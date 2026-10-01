@@ -90,7 +90,7 @@ export async function listProjectFiles(sourceDirectory: string): Promise<string[
   let top: string;
   try { top = (await git(sourceDirectory, ['rev-parse', '--show-toplevel'])).toString('utf8').trim(); }
   catch { throw new BridgeError('ISOLATION_REQUIRES_GIT', 'Isolated copies require a Git repository'); }
-  if (path.relative(await realpath(top), sourceDirectory) !== '') {
+  if (path.relative(await realpath(top), await realpath(sourceDirectory)) !== '') {
     throw new BridgeError('INVALID_WORKING_DIRECTORY', 'workingDirectory must be the Git repository root');
   }
   const candidates = [...new Set(splitNull(await git(sourceDirectory, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];

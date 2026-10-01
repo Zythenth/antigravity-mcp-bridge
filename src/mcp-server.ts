@@ -24,7 +24,7 @@ function safe<T>(operation: () => Promise<T> | T) {
 }
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
-  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.2.0' }, {
+  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.2.1' }, {
     instructions: 'Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Review antigravity_preview before asking the user whether to integrate. antigravity_integrate requires explicit user approval and the reviewed SHA-256. The original project is not modified by antigravity_run.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
