@@ -27,6 +27,7 @@ export interface TaskRecord {
   copyDirectory?: string;
   includedFiles?: string[];
   integratedAt?: string;
+  discardedAt?: string;
 }
 
 export interface RunOptions {

@@ -11,9 +11,52 @@ import { EventStore } from '../src/event-store.js';
 import { LineParser } from '../src/stream-parser.js';
 import { TaskManager } from '../src/task-manager.js';
 import type { TaskRecord } from '../src/types.js';
-import { createProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
+import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
+
+test('discard removes copy and baseline, refuses active shared copies, and is idempotent', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const finished = await until(tasks, first.taskId, done);
+    const resumed = await tasks.run({ prompt: 'slow:test', workingDirectory: dir, sessionId: finished.sessionId });
+    await assert.rejects(tasks.discard(first.taskId), { code: 'TASK_NOT_READY' });
+    await assert.rejects(tasks.preview(first.taskId), { code: 'TASK_NOT_READY' });
+    await until(tasks, resumed.taskId, done);
+    await tasks.discard(first.taskId);
+    assert.ok(tasks.status(resumed.taskId).discardedAt);
+    await assert.rejects(readFile(path.join(finished.copyDirectory!, 'source.txt')), { code: 'ENOENT' });
+    await assert.rejects(tasks.preview(resumed.taskId), { code: 'TASK_NOT_READY' });
+    await assert.rejects(tasks.run({ prompt: 'resume', workingDirectory: dir, sessionId: finished.sessionId }), { code: 'INVALID_SESSION' });
+    await tasks.discard(first.taskId);
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'source');
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('cleanup expires only inactive copies and deletion rejects source paths', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'test', workingDirectory: dir });
+    const finished = await until(tasks, first.taskId, done);
+    assert.deepEqual((await tasks.cleanup()).discardedTaskIds, []);
+    const active = await tasks.run({ prompt: 'slow:test', workingDirectory: dir });
+    const future = Date.parse(finished.completedAt!) + 168 * 3600000;
+    assert.deepEqual((await tasks.cleanup(future)).discardedTaskIds, [first.taskId]);
+    assert.equal(tasks.status(active.taskId).discardedAt, undefined);
+    await until(tasks, active.taskId, done);
+    await tasks.discard(active.taskId);
+    const project = await createProjectCopy(dir);
+    await assert.rejects(discardProjectCopy({ ...project, copyDirectory: dir }), { code: 'UNSAFE_PROJECT_PATH' });
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'source');
+    await discardProjectCopy(project);
+    await assert.rejects(readFile(path.join(project.gitDirectory, 'HEAD')), { code: 'ENOENT' });
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
 
 function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> = {}) {
   const config = loadConfig({ AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '2', ...configOverrides });

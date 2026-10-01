@@ -24,6 +24,26 @@ export interface ChangePreview {
   copyDirectory: string;
 }
 
+export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
+  const root = await realpath(os.tmpdir());
+  const targets = [
+    [project.copyDirectory, 'agy-mcp-copy-'],
+    [project.gitDirectory, 'agy-mcp-baseline-'],
+  ];
+  for (const [directory, prefix] of targets) {
+    const absolute = path.resolve(directory!);
+    if (path.relative(root, await realpath(path.dirname(absolute))) !== '' || !path.basename(absolute).startsWith(prefix!)) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Refusing to delete a directory outside bridge temporary storage');
+    }
+    const info = await lstat(absolute).catch(error => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    });
+    if (info && (!info.isDirectory() || info.isSymbolicLink())) throw new BridgeError('UNSAFE_PROJECT_PATH', 'Refusing to delete a replaced copy directory');
+  }
+  for (const [directory] of targets) await rm(path.resolve(directory!), { recursive: true, force: true });
+}
+
 async function git(cwd: string, args: string[], input?: Buffer, allowedCodes = [0]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });

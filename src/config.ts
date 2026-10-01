@@ -15,6 +15,7 @@ export interface Config {
   defaultTimeoutSeconds: number;
   eventBufferSize: number;
   maxPromptChars: number;
+  copyRetentionHours: number;
   forbiddenDirectories: string[];
 }
 
@@ -27,6 +28,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     defaultTimeoutSeconds: positiveInteger(env.DEFAULT_TIMEOUT_SECONDS, 1800, 86400),
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2000, 100000),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 50000, 1000000),
+    copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || '').split(path.delimiter).filter(Boolean).map(p => path.resolve(p)),
   };
 }

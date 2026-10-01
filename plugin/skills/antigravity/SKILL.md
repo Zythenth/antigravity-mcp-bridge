@@ -24,6 +24,7 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 
 - Use o `sessionId` de uma tarefa concluída com `antigravity_resume` para continuar na mesma cópia. `antigravity_sessions` lista apenas sessões vistas pela instância atual do bridge.
 - Quando o usuário pedir cancelamento, chame `antigravity_cancel` com o `taskId` e confirme o status. O cancelamento encerra o processo local; alterações parciais podem permanecer.
+- Quando o usuário quiser descartar o trabalho, chame `antigravity_discard` depois que a tarefa terminar. A remoção alcança todas as tarefas retomadas na mesma cópia. Use `antigravity_cleanup` para remover cópias expiradas; a retenção padrão é de 7 dias.
 - Depois de falha ou timeout, examine eventos e a cópia antes de repetir a tarefa. Não faça nova execução automaticamente se ela puder repetir efeitos ou consumir quota.
 
 O `--sandbox` restringe comandos de terminal do CLI, mas não garante isolamento completo do sistema de arquivos no Windows. Não delegue acesso a arquivos sensíveis apenas com base nessa opção; use a lista de arquivos e revise o conteúdo efetivamente copiado.

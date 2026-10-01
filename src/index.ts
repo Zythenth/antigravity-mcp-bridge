@@ -10,11 +10,16 @@ await adapter.discover();
 const tasks = new TaskManager(adapter, config);
 const server = createMcpServer(adapter, tasks);
 await server.connect(new StdioServerTransport());
+const cleanupTimer = setInterval(() => {
+  void tasks.cleanup().catch(error => process.stderr.write(`Copy cleanup failed: ${String(error)}\n`));
+}, 60000);
+cleanupTimer.unref();
 
 let closing = false;
 async function shutdown() {
   if (closing) return;
   closing = true;
+  clearInterval(cleanupTimer);
   await tasks.shutdown();
   await server.close();
 }

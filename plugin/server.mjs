@@ -28678,6 +28678,7 @@ function loadConfig(env = process.env) {
     defaultTimeoutSeconds: positiveInteger(env.DEFAULT_TIMEOUT_SECONDS, 1800, 86400),
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
+    copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path2.delimiter).filter(Boolean).map((p) => path2.resolve(p))
   };
 }
@@ -36662,6 +36663,28 @@ import { copyFile, lstat, mkdir, mkdtemp, realpath, rm } from "node:fs/promises"
 import os from "node:os";
 import path3 from "node:path";
 var maxGitOutput = 1e7;
+async function discardProjectCopy(project) {
+  const root = await realpath(os.tmpdir());
+  const targets = [
+    [project.copyDirectory, "agy-mcp-copy-"],
+    [project.gitDirectory, "agy-mcp-baseline-"]
+  ];
+  for (const [directory, prefix] of targets) {
+    const absolute = path3.resolve(directory);
+    if (path3.relative(root, await realpath(path3.dirname(absolute))) !== "" || !path3.basename(absolute).startsWith(prefix)) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
+    }
+    const info = await lstat(absolute).catch((error62) => {
+      if (error62.code === "ENOENT")
+        return void 0;
+      throw error62;
+    });
+    if (info && (!info.isDirectory() || info.isSymbolicLink()))
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
+  }
+  for (const [directory] of targets)
+    await rm(path3.resolve(directory), { recursive: true, force: true });
+}
 async function git(cwd, args, input2, allowedCodes = [0]) {
   return new Promise((resolve, reject) => {
     const child = spawn2("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
@@ -36939,6 +36962,18 @@ function createMcpServer(adapter2, tasks2) {
     inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
     annotations: action
   }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256))());
+  server2.registerTool("antigravity_discard", {
+    title: "Discard an isolated copy",
+    description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
+    inputSchema: { taskId: external_exports.string().uuid() },
+    annotations: { ...action, openWorldHint: false }
+  }, async ({ taskId }) => safe(async () => ({ task: await tasks2.discard(taskId) }))());
+  server2.registerTool("antigravity_cleanup", {
+    title: "Clean expired isolated copies",
+    description: "Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.",
+    inputSchema: {},
+    annotations: { ...action, openWorldHint: false }
+  }, safe(() => tasks2.cleanup()));
   server2.registerTool("antigravity_status", {
     title: "Get Antigravity task status",
     description: "Return task metadata, status, process ID and isolated copy path when available.",
@@ -37110,6 +37145,7 @@ var TaskManager = class {
   active = 0;
   selectedModel;
   stopped = false;
+  busyProjects = /* @__PURE__ */ new Set();
   constructor(adapter2, config3) {
     this.adapter = adapter2;
     this.config = config3;
@@ -37148,6 +37184,8 @@ var TaskManager = class {
     if (options.sessionId && (!previous || previous.record.status !== "completed" || previous.record.integratedAt)) {
       throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
     }
+    if (previous?.project && this.busyProjects.has(previous.project))
+      throw new BridgeError("TASK_NOT_READY", "The copy is being reviewed or removed");
     if (previous && options.includePaths !== void 0)
       throw new BridgeError("INVALID_INCLUDE_PATH", "A resumed task reuses its original file selection");
     if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
@@ -37157,6 +37195,9 @@ var TaskManager = class {
       const oldestFinished = [...this.tasks.values()].find((task) => terminal.has(task.record.status));
       if (!oldestFinished)
         throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
+      if (oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
+        await this.discard(oldestFinished.record.taskId);
+      }
       this.tasks.delete(oldestFinished.record.taskId);
       this.events.drop(oldestFinished.record.taskId);
     }
@@ -37189,7 +37230,52 @@ var TaskManager = class {
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
-    return previewProjectCopy(task.project);
+    return this.withProject(task.project, () => previewProjectCopy(task.project));
+  }
+  async withProject(project, operation) {
+    if (this.busyProjects.has(project) || [...this.tasks.values()].some((task) => task.project === project && !terminal.has(task.record.status))) {
+      throw new BridgeError("TASK_NOT_READY", "Wait for all operations on this copy to finish");
+    }
+    this.busyProjects.add(project);
+    try {
+      return await operation();
+    } finally {
+      this.busyProjects.delete(project);
+    }
+  }
+  async discard(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task)
+      throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
+    if (!terminal.has(task.record.status))
+      throw new BridgeError("TASK_NOT_READY", "Cancel and wait for the task before discarding");
+    if (task.project) {
+      const project = task.project;
+      await this.withProject(project, async () => {
+        await discardProjectCopy(project);
+        for (const related of this.tasks.values())
+          if (related.project === project) {
+            related.project = void 0;
+            related.record.discardedAt = (/* @__PURE__ */ new Date()).toISOString();
+            this.events.append(related.record.taskId, "copy.discarded", {});
+          }
+      });
+    }
+    return this.status(taskId);
+  }
+  async cleanup(now = Date.now()) {
+    const discardedTaskIds = [];
+    for (const project of new Set([...this.tasks.values()].map((task) => task.project).filter((p) => Boolean(p)))) {
+      const related = [...this.tasks.values()].filter((task) => task.project === project);
+      if (this.busyProjects.has(project) || related.some((task) => !terminal.has(task.record.status)))
+        continue;
+      const latest = Math.max(...related.map((task) => Date.parse(task.record.completedAt || task.record.createdAt)));
+      if (now - latest < this.config.copyRetentionHours * 36e5)
+        continue;
+      await this.discard(related[0].record.taskId);
+      discardedTaskIds.push(...related.map((task) => task.record.taskId));
+    }
+    return { discardedTaskIds };
   }
   async integrate(taskId, expectedSha256) {
     const task = this.tasks.get(taskId);
@@ -37203,11 +37289,13 @@ var TaskManager = class {
     if ([...this.tasks.values()].some((other) => other !== task && other.project === task.project && !terminal.has(other.record.status))) {
       throw new BridgeError("TASK_NOT_READY", "Wait for the resumed task to finish");
     }
-    const preview = await integrateProjectCopy(task.project, expectedSha256);
-    for (const related of this.tasks.values())
-      if (related.project === task.project)
-        related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
-    return preview;
+    return this.withProject(task.project, async () => {
+      const preview = await integrateProjectCopy(task.project, expectedSha256);
+      for (const related of this.tasks.values())
+        if (related.project === task.project)
+          related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
+      return preview;
+    });
   }
   readEvents(taskId, after = 0, limit = 200) {
     this.status(taskId);
@@ -37393,11 +37481,17 @@ await adapter.discover();
 var tasks = new TaskManager(adapter, config2);
 var server = createMcpServer(adapter, tasks);
 await server.connect(new StdioServerTransport());
+var cleanupTimer = setInterval(() => {
+  void tasks.cleanup().catch((error62) => process.stderr.write(`Copy cleanup failed: ${String(error62)}
+`));
+}, 6e4);
+cleanupTimer.unref();
 var closing = false;
 async function shutdown() {
   if (closing)
     return;
   closing = true;
+  clearInterval(cleanupTimer);
   await tasks.shutdown();
   await server.close();
 }

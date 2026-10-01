@@ -67,6 +67,8 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
 | `antigravity_events` | Lê eventos após um cursor `after` |
 | `antigravity_result` | Consulta o resultado ou informa `ready: false` |
+| `antigravity_discard` | Remove a cópia e o baseline de uma tarefa finalizada |
+| `antigravity_cleanup` | Remove cópias finalizadas cujo prazo de retenção expirou |
 | `antigravity_cancel` | Cancela tarefa na fila ou encerra o processo local |
 | `antigravity_sessions` | Lista sessões vistas pela instância atual do bridge |
 | `antigravity_resume` | Retoma uma conversa conhecida pelo `sessionId` |
@@ -91,7 +93,7 @@ O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos est
 
 Antes de chamar `agy`, o bridge cria uma cópia temporária dos arquivos elegíveis e mantém um baseline Git separado da cópia. O CLI recebe a cópia como diretório de trabalho e a opção `--sandbox`. O projeto original só muda por `antigravity_integrate`, depois da revisão do patch. O bridge não faz commit, merge nem push.
 
-O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão até sua remoção manual. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
+O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
 
 ## Configuração e segurança
 
@@ -103,6 +105,7 @@ O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias perm
 | `MAX_RETAINED_TASKS` | `100` | Tarefas mantidas em memória |
 | `DEFAULT_TIMEOUT_SECONDS` | `1800` | Prazo máximo por execução |
 | `EVENT_BUFFER_SIZE` | `2000` | Eventos mantidos em memória |
+| `COPY_RETENTION_HOURS` | `168` | Prazo de retenção das cópias finalizadas |
 | `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt |
 | `FORBIDDEN_DIRECTORIES` | vazio | Diretórios bloqueados, separados por `;` no Windows |
 

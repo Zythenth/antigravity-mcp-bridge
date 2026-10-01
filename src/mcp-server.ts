@@ -84,6 +84,16 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
   }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256))());
 
+  server.registerTool('antigravity_discard', {
+    title: 'Discard an isolated copy', description: 'Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.',
+    inputSchema: { taskId: z.string().uuid() }, annotations: { ...action, openWorldHint: false },
+  }, async ({ taskId }) => safe(async () => ({ task: await tasks.discard(taskId) }))());
+
+  server.registerTool('antigravity_cleanup', {
+    title: 'Clean expired isolated copies', description: 'Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.',
+    inputSchema: {}, annotations: { ...action, openWorldHint: false },
+  }, safe(() => tasks.cleanup()));
+
   server.registerTool('antigravity_status', {
     title: 'Get Antigravity task status', description: 'Return task metadata, status, process ID and isolated copy path when available.',
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,

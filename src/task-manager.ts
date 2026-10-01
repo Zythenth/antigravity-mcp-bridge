@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, integrateProjectCopy, previewProjectCopy, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewProjectCopy, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
@@ -18,6 +18,7 @@ export class TaskManager {
   private active = 0;
   private selectedModel?: string;
   private stopped = false;
+  private readonly busyProjects = new Set<ProjectCopy>();
 
   constructor(private readonly adapter: CliAdapter, private readonly config: Config) {
     this.events = new EventStore(config.eventBufferSize);
@@ -52,6 +53,7 @@ export class TaskManager {
     if (options.sessionId && (!previous || previous.record.status !== 'completed' || previous.record.integratedAt)) {
       throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
     }
+    if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
     if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
     if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
       throw new BridgeError('QUEUE_FULL', 'Task queue is full');
@@ -59,6 +61,9 @@ export class TaskManager {
     if (this.tasks.size >= this.config.maxRetainedTasks) {
       const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status));
       if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
+      if (oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
+        await this.discard(oldestFinished.record.taskId);
+      }
       this.tasks.delete(oldestFinished.record.taskId);
       this.events.drop(oldestFinished.record.taskId);
     }
@@ -85,7 +90,47 @@ export class TaskManager {
   async preview(taskId: string) {
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
-    return previewProjectCopy(task.project);
+    return this.withProject(task.project, () => previewProjectCopy(task.project!));
+  }
+
+  private async withProject<T>(project: ProjectCopy, operation: () => Promise<T>): Promise<T> {
+    if (this.busyProjects.has(project) || [...this.tasks.values()].some(task => task.project === project && !terminal.has(task.record.status))) {
+      throw new BridgeError('TASK_NOT_READY', 'Wait for all operations on this copy to finish');
+    }
+    this.busyProjects.add(project);
+    try { return await operation(); }
+    finally { this.busyProjects.delete(project); }
+  }
+
+  async discard(taskId: string): Promise<TaskRecord> {
+    const task = this.tasks.get(taskId);
+    if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
+    if (!terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Cancel and wait for the task before discarding');
+    if (task.project) {
+      const project = task.project;
+      await this.withProject(project, async () => {
+        await discardProjectCopy(project);
+        for (const related of this.tasks.values()) if (related.project === project) {
+          related.project = undefined;
+          related.record.discardedAt = new Date().toISOString();
+          this.events.append(related.record.taskId, 'copy.discarded', {});
+        }
+      });
+    }
+    return this.status(taskId);
+  }
+
+  async cleanup(now = Date.now()): Promise<{ discardedTaskIds: string[] }> {
+    const discardedTaskIds: string[] = [];
+    for (const project of new Set([...this.tasks.values()].map(task => task.project).filter((p): p is ProjectCopy => Boolean(p)))) {
+      const related = [...this.tasks.values()].filter(task => task.project === project);
+      if (this.busyProjects.has(project) || related.some(task => !terminal.has(task.record.status))) continue;
+      const latest = Math.max(...related.map(task => Date.parse(task.record.completedAt || task.record.createdAt)));
+      if (now - latest < this.config.copyRetentionHours * 3600000) continue;
+      await this.discard(related[0]!.record.taskId);
+      discardedTaskIds.push(...related.map(task => task.record.taskId));
+    }
+    return { discardedTaskIds };
   }
 
   async integrate(taskId: string, expectedSha256: string) {
@@ -98,9 +143,11 @@ export class TaskManager {
     if ([...this.tasks.values()].some(other => other !== task && other.project === task.project && !terminal.has(other.record.status))) {
       throw new BridgeError('TASK_NOT_READY', 'Wait for the resumed task to finish');
     }
-    const preview = await integrateProjectCopy(task.project, expectedSha256);
-    for (const related of this.tasks.values()) if (related.project === task.project) related.record.integratedAt = new Date().toISOString();
-    return preview;
+    return this.withProject(task.project, async () => {
+      const preview = await integrateProjectCopy(task.project!, expectedSha256);
+      for (const related of this.tasks.values()) if (related.project === task.project) related.record.integratedAt = new Date().toISOString();
+      return preview;
+    });
   }
 
   readEvents(taskId: string, after = 0, limit = 200) {
