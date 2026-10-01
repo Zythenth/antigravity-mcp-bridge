@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import type { ProjectCopy } from './isolation.js';
 import type { BridgeEvent } from './types.js';
+import { usageCountersSchema } from './usage.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
 const snapshotSchema = z.object({
@@ -14,6 +15,7 @@ const snapshotSchema = z.object({
     status: z.enum(['queued', 'starting', 'running', 'streaming', 'completed', 'failed', 'cancelled', 'timeout']),
     createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(), pid: z.number().int().positive().optional(),
     mode: z.enum(['write', 'read-only']).optional(), integratedAt: z.string().datetime().optional(), discardedAt: z.string().datetime().optional(),
+    usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
   }).passthrough(),
   options: z.object({ prompt: z.string(), workingDirectory: z.string() }).passthrough(),
   project: z.object({ sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),

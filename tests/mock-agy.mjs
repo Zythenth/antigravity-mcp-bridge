@@ -28,7 +28,9 @@ const report = schema?.properties.reviewedFiles ? {
 } : schema ? { summary: 'Fixture plan', steps: [{ description: 'Inspect source', files: ['source.txt'], verification: 'Check requested behavior' }], unverified: ['Runtime not tested'] } : undefined;
 const send = obj => process.stdout.write(JSON.stringify(obj) + '\n');
 const result = (status = 'SUCCESS') => send({ event: 'result', result: { conversation_id: conversationId, status,
-  response: prompt, usage: { input_tokens: 1, output_tokens: 2 }, ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}) } });
+  response: prompt, usage: { input_tokens: args.includes('--conversation') ? 2 : 1, output_tokens: args.includes('--conversation') ? 4 : 2,
+    total_tokens: args.includes('--conversation') ? 6 : 3, thinking_tokens: 0, cache_read_tokens: 0 },
+  ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}) } });
 send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
 const nativeTest = prompt.match(/<bridge-test-command>(.*?)<\/bridge-test-command>/s);
 if (nativeTest && !args.includes('no-test-events')) {

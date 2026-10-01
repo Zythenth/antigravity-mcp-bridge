@@ -554,6 +554,7 @@ test('run streams official event shapes and captures result, stderr and malforme
     const events = tasks.readEvents(first.taskId).events;
     const initialArgs = (events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;
     assert.equal(initialArgs[initialArgs.indexOf('--add-dir') + 1], final.copyDirectory);
+    assert.equal(initialArgs[initialArgs.indexOf('--mode') + 1], 'accept-edits');
     assert.ok(initialArgs.includes('--new-project'));
     assert.ok(events.some(event => event.type === 'response.chunk' && (event.data as { text_delta: string }).text_delta === 'Olá'));
     assert.ok(events.some(event => event.type === 'tool.started'));
@@ -620,7 +621,7 @@ test('working directory and prompt validation', async () => {
 test('resumed conversation reuses the isolated copy and source remains clean', async () => {
   const dir = await repository();
   try {
-    const { adapter, tasks } = setup();
+    const { adapter, tasks, config } = setup();
     await adapter.discover();
     const run = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
     const final = await until(tasks, run.taskId, done);
@@ -628,6 +629,12 @@ test('resumed conversation reuses the isolated copy and source remains clean', a
     assert.equal(final.sessionId, 'mock-conversation');
     const resumed = await tasks.run({ prompt: 'split:again', workingDirectory: dir, sessionId: final.sessionId });
     const continued = await until(tasks, resumed.taskId, done);
+    assert.equal(final.tokenUsage?.counters.totalTokens, 3);
+    assert.equal(continued.tokenUsage?.counters.totalTokens, 3);
+    assert.equal(continued.tokenUsage?.source, 'session-delta');
+    const recoveredUsage = new TaskManager(adapter, config); managers.push(recoveredUsage);
+    assert.equal(recoveredUsage.status(resumed.taskId).tokenUsage?.counters.totalTokens, 3);
+    assert.equal(recoveredUsage.usage({ sessionId: final.sessionId }).counters.totalTokens, 6);
     assert.equal(continued.status, 'completed');
     assert.equal(continued.copyDirectory, final.copyDirectory);
     const resumedArgs = (tasks.readEvents(resumed.taskId).events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;

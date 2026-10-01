@@ -2053,7 +2053,7 @@ var require_fast_deep_equal = __commonJS({
       if (a === b) return true;
       if (a && b && typeof a == "object" && typeof b == "object") {
         if (a.constructor !== b.constructor) return false;
-        var length, i, keys;
+        var length, i, keys2;
         if (Array.isArray(a)) {
           length = a.length;
           if (length != b.length) return false;
@@ -2064,13 +2064,13 @@ var require_fast_deep_equal = __commonJS({
         if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
         if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
         if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-        keys = Object.keys(a);
-        length = keys.length;
+        keys2 = Object.keys(a);
+        length = keys2.length;
         if (length !== Object.keys(b).length) return false;
         for (i = length; i-- !== 0; )
-          if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+          if (!Object.prototype.hasOwnProperty.call(b, keys2[i])) return false;
         for (i = length; i-- !== 0; ) {
-          var key = keys[i];
+          var key = keys2[i];
           if (!equal(a[key], b[key])) return false;
         }
         return true;
@@ -7986,9 +7986,9 @@ function putProp(target, key, value) {
   else
     target[key] = value;
 }
-function mirrorShape(target, source, keys, wrap) {
+function mirrorShape(target, source, keys2, wrap) {
   const raw = sourceShape(source);
-  for (const key of keys) {
+  for (const key of keys2) {
     const desc = Object.getOwnPropertyDescriptor(raw, key);
     if (!desc.enumerable)
       continue;
@@ -8029,12 +8029,12 @@ function getElementAtPath(obj, path7) {
   return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
-  const keys = Object.keys(promisesObj);
-  const promises = keys.map((key) => promisesObj[key]);
+  const keys2 = Object.keys(promisesObj);
+  const promises = keys2.map((key) => promisesObj[key]);
   return Promise.all(promises).then((results) => {
     const resolvedObj = {};
-    for (let i = 0; i < keys.length; i++) {
-      resolvedObj[keys[i]] = results[i];
+    for (let i = 0; i < keys2.length; i++) {
+      resolvedObj[keys2[i]] = results[i];
     }
     return resolvedObj;
   });
@@ -8256,15 +8256,15 @@ function pick(schema, mask) {
 }
 function maskedKeys(schema, mask) {
   const raw = sourceShape(schema);
-  const keys = [];
+  const keys2 = [];
   for (const key of Reflect.ownKeys(mask)) {
     if (!Object.getOwnPropertyDescriptor(raw, key)?.enumerable) {
       throw new Error(`Unrecognized key: "${String(key)}"`);
     }
     if (mask[key])
-      keys.push(key);
+      keys2.push(key);
   }
-  return keys;
+  return keys2;
 }
 function omit(schema, mask) {
   const currDef = schema._zod.def;
@@ -10263,13 +10263,13 @@ var CC_SANITIZE = /[- ]/g;
 function isLuhnAlgo(digits) {
   let length = digits.length;
   let bit = 1;
-  let sum = 0;
+  let sum2 = 0;
   while (length) {
     const value = digits.charCodeAt(--length) - 48;
     bit ^= 1;
-    sum += bit ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][value] : value;
+    sum2 += bit ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][value] : value;
   }
-  return sum % 10 === 0;
+  return sum2 % 10 === 0;
 }
 function isValidCreditCard(input2) {
   if (!creditCard.test(input2))
@@ -10630,10 +10630,10 @@ function handlePropertyResult(result, final, key, input2, optin, optout) {
 }
 var NO_SYMBOL_KEYS = [];
 function normalizeDef(def) {
-  const keys = Object.keys(def.shape);
+  const keys2 = Object.keys(def.shape);
   const ownSymbols = Object.getOwnPropertySymbols(def.shape);
   const symbolKeys = ownSymbols.length ? ownSymbols : NO_SYMBOL_KEYS;
-  const allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+  const allKeys = symbolKeys.length ? [...keys2, ...symbolKeys] : keys2;
   for (const k of allKeys) {
     if (!def.shape?.[k]?._zod?.traits?.has("$ZodType")) {
       throw new Error(`Invalid element at key "${String(k)}": expected a Zod schema`);
@@ -10645,8 +10645,8 @@ function normalizeDef(def) {
     allKeys,
     symbolKeys,
     // string-only: handleCatchall matches it against `for...in`, which never yields a symbol
-    keySet: new Set(keys),
-    numKeys: keys.length,
+    keySet: new Set(keys2),
+    numKeys: keys2.length,
     optionalKeys: new Set(okeys)
   };
 }
@@ -11189,19 +11189,19 @@ function handleIntersectionResults(result, left, right) {
   let unrecIssue;
   const keyIssues = /* @__PURE__ */ new Map();
   const collect = (iss, side) => {
-    let keys;
+    let keys2;
     if (iss.code === "unrecognized_keys" && !iss.path?.length) {
       unrecIssue ?? (unrecIssue = iss);
-      keys = iss.keys;
+      keys2 = iss.keys;
     } else if (iss.code === "invalid_key" && iss.origin === "record" && iss.path?.length === 1) {
       const k = String(iss.path[0]);
       if (!keyIssues.has(k))
         keyIssues.set(k, iss);
-      keys = [k];
+      keys2 = [k];
     } else {
       return false;
     }
-    for (const k of keys) {
+    for (const k of keys2) {
       if (!unrecKeys.has(k))
         unrecKeys.set(k, {});
       unrecKeys.get(k)[side] = true;
@@ -20868,13 +20868,13 @@ function generateObjectCheck(doc, ctx, schema, accessor, buildsValue = true) {
   const def = schema._zod.def;
   doc.write(`if (typeof ${accessor} !== "object" || ${accessor} === null || Array.isArray(${accessor})) return INVALID;`);
   const shape = def.shape;
-  const keys = Object.keys(shape);
+  const keys2 = Object.keys(shape);
   const symbolKeys = Object.getOwnPropertySymbols(shape);
-  const allKeys = symbolKeys.length ? [...keys, ...symbolKeys] : keys;
+  const allKeys = symbolKeys.length ? [...keys2, ...symbolKeys] : keys2;
   const keyExpr = (k) => typeof k === "symbol" ? addConstant(ctx, k) : esc(k);
   const propKey = (k) => typeof k === "symbol" ? `[${keyExpr(k)}]` : esc(k);
   const propShape = shape;
-  if (keys.includes("__proto__")) {
+  if (keys2.includes("__proto__")) {
     throw new ZodCompileUnsupportedError('object shape key "__proto__"');
   }
   const propOutputs = /* @__PURE__ */ new Map();
@@ -20916,7 +20916,7 @@ function generateObjectCheck(doc, ctx, schema, accessor, buildsValue = true) {
   if (catchall) {
     const catchallType = catchall._zod.def.type;
     if (catchallType === "never") {
-      const condition = keys.map((k) => `k !== ${esc(k)}`).join(" && ") || "true";
+      const condition = keys2.map((k) => `k !== ${esc(k)}`).join(" && ") || "true";
       doc.write(`for (const k in ${accessor}) {`);
       doc.indented((d) => {
         d.write(`if (${condition}) return INVALID;`);
@@ -20932,7 +20932,7 @@ function generateObjectCheck(doc, ctx, schema, accessor, buildsValue = true) {
   const hasConditionalKeys = allKeys.some((k) => mayOmitUndefined(propShape[k]) || dropsWhenAbsent(propShape[k]));
   if (!buildsValue) {
     if (unknownKeysMode === "schema") {
-      const knownSet = keys.length > 0 ? addConstant(ctx, new Set(keys)) : null;
+      const knownSet = keys2.length > 0 ? addConstant(ctx, new Set(keys2)) : null;
       doc.write(`for (const k in ${accessor}) {`);
       doc.indented((d) => {
         d.write(`if (k === "__proto__") continue;`);
@@ -20964,7 +20964,7 @@ function generateObjectCheck(doc, ctx, schema, accessor, buildsValue = true) {
     }
   }
   if (unknownKeysMode !== "none") {
-    const knownSet = keys.length > 0 ? addConstant(ctx, new Set(keys)) : null;
+    const knownSet = keys2.length > 0 ? addConstant(ctx, new Set(keys2)) : null;
     doc.write(`for (const k in ${accessor}) {`);
     doc.indented((d) => {
       d.write(`if (k === "__proto__") continue;`);
@@ -22975,8 +22975,8 @@ function compactTypeUnion(schema) {
     if (!option || typeof option !== "object")
       return;
     compactTypeUnion(option);
-    const keys = Object.keys(option);
-    if (keys.length !== 1 || keys[0] !== "type")
+    const keys2 = Object.keys(option);
+    if (keys2.length !== 1 || keys2[0] !== "type")
       return;
     const type = option.type;
     for (const member of Array.isArray(type) ? type : [type]) {
@@ -25459,11 +25459,11 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst._zod.processJSONSchema = (ctx, json2, params) => enumProcessor(inst, ctx, json2, params);
   inst.enum = def.entries;
   inst.options = [...inst._zod.values];
-  const keys = new Set(Object.keys(def.entries));
+  const keys2 = new Set(Object.keys(def.entries));
   inst.extract = (values, params) => {
     const newEntries = {};
     for (const value of values) {
-      if (keys.has(value)) {
+      if (keys2.has(value)) {
         newEntries[value] = def.entries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -25478,7 +25478,7 @@ var ZodEnum = /* @__PURE__ */ $constructor("ZodEnum", (inst, def) => {
   inst.exclude = (values, params) => {
     const newEntries = { ...def.entries };
     for (const value of values) {
-      if (keys.has(value)) {
+      if (keys2.has(value)) {
         delete newEntries[value];
       } else
         throw new Error(`Key ${value} not found in enum`);
@@ -26039,8 +26039,8 @@ function checkObjectGuards(objectSchema, guards) {
     const value = payload.value;
     if (typeof value !== "object" || value === null || Array.isArray(value))
       return;
-    const keys = Object.getOwnPropertyNames(value);
-    if (guards.minProperties !== void 0 && keys.length < guards.minProperties) {
+    const keys2 = Object.getOwnPropertyNames(value);
+    if (guards.minProperties !== void 0 && keys2.length < guards.minProperties) {
       payload.issues.push({
         origin: "object",
         code: "too_small",
@@ -26052,7 +26052,7 @@ function checkObjectGuards(objectSchema, guards) {
         continue: true
       });
     }
-    if (guards.maxProperties !== void 0 && keys.length > guards.maxProperties) {
+    if (guards.maxProperties !== void 0 && keys2.length > guards.maxProperties) {
       payload.issues.push({
         origin: "object",
         code: "too_big",
@@ -26065,7 +26065,7 @@ function checkObjectGuards(objectSchema, guards) {
       });
     }
     if (guards.keySchema) {
-      for (const key of keys) {
+      for (const key of keys2) {
         const result = guards.keySchema.safeParse(key);
         if (result.success)
           continue;
@@ -26106,9 +26106,9 @@ function canonicalKey(value, seen) {
       }
       return `a${parts2.length}:[${parts2.join(",")}]`;
     }
-    const keys = Object.keys(value).sort();
+    const keys2 = Object.keys(value).sort();
     const parts = [];
-    for (const k of keys) {
+    for (const k of keys2) {
       const key = canonicalKey(value[k], seen);
       if (key === null)
         return null;
@@ -26683,10 +26683,10 @@ function visit(schema, fnOrHandlers) {
     switch (kind) {
       case "object": {
         const oldShape = def.shape;
-        const keys = Object.keys(oldShape);
+        const keys2 = Object.keys(oldShape);
         let changed = false;
         const newShape = {};
-        for (const k of keys) {
+        for (const k of keys2) {
           const mapped = run(oldShape[k]);
           if (mapped !== oldShape[k])
             changed = true;
@@ -29114,6 +29114,8 @@ var CliAdapter = class {
       if (!this.help.includes("--mode") || !this.help.includes("plan"))
         throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise plan mode");
       args.push("--mode", "plan");
+    } else if (this.help.includes("--mode") && this.help.includes("accept-edits")) {
+      args.push("--mode", "accept-edits");
     }
     if (model)
       args.push("--model", model);
@@ -29170,13 +29172,13 @@ var util;
     });
   };
   util2.objectKeys = typeof Object.keys === "function" ? (obj) => Object.keys(obj) : (object3) => {
-    const keys = [];
+    const keys2 = [];
     for (const key in object3) {
       if (Object.prototype.hasOwnProperty.call(object3, key)) {
-        keys.push(key);
+        keys2.push(key);
       }
     }
-    return keys;
+    return keys2;
   };
   util2.find = (arr, checker) => {
     for (const item of arr) {
@@ -31411,8 +31413,8 @@ var ZodObject2 = class _ZodObject extends ZodType2 {
     if (this._cached !== null)
       return this._cached;
     const shape = this._def.shape();
-    const keys = util.objectKeys(shape);
-    this._cached = { shape, keys };
+    const keys2 = util.objectKeys(shape);
+    this._cached = { shape, keys: keys2 };
     return this._cached;
   }
   _parse(input2) {
@@ -33971,7 +33973,7 @@ function parseMapDef(def, refs) {
   if (refs.mapStrategy === "record") {
     return parseRecordDef(def, refs);
   }
-  const keys = parseDef(def.keyType._def, {
+  const keys2 = parseDef(def.keyType._def, {
     ...refs,
     currentPath: [...refs.currentPath, "items", "items", "0"]
   }) || parseAnyDef(refs);
@@ -33984,7 +33986,7 @@ function parseMapDef(def, refs) {
     maxItems: 125,
     items: {
       type: "array",
-      items: [keys, values],
+      items: [keys2, values],
       minItems: 2,
       maxItems: 2
     }
@@ -37365,7 +37367,7 @@ function safe(operation) {
 }
 function createMcpServer(adapter2, tasks2) {
   const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.3.0" }, {
-    instructions: "Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Use read-only mode for consultations. Review antigravity_preview and actual tests before integration. antigravity_integrate requests confirmation through MCP form elicitation, bound to the reviewed SHA-256; clients without form support cannot integrate. A tool argument or patch hash does not constitute approval. The original project is not modified by antigravity_run."
+    instructions: "Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -37387,6 +37389,12 @@ function createMcpServer(adapter2, tasks2) {
     inputSchema: {},
     annotations: readOnly
   }, safe(() => ({ model: tasks2.getModel() ?? null })));
+  server2.registerTool("antigravity_usage", {
+    title: "Read observed token usage",
+    description: "Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.",
+    inputSchema: { taskId: external_exports.string().uuid().optional(), sessionId: external_exports.string().min(1).max(128).optional(), model: external_exports.string().min(1).max(128).optional() },
+    annotations: readOnly
+  }, async (filters) => safe(() => tasks2.usage(filters))());
   server2.registerTool("antigravity_list_project_files", {
     title: "List files eligible for a project copy",
     description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
@@ -37665,6 +37673,97 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path6 from "node:path";
 import os3 from "node:os";
+
+// dist/src/usage.js
+var usageCountersSchema = external_exports.object({
+  inputTokens: external_exports.number().int().nonnegative().nullable(),
+  outputTokens: external_exports.number().int().nonnegative().nullable(),
+  totalTokens: external_exports.number().int().nonnegative().nullable(),
+  thinkingTokens: external_exports.number().int().nonnegative().nullable(),
+  cacheReadTokens: external_exports.number().int().nonnegative().nullable()
+});
+var fields = {
+  inputTokens: "input_tokens",
+  outputTokens: "output_tokens",
+  totalTokens: "total_tokens",
+  thinkingTokens: "thinking_tokens",
+  cacheReadTokens: "cache_read_tokens"
+};
+var keys = Object.keys(fields);
+function normalizeUsage(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  return Object.fromEntries(keys.map((key) => {
+    const value = data[fields[key]];
+    return [key, typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null];
+  }));
+}
+function taskTokenUsage(task) {
+  const raw = task.result?.usage;
+  const current = normalizeUsage(raw);
+  const counters = { ...current };
+  const warnings = [];
+  if (task.usageIsResume) {
+    for (const key of keys) {
+      const before = task.usageBaseline?.[key];
+      const after = current[key];
+      counters[key] = before !== void 0 && before !== null && after !== null && after >= before ? after - before : null;
+      if (before !== null && before !== void 0 && after !== null && after < before)
+        warnings.push("Counter reset: " + key);
+    }
+    if (!task.usageBaseline)
+      warnings.push("Previous session counters are unavailable; cumulative usage is not task usage");
+  }
+  const available = keys.some((key) => counters[key] !== null);
+  const partial2 = keys.some((key) => counters[key] === null);
+  if (raw === void 0)
+    warnings.push("Final CLI usage is unavailable");
+  if (partial2)
+    warnings.push("Missing counters remain null; no estimate or zero substitution");
+  return {
+    scope: "task",
+    source: available ? task.usageIsResume ? "session-delta" : "session-total" : "unavailable",
+    counters,
+    available,
+    partial: partial2,
+    warnings
+  };
+}
+function sum(rows) {
+  return Object.fromEntries(keys.map((key) => {
+    if (!rows.length || rows.some((row) => row[key] === null))
+      return [key, null];
+    const total = rows.reduce((total2, row) => total2 + row[key], 0);
+    return [key, Number.isSafeInteger(total) ? total : null];
+  }));
+}
+function aggregateUsage(tasks2) {
+  const byTask = tasks2.map((task) => ({ taskId: task.taskId, sessionId: task.sessionId ?? null, model: task.model ?? null, status: task.status, ...taskTokenUsage(task) }));
+  const models = [...new Set(tasks2.map((task) => task.model ?? null))];
+  const sessions = [...new Set(tasks2.map((task) => task.sessionId).filter((id) => id !== void 0))];
+  return {
+    scope: "retained-tasks",
+    taskCount: tasks2.length,
+    measuredTaskCount: byTask.filter((task) => task.available).length,
+    counters: sum(byTask.map((task) => task.counters)),
+    byTask,
+    byModel: models.map((model) => {
+      const rows = byTask.filter((task) => task.model === model);
+      return { model, taskCount: rows.length, counters: sum(rows.map((task) => task.counters)) };
+    }),
+    bySession: sessions.map((sessionId) => {
+      const rows = byTask.filter((task) => task.sessionId === sessionId);
+      const latest = tasks2.filter((task) => task.sessionId === sessionId && task.result?.usage !== void 0).at(-1);
+      return {
+        sessionId,
+        taskCount: rows.length,
+        counters: sum(rows.map((task) => task.counters)),
+        observedCumulative: latest ? normalizeUsage(latest.result.usage) : null
+      };
+    })
+  };
+}
+
+// dist/src/state-store.js
 var uuid3 = /^[a-f0-9-]{36}$/;
 var snapshotSchema = external_exports.object({
   version: external_exports.literal(1),
@@ -37679,7 +37778,9 @@ var snapshotSchema = external_exports.object({
     pid: external_exports.number().int().positive().optional(),
     mode: external_exports.enum(["write", "read-only"]).optional(),
     integratedAt: external_exports.string().datetime().optional(),
-    discardedAt: external_exports.string().datetime().optional()
+    discardedAt: external_exports.string().datetime().optional(),
+    usageIsResume: external_exports.boolean().optional(),
+    usageBaseline: usageCountersSchema.optional()
   }).passthrough(),
   options: external_exports.object({ prompt: external_exports.string(), workingDirectory: external_exports.string() }).passthrough(),
   project: external_exports.object({
@@ -37852,6 +37953,7 @@ var TaskManager = class {
         this.events.drop(id);
       }
     for (const item of stored) {
+      item.record.usageIsResume ??= Boolean(item.options.sessionId);
       const existing = this.tasks.get(item.record.taskId);
       if (existing?.owned || existing?.project && this.busyProjects.has(existing.project))
         continue;
@@ -37953,6 +38055,8 @@ var TaskManager = class {
         prompt: options.prompt,
         acceptanceCriteria,
         tests: previous?.record.tests,
+        usageIsResume: Boolean(previous),
+        usageBaseline: previous ? normalizeUsage(previous.record.result?.usage) : void 0,
         workingDirectory,
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -37973,11 +38077,16 @@ var TaskManager = class {
     const task = this.tasks.get(taskId);
     if (!task)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
-    return { ...task.record };
+    return { ...task.record, tokenUsage: taskTokenUsage(task.record) };
   }
   list() {
     this.refresh();
-    return [...this.tasks.values()].map((task) => ({ ...task.record }));
+    return [...this.tasks.values()].map((task) => ({ ...task.record, tokenUsage: taskTokenUsage(task.record) }));
+  }
+  usage(filters = {}) {
+    if (filters.taskId)
+      this.status(filters.taskId);
+    return aggregateUsage(this.list().filter((task) => (!filters.taskId || task.taskId === filters.taskId) && (!filters.sessionId || task.sessionId === filters.sessionId) && (!filters.model || task.model === filters.model)));
   }
   result(taskId) {
     const task = this.status(taskId);

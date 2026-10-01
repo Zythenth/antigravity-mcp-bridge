@@ -8,6 +8,7 @@
 - Leitura paginada de patches por arquivo e do JSON final, com hashes, cursores Unicode e opções de resposta compacta.
 - Normalização nativa dos aliases 8.3 nos testes Windows e declaração explícita da cópia no workspace do CLI.
 - Papéis de planejamento e revisão em consulta, contratos JSON e conferência de citações dos achados.
+- Consumo de tokens por tarefa, sessão e modelo, com deltas de retomada, baseline persistido e identificação de dados indisponíveis.
 
 ## 0.3.0
 

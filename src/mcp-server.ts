@@ -28,7 +28,7 @@ function safe<T>(operation: () => Promise<T> | T) {
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
   const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.3.0' }, {
-    instructions: 'Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Use read-only mode for consultations. Review antigravity_preview and actual tests before integration. antigravity_integrate requests confirmation through MCP form elicitation, bound to the reviewed SHA-256; clients without form support cannot integrate. A tool argument or patch hash does not constitute approval. The original project is not modified by antigravity_run.',
+    instructions: 'Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -47,6 +47,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     title: 'Get selected model', description: 'Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.',
     inputSchema: {}, annotations: readOnly,
   }, safe(() => ({ model: tasks.getModel() ?? null })));
+
+  server.registerTool('antigravity_usage', {
+    title: 'Read observed token usage', description: 'Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.',
+    inputSchema: { taskId: z.string().uuid().optional(), sessionId: z.string().min(1).max(128).optional(), model: z.string().min(1).max(128).optional() }, annotations: readOnly,
+  }, async filters => safe(() => tasks.usage(filters))());
 
   server.registerTool('antigravity_list_project_files', {
     title: 'List files eligible for a project copy', description: 'List tracked and untracked files excluding Git ignore and local exclude matches.',

@@ -114,6 +114,8 @@ export class CliAdapter {
     if (options.mode === 'read-only') {
       if (!this.help.includes('--mode') || !this.help.includes('plan')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise plan mode');
       args.push('--mode', 'plan');
+    } else if (this.help.includes('--mode') && this.help.includes('accept-edits')) {
+      args.push('--mode', 'accept-edits');
     }
     if (model) args.push('--model', model);
     if (options.sessionId) args.push('--conversation', options.sessionId);

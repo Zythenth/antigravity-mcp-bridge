@@ -68,6 +68,7 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_verify` | Confere critérios da tarefa e evidências de revisão contra arquivos reais |
 | `antigravity_read_patch` | Lê o patch por arquivo ou em trechos vinculados ao hash completo |
 | `antigravity_read_result` | Lê o JSON final do CLI em trechos com hash de conteúdo |
+| `antigravity_usage` | Consolida tokens observados por tarefa, sessão e modelo |
 | `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
@@ -94,6 +95,16 @@ Fluxo típico:
 A integração exige suporte do cliente a **MCP form elicitation**. `antigravity_health` informa `integrationApproval.available`. O formulário mostra origem, tarefa, hash, arquivos e contagens de linhas; só `accept` com `confirm: true` permite aplicar. Recusa, cancelamento, timeout ou falta de suporte preservam o original. O hash identifica o patch e a confirmação vem de uma resposta separada do cliente; nenhum argumento `approved` é aceito como autorização. Após a resposta, o bridge confere novamente hash e origem. A confirmação depende de um cliente confiável que apresente a decisão ao usuário.
 
 ## Verificação dos resultados
+
+### Consumo de tokens
+
+`antigravity_status` e `antigravity_result` incluem `task.tokenUsage`. `antigravity_usage` consolida as tarefas retidas e aceita filtros por `taskId`, `sessionId` e `model`. A resposta contém `byTask`, `bySession`, `byModel` e os contadores `inputTokens`, `outputTokens`, `totalTokens`, `thinkingTokens` e `cacheReadTokens`.
+
+O [resultado final do agy informa uso cumulativo da sessão](https://www.antigravity.google/docs/cli/headless/#read-the-results). O bridge salva os contadores anteriores ao retomar e usa a diferença para a tarefa seguinte, inclusive quando o modelo muda. Assim, duas respostas cumulativas de 120 e 170 tokens representam 170 tokens na sessão e 50 na segunda tarefa. `observedCumulative` preserva o último total de sessão informado pelo CLI, separado do consumo das tarefas retidas.
+
+Contadores ausentes, inválidos, reiniciados ou sem baseline conhecido ficam `null`; `available`, `partial`, `source` e `warnings` indicam a qualidade dos dados. Não há estimativa de tokens nem substituição silenciosa por zero. O consumo de tarefas falhas também é incluído quando o CLI devolve os contadores finais. Antes desse resultado, o total da tarefa pode estar indisponível. Tarefas antigas removidas pela retenção deixam de compor o consolidado local. Modelo `null` significa que não foi informado um ID; não se presume um modelo padrão.
+
+Esses números são relatos do CLI, sem cálculo de cobrança ou acesso à quota global da conta. Cache e raciocínio são dimensões separadas e não devem ser somados novamente a `totalTokens`. A skill orienta o Codex a informar o consumo disponível ao concluir ou relatar falhas.
 
 ### Papéis de trabalho
 

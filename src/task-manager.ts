@@ -12,6 +12,7 @@ import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verificat
 import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
 import { textChunk } from './chunks.js';
 import { roleSchema, validateRoleReport } from './roles.js';
+import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -49,6 +50,7 @@ export class TaskManager {
       this.tasks.delete(id); this.events.drop(id);
     }
     for (const item of stored) {
+      item.record.usageIsResume ??= Boolean(item.options.sessionId);
       const existing = this.tasks.get(item.record.taskId);
       if (existing?.owned || (existing?.project && this.busyProjects.has(existing.project))) continue;
       if (item.project) {
@@ -128,7 +130,9 @@ export class TaskManager {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, prompt: options.prompt,
-        acceptanceCriteria, tests: previous?.record.tests, workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
+        acceptanceCriteria, tests: previous?.record.tests, usageIsResume: Boolean(previous),
+        usageBaseline: previous ? normalizeUsage((previous.record.result as { usage?: unknown } | undefined)?.usage) : undefined,
+        workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
       this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
       pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
@@ -142,12 +146,18 @@ export class TaskManager {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
-    return { ...task.record };
+    return { ...task.record, tokenUsage: taskTokenUsage(task.record) };
   }
 
   list(): TaskRecord[] {
     this.refresh();
-    return [...this.tasks.values()].map(task => ({ ...task.record }));
+    return [...this.tasks.values()].map(task => ({ ...task.record, tokenUsage: taskTokenUsage(task.record) }));
+  }
+
+  usage(filters: { taskId?: string; sessionId?: string; model?: string } = {}) {
+    if (filters.taskId) this.status(filters.taskId);
+    return aggregateUsage(this.list().filter(task => (!filters.taskId || task.taskId === filters.taskId) &&
+      (!filters.sessionId || task.sessionId === filters.sessionId) && (!filters.model || task.model === filters.model)));
   }
 
   result(taskId: string) {

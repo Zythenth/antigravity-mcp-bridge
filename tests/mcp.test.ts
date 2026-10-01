@@ -98,6 +98,11 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal(observed?.task.status, 'completed', JSON.stringify(observed?.task.error));
     assert.equal(observed.task.tests.at(-1).source, 'agy-tool');
     assert.equal(observed.task.tests.at(-1).exitCode, 0);
+    assert.equal(observed.task.tokenUsage.counters.totalTokens, 3);
+    const consumption = await call('antigravity_usage', { sessionId: observed.task.sessionId });
+    assert.equal(consumption.counters.totalTokens, 6);
+    assert.equal(consumption.bySession[0].observedCumulative.totalTokens, 6);
+    assert.equal(consumption.byModel[0].model, null);
     await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
     for (const response of ['decline', 'cancel', 'accept'] as const) {
@@ -117,6 +122,6 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     await client?.close();
     assert.equal(path.dirname(dir), os.tmpdir());
     assert.ok(path.basename(dir).startsWith('agy-mcp-protocol-test-'));
-    await rm(dir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
