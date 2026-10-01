@@ -1,0 +1,20 @@
+{
+  "name": "antigravity-mcp-bridge",
+  "interface": {
+    "displayName": "Antigravity MCP Bridge"
+  },
+  "plugins": [
+    {
+      "name": "antigravity",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

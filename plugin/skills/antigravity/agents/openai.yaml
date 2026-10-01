@@ -1,0 +1,4 @@
+interface:
+  display_name: "Antigravity"
+  short_description: "Delegue tarefas ao agy e acompanhe resultados"
+  default_prompt: "Use $antigravity para implementar esta tarefa e revisar o resultado."

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "antigravity": {
+      "command": "node",
+      "args": ["./server.mjs"],
+      "cwd": "."
+    }
+  }
+}

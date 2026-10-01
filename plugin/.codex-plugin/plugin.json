@@ -1,0 +1,19 @@
+{
+  "name": "antigravity",
+  "version": "0.1.0",
+  "description": "Delegate coding tasks to Google Antigravity through the official agy CLI.",
+  "author": {
+    "name": "Zythenth"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Antigravity",
+    "shortDescription": "Delegue tarefas ao agy e acompanhe a execução.",
+    "longDescription": "Use o CLI oficial do Antigravity pelo Codex para escolher modelos, executar tarefas e revisar eventos e resultados.",
+    "developerName": "Zythenth",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Use o Antigravity para implementar esta tarefa e revise o resultado."]
+  }
+}
