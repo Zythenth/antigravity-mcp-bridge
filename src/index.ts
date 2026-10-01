@@ -8,6 +8,7 @@ const config = loadConfig();
 const adapter = new CliAdapter(config);
 await adapter.discover();
 const tasks = new TaskManager(adapter, config);
+await tasks.cleanup();
 const server = createMcpServer(adapter, tasks);
 await server.connect(new StdioServerTransport());
 const cleanupTimer = setInterval(() => {

@@ -3261,8 +3261,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path5) {
-      let input2 = path5;
+    function removeDotSegments(path6) {
+      let input2 = path6;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3671,8 +3671,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path5 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
+        const path6 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8017,10 +8017,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path6) {
+  if (!path6)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path6.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -8360,11 +8360,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path6, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path6);
     return iss;
   });
 }
@@ -8814,16 +8814,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path5 = []) => {
+  const processError = (error63, path6 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path6, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8862,17 +8862,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path5 = []) => {
+  const processError = (error63, path6 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
       } else {
-        const fullpath = [...path5, ...issue2.path];
+        const fullpath = [...path6, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8911,8 +8911,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path5 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path5) {
+  const path6 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path6) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26014,13 +26014,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path5 = ref.slice(1).split("/").filter(Boolean);
-  if (path5.length === 0) {
+  const path6 = ref.slice(1).split("/").filter(Boolean);
+  if (path6.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path5[0] === defsKey) {
-    const key = path5[1] === void 0 ? void 0 : decodeJSONPointerSegment(path5[1]);
+  if (path6[0] === defsKey) {
+    const key = path6[1] === void 0 ? void 0 : decodeJSONPointerSegment(path6[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28667,6 +28667,7 @@ var CliAdapter = class {
 
 // dist/src/config.js
 import path2 from "node:path";
+import os from "node:os";
 function positiveInteger(value, fallback, max) {
   if (value === void 0)
     return fallback;
@@ -28685,6 +28686,7 @@ function loadConfig(env = process.env) {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
+    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path2.join(os.homedir(), ".antigravity-mcp-bridge"),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path2.delimiter).filter(Boolean).map((p) => path2.resolve(p))
   };
 }
@@ -29063,8 +29065,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path5, errorMaps, issueData } = params;
-  const fullPath = [...path5, ...issueData.path || []];
+  const { data, path: path6, errorMaps, issueData } = params;
+  const fullPath = [...path6, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -29179,11 +29181,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path5, key) {
+  constructor(parent, value, path6, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path5;
+    this._path = path6;
     this._key = key;
   }
   get path() {
@@ -32734,11 +32736,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path5) {
-  if (path5.length === 0) {
+function getDotPath(path6) {
+  if (path6.length === 0) {
     return "object root";
   }
-  return path5.reduce((acc, seg, index) => {
+  return path6.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -36666,11 +36668,11 @@ import { createHash } from "node:crypto";
 import { spawn as spawn2 } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
-import os from "node:os";
+import os2 from "node:os";
 import path3 from "node:path";
 var maxGitOutput = 1e7;
 async function discardProjectCopy(project) {
-  const root = await realpath(os.tmpdir());
+  const root = await realpath(os2.tmpdir());
   const targets = [
     [project.copyDirectory, "agy-mcp-copy-"],
     [project.gitDirectory, "agy-mcp-baseline-"]
@@ -36773,7 +36775,7 @@ async function listProjectFiles(sourceDirectory) {
   const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
   return candidates.filter((file2) => !ignored.has(file2) && !file2.split("/").includes(".git")).sort();
 }
-async function createProjectCopy(sourceDirectory, includePaths) {
+async function createProjectCopy(sourceDirectory, includePaths, onCreated) {
   const candidates = await listProjectFiles(sourceDirectory);
   let selected = candidates;
   if (includePaths !== void 0) {
@@ -36789,10 +36791,12 @@ async function createProjectCopy(sourceDirectory, includePaths) {
   }
   if (!selected.length)
     throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
-  const copyDirectory = await mkdtemp(path3.join(os.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path3.join(os.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   try {
+    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    onCreated?.(project);
     for (const relative of selected) {
       const source = await checkedPath(sourceDirectory, relative, true);
       const target = path3.join(copyDirectory, ...relative.split("/"));
@@ -36817,12 +36821,12 @@ async function createProjectCopy(sourceDirectory, includePaths) {
       "-m",
       "baseline"
     ]);
-    return { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    return project;
   } catch (error62) {
-    if (path3.dirname(copyDirectory) === os.tmpdir() && path3.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+    if (path3.dirname(copyDirectory) === os2.tmpdir() && path3.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
       await rm(copyDirectory, { recursive: true, force: true });
     }
-    if (path3.dirname(gitDirectory) === os.tmpdir() && path3.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+    if (path3.dirname(gitDirectory) === os2.tmpdir() && path3.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
       await rm(gitDirectory, { recursive: true, force: true });
     }
     throw error62;
@@ -37008,6 +37012,12 @@ function createMcpServer(adapter2, tasks2) {
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: readOnly
   }, async ({ taskId }) => safe(() => ({ task: tasks2.status(taskId) }))());
+  server2.registerTool("antigravity_tasks", {
+    title: "List persisted tasks",
+    description: "Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.",
+    inputSchema: {},
+    annotations: readOnly
+  }, safe(() => ({ tasks: tasks2.list().map(({ prompt: _prompt, ...task }) => task) })));
   server2.registerTool("antigravity_events", {
     title: "Read Antigravity events",
     description: "Read live normalized agy events after a sequence cursor. Includes original agy event payloads.",
@@ -37028,15 +37038,15 @@ function createMcpServer(adapter2, tasks2) {
   }, async ({ taskId }) => safe(async () => ({ task: await tasks2.cancel(taskId) }))());
   server2.registerTool("antigravity_sessions", {
     title: "List known Antigravity sessions",
-    description: "List conversation IDs observed by this bridge process. agy 1.2.11 does not advertise a session-list command.",
+    description: "List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.",
     inputSchema: {},
     annotations: readOnly
-  }, safe(() => ({ sessions: tasks2.sessions(), scope: "current bridge process" })));
+  }, safe(() => ({ sessions: tasks2.sessions(), scope: "local bridge state" })));
   return server2;
 }
 
 // dist/src/task-manager.js
-import { randomUUID } from "node:crypto";
+import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/logger.js
@@ -37055,10 +37065,12 @@ function logTaskEvent(taskId, type, data) {
 // dist/src/event-store.js
 var EventStore = class {
   capacity;
+  onAppend;
   events = [];
   cursors = /* @__PURE__ */ new Map();
-  constructor(capacity) {
+  constructor(capacity, onAppend) {
     this.capacity = capacity;
+    this.onAppend = onAppend;
   }
   append(taskId, type, data, raw) {
     const sequence = (this.cursors.get(taskId) || 0) + 1;
@@ -37074,6 +37086,7 @@ var EventStore = class {
     if (this.events.length > this.capacity)
       this.events.splice(0, this.events.length - this.capacity);
     logTaskEvent(taskId, type, data);
+    this.onAppend?.(taskId);
     return event;
   }
   read(taskId, after = 0, limit = 200) {
@@ -37088,6 +37101,17 @@ var EventStore = class {
       if (this.events[index]?.taskId === taskId)
         this.events.splice(index, 1);
     }
+  }
+  snapshot(taskId) {
+    return { events: this.events.filter((event) => event.taskId === taskId), cursor: this.cursors.get(taskId) || 0 };
+  }
+  restore(taskId, events, cursor) {
+    this.drop(taskId);
+    this.events.push(...events);
+    this.events.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.sequence - b.sequence);
+    if (this.events.length > this.capacity)
+      this.events.splice(0, this.events.length - this.capacity);
+    this.cursors.set(taskId, cursor);
   }
 };
 
@@ -37162,6 +37186,132 @@ function validatePrompt(prompt, maxChars) {
   }
 }
 
+// dist/src/state-store.js
+import { randomUUID } from "node:crypto";
+import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import path5 from "node:path";
+import os3 from "node:os";
+var uuid3 = /^[a-f0-9-]{36}$/;
+var snapshotSchema = external_exports.object({
+  version: external_exports.literal(1),
+  ownerPid: external_exports.number().int().positive(),
+  record: external_exports.object({
+    taskId: external_exports.string().uuid(),
+    workingDirectory: external_exports.string(),
+    prompt: external_exports.string(),
+    status: external_exports.enum(["queued", "starting", "running", "streaming", "completed", "failed", "cancelled", "timeout"]),
+    createdAt: external_exports.string().datetime(),
+    completedAt: external_exports.string().datetime().optional(),
+    pid: external_exports.number().int().positive().optional(),
+    mode: external_exports.enum(["write", "read-only"]).optional(),
+    integratedAt: external_exports.string().datetime().optional(),
+    discardedAt: external_exports.string().datetime().optional()
+  }).passthrough(),
+  options: external_exports.object({ prompt: external_exports.string(), workingDirectory: external_exports.string() }).passthrough(),
+  project: external_exports.object({
+    sourceDirectory: external_exports.string(),
+    copyDirectory: external_exports.string(),
+    gitDirectory: external_exports.string(),
+    baseline: external_exports.array(external_exports.tuple([external_exports.string(), external_exports.string().regex(/^[a-f0-9]{64}$/)])),
+    includedFiles: external_exports.array(external_exports.string())
+  }).optional(),
+  events: external_exports.array(external_exports.object({ taskId: external_exports.string().uuid(), sequence: external_exports.number().int().positive(), timestamp: external_exports.string(), type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() })),
+  cursor: external_exports.number().int().nonnegative()
+});
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error62) {
+    return error62.code !== "ESRCH";
+  }
+}
+var StateStore = class {
+  directory;
+  constructor(directory) {
+    this.directory = directory;
+    if (!path5.isAbsolute(directory))
+      throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
+    mkdirSync(directory, { recursive: true, mode: 448 });
+    if (lstatSync(directory).isSymbolicLink())
+      throw new BridgeError("INVALID_STATE_DIRECTORY", "State directory cannot be a link");
+  }
+  file(taskId) {
+    if (!uuid3.test(taskId))
+      throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
+    return path5.join(this.directory, taskId + ".json");
+  }
+  save(task) {
+    const target = this.file(task.record.taskId);
+    const temporary = target + "." + randomUUID() + ".tmp";
+    const snapshot = { ...task, version: 1, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
+    try {
+      writeFileSync(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
+      renameSync(temporary, target);
+    } finally {
+      rmSync(temporary, { force: true });
+    }
+  }
+  load() {
+    return readdirSync(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
+      const file2 = path5.join(this.directory, name);
+      if (lstatSync(file2).isSymbolicLink() || lstatSync(file2).size > 7e7)
+        throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
+      let data;
+      try {
+        data = snapshotSchema.parse(JSON.parse(readFileSync(file2, "utf8")));
+      } catch {
+        throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
+      }
+      if (data.record.taskId + ".json" !== name || !path5.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+        throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
+      }
+      if (data.project) {
+        for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
+          if (!path5.isAbsolute(directory) || path5.relative(os3.tmpdir(), path5.dirname(directory)) !== "" || !path5.basename(directory).startsWith(prefix)) {
+            throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
+          }
+        }
+        if (data.project.sourceDirectory !== data.record.workingDirectory)
+          throw new BridgeError("INVALID_STATE", "Persisted source differs from task");
+      }
+      return {
+        ...data,
+        record: data.record,
+        options: data.options,
+        project: data.project && { ...data.project, baseline: new Map(data.project.baseline) }
+      };
+    }).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt));
+  }
+  drop(taskId) {
+    rmSync(this.file(taskId), { force: true });
+  }
+  acquire(name) {
+    if (!/^[a-zA-Z0-9-]+$/.test(name))
+      throw new BridgeError("INVALID_STATE", "Invalid lock name");
+    const file2 = path5.join(this.directory, name + ".lock");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        writeFileSync(file2, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
+        return () => rmSync(file2, { force: true });
+      } catch (error62) {
+        if (error62.code !== "EEXIST")
+          throw error62;
+        let pid;
+        try {
+          pid = JSON.parse(readFileSync(file2, "utf8")).pid;
+        } catch {
+        }
+        if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 1 || processAlive(pid)) {
+          throw new BridgeError("STATE_BUSY", "Another bridge operation owns this task or copy");
+        }
+        rmSync(file2);
+      }
+    }
+    throw new BridgeError("STATE_BUSY", "Could not acquire bridge state lock");
+  }
+};
+
 // dist/src/task-manager.js
 var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
 var TaskManager = class {
@@ -37174,10 +37324,52 @@ var TaskManager = class {
   selectedModel;
   stopped = false;
   busyProjects = /* @__PURE__ */ new Set();
+  state;
   constructor(adapter2, config3) {
     this.adapter = adapter2;
     this.config = config3;
-    this.events = new EventStore(config3.eventBufferSize);
+    this.state = new StateStore(config3.stateDirectory);
+    this.events = new EventStore(config3.eventBufferSize, (taskId) => this.persist(taskId));
+    this.refresh();
+  }
+  persist(taskId) {
+    const task = this.tasks.get(taskId);
+    if (task)
+      this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
+  }
+  projectLock(project) {
+    return "copy-" + createHash2("sha256").update(project.copyDirectory).digest("hex");
+  }
+  refresh() {
+    const stored = this.state.load();
+    const projects = new Map([...this.tasks.values()].filter((task) => task.project && (task.owned || this.busyProjects.has(task.project))).map((task) => [task.project.copyDirectory, task.project]));
+    const ids = new Set(stored.map((task) => task.record.taskId));
+    for (const [id, task] of this.tasks)
+      if (!ids.has(id) && !task.owned && !this.busyProjects.has(task.project)) {
+        this.tasks.delete(id);
+        this.events.drop(id);
+      }
+    for (const item of stored) {
+      const existing = this.tasks.get(item.record.taskId);
+      if (existing?.owned || existing?.project && this.busyProjects.has(existing.project))
+        continue;
+      if (item.project) {
+        if (!projects.has(item.project.copyDirectory))
+          projects.set(item.project.copyDirectory, item.project);
+        item.project = projects.get(item.project.copyDirectory);
+      }
+      const task = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
+      this.tasks.set(item.record.taskId, task);
+      this.events.restore(item.record.taskId, item.events, item.cursor);
+      if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
+        if (item.record.pid && processAlive(item.record.pid)) {
+          item.record.error = { code: "ORPHAN_PROCESS_RUNNING", message: "The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination" };
+        } else {
+          task.ownerPid = process.pid;
+          this.finish(task, "failed", "SERVER_RESTARTED", "Previous execution was interrupted; inspect its copy before starting new work");
+        }
+      }
+    }
   }
   getModel() {
     return this.selectedModel;
@@ -37208,59 +37400,73 @@ var TaskManager = class {
     }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId))
       throw new BridgeError("INVALID_SESSION", "Invalid conversation ID");
-    const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task) => task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : void 0;
-    if (options.sessionId && (!previous || previous.record.status !== "completed" || previous.record.integratedAt)) {
-      throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
-    }
-    if (previous?.project && this.busyProjects.has(previous.project))
-      throw new BridgeError("TASK_NOT_READY", "The copy is being reviewed or removed");
-    if (previous && options.includePaths !== void 0)
-      throw new BridgeError("INVALID_INCLUDE_PATH", "A resumed task reuses its original file selection");
-    const mode = options.mode ?? previous?.record.mode ?? "write";
-    if (!["write", "read-only"].includes(mode))
-      throw new BridgeError("INVALID_MODE", "mode must be write or read-only");
-    if (previous && mode !== previous.record.mode)
-      throw new BridgeError("INVALID_MODE", "A resumed task must retain its original mode");
-    if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
-      throw new BridgeError("QUEUE_FULL", "Task queue is full");
-    }
-    if (this.tasks.size >= this.config.maxRetainedTasks) {
-      const oldestFinished = [...this.tasks.values()].find((task) => terminal.has(task.record.status));
-      if (!oldestFinished)
-        throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
-      if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
-        await this.discard(oldestFinished.record.taskId);
+    const releaseRegistry = this.state.acquire("registry");
+    try {
+      this.refresh();
+      const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task) => task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : void 0;
+      if (options.sessionId && (!previous || previous.record.status !== "completed" || previous.record.integratedAt)) {
+        throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
       }
-      this.tasks.delete(oldestFinished.record.taskId);
-      this.events.drop(oldestFinished.record.taskId);
+      if (previous?.project && this.busyProjects.has(previous.project))
+        throw new BridgeError("TASK_NOT_READY", "The copy is being reviewed or removed");
+      if (previous && options.includePaths !== void 0)
+        throw new BridgeError("INVALID_INCLUDE_PATH", "A resumed task reuses its original file selection");
+      const mode = options.mode ?? previous?.record.mode ?? "write";
+      if (!["write", "read-only"].includes(mode))
+        throw new BridgeError("INVALID_MODE", "mode must be write or read-only");
+      if (previous && mode !== previous.record.mode)
+        throw new BridgeError("INVALID_MODE", "A resumed task must retain its original mode");
+      if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
+        throw new BridgeError("QUEUE_FULL", "Task queue is full");
+      }
+      if (this.tasks.size >= this.config.maxRetainedTasks) {
+        const oldestFinished = [...this.tasks.values()].find((task) => terminal.has(task.record.status));
+        if (!oldestFinished)
+          throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
+        if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
+          await this.discard(oldestFinished.record.taskId);
+        }
+        this.tasks.delete(oldestFinished.record.taskId);
+        this.events.drop(oldestFinished.record.taskId);
+        this.state.drop(oldestFinished.record.taskId);
+      }
+      const record2 = {
+        taskId: randomUUID2(),
+        sessionId: options.sessionId,
+        model,
+        mode,
+        prompt: options.prompt,
+        workingDirectory,
+        status: "queued",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const releaseProject = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : void 0;
+      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject });
+      this.queue.push(record2.taskId);
+      this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
+      this.pump();
+      return { ...record2 };
+    } finally {
+      releaseRegistry();
     }
-    const record2 = {
-      taskId: randomUUID(),
-      sessionId: options.sessionId,
-      model,
-      mode,
-      prompt: options.prompt,
-      workingDirectory,
-      status: "queued",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.tasks.set(record2.taskId, { record: record2, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project });
-    this.queue.push(record2.taskId);
-    this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
-    this.pump();
-    return { ...record2 };
   }
   status(taskId) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
     return { ...task.record };
+  }
+  list() {
+    this.refresh();
+    return [...this.tasks.values()].map((task) => ({ ...task.record }));
   }
   result(taskId) {
     const task = this.status(taskId);
     return { task, ready: terminal.has(task.status) };
   }
   async preview(taskId) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
@@ -37271,13 +37477,17 @@ var TaskManager = class {
       throw new BridgeError("TASK_NOT_READY", "Wait for all operations on this copy to finish");
     }
     this.busyProjects.add(project);
+    let release;
     try {
+      release = this.state.acquire(this.projectLock(project));
       return await operation();
     } finally {
+      release?.();
       this.busyProjects.delete(project);
     }
   }
   async discard(taskId) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
@@ -37298,6 +37508,7 @@ var TaskManager = class {
     return this.status(taskId);
   }
   async cleanup(now = Date.now()) {
+    this.refresh();
     const discardedTaskIds = [];
     for (const project of new Set([...this.tasks.values()].map((task) => task.project).filter((p) => Boolean(p)))) {
       const related = [...this.tasks.values()].filter((task) => task.project === project);
@@ -37312,6 +37523,7 @@ var TaskManager = class {
     return { discardedTaskIds };
   }
   async integrate(taskId, expectedSha256) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== "completed")
       throw new BridgeError("TASK_NOT_READY", "Only completed tasks can be integrated");
@@ -37326,11 +37538,18 @@ var TaskManager = class {
       throw new BridgeError("TASK_NOT_READY", "Wait for the resumed task to finish");
     }
     return this.withProject(task.project, async () => {
-      const preview = await integrateProjectCopy(task.project, expectedSha256);
-      for (const related of this.tasks.values())
-        if (related.project === task.project)
-          related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
-      return preview;
+      const releaseSource = this.state.acquire("source-" + createHash2("sha256").update(task.record.workingDirectory).digest("hex"));
+      try {
+        const preview = await integrateProjectCopy(task.project, expectedSha256);
+        for (const related of this.tasks.values())
+          if (related.project === task.project) {
+            related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
+            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256 });
+          }
+        return preview;
+      } finally {
+        releaseSource();
+      }
     });
   }
   readEvents(taskId, after = 0, limit = 200) {
@@ -37338,6 +37557,7 @@ var TaskManager = class {
     return this.events.read(taskId, after, limit);
   }
   sessions() {
+    this.refresh();
     const sessions = /* @__PURE__ */ new Map();
     for (const { record: record2 } of this.tasks.values()) {
       if (record2.sessionId)
@@ -37346,11 +37566,14 @@ var TaskManager = class {
     return [...sessions].map(([sessionId, taskIds]) => ({ sessionId, taskIds }));
   }
   async cancel(taskId) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
     if (terminal.has(task.record.status))
       return this.status(taskId);
+    if (!task.owned)
+      throw new BridgeError("TASK_OWNED_BY_OTHER_SERVER", "Cancel the task in the bridge process that started it");
     if (task.record.status === "queued") {
       const index = this.queue.indexOf(taskId);
       if (index !== -1)
@@ -37359,6 +37582,9 @@ var TaskManager = class {
       task.record.error = { code: "TASK_CANCELLED", message: "Task cancelled before execution" };
       task.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
       this.events.append(taskId, "task.cancelled", {});
+      task.owned = false;
+      task.releaseProject?.();
+      task.releaseProject = void 0;
     } else {
       task.termination = "cancelled";
       if (task.child)
@@ -37368,7 +37594,9 @@ var TaskManager = class {
   }
   async shutdown() {
     this.stopped = true;
-    await Promise.all([...this.tasks.keys()].map((id) => this.cancel(id)));
+    const owned = [...this.tasks.values()].filter((task) => task.owned);
+    await Promise.all(owned.map((task) => this.cancel(task.record.taskId)));
+    await Promise.all(owned.map((task) => task.completion));
   }
   pump() {
     while (!this.stopped && this.active < this.config.maxConcurrentTasks && this.queue.length) {
@@ -37376,7 +37604,10 @@ var TaskManager = class {
       if (!task || task.record.status !== "queued")
         continue;
       this.active++;
-      void this.execute(task).finally(() => {
+      task.completion = this.execute(task).finally(() => {
+        task.releaseProject?.();
+        task.releaseProject = void 0;
+        task.owned = false;
         this.active--;
         this.pump();
       });
@@ -37388,9 +37619,14 @@ var TaskManager = class {
     record2.startedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.events.append(record2.taskId, "task.started", {});
     try {
-      task.project ??= await createProjectCopy(record2.workingDirectory, task.options.includePaths);
+      task.project ??= await createProjectCopy(record2.workingDirectory, task.options.includePaths, (project) => {
+        task.project = project;
+        this.events.append(record2.taskId, "copy.created", { copyDirectory: project.copyDirectory });
+      });
+      task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
       record2.copyDirectory = task.project.copyDirectory;
       record2.includedFiles = task.project.includedFiles;
+      this.events.append(record2.taskId, "copy.ready", { copyDirectory: record2.copyDirectory });
       if (task.termination) {
         this.finish(task, task.termination);
         return;
@@ -37517,6 +37753,7 @@ var config2 = loadConfig();
 var adapter = new CliAdapter(config2);
 await adapter.discover();
 var tasks = new TaskManager(adapter, config2);
+await tasks.cleanup();
 var server = createMcpServer(adapter, tasks);
 await server.connect(new StdioServerTransport());
 var cleanupTimer = setInterval(() => {

@@ -120,7 +120,7 @@ export async function listProjectFiles(sourceDirectory: string): Promise<string[
   return candidates.filter(file => !ignored.has(file) && !file.split('/').includes('.git')).sort();
 }
 
-export async function createProjectCopy(sourceDirectory: string, includePaths?: string[]): Promise<ProjectCopy> {
+export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void): Promise<ProjectCopy> {
   const candidates = await listProjectFiles(sourceDirectory);
   let selected = candidates;
   if (includePaths !== undefined) {
@@ -139,6 +139,8 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
   const baseline = new Map<string, string>();
   try {
+    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    onCreated?.(project);
     for (const relative of selected) {
       const source = await checkedPath(sourceDirectory, relative, true);
       const target = path.join(copyDirectory, ...relative.split('/'));
@@ -155,7 +157,7 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
       '-c', 'core.hooksPath=' + path.join(gitDirectory, 'disabled-hooks'),
       'commit', '--quiet', '--allow-empty', '-m', 'baseline',
     ]);
-    return { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    return project;
   } catch (error) {
     if (path.dirname(copyDirectory) === os.tmpdir() && path.basename(copyDirectory).startsWith('agy-mcp-copy-')) {
       await rm(copyDirectory, { recursive: true, force: true });

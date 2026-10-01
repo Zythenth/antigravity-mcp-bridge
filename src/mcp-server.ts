@@ -100,6 +100,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
   }, async ({ taskId }) => safe(() => ({ task: tasks.status(taskId) }))());
 
+  server.registerTool('antigravity_tasks', {
+    title: 'List persisted tasks', description: 'Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.',
+    inputSchema: {}, annotations: readOnly,
+  }, safe(() => ({ tasks: tasks.list().map(({ prompt: _prompt, ...task }) => task) })));
+
   server.registerTool('antigravity_events', {
     title: 'Read Antigravity events', description: 'Read live normalized agy events after a sequence cursor. Includes original agy event payloads.',
     inputSchema: { taskId: z.string().uuid(), after: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(1000).optional() },
@@ -117,9 +122,9 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId }) => safe(async () => ({ task: await tasks.cancel(taskId) }))());
 
   server.registerTool('antigravity_sessions', {
-    title: 'List known Antigravity sessions', description: 'List conversation IDs observed by this bridge process. agy 1.2.11 does not advertise a session-list command.',
+    title: 'List known Antigravity sessions', description: 'List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.',
     inputSchema: {}, annotations: readOnly,
-  }, safe(() => ({ sessions: tasks.sessions(), scope: 'current bridge process' })));
+  }, safe(() => ({ sessions: tasks.sessions(), scope: 'local bridge state' })));
 
   return server;
 }

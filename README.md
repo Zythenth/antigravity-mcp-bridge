@@ -64,13 +64,14 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra os arquivos alterados, patch e hash para revisão |
 | `antigravity_integrate` | Aplica o patch revisado ao projeto original após aprovação |
+| `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
 | `antigravity_events` | Lê eventos após um cursor `after` |
 | `antigravity_result` | Consulta o resultado ou informa `ready: false` |
 | `antigravity_discard` | Remove a cópia e o baseline de uma tarefa finalizada |
 | `antigravity_cleanup` | Remove cópias finalizadas cujo prazo de retenção expirou |
 | `antigravity_cancel` | Cancela tarefa na fila ou encerra o processo local |
-| `antigravity_sessions` | Lista sessões vistas pela instância atual do bridge |
+| `antigravity_sessions` | Lista sessões conhecidas no estado local |
 | `antigravity_resume` | Retoma uma conversa conhecida pelo `sessionId` |
 
 `antigravity_run` recebe `prompt`, `workingDirectory` absoluto na raiz de um repositório Git e, opcionalmente, `model`, `timeoutSeconds`, `mode` e `includePaths` (arquivos ou pastas relativos à raiz). Sem `includePaths`, copia todos os arquivos rastreados e não rastreados que **não** correspondam a `.gitignore`, `.git/info/exclude` ou às outras regras de ignore do Git. O filtro também exclui arquivos rastreados que passaram a ser ignorados. `includePaths` apenas reduz essa seleção; não permite incluir arquivos ignorados. Links simbólicos e caminhos fora da raiz são recusados. Consulte `antigravity_list_models` antes de selecionar um modelo.
@@ -87,15 +88,15 @@ Fluxo típico:
 
 ## Eventos, sessões e cancelamento
 
-O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado em memória: `truncated: true` indica perda de eventos antigos. Tarefas, eventos e modelos selecionados em memória desaparecem ao reiniciar o servidor.
+O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O modelo padrão continua restrito ao processo. O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
 
-`antigravity_resume` usa o `conversation_id` de uma tarefa concluída nesta instância e reutiliza sua cópia isolada. `antigravity_sessions` não lista conversas antigas desconhecidas pelo processo atual. O cancelamento encerra o subprocesso local; alterações parciais na cópia podem permanecer e devem ser revisadas.
+`antigravity_resume` usa o `conversation_id` de uma tarefa concluída, inclusive após reinício, e reutiliza sua cópia isolada. Use `antigravity_tasks` para recuperar IDs e `antigravity_sessions` para consultar sessões persistidas. Execuções interrompidas não são repetidas automaticamente: recebem `SERVER_RESTARTED` quando o processo anterior já terminou. Se o PID registrado ainda estiver vivo, a cópia fica bloqueada com `ORPHAN_PROCESS_RUNNING`; o bridge não encerra processos recuperados apenas por PID. Tarefas de outro servidor ativo podem ser acompanhadas, mas devem ser canceladas no servidor que as iniciou. Locks locais impedem uso simultâneo da mesma cópia. O cancelamento encerra o subprocesso local; alterações parciais na cópia podem permanecer e devem ser revisadas.
 
 ## Cópia, revisão e integração
 
 Antes de chamar `agy`, o bridge cria uma cópia temporária dos arquivos elegíveis e mantém um baseline Git separado da cópia. O CLI recebe a cópia como diretório de trabalho e a opção `--sandbox`. O projeto original só muda por `antigravity_integrate`, depois da revisão do patch. O bridge não faz commit, merge nem push.
 
-O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
+O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas na inicialização e a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
 
 ## Configuração e segurança
 
@@ -104,9 +105,10 @@ O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias perm
 | `AGY_PATH` | `agy` | Caminho do CLI oficial |
 | `MAX_CONCURRENT_TASKS` | `1` | Processos simultâneos |
 | `MAX_QUEUED_TASKS` | `20` | Tarefas aguardando |
-| `MAX_RETAINED_TASKS` | `100` | Tarefas mantidas em memória |
+| `MAX_RETAINED_TASKS` | `100` | Tarefas persistidas retidas |
 | `DEFAULT_TIMEOUT_SECONDS` | `1800` | Prazo máximo por execução |
 | `EVENT_BUFFER_SIZE` | `2000` | Eventos mantidos em memória |
+| `BRIDGE_STATE_DIRECTORY` | `~/.antigravity-mcp-bridge` | Diretório privado de tarefas e sessões |
 | `COPY_RETENTION_HOURS` | `168` | Prazo de retenção das cópias finalizadas |
 | `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt |
 | `FORBIDDEN_DIRECTORIES` | vazio | Diretórios bloqueados, separados por `;` no Windows |

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import os from 'node:os';
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
@@ -16,6 +17,7 @@ export interface Config {
   eventBufferSize: number;
   maxPromptChars: number;
   copyRetentionHours: number;
+  stateDirectory: string;
   forbiddenDirectories: string[];
 }
 
@@ -29,6 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2000, 100000),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 50000, 1000000),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
+    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge'),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || '').split(path.delimiter).filter(Boolean).map(p => path.resolve(p)),
   };
 }

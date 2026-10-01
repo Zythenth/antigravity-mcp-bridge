@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { CliAdapter } from '../src/cli-adapter.js';
 import { loadConfig } from '../src/config.js';
 import { EventStore } from '../src/event-store.js';
@@ -14,6 +15,71 @@ import type { TaskRecord } from '../src/types.js';
 import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
+const stateDirectories: string[] = [];
+const managers: TaskManager[] = [];
+after(async () => {
+  for (const tasks of managers) {
+    await tasks.shutdown();
+    for (const task of tasks.list()) if (done(task)) await tasks.discard(task.taskId);
+  }
+  for (const directory of stateDirectories) {
+    assert.equal(path.dirname(directory), os.tmpdir());
+    assert.ok(path.basename(directory).startsWith('agy-mcp-state-test-'));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('restart recovers tasks, bounded events, sessions and the original copy', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'split:test', workingDirectory: dir });
+    const finished = await until(tasks, first.taskId, done);
+    const events = tasks.readEvents(first.taskId);
+    await tasks.shutdown();
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    assert.equal(recovered.status(first.taskId).copyDirectory, finished.copyDirectory);
+    assert.deepEqual(recovered.readEvents(first.taskId), events);
+    assert.ok(recovered.sessions().some(session => session.sessionId === finished.sessionId));
+    const next = await recovered.run({ prompt: 'write:test', workingDirectory: dir, sessionId: finished.sessionId });
+    await until(recovered, next.taskId, done);
+    assert.equal(recovered.status(next.taskId).copyDirectory, finished.copyDirectory);
+    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    const preview = await recovered.preview(next.taskId);
+    await recovered.integrate(next.taskId, preview.sha256);
+    assert.ok(tasks.status(first.taskId).integratedAt);
+    await tasks.discard(first.taskId);
+    assert.ok(recovered.status(next.taskId).discardedAt);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('recovery never replays interrupted work or terminates an unowned live PID', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'test', workingDirectory: dir });
+    await until(tasks, first.taskId, done); await tasks.shutdown();
+    const file = path.join(config.stateDirectory, first.taskId + '.json');
+    const data = JSON.parse(await readFile(file, 'utf8'));
+    data.ownerPid = 99999999; data.record.status = 'queued'; delete data.record.pid;
+    await writeFile(file, JSON.stringify(data));
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    assert.equal(recovered.result(first.taskId).ready, true);
+    assert.equal(recovered.status(first.taskId).error?.code, 'SERVER_RESTARTED');
+    assert.equal(recovered.readEvents(first.taskId).events.at(-1)?.type, 'task.failed');
+    data.record.status = 'running'; data.record.pid = process.pid;
+    await writeFile(file, JSON.stringify(data));
+    assert.equal(recovered.result(first.taskId).ready, false);
+    assert.equal(recovered.status(first.taskId).error?.code, 'ORPHAN_PROCESS_RUNNING');
+    await assert.rejects(recovered.cancel(first.taskId), { code: 'TASK_OWNED_BY_OTHER_SERVER' });
+    await assert.rejects(recovered.discard(first.taskId), { code: 'TASK_NOT_READY' });
+    data.record.status = 'failed'; delete data.record.pid;
+    await writeFile(file, JSON.stringify(data));
+    await recovered.discard(first.taskId);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
 
 test('read-only uses plan mode, survives resume, rejects integration and detects edits', async () => {
   const dir = await repository();
@@ -84,9 +150,11 @@ test('cleanup expires only inactive copies and deletion rejects source paths', a
 });
 
 function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> = {}) {
-  const config = loadConfig({ AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '2', ...configOverrides });
+  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(stateDirectory);
+  const config = loadConfig({ AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '2', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });
   const adapter = new CliAdapter(config, prefixArgs);
-  return { adapter, tasks: new TaskManager(adapter, config) };
+  const tasks = new TaskManager(adapter, config); managers.push(tasks);
+  return { adapter, tasks, config };
 }
 
 async function until(tasks: TaskManager, taskId: string, predicate: (record: TaskRecord) => boolean, timeout = 5000): Promise<TaskRecord> {

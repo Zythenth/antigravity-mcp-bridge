@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
@@ -7,8 +7,9 @@ import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewPro
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
+import { processAlive, StateStore } from './state-store.js';
 
-interface InternalTask { record: TaskRecord; options: RunOptions; project?: ProjectCopy; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number }
+interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 export class TaskManager {
@@ -19,9 +20,49 @@ export class TaskManager {
   private selectedModel?: string;
   private stopped = false;
   private readonly busyProjects = new Set<ProjectCopy>();
+  private readonly state: StateStore;
 
   constructor(private readonly adapter: CliAdapter, private readonly config: Config) {
-    this.events = new EventStore(config.eventBufferSize);
+    this.state = new StateStore(config.stateDirectory);
+    this.events = new EventStore(config.eventBufferSize, taskId => this.persist(taskId));
+    this.refresh();
+  }
+
+  private persist(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (task) this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
+  }
+
+  private projectLock(project: ProjectCopy): string {
+    return 'copy-' + createHash('sha256').update(project.copyDirectory).digest('hex');
+  }
+
+  private refresh(): void {
+    const stored = this.state.load();
+    const projects = new Map([...this.tasks.values()].filter(task => task.project && (task.owned || this.busyProjects.has(task.project))).map(task => [task.project!.copyDirectory, task.project!]));
+    const ids = new Set(stored.map(task => task.record.taskId));
+    for (const [id, task] of this.tasks) if (!ids.has(id) && !task.owned && !this.busyProjects.has(task.project!)) {
+      this.tasks.delete(id); this.events.drop(id);
+    }
+    for (const item of stored) {
+      const existing = this.tasks.get(item.record.taskId);
+      if (existing?.owned || (existing?.project && this.busyProjects.has(existing.project))) continue;
+      if (item.project) {
+        if (!projects.has(item.project.copyDirectory)) projects.set(item.project.copyDirectory, item.project);
+        item.project = projects.get(item.project.copyDirectory);
+      }
+      const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
+      this.tasks.set(item.record.taskId, task);
+      this.events.restore(item.record.taskId, item.events, item.cursor);
+      if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
+        if (item.record.pid && processAlive(item.record.pid)) {
+          item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };
+        } else {
+          task.ownerPid = process.pid;
+          this.finish(task, 'failed', 'SERVER_RESTARTED', 'Previous execution was interrupted; inspect its copy before starting new work');
+        }
+      }
+    }
   }
 
   getModel(): string | undefined { return this.selectedModel; }
@@ -48,41 +89,53 @@ export class TaskManager {
       if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);
     }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', 'Invalid conversation ID');
-    const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
-      task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : undefined;
-    if (options.sessionId && (!previous || previous.record.status !== 'completed' || previous.record.integratedAt)) {
-      throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
-    }
-    if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
-    if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
-    const mode = options.mode ?? previous?.record.mode ?? 'write';
-    if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
-    if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
-    if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
-      throw new BridgeError('QUEUE_FULL', 'Task queue is full');
-    }
-    if (this.tasks.size >= this.config.maxRetainedTasks) {
-      const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status));
-      if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
-      if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
-        await this.discard(oldestFinished.record.taskId);
+    const releaseRegistry = this.state.acquire('registry');
+    try {
+      this.refresh();
+      const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
+        task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : undefined;
+      if (options.sessionId && (!previous || previous.record.status !== 'completed' || previous.record.integratedAt)) {
+        throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
       }
-      this.tasks.delete(oldestFinished.record.taskId);
-      this.events.drop(oldestFinished.record.taskId);
-    }
-    const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
-      workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
-    this.tasks.set(record.taskId, { record, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project });
-    this.queue.push(record.taskId);
-    this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
-    this.pump();
-    return { ...record };
+      if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
+      if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
+      const mode = options.mode ?? previous?.record.mode ?? 'write';
+      if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
+      if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
+      if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
+        throw new BridgeError('QUEUE_FULL', 'Task queue is full');
+      }
+      if (this.tasks.size >= this.config.maxRetainedTasks) {
+        const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status));
+        if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
+        if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
+          await this.discard(oldestFinished.record.taskId);
+        }
+        this.tasks.delete(oldestFinished.record.taskId);
+        this.events.drop(oldestFinished.record.taskId);
+        this.state.drop(oldestFinished.record.taskId);
+      }
+      const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
+        workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
+      const releaseProject = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : undefined;
+      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject });
+      this.queue.push(record.taskId);
+      this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
+      this.pump();
+      return { ...record };
+    } finally { releaseRegistry(); }
   }
 
   status(taskId: string): TaskRecord {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
     return { ...task.record };
+  }
+
+  list(): TaskRecord[] {
+    this.refresh();
+    return [...this.tasks.values()].map(task => ({ ...task.record }));
   }
 
   result(taskId: string): { task: TaskRecord; ready: boolean } {
@@ -91,6 +144,7 @@ export class TaskManager {
   }
 
   async preview(taskId: string) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
     return this.withProject(task.project, () => previewProjectCopy(task.project!));
@@ -101,11 +155,13 @@ export class TaskManager {
       throw new BridgeError('TASK_NOT_READY', 'Wait for all operations on this copy to finish');
     }
     this.busyProjects.add(project);
-    try { return await operation(); }
-    finally { this.busyProjects.delete(project); }
+    let release: (() => void) | undefined;
+    try { release = this.state.acquire(this.projectLock(project)); return await operation(); }
+    finally { release?.(); this.busyProjects.delete(project); }
   }
 
   async discard(taskId: string): Promise<TaskRecord> {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
     if (!terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Cancel and wait for the task before discarding');
@@ -124,6 +180,7 @@ export class TaskManager {
   }
 
   async cleanup(now = Date.now()): Promise<{ discardedTaskIds: string[] }> {
+    this.refresh();
     const discardedTaskIds: string[] = [];
     for (const project of new Set([...this.tasks.values()].map(task => task.project).filter((p): p is ProjectCopy => Boolean(p)))) {
       const related = [...this.tasks.values()].filter(task => task.project === project);
@@ -137,6 +194,7 @@ export class TaskManager {
   }
 
   async integrate(taskId: string, expectedSha256: string) {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
     if (task.record.integratedAt) throw new BridgeError('ALREADY_INTEGRATED', 'This task was already integrated');
@@ -148,9 +206,15 @@ export class TaskManager {
       throw new BridgeError('TASK_NOT_READY', 'Wait for the resumed task to finish');
     }
     return this.withProject(task.project, async () => {
-      const preview = await integrateProjectCopy(task.project!, expectedSha256);
-      for (const related of this.tasks.values()) if (related.project === task.project) related.record.integratedAt = new Date().toISOString();
-      return preview;
+      const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
+      try {
+        const preview = await integrateProjectCopy(task.project!, expectedSha256);
+        for (const related of this.tasks.values()) if (related.project === task.project) {
+          related.record.integratedAt = new Date().toISOString();
+          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256 });
+        }
+        return preview;
+      } finally { releaseSource(); }
     });
   }
 
@@ -160,6 +224,7 @@ export class TaskManager {
   }
 
   sessions(): Array<{ sessionId: string; taskIds: string[] }> {
+    this.refresh();
     const sessions = new Map<string, string[]>();
     for (const { record } of this.tasks.values()) {
       if (record.sessionId) sessions.set(record.sessionId, [...(sessions.get(record.sessionId) || []), record.taskId]);
@@ -168,9 +233,11 @@ export class TaskManager {
   }
 
   async cancel(taskId: string): Promise<TaskRecord> {
+    this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
     if (terminal.has(task.record.status)) return this.status(taskId);
+    if (!task.owned) throw new BridgeError('TASK_OWNED_BY_OTHER_SERVER', 'Cancel the task in the bridge process that started it');
     if (task.record.status === 'queued') {
       const index = this.queue.indexOf(taskId);
       if (index !== -1) this.queue.splice(index, 1);
@@ -178,6 +245,8 @@ export class TaskManager {
       task.record.error = { code: 'TASK_CANCELLED', message: 'Task cancelled before execution' };
       task.record.completedAt = new Date().toISOString();
       this.events.append(taskId, 'task.cancelled', {});
+      task.owned = false;
+      task.releaseProject?.(); task.releaseProject = undefined;
     } else {
       task.termination = 'cancelled';
       if (task.child) this.terminate(task.child);
@@ -187,7 +256,9 @@ export class TaskManager {
 
   async shutdown(): Promise<void> {
     this.stopped = true;
-    await Promise.all([...this.tasks.keys()].map(id => this.cancel(id)));
+    const owned = [...this.tasks.values()].filter(task => task.owned);
+    await Promise.all(owned.map(task => this.cancel(task.record.taskId)));
+    await Promise.all(owned.map(task => task.completion));
   }
 
   private pump(): void {
@@ -195,7 +266,7 @@ export class TaskManager {
       const task = this.tasks.get(this.queue.shift()!);
       if (!task || task.record.status !== 'queued') continue;
       this.active++;
-      void this.execute(task).finally(() => { this.active--; this.pump(); });
+      task.completion = this.execute(task).finally(() => { task.releaseProject?.(); task.releaseProject = undefined; task.owned = false; this.active--; this.pump(); });
     }
   }
 
@@ -205,9 +276,14 @@ export class TaskManager {
     record.startedAt = new Date().toISOString();
     this.events.append(record.taskId, 'task.started', {});
     try {
-      task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths);
+      task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
+        task.project = project;
+        this.events.append(record.taskId, 'copy.created', { copyDirectory: project.copyDirectory });
+      });
+      task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
       record.copyDirectory = task.project.copyDirectory;
       record.includedFiles = task.project.includedFiles;
+      this.events.append(record.taskId, 'copy.ready', { copyDirectory: record.copyDirectory });
       if (task.termination) { this.finish(task, task.termination); return; }
       const child = this.adapter.spawnTask(task.options, record.model, task.project.copyDirectory);
       task.child = child;

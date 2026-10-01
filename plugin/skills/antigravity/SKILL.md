@@ -22,7 +22,7 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 
 ## Continuação e controle
 
-- Use o `sessionId` de uma tarefa concluída com `antigravity_resume` para continuar na mesma cópia. `antigravity_sessions` lista apenas sessões vistas pela instância atual do bridge.
+- Use o `sessionId` de uma tarefa concluída com `antigravity_resume` para continuar na mesma cópia. `antigravity_sessions` lista sessões persistidas e `antigravity_tasks` recupera IDs de tarefas após reinício. Execuções interrompidas não são repetidas: examine `SERVER_RESTARTED` e a cópia antes de iniciar outro trabalho. Se houver `ORPHAN_PROCESS_RUNNING`, aguarde o processo registrado terminar; não tente aplicar ou descartar sua cópia.
 - Quando o usuário pedir cancelamento, chame `antigravity_cancel` com o `taskId` e confirme o status. O cancelamento encerra o processo local; alterações parciais podem permanecer.
 - Quando o usuário quiser descartar o trabalho, chame `antigravity_discard` depois que a tarefa terminar. A remoção alcança todas as tarefas retomadas na mesma cópia. Use `antigravity_cleanup` para remover cópias expiradas; a retenção padrão é de 7 dias.
 - Depois de falha ou timeout, examine eventos e a cópia antes de repetir a tarefa. Não faça nova execução automaticamente se ela puder repetir efeitos ou consumir quota.
