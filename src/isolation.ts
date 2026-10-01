@@ -19,6 +19,8 @@ export interface ProjectCopy {
 
 export interface ChangePreview {
   files: Array<{ status: string; path: string }>;
+  fileSummaries: Array<{ status: string; path: string; insertions: number | null; deletions: number | null; binary: boolean }>;
+  summary: { filesChanged: number; added: number; modified: number; deleted: number; insertions: number; deletions: number; binaryFiles: number };
   patch: string;
   sha256: string;
   sourceDirectory: string;
@@ -183,7 +185,7 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   await git(project.copyDirectory, [...scope, 'add', '-A', '--', '.']);
   const names = splitNull(await git(project.copyDirectory,
-    [...scope, 'diff', '--cached', '--name-status', '--no-renames', '-z', 'HEAD']));
+    [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--name-status', '--no-renames', '-z', 'HEAD']));
   if (names.length / 2 > limits.maxChangedFiles) throw new BridgeError('CHANGE_LIMIT_EXCEEDED', `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files: ChangePreview['files'] = [];
   for (let index = 0; index < names.length; index += 2) {
@@ -193,9 +195,23 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
     if (status !== 'D') await checkedPath(project.copyDirectory, relative, true);
     files.push({ status, path: relative });
   }
-  const bytes = await git(project.copyDirectory, [...scope, 'diff', '--cached', '--binary', '--no-renames', 'HEAD']);
+  const stats = new Map(splitNull(await git(project.copyDirectory,
+    [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--numstat', '--no-renames', '-z', 'HEAD'])).map(line => {
+      const [added, removed, ...relative] = line.split('\t');
+      return [relative.join('\t'), { insertions: added === '-' ? null : Number(added), deletions: removed === '-' ? null : Number(removed), binary: added === '-' }];
+    }));
+  const fileSummaries = files.map(file => {
+    const stat = stats.get(file.path);
+    if (!stat) throw new BridgeError('GIT_OPERATION_FAILED', 'Missing diff statistics for: ' + file.path);
+    return { ...file, ...stat };
+  });
+  const summary = { filesChanged: files.length, added: files.filter(file => file.status === 'A').length,
+    modified: files.filter(file => file.status === 'M').length, deleted: files.filter(file => file.status === 'D').length,
+    insertions: fileSummaries.reduce((total, file) => total + (file.insertions ?? 0), 0),
+    deletions: fileSummaries.reduce((total, file) => total + (file.deletions ?? 0), 0), binaryFiles: fileSummaries.filter(file => file.binary).length };
+  const bytes = await git(project.copyDirectory, [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD']);
   return {
-    files, patch: bytes.toString('utf8'), sha256: createHash('sha256').update(bytes).digest('hex'),
+    files, fileSummaries, summary, patch: bytes.toString('utf8'), sha256: createHash('sha256').update(bytes).digest('hex'),
     sourceDirectory: project.sourceDirectory, copyDirectory: project.copyDirectory,
   };
 }

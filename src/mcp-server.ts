@@ -76,9 +76,16 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async args => safe(async () => ({ task: await tasks.run(args) }))());
 
   server.registerTool('antigravity_preview', {
-    title: 'Preview isolated changes', description: 'Return file list, patch and SHA-256 for Codex review. Requires a finished task.',
+    title: 'Preview isolated changes', description: 'Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.',
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
   }, async ({ taskId }) => safe(() => tasks.preview(taskId))());
+
+  server.registerTool('antigravity_record_test', {
+    title: 'Record review test evidence', description: 'Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), command: z.string().min(1).max(1000),
+      exitCode: z.number().int().min(0).max(255), output: z.string().max(4000).optional() },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+  }, async ({ taskId, expectedSha256, command, exitCode, output }) => safe(() => tasks.recordTest(taskId, expectedSha256, command, exitCode, output))());
 
   server.registerTool('antigravity_integrate', {
     title: 'Integrate reviewed changes', description: 'Apply the reviewed patch to the source after explicit user approval. Requires the SHA-256 from antigravity_preview.',

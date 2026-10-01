@@ -29,6 +29,16 @@ export interface TaskRecord {
   integratedAt?: string;
   discardedAt?: string;
   mode?: 'write' | 'read-only';
+  tests?: TestEvidence[];
+}
+
+export interface TestEvidence {
+  command: string;
+  exitCode: number;
+  output: string;
+  sha256: string;
+  recordedAt: string;
+  source: 'client-reported';
 }
 
 export interface RunOptions {

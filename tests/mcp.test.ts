@@ -45,6 +45,11 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.ok((await call('antigravity_tasks')).tasks.some((task: { taskId: string }) => task.taskId === taskId));
     await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
     const preview = await call('antigravity_preview', { taskId });
+    assert.equal(preview.summary.added, 1);
+    const testScript = "if (require('node:fs').readFileSync('AGY_BRIDGE_TEST.md','utf8') !== 'Antigravity MCP bridge test successful.') process.exit(1); console.log('file checked');";
+    const output = execFileSync(process.execPath, ['-e', testScript], { cwd: final.task.copyDirectory, encoding: 'utf8' });
+    await call('antigravity_record_test', { taskId, expectedSha256: preview.sha256, command: 'node -e ' + testScript, exitCode: 0, output });
+    assert.equal((await call('antigravity_preview', { taskId })).tests[0].stale, false);
     await call('antigravity_integrate', { taskId, expectedSha256: preview.sha256 });
     assert.equal(await readFile(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await call('antigravity_discard', { taskId });

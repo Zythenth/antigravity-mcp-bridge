@@ -147,7 +147,27 @@ export class TaskManager {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
-    return this.withProject(task.project, () => previewProjectCopy(task.project!, this.config));
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project!, this.config);
+      return { ...preview, tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 })) };
+    });
+  }
+
+  async recordTest(taskId: string, expectedSha256: string, command: string, exitCode: number, output = '') {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before recording tests');
+    if (!command.trim() || command.length > 1000 || !Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255 || output.length > 4000) {
+      throw new BridgeError('INVALID_TEST_EVIDENCE', 'Invalid command, exit code or output size');
+    }
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project!, this.config);
+      if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview again before recording test evidence');
+      const evidence = { command, exitCode, output, sha256: expectedSha256, recordedAt: new Date().toISOString(), source: 'client-reported' as const };
+      task.record.tests = [...(task.record.tests || []).slice(-19), evidence];
+      this.events.append(taskId, 'review.test-recorded', { command, exitCode, sha256: expectedSha256 });
+      return evidence;
+    });
   }
 
   private async withProject<T>(project: ProjectCopy, operation: () => Promise<T>): Promise<T> {

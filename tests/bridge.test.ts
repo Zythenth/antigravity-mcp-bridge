@@ -18,6 +18,50 @@ const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.u
 const stateDirectories: string[] = [];
 const managers: TaskManager[] = [];
 
+test('preview reports line totals, A/M/D counts and binary files independently of patch text', async () => {
+  const dir = await repository();
+  try {
+    await writeFile(path.join(dir, 'gone.txt'), 'a\nb\n');
+    await writeFile(path.join(dir, 'binary.bin'), Buffer.from([0, 1, 2]));
+    const project = await createProjectCopy(dir);
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), 'new\nmore\n');
+    await writeFile(path.join(project.copyDirectory, 'new file.txt'), 'first\nsecond\n');
+    await writeFile(path.join(project.copyDirectory, 'binary.bin'), Buffer.from([0, 3, 4]));
+    await rm(path.join(project.copyDirectory, 'gone.txt'));
+    const preview = await previewProjectCopy(project);
+    assert.deepEqual(preview.summary, { filesChanged: 4, added: 1, modified: 2, deleted: 1, insertions: 4, deletions: 3, binaryFiles: 1 });
+    assert.deepEqual(preview.fileSummaries.find(file => file.path === 'new file.txt'), { status: 'A', path: 'new file.txt', insertions: 2, deletions: 0, binary: false });
+    assert.deepEqual(preview.fileSummaries.find(file => file.path === 'binary.bin'), { status: 'M', path: 'binary.bin', insertions: null, deletions: null, binary: true });
+    assert.ok(preview.patch.includes('GIT binary patch'));
+    await discardProjectCopy(project);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('test evidence persists, keeps failed results and marks stale hashes without claiming execution', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const finished = await until(tasks, task.taskId, done);
+    const preview = await tasks.preview(task.taskId);
+    await tasks.recordTest(task.taskId, preview.sha256, 'fixture check', 0, 'client-provided output');
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    assert.equal((await recovered.preview(task.taskId)).tests[0]?.source, 'client-reported');
+    assert.equal((await recovered.preview(task.taskId)).tests[0]?.stale, false);
+    await writeFile(path.join(finished.copyDirectory!, 'source.txt'), 'changed');
+    const changed = await recovered.preview(task.taskId);
+    assert.equal(changed.tests[0]?.stale, true);
+    await assert.rejects(recovered.recordTest(task.taskId, preview.sha256, 'old check', 0), { code: 'REVIEW_CHANGED' });
+    await recovered.recordTest(task.taskId, changed.sha256, 'failed check', 1, 'assertion failed');
+    const tests = (await recovered.preview(task.taskId)).tests;
+    assert.equal(tests.length, 2);
+    assert.equal(tests[1]?.exitCode, 1);
+    assert.equal(tests[1]?.stale, false);
+    await tasks.discard(task.taskId);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('copy limits enforce count and byte boundaries before copying; includePaths narrows them', async () => {
   const dir = await repository();
   try {

@@ -36851,7 +36851,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
 async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
   await git(project.copyDirectory, [...scope, "add", "-A", "--", "."]);
-  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--name-status", "--no-renames", "-z", "HEAD"]));
+  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
   if (names.length / 2 > limits.maxChangedFiles)
     throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files = [];
@@ -36864,9 +36864,30 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
       await checkedPath(project.copyDirectory, relative, true);
     files.push({ status, path: relative });
   }
-  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--binary", "--no-renames", "HEAD"]);
+  const stats = new Map(splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
+    const [added, removed, ...relative] = line.split("	");
+    return [relative.join("	"), { insertions: added === "-" ? null : Number(added), deletions: removed === "-" ? null : Number(removed), binary: added === "-" }];
+  }));
+  const fileSummaries = files.map((file2) => {
+    const stat2 = stats.get(file2.path);
+    if (!stat2)
+      throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file2.path);
+    return { ...file2, ...stat2 };
+  });
+  const summary = {
+    filesChanged: files.length,
+    added: files.filter((file2) => file2.status === "A").length,
+    modified: files.filter((file2) => file2.status === "M").length,
+    deleted: files.filter((file2) => file2.status === "D").length,
+    insertions: fileSummaries.reduce((total, file2) => total + (file2.insertions ?? 0), 0),
+    deletions: fileSummaries.reduce((total, file2) => total + (file2.deletions ?? 0), 0),
+    binaryFiles: fileSummaries.filter((file2) => file2.binary).length
+  };
+  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
   return {
     files,
+    fileSummaries,
+    summary,
     patch: bytes.toString("utf8"),
     sha256: createHash("sha256").update(bytes).digest("hex"),
     sourceDirectory: project.sourceDirectory,
@@ -37002,10 +37023,22 @@ function createMcpServer(adapter2, tasks2) {
   }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
   server2.registerTool("antigravity_preview", {
     title: "Preview isolated changes",
-    description: "Return file list, patch and SHA-256 for Codex review. Requires a finished task.",
+    description: "Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.",
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: readOnly
   }, async ({ taskId }) => safe(() => tasks2.preview(taskId))());
+  server2.registerTool("antigravity_record_test", {
+    title: "Record review test evidence",
+    description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
+    inputSchema: {
+      taskId: external_exports.string().uuid(),
+      expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+      command: external_exports.string().min(1).max(1e3),
+      exitCode: external_exports.number().int().min(0).max(255),
+      output: external_exports.string().max(4e3).optional()
+    },
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
+  }, async ({ taskId, expectedSha256, command, exitCode, output: output2 }) => safe(() => tasks2.recordTest(taskId, expectedSha256, command, exitCode, output2))());
   server2.registerTool("antigravity_integrate", {
     title: "Integrate reviewed changes",
     description: "Apply the reviewed patch to the source after explicit user approval. Requires the SHA-256 from antigravity_preview.",
@@ -37488,7 +37521,28 @@ var TaskManager = class {
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
-    return this.withProject(task.project, () => previewProjectCopy(task.project, this.config));
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project, this.config);
+      return { ...preview, tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 })) };
+    });
+  }
+  async recordTest(taskId, expectedSha256, command, exitCode, output2 = "") {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status))
+      throw new BridgeError("TASK_NOT_READY", "Wait for the task before recording tests");
+    if (!command.trim() || command.length > 1e3 || !Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255 || output2.length > 4e3) {
+      throw new BridgeError("INVALID_TEST_EVIDENCE", "Invalid command, exit code or output size");
+    }
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project, this.config);
+      if (preview.sha256 !== expectedSha256)
+        throw new BridgeError("REVIEW_CHANGED", "Preview again before recording test evidence");
+      const evidence = { command, exitCode, output: output2, sha256: expectedSha256, recordedAt: (/* @__PURE__ */ new Date()).toISOString(), source: "client-reported" };
+      task.record.tests = [...(task.record.tests || []).slice(-19), evidence];
+      this.events.append(taskId, "review.test-recorded", { command, exitCode, sha256: expectedSha256 });
+      return evidence;
+    });
   }
   async withProject(project, operation) {
     if (this.busyProjects.has(project) || [...this.tasks.values()].some((task) => task.project === project && !terminal.has(task.record.status))) {

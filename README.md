@@ -62,7 +62,8 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou define o modelo padrão em memória |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
-| `antigravity_preview` | Mostra os arquivos alterados, patch e hash para revisão |
+| `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
+| `antigravity_record_test` | Registra comando, saída e exit code relatados pelo cliente, vinculados ao hash |
 | `antigravity_integrate` | Aplica o patch revisado ao projeto original após aprovação |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
@@ -84,7 +85,7 @@ Fluxo típico:
 2. Inicie a tarefa com `antigravity_run` e guarde o `taskId`.
 3. Leia `antigravity_events` com `after: 0` e continue usando `nextCursor`.
 4. Consulte `antigravity_result` até `ready: true`.
-5. Use `antigravity_preview` para revisar o patch e executar os testes na cópia. Após aprovação do usuário, chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia. O bridge recusa integração se a cópia ou os arquivos afetados no original mudaram após a revisão.
+5. Use `antigravity_preview` para revisar o patch e executar os testes na cópia. Registre cada execução com `antigravity_record_test` (`command`, `exitCode`, `output` e `expectedSha256`). Após aprovação do usuário, chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia. O bridge recusa integração se a cópia ou os arquivos afetados no original mudaram após a revisão.
 
 ## Eventos, sessões e cancelamento
 
@@ -97,6 +98,8 @@ O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos est
 Antes de chamar `agy`, o bridge cria uma cópia temporária dos arquivos elegíveis e mantém um baseline Git separado da cópia. O CLI recebe a cópia como diretório de trabalho e a opção `--sandbox`. O projeto original só muda por `antigravity_integrate`, depois da revisão do patch. O bridge não faz commit, merge nem push.
 
 O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas na inicialização e a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
+
+`antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Os testes são relatos do cliente, identificados por `source: "client-reported"`; o bridge não executa nem verifica o comando. Cada registro leva hash, data, exit code e até 4.000 caracteres de saída. Resultados antigos recebem `stale: true` se o patch atual diferir. Falhas são preservadas e devem ser apresentadas na revisão.
 
 A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
 
