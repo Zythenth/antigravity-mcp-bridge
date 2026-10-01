@@ -55,6 +55,8 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 ## Ferramentas
 
+Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.
+
 | Ferramenta | Função |
 | --- | --- |
 | `antigravity_health` | Verifica executável, versão, autenticação aparente e capacidades |

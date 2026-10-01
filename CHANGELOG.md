@@ -9,6 +9,7 @@
 - Normalização nativa dos aliases 8.3 nos testes Windows e declaração explícita da cópia no workspace do CLI.
 - Papéis de planejamento e revisão em consulta, contratos JSON e conferência de citações dos achados.
 - Consumo de tokens por tarefa, sessão e modelo, com deltas de retomada, baseline persistido e identificação de dados indisponíveis.
+- Schemas de saída publicados nas 23 ferramentas, com contratos de sucesso/erro e validação pelo SDK.
 
 ## 0.3.0
 

@@ -1066,10 +1066,10 @@ var require_util = __commonJS({
     var codegen_1 = require_codegen();
     var code_1 = require_code();
     function toHash(arr) {
-      const hash2 = {};
+      const hash3 = {};
       for (const item of arr)
-        hash2[item] = true;
-      return hash2;
+        hash3[item] = true;
+      return hash3;
     }
     exports.toHash = toHash;
     function alwaysValidSchema(it, schema) {
@@ -2225,25 +2225,25 @@ var require_resolve = __commonJS({
       return false;
     }
     function countKeys(schema) {
-      let count = 0;
+      let count2 = 0;
       for (const key in schema) {
         if (key === "$ref")
           return Infinity;
-        count++;
+        count2++;
         if (SIMPLE_INLINED.has(key))
           continue;
         if (typeof schema[key] == "object") {
-          (0, util_1.eachItem)(schema[key], (sch) => count += countKeys(sch));
+          (0, util_1.eachItem)(schema[key], (sch) => count2 += countKeys(sch));
         }
-        if (count === Infinity)
+        if (count2 === Infinity)
           return Infinity;
       }
-      return count;
+      return count2;
     }
-    function getFullPath(resolver, id = "", normalize) {
+    function getFullPath(resolver, id2 = "", normalize) {
       if (normalize !== false)
-        id = normalizeId(id);
-      const p = resolver.parse(id);
+        id2 = normalizeId(id2);
+      const p = resolver.parse(id2);
       return _getFullPath(resolver, p);
     }
     exports.getFullPath = getFullPath;
@@ -2253,13 +2253,13 @@ var require_resolve = __commonJS({
     }
     exports._getFullPath = _getFullPath;
     var TRAILING_SLASH_HASH = /#\/?$/;
-    function normalizeId(id) {
-      return id ? id.replace(TRAILING_SLASH_HASH, "") : "";
+    function normalizeId(id2) {
+      return id2 ? id2.replace(TRAILING_SLASH_HASH, "") : "";
     }
     exports.normalizeId = normalizeId;
-    function resolveUrl(resolver, baseId, id) {
-      id = normalizeId(id);
-      return resolver.resolve(baseId, id);
+    function resolveUrl(resolver, baseId, id2) {
+      id2 = normalizeId(id2);
+      return resolver.resolve(baseId, id2);
     }
     exports.resolveUrl = resolveUrl;
     var ANCHOR = /^[a-z_][-a-z0-9._]*$/i;
@@ -3029,8 +3029,8 @@ var require_compile = __commonJS({
       if (Object.keys(root.schema).length > 0 && refPath === baseId) {
         return getJsonPointer.call(this, p, root);
       }
-      const id = (0, resolve_1.normalizeId)(refPath);
-      const schOrRef = this.refs[id] || this.schemas[id];
+      const id2 = (0, resolve_1.normalizeId)(refPath);
+      const schOrRef = this.refs[id2] || this.schemas[id2];
       if (typeof schOrRef == "string") {
         const sch = resolveSchema.call(this, root, schOrRef);
         if (typeof (sch === null || sch === void 0 ? void 0 : sch.schema) !== "object")
@@ -3041,7 +3041,7 @@ var require_compile = __commonJS({
         return;
       if (!schOrRef.validate)
         compileSchema.call(this, schOrRef);
-      if (id === (0, resolve_1.normalizeId)(ref)) {
+      if (id2 === (0, resolve_1.normalizeId)(ref)) {
         const { schema } = schOrRef;
         const { schemaId } = this.opts;
         const schId = schema[schemaId];
@@ -4468,15 +4468,15 @@ var require_core = __commonJS({
             this.addSchema(sch, void 0, _meta, _validateSchema);
           return this;
         }
-        let id;
+        let id2;
         if (typeof schema === "object") {
           const { schemaId } = this.opts;
-          id = schema[schemaId];
-          if (id !== void 0 && typeof id != "string") {
+          id2 = schema[schemaId];
+          if (id2 !== void 0 && typeof id2 != "string") {
             throw new Error(`schema ${schemaId} must be string`);
           }
         }
-        key = (0, resolve_1.normalizeId)(key || id);
+        key = (0, resolve_1.normalizeId)(key || id2);
         this._checkUnique(key);
         this.schemas[key] = this._addSchema(schema, _meta, key, _validateSchema, true);
         return this;
@@ -4555,11 +4555,11 @@ var require_core = __commonJS({
           case "object": {
             const cacheKey = schemaKeyRef;
             this._cache.delete(cacheKey);
-            let id = schemaKeyRef[this.opts.schemaId];
-            if (id) {
-              id = (0, resolve_1.normalizeId)(id);
-              delete this.schemas[id];
-              delete this.refs[id];
+            let id2 = schemaKeyRef[this.opts.schemaId];
+            if (id2) {
+              id2 = (0, resolve_1.normalizeId)(id2);
+              delete this.schemas[id2];
+              delete this.refs[id2];
             }
             return this;
           }
@@ -4666,10 +4666,10 @@ var require_core = __commonJS({
         }
       }
       _addSchema(schema, meta3, baseId, validateSchema = this.opts.validateSchema, addSchema = this.opts.addUsedSchema) {
-        let id;
+        let id2;
         const { schemaId } = this.opts;
         if (typeof schema == "object") {
-          id = schema[schemaId];
+          id2 = schema[schemaId];
         } else {
           if (this.opts.jtd)
             throw new Error("schema must be object");
@@ -4679,7 +4679,7 @@ var require_core = __commonJS({
         let sch = this._cache.get(schema);
         if (sch !== void 0)
           return sch;
-        baseId = (0, resolve_1.normalizeId)(id || baseId);
+        baseId = (0, resolve_1.normalizeId)(id2 || baseId);
         const localRefs = resolve_1.getSchemaRefs.call(this, schema, baseId);
         sch = new compile_1.SchemaEnv({ schema, schemaId, meta: meta3, baseId, localRefs });
         this._cache.set(sch.schema, sch);
@@ -4692,9 +4692,9 @@ var require_core = __commonJS({
           this.validateSchema(schema, true);
         return sch;
       }
-      _checkUnique(id) {
-        if (this.schemas[id] || this.refs[id]) {
-          throw new Error(`schema with key or id "${id}" already exists`);
+      _checkUnique(id2) {
+        if (this.schemas[id2] || this.refs[id2]) {
+          throw new Error(`schema with key or id "${id2}" already exists`);
         }
       }
       _compileSchemaEnv(sch) {
@@ -5720,8 +5720,8 @@ var require_contains = __commonJS({
         cxt.result(valid, () => cxt.reset());
         function validateItemsWithCount() {
           const schValid = gen.name("_valid");
-          const count = gen.let("count", 0);
-          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count)));
+          const count2 = gen.let("count", 0);
+          validateItems(schValid, () => gen.if(schValid, () => checkLimits(count2)));
         }
         function validateItems(_valid, block) {
           gen.forRange("i", 0, len, (i) => {
@@ -5734,16 +5734,16 @@ var require_contains = __commonJS({
             block();
           });
         }
-        function checkLimits(count) {
-          gen.code((0, codegen_1._)`${count}++`);
+        function checkLimits(count2) {
+          gen.code((0, codegen_1._)`${count2}++`);
           if (max === void 0) {
-            gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true).break());
+            gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true).break());
           } else {
-            gen.if((0, codegen_1._)`${count} > ${max}`, () => gen.assign(valid, false).break());
+            gen.if((0, codegen_1._)`${count2} > ${max}`, () => gen.assign(valid, false).break());
             if (min === 1)
               gen.assign(valid, true);
             else
-              gen.if((0, codegen_1._)`${count} >= ${min}`, () => gen.assign(valid, true));
+              gen.if((0, codegen_1._)`${count2} >= ${min}`, () => gen.assign(valid, true));
           }
         }
       }
@@ -8421,14 +8421,14 @@ function codePointLength(str) {
   const units = str.length;
   if (!highSurrogate.test(str))
     return units;
-  let count = units;
+  let count2 = units;
   for (let i = 0; i < units - 1; i++) {
     if ((str.charCodeAt(i) & 64512) === 55296 && (str.charCodeAt(i + 1) & 64512) === 56320) {
-      count--;
+      count2--;
       i++;
     }
   }
-  return count;
+  return count2;
 }
 function getLengthableOrigin(input2) {
   if (Array.isArray(input2))
@@ -10786,15 +10786,15 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     const syms = normalized.symbolKeys;
     const doc = new Doc(["payload", "ctx"], { shape, inst, memo: memo2, syms });
     const parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
-    const prefixStr = (id, k) => `
-          let ${id}_ab = false;
-          for (let i = 0; i < ${id}.issues.length; i++) {
-            const iss = ${id}.issues[i];
+    const prefixStr = (id2, k) => `
+          let ${id2}_ab = false;
+          for (let i = 0; i < ${id2}.issues.length; i++) {
+            const iss = ${id2}.issues[i];
             iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
-            if (iss.continue !== true) ${id}_ab = true;
+            if (iss.continue !== true) ${id2}_ab = true;
           }
-          if (${id}_ab && ctx && ctx.abortEarly) {
+          if (${id2}_ab && ctx && ctx.abortEarly) {
             payload.value = newResult;
             return payload;
           }`;
@@ -10808,34 +10808,34 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
     for (const key of normalized.allKeys) {
       if (key === "__proto__")
         continue;
-      const id = ids[key];
+      const id2 = ids[key];
       const k = typeof key === "symbol" ? `syms[${syms.indexOf(key)}]` : esc(key);
       const isPresent = `${k} in input`;
       const schema = shape[key];
       const optin = schema?._zod?.optin;
       const isOptionalIn = optin !== void 0;
       const isOptionalOut = schema?._zod?.optout === "optional";
-      doc.write(`const ${id} = ${parseStr(k)};`);
+      doc.write(`const ${id2} = ${parseStr(k)};`);
       if (isOptionalIn && isOptionalOut) {
-        const assign = optin === "optional" ? `${id}_present` : `${id}.value !== undefined || ${id}_present`;
+        const assign = optin === "optional" ? `${id2}_present` : `${id2}.value !== undefined || ${id2}_present`;
         doc.write(`
-        const ${id}_present = ${isPresent};
-        if (!${id}.issues.length || ${id}_present) {
-          if (${id}.issues.length) {${prefixStr(id, k)}
+        const ${id2}_present = ${isPresent};
+        if (!${id2}.issues.length || ${id2}_present) {
+          if (${id2}.issues.length) {${prefixStr(id2, k)}
           }
 
           if (${assign}) {
-            newResult[${k}] = ${id}.value;
+            newResult[${k}] = ${id2}.value;
           }
         }
 
       `);
       } else if (!isOptionalIn) {
         doc.write(`
-        const ${id}_present = ${isPresent};
-        if (${id}.issues.length) {${prefixStr(id, k)}
+        const ${id2}_present = ${isPresent};
+        if (${id2}.issues.length) {${prefixStr(id2, k)}
         }
-        if (!${id}_present && !${id}.issues.length) {
+        if (!${id2}_present && !${id2}.issues.length) {
           payload.issues.push({
             code: "invalid_type",
             expected: "nonoptional",
@@ -10848,22 +10848,22 @@ var $ZodObjectJIT = /* @__PURE__ */ $constructor("$ZodObjectJIT", (inst, def) =>
           }
         }
 
-        if (${id}_present) {
-          newResult[${k}] = ${id}.value;
+        if (${id2}_present) {
+          newResult[${k}] = ${id2}.value;
         }
 
       `);
       } else {
         doc.write(`
-        if (${id}.issues.length) {${prefixStr(id, k)}
+        if (${id2}.issues.length) {${prefixStr(id2, k)}
         }
       `);
         if (optin === "defaulted") {
-          doc.write(`newResult[${k}] = ${id}.value;`);
+          doc.write(`newResult[${k}] = ${id2}.value;`);
         } else {
           doc.write(`
-        if (${id}.value !== undefined || ${isPresent}) {
-          newResult[${k}] = ${id}.value;
+        if (${id2}.value !== undefined || ${isPresent}) {
+          newResult[${k}] = ${id2}.value;
         }
       `);
         }
@@ -12783,8 +12783,8 @@ function az_default() {
 }
 
 // node_modules/zod/v4/locales/be.js
-function getBelarusianPlural(count, one, few, many) {
-  const absCount = Math.abs(count);
+function getBelarusianPlural(count2, one, few, many) {
+  const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
   const lastTwoDigits = absCount % 100;
   if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
@@ -15431,8 +15431,8 @@ function hu_default() {
 }
 
 // node_modules/zod/v4/locales/hy.js
-function getArmenianPlural(count, one, many) {
-  return Math.abs(count) === 1 ? one : many;
+function getArmenianPlural(count2, one, many) {
+  return Math.abs(count2) === 1 ? one : many;
 }
 function withDefiniteArticle(word) {
   if (!word)
@@ -18170,8 +18170,8 @@ function ro_default() {
 }
 
 // node_modules/zod/v4/locales/ru.js
-function getRussianPlural(count, one, few, many) {
-  const absCount = Math.abs(count);
+function getRussianPlural(count2, one, few, many) {
+  const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
   const lastTwoDigits = absCount % 100;
   if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
@@ -22881,26 +22881,26 @@ function extractDefs(ctx, schema) {
     return;
   const idToSchema = /* @__PURE__ */ new Map();
   for (const entry of ctx.seen.entries()) {
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
-      const existing = idToSchema.get(id);
+    const id2 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id2) {
+      const existing = idToSchema.get(id2);
       if (existing && existing !== entry[0]) {
-        throw new Error(`Duplicate schema id "${id}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
+        throw new Error(`Duplicate schema id "${id2}" detected during JSON Schema conversion. Two different schemas cannot share the same id when converted together.`);
       }
-      idToSchema.set(id, entry[0]);
+      idToSchema.set(id2, entry[0]);
     }
   }
   const makeURI = (entry) => {
     const defsSegment = ctx.target === "draft-2020-12" ? "$defs" : "definitions";
     if (ctx.external) {
       const externalId = ctx.external.registry.get(entry[0])?.id;
-      const uriGenerator = ctx.external.uri ?? ((id2) => id2);
+      const uriGenerator = ctx.external.uri ?? ((id3) => id3);
       if (externalId) {
         return { ref: uriGenerator(externalId) };
       }
-      const id = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
-      entry[1].defId = id;
-      return { defId: id, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id)}` };
+      const id2 = entry[1].defId ?? entry[1].schema.id ?? `schema${ctx.counter++}`;
+      entry[1].defId = id2;
+      return { defId: id2, ref: `${uriGenerator("__shared")}#/${defsSegment}/${encodeJSONPointerSegment(id2)}` };
     }
     const uriPrefix = `#`;
     const defUriPrefix = `${uriPrefix}/${defsSegment}/`;
@@ -22948,8 +22948,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         continue;
       }
     }
-    const id = ctx.metadataRegistry.get(entry[0])?.id;
-    if (id) {
+    const id2 = ctx.metadataRegistry.get(entry[0])?.id;
+    if (id2) {
       extractToDef(entry);
       continue;
     }
@@ -23182,10 +23182,10 @@ function finalize(ctx, schema) {
   } else {
   }
   if (ctx.external?.uri) {
-    const id = ctx.external.registry.get(schema)?.id;
-    if (!id)
+    const id2 = ctx.external.registry.get(schema)?.id;
+    if (!id2)
       throw new Error("Schema is missing an `id` property");
-    result.$id = ctx.external.uri(id);
+    result.$id = ctx.external.uri(id2);
   }
   assignProps(result, root.defId ? root.schema : root.def ?? root.schema);
   const rootMetaId = ctx.metadataRegistry.get(schema)?.id;
@@ -23791,7 +23791,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json2;
+  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id: id2, ...rest } = json2;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -28650,9 +28650,9 @@ async function checkedPath(root, relative, mustExist) {
   }
   return current;
 }
-async function sha256File(file2) {
+async function sha256File(file3) {
   const digest = createHash("sha256");
-  for await (const chunk of createReadStream(file2))
+  for await (const chunk of createReadStream(file3))
     digest.update(chunk);
   return digest.digest("hex");
 }
@@ -28670,7 +28670,7 @@ async function listProjectFiles(sourceDirectory) {
   if (!candidates.length)
     return [];
   const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
-  return candidates.filter((file2) => !ignored.has(file2) && !file2.split("/").includes(".git")).sort();
+  return candidates.filter((file3) => !ignored.has(file3) && !file3.split("/").includes(".git")).sort();
 }
 async function createProjectCopy(sourceDirectory, includePaths, onCreated, limits = DEFAULT_PROJECT_LIMITS) {
   const candidates = await listProjectFiles(sourceDirectory);
@@ -28680,11 +28680,11 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
       throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths cannot be empty");
     const wanted = includePaths.map(validRelative);
     for (const item of wanted) {
-      if (!candidates.some((file2) => file2 === item || file2.startsWith(item + "/"))) {
+      if (!candidates.some((file3) => file3 === item || file3.startsWith(item + "/"))) {
         throw new BridgeError("INVALID_INCLUDE_PATH", "No eligible file matches: " + item);
       }
     }
-    selected = candidates.filter((file2) => wanted.some((item) => file2 === item || file2.startsWith(item + "/")));
+    selected = candidates.filter((file3) => wanted.some((item) => file3 === item || file3.startsWith(item + "/")));
   }
   if (!selected.length)
     throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
@@ -28749,32 +28749,32 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
     throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files = [];
   for (let index = 0; index < names.length; index += 2) {
-    const status = names[index];
+    const status2 = names[index];
     const relative = validRelative(names[index + 1] || "");
-    if (!["A", "M", "D"].includes(status))
+    if (!["A", "M", "D"].includes(status2))
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Unsupported file change: " + relative);
-    if (status !== "D")
+    if (status2 !== "D")
       await checkedPath(project.copyDirectory, relative, true);
-    files.push({ status, path: relative });
+    files.push({ status: status2, path: relative });
   }
   const stats = new Map(splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
     const [added, removed, ...relative] = line.split("	");
     return [relative.join("	"), { insertions: added === "-" ? null : Number(added), deletions: removed === "-" ? null : Number(removed), binary: added === "-" }];
   }));
-  const fileSummaries = files.map((file2) => {
-    const stat3 = stats.get(file2.path);
+  const fileSummaries = files.map((file3) => {
+    const stat3 = stats.get(file3.path);
     if (!stat3)
-      throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file2.path);
-    return { ...file2, ...stat3 };
+      throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file3.path);
+    return { ...file3, ...stat3 };
   });
   const summary = {
     filesChanged: files.length,
-    added: files.filter((file2) => file2.status === "A").length,
-    modified: files.filter((file2) => file2.status === "M").length,
-    deleted: files.filter((file2) => file2.status === "D").length,
-    insertions: fileSummaries.reduce((total, file2) => total + (file2.insertions ?? 0), 0),
-    deletions: fileSummaries.reduce((total, file2) => total + (file2.deletions ?? 0), 0),
-    binaryFiles: fileSummaries.filter((file2) => file2.binary).length
+    added: files.filter((file3) => file3.status === "A").length,
+    modified: files.filter((file3) => file3.status === "M").length,
+    deleted: files.filter((file3) => file3.status === "D").length,
+    insertions: fileSummaries.reduce((total, file3) => total + (file3.insertions ?? 0), 0),
+    deletions: fileSummaries.reduce((total, file3) => total + (file3.deletions ?? 0), 0),
+    binaryFiles: fileSummaries.filter((file3) => file3.binary).length
   };
   const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
   return {
@@ -28809,7 +28809,7 @@ async function verifyReadOnlyCopy(project) {
     }
 }
 async function readProjectPatch(project, relative) {
-  const file2 = validRelative(relative);
+  const file3 = validRelative(relative);
   return (await git(project.copyDirectory, [
     "--git-dir=" + project.gitDirectory,
     "--work-tree=" + project.copyDirectory,
@@ -28821,7 +28821,7 @@ async function readProjectPatch(project, relative) {
     "--no-renames",
     "HEAD",
     "--",
-    file2
+    file3
   ])).toString("utf8");
 }
 async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
@@ -28829,26 +28829,26 @@ async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) 
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
   const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
   const digest = createHash("sha256");
-  let count = 0, bytes = 0;
-  for (const relative of candidates.filter((file2) => !ignored.has(file2))) {
-    let file2;
+  let count2 = 0, bytes = 0;
+  for (const relative of candidates.filter((file3) => !ignored.has(file3))) {
+    let file3;
     try {
-      file2 = await checkedPath(project.copyDirectory, relative, true);
+      file3 = await checkedPath(project.copyDirectory, relative, true);
     } catch (error62) {
       if (error62.code === "ENOENT")
         continue;
       throw error62;
     }
-    if (++count > limits.maxCopyFiles)
+    if (++count2 > limits.maxCopyFiles)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot file limit exceeded");
-    const hash2 = createHash("sha256");
-    for await (const chunk of createReadStream(file2)) {
+    const hash3 = createHash("sha256");
+    for await (const chunk of createReadStream(file3)) {
       bytes += chunk.length;
       if (bytes > limits.maxCopyBytes)
         throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot byte limit exceeded");
-      hash2.update(chunk);
+      hash3.update(chunk);
     }
-    digest.update(relative + "\0" + hash2.digest("hex") + "\0");
+    digest.update(relative + "\0" + hash3.digest("hex") + "\0");
   }
   return digest.digest("hex");
 }
@@ -28858,17 +28858,17 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
     throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
   if (preview.sha256 !== expectedSha256)
     throw new BridgeError("REVIEW_CHANGED", "The copy changed after review; preview it again");
-  for (const file2 of preview.files) {
-    const source = await checkedPath(project.sourceDirectory, file2.path, false);
-    const expected = project.baseline.get(file2.path);
+  for (const file3 of preview.files) {
+    const source = await checkedPath(project.sourceDirectory, file3.path, false);
+    const expected = project.baseline.get(file3.path);
     if (expected) {
       const current = await sha256File(source).catch(() => void 0);
       if (current !== expected)
-        throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file2.path);
+        throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file3.path);
     } else {
       try {
         await lstat(source);
-        throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file2.path);
+        throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file3.path);
       } catch (error62) {
         if (error62.code !== "ENOENT")
           throw error62;
@@ -28920,22 +28920,22 @@ async function validateRoleReport(role, raw, copyDirectory) {
     if (!parsed2.success)
       throw new BridgeError("ROLE_OUTPUT_INVALID", "Planner response does not match its structured contract");
     for (const step of parsed2.data.steps)
-      for (const file2 of step.files)
-        await checkedPath(copyDirectory, file2, false);
+      for (const file3 of step.files)
+        await checkedPath(copyDirectory, file3, false);
     return { role, source: "agy-reported", data: parsed2.data };
   }
   const parsed = reviewerReportSchema.safeParse(raw);
   if (!parsed.success)
     throw new BridgeError("ROLE_OUTPUT_INVALID", "Reviewer response does not match its structured contract");
-  for (const file2 of parsed.data.reviewedFiles)
-    await checkedPath(copyDirectory, file2, true);
+  for (const file3 of parsed.data.reviewedFiles)
+    await checkedPath(copyDirectory, file3, true);
   for (const finding of parsed.data.findings) {
     if (!parsed.data.reviewedFiles.includes(finding.path))
       throw new BridgeError("ROLE_OUTPUT_INVALID", "Finding refers to a file outside reviewedFiles");
-    const file2 = await checkedPath(copyDirectory, finding.path, true);
-    if ((await stat(file2)).size > 1e7)
+    const file3 = await checkedPath(copyDirectory, finding.path, true);
+    if ((await stat(file3)).size > 1e7)
       throw new BridgeError("VERIFICATION_TOO_LARGE", "Review citation exceeds the text file limit");
-    const lines = (await readFile(file2, "utf8")).split(/\r?\n/);
+    const lines = (await readFile(file3, "utf8")).split(/\r?\n/);
     const quote = finding.quote.split(/\r?\n/);
     if (lines.slice(finding.line - 1, finding.line - 1 + quote.length).join("\n") !== quote.join("\n")) {
       throw new BridgeError("ROLE_OUTPUT_INVALID", "Review citation does not match its file and line");
@@ -29568,18 +29568,18 @@ var ParseStatus = class _ParseStatus {
     if (this.value !== "aborted")
       this.value = "aborted";
   }
-  static mergeArray(status, results) {
+  static mergeArray(status2, results) {
     const arrayValue = [];
     for (const s of results) {
       if (s.status === "aborted")
         return INVALID2;
       if (s.status === "dirty")
-        status.dirty();
+        status2.dirty();
       arrayValue.push(s.value);
     }
-    return { status: status.value, value: arrayValue };
+    return { status: status2.value, value: arrayValue };
   }
-  static async mergeObjectAsync(status, pairs) {
+  static async mergeObjectAsync(status2, pairs) {
     const syncPairs = [];
     for (const pair of pairs) {
       const key = await pair.key;
@@ -29589,9 +29589,9 @@ var ParseStatus = class _ParseStatus {
         value
       });
     }
-    return _ParseStatus.mergeObjectSync(status, syncPairs);
+    return _ParseStatus.mergeObjectSync(status2, syncPairs);
   }
-  static mergeObjectSync(status, pairs) {
+  static mergeObjectSync(status2, pairs) {
     const finalObject = {};
     for (const pair of pairs) {
       const { key, value } = pair;
@@ -29600,14 +29600,14 @@ var ParseStatus = class _ParseStatus {
       if (value.status === "aborted")
         return INVALID2;
       if (key.status === "dirty")
-        status.dirty();
+        status2.dirty();
       if (value.status === "dirty")
-        status.dirty();
+        status2.dirty();
       if (key.value !== "__proto__" && (typeof value.value !== "undefined" || pair.alwaysSet)) {
         finalObject[key.value] = value.value;
       }
     }
-    return { status: status.value, value: finalObject };
+    return { status: status2.value, value: finalObject };
   }
 };
 var INVALID2 = Object.freeze({
@@ -30067,7 +30067,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
       });
       return INVALID2;
     }
-    const status = new ParseStatus();
+    const status2 = new ParseStatus();
     let ctx = void 0;
     for (const check2 of this._def.checks) {
       if (check2.kind === "min") {
@@ -30081,7 +30081,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             exact: false,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "max") {
         if (input2.data.length > check2.value) {
@@ -30094,7 +30094,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             exact: false,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "length") {
         const tooBig = input2.data.length > check2.value;
@@ -30120,7 +30120,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
               message: check2.message
             });
           }
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "email") {
         if (!emailRegex.test(input2.data)) {
@@ -30130,7 +30130,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "emoji") {
         if (!emojiRegex) {
@@ -30143,7 +30143,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "uuid") {
         if (!uuidRegex.test(input2.data)) {
@@ -30153,7 +30153,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "nanoid") {
         if (!nanoidRegex.test(input2.data)) {
@@ -30163,7 +30163,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "cuid") {
         if (!cuidRegex.test(input2.data)) {
@@ -30173,7 +30173,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "cuid2") {
         if (!cuid2Regex.test(input2.data)) {
@@ -30183,7 +30183,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "ulid") {
         if (!ulidRegex.test(input2.data)) {
@@ -30193,7 +30193,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "url") {
         try {
@@ -30205,7 +30205,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "regex") {
         check2.regex.lastIndex = 0;
@@ -30217,7 +30217,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "trim") {
         input2.data = input2.data.trim();
@@ -30229,7 +30229,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             validation: { includes: check2.value, position: check2.position },
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "toLowerCase") {
         input2.data = input2.data.toLowerCase();
@@ -30243,7 +30243,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             validation: { startsWith: check2.value },
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "endsWith") {
         if (!input2.data.endsWith(check2.value)) {
@@ -30253,7 +30253,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             validation: { endsWith: check2.value },
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "datetime") {
         const regex = datetimeRegex(check2);
@@ -30264,7 +30264,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             validation: "datetime",
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "date") {
         const regex = dateRegex;
@@ -30275,7 +30275,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             validation: "date",
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "time") {
         const regex = timeRegex(check2);
@@ -30286,7 +30286,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             validation: "time",
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "duration") {
         if (!durationRegex.test(input2.data)) {
@@ -30296,7 +30296,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "ip") {
         if (!isValidIP(input2.data, check2.version)) {
@@ -30306,7 +30306,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "jwt") {
         if (!isValidJWT2(input2.data, check2.alg)) {
@@ -30316,7 +30316,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "cidr") {
         if (!isValidCidr(input2.data, check2.version)) {
@@ -30326,7 +30326,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "base64") {
         if (!base64Regex.test(input2.data)) {
@@ -30336,7 +30336,7 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "base64url") {
         if (!base64urlRegex.test(input2.data)) {
@@ -30346,13 +30346,13 @@ var ZodString2 = class _ZodString2 extends ZodType2 {
             code: ZodIssueCode2.invalid_string,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
-    return { status: status.value, value: input2.data };
+    return { status: status2.value, value: input2.data };
   }
   _regex(regex, validation, message) {
     return this.refinement((data) => regex.test(data), {
@@ -30628,7 +30628,7 @@ var ZodNumber2 = class _ZodNumber extends ZodType2 {
       return INVALID2;
     }
     let ctx = void 0;
-    const status = new ParseStatus();
+    const status2 = new ParseStatus();
     for (const check2 of this._def.checks) {
       if (check2.kind === "int") {
         if (!util.isInteger(input2.data)) {
@@ -30639,7 +30639,7 @@ var ZodNumber2 = class _ZodNumber extends ZodType2 {
             received: "float",
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "min") {
         const tooSmall = check2.inclusive ? input2.data < check2.value : input2.data <= check2.value;
@@ -30653,7 +30653,7 @@ var ZodNumber2 = class _ZodNumber extends ZodType2 {
             exact: false,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "max") {
         const tooBig = check2.inclusive ? input2.data > check2.value : input2.data >= check2.value;
@@ -30667,7 +30667,7 @@ var ZodNumber2 = class _ZodNumber extends ZodType2 {
             exact: false,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "multipleOf") {
         if (floatSafeRemainder2(input2.data, check2.value) !== 0) {
@@ -30677,7 +30677,7 @@ var ZodNumber2 = class _ZodNumber extends ZodType2 {
             multipleOf: check2.value,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "finite") {
         if (!Number.isFinite(input2.data)) {
@@ -30686,13 +30686,13 @@ var ZodNumber2 = class _ZodNumber extends ZodType2 {
             code: ZodIssueCode2.not_finite,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
-    return { status: status.value, value: input2.data };
+    return { status: status2.value, value: input2.data };
   }
   gte(value, message) {
     return this.setLimit("min", value, true, errorUtil.toString(message));
@@ -30857,7 +30857,7 @@ var ZodBigInt2 = class _ZodBigInt extends ZodType2 {
       return this._getInvalidInput(input2);
     }
     let ctx = void 0;
-    const status = new ParseStatus();
+    const status2 = new ParseStatus();
     for (const check2 of this._def.checks) {
       if (check2.kind === "min") {
         const tooSmall = check2.inclusive ? input2.data < check2.value : input2.data <= check2.value;
@@ -30870,7 +30870,7 @@ var ZodBigInt2 = class _ZodBigInt extends ZodType2 {
             inclusive: check2.inclusive,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "max") {
         const tooBig = check2.inclusive ? input2.data > check2.value : input2.data >= check2.value;
@@ -30883,7 +30883,7 @@ var ZodBigInt2 = class _ZodBigInt extends ZodType2 {
             inclusive: check2.inclusive,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "multipleOf") {
         if (input2.data % check2.value !== BigInt(0)) {
@@ -30893,13 +30893,13 @@ var ZodBigInt2 = class _ZodBigInt extends ZodType2 {
             multipleOf: check2.value,
             message: check2.message
           });
-          status.dirty();
+          status2.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
-    return { status: status.value, value: input2.data };
+    return { status: status2.value, value: input2.data };
   }
   _getInvalidInput(input2) {
     const ctx = this._getOrReturnCtx(input2);
@@ -31057,7 +31057,7 @@ var ZodDate2 = class _ZodDate extends ZodType2 {
       });
       return INVALID2;
     }
-    const status = new ParseStatus();
+    const status2 = new ParseStatus();
     let ctx = void 0;
     for (const check2 of this._def.checks) {
       if (check2.kind === "min") {
@@ -31071,7 +31071,7 @@ var ZodDate2 = class _ZodDate extends ZodType2 {
             minimum: check2.value,
             type: "date"
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (check2.kind === "max") {
         if (input2.data.getTime() > check2.value) {
@@ -31084,14 +31084,14 @@ var ZodDate2 = class _ZodDate extends ZodType2 {
             maximum: check2.value,
             type: "date"
           });
-          status.dirty();
+          status2.dirty();
         }
       } else {
         util.assertNever(check2);
       }
     }
     return {
-      status: status.value,
+      status: status2.value,
       value: new Date(input2.data.getTime())
     };
   }
@@ -31277,7 +31277,7 @@ ZodVoid2.create = (params) => {
 };
 var ZodArray2 = class _ZodArray extends ZodType2 {
   _parse(input2) {
-    const { ctx, status } = this._processInputParams(input2);
+    const { ctx, status: status2 } = this._processInputParams(input2);
     const def = this._def;
     if (ctx.parsedType !== ZodParsedType.array) {
       addIssueToContext(ctx, {
@@ -31300,7 +31300,7 @@ var ZodArray2 = class _ZodArray extends ZodType2 {
           exact: true,
           message: def.exactLength.message
         });
-        status.dirty();
+        status2.dirty();
       }
     }
     if (def.minLength !== null) {
@@ -31313,7 +31313,7 @@ var ZodArray2 = class _ZodArray extends ZodType2 {
           exact: false,
           message: def.minLength.message
         });
-        status.dirty();
+        status2.dirty();
       }
     }
     if (def.maxLength !== null) {
@@ -31326,20 +31326,20 @@ var ZodArray2 = class _ZodArray extends ZodType2 {
           exact: false,
           message: def.maxLength.message
         });
-        status.dirty();
+        status2.dirty();
       }
     }
     if (ctx.common.async) {
       return Promise.all([...ctx.data].map((item, i) => {
         return def.type._parseAsync(new ParseInputLazyPath(ctx, item, ctx.path, i));
       })).then((result2) => {
-        return ParseStatus.mergeArray(status, result2);
+        return ParseStatus.mergeArray(status2, result2);
       });
     }
     const result = [...ctx.data].map((item, i) => {
       return def.type._parseSync(new ParseInputLazyPath(ctx, item, ctx.path, i));
     });
-    return ParseStatus.mergeArray(status, result);
+    return ParseStatus.mergeArray(status2, result);
   }
   get element() {
     return this._def.type;
@@ -31428,7 +31428,7 @@ var ZodObject2 = class _ZodObject extends ZodType2 {
       });
       return INVALID2;
     }
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     const { shape, keys: shapeKeys } = this._getCached();
     const extraKeys = [];
     if (!(this._def.catchall instanceof ZodNever2 && this._def.unknownKeys === "strip")) {
@@ -31463,7 +31463,7 @@ var ZodObject2 = class _ZodObject extends ZodType2 {
             code: ZodIssueCode2.unrecognized_keys,
             keys: extraKeys
           });
-          status.dirty();
+          status2.dirty();
         }
       } else if (unknownKeys === "strip") {
       } else {
@@ -31497,10 +31497,10 @@ var ZodObject2 = class _ZodObject extends ZodType2 {
         }
         return syncPairs;
       }).then((syncPairs) => {
-        return ParseStatus.mergeObjectSync(status, syncPairs);
+        return ParseStatus.mergeObjectSync(status2, syncPairs);
       });
     } else {
-      return ParseStatus.mergeObjectSync(status, pairs);
+      return ParseStatus.mergeObjectSync(status2, pairs);
     }
   }
   get shape() {
@@ -31982,7 +31982,7 @@ function mergeValues2(a, b) {
 }
 var ZodIntersection2 = class extends ZodType2 {
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     const handleParsed = (parsedLeft, parsedRight) => {
       if (isAborted(parsedLeft) || isAborted(parsedRight)) {
         return INVALID2;
@@ -31995,9 +31995,9 @@ var ZodIntersection2 = class extends ZodType2 {
         return INVALID2;
       }
       if (isDirty(parsedLeft) || isDirty(parsedRight)) {
-        status.dirty();
+        status2.dirty();
       }
-      return { status: status.value, value: merged.data };
+      return { status: status2.value, value: merged.data };
     };
     if (ctx.common.async) {
       return Promise.all([
@@ -32035,7 +32035,7 @@ ZodIntersection2.create = (left, right, params) => {
 };
 var ZodTuple2 = class _ZodTuple extends ZodType2 {
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     if (ctx.parsedType !== ZodParsedType.array) {
       addIssueToContext(ctx, {
         code: ZodIssueCode2.invalid_type,
@@ -32063,7 +32063,7 @@ var ZodTuple2 = class _ZodTuple extends ZodType2 {
         exact: false,
         type: "array"
       });
-      status.dirty();
+      status2.dirty();
     }
     const items = [...ctx.data].map((item, itemIndex) => {
       const schema = this._def.items[itemIndex] || this._def.rest;
@@ -32073,10 +32073,10 @@ var ZodTuple2 = class _ZodTuple extends ZodType2 {
     }).filter((x) => !!x);
     if (ctx.common.async) {
       return Promise.all(items).then((results) => {
-        return ParseStatus.mergeArray(status, results);
+        return ParseStatus.mergeArray(status2, results);
       });
     } else {
-      return ParseStatus.mergeArray(status, items);
+      return ParseStatus.mergeArray(status2, items);
     }
   }
   get items() {
@@ -32108,7 +32108,7 @@ var ZodRecord2 = class _ZodRecord extends ZodType2 {
     return this._def.valueType;
   }
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     if (ctx.parsedType !== ZodParsedType.object) {
       addIssueToContext(ctx, {
         code: ZodIssueCode2.invalid_type,
@@ -32128,9 +32128,9 @@ var ZodRecord2 = class _ZodRecord extends ZodType2 {
       });
     }
     if (ctx.common.async) {
-      return ParseStatus.mergeObjectAsync(status, pairs);
+      return ParseStatus.mergeObjectAsync(status2, pairs);
     } else {
-      return ParseStatus.mergeObjectSync(status, pairs);
+      return ParseStatus.mergeObjectSync(status2, pairs);
     }
   }
   get element() {
@@ -32161,7 +32161,7 @@ var ZodMap2 = class extends ZodType2 {
     return this._def.valueType;
   }
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     if (ctx.parsedType !== ZodParsedType.map) {
       addIssueToContext(ctx, {
         code: ZodIssueCode2.invalid_type,
@@ -32188,11 +32188,11 @@ var ZodMap2 = class extends ZodType2 {
             return INVALID2;
           }
           if (key.status === "dirty" || value.status === "dirty") {
-            status.dirty();
+            status2.dirty();
           }
           finalMap.set(key.value, value.value);
         }
-        return { status: status.value, value: finalMap };
+        return { status: status2.value, value: finalMap };
       });
     } else {
       const finalMap = /* @__PURE__ */ new Map();
@@ -32203,11 +32203,11 @@ var ZodMap2 = class extends ZodType2 {
           return INVALID2;
         }
         if (key.status === "dirty" || value.status === "dirty") {
-          status.dirty();
+          status2.dirty();
         }
         finalMap.set(key.value, value.value);
       }
-      return { status: status.value, value: finalMap };
+      return { status: status2.value, value: finalMap };
     }
   }
 };
@@ -32221,7 +32221,7 @@ ZodMap2.create = (keyType, valueType, params) => {
 };
 var ZodSet2 = class _ZodSet extends ZodType2 {
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     if (ctx.parsedType !== ZodParsedType.set) {
       addIssueToContext(ctx, {
         code: ZodIssueCode2.invalid_type,
@@ -32241,7 +32241,7 @@ var ZodSet2 = class _ZodSet extends ZodType2 {
           exact: false,
           message: def.minSize.message
         });
-        status.dirty();
+        status2.dirty();
       }
     }
     if (def.maxSize !== null) {
@@ -32254,7 +32254,7 @@ var ZodSet2 = class _ZodSet extends ZodType2 {
           exact: false,
           message: def.maxSize.message
         });
-        status.dirty();
+        status2.dirty();
       }
     }
     const valueType = this._def.valueType;
@@ -32264,10 +32264,10 @@ var ZodSet2 = class _ZodSet extends ZodType2 {
         if (element.status === "aborted")
           return INVALID2;
         if (element.status === "dirty")
-          status.dirty();
+          status2.dirty();
         parsedSet.add(element.value);
       }
-      return { status: status.value, value: parsedSet };
+      return { status: status2.value, value: parsedSet };
     }
     const elements = [...ctx.data.values()].map((item, i) => valueType._parse(new ParseInputLazyPath(ctx, item, ctx.path, i)));
     if (ctx.common.async) {
@@ -32598,15 +32598,15 @@ var ZodEffects = class extends ZodType2 {
     return this._def.schema._def.typeName === ZodFirstPartyTypeKind2.ZodEffects ? this._def.schema.sourceType() : this._def.schema;
   }
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     const effect = this._def.effect || null;
     const checkCtx = {
       addIssue: (arg) => {
         addIssueToContext(ctx, arg);
         if (arg.fatal) {
-          status.abort();
+          status2.abort();
         } else {
-          status.dirty();
+          status2.dirty();
         }
       },
       get path() {
@@ -32618,7 +32618,7 @@ var ZodEffects = class extends ZodType2 {
       const processed = effect.transform(ctx.data, checkCtx);
       if (ctx.common.async) {
         return Promise.resolve(processed).then(async (processed2) => {
-          if (status.value === "aborted")
+          if (status2.value === "aborted")
             return INVALID2;
           const result = await this._def.schema._parseAsync({
             data: processed2,
@@ -32629,12 +32629,12 @@ var ZodEffects = class extends ZodType2 {
             return INVALID2;
           if (result.status === "dirty")
             return DIRTY(result.value);
-          if (status.value === "dirty")
+          if (status2.value === "dirty")
             return DIRTY(result.value);
           return result;
         });
       } else {
-        if (status.value === "aborted")
+        if (status2.value === "aborted")
           return INVALID2;
         const result = this._def.schema._parseSync({
           data: processed,
@@ -32645,7 +32645,7 @@ var ZodEffects = class extends ZodType2 {
           return INVALID2;
         if (result.status === "dirty")
           return DIRTY(result.value);
-        if (status.value === "dirty")
+        if (status2.value === "dirty")
           return DIRTY(result.value);
         return result;
       }
@@ -32670,17 +32670,17 @@ var ZodEffects = class extends ZodType2 {
         if (inner.status === "aborted")
           return INVALID2;
         if (inner.status === "dirty")
-          status.dirty();
+          status2.dirty();
         executeRefinement(inner.value);
-        return { status: status.value, value: inner.value };
+        return { status: status2.value, value: inner.value };
       } else {
         return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((inner) => {
           if (inner.status === "aborted")
             return INVALID2;
           if (inner.status === "dirty")
-            status.dirty();
+            status2.dirty();
           return executeRefinement(inner.value).then(() => {
-            return { status: status.value, value: inner.value };
+            return { status: status2.value, value: inner.value };
           });
         });
       }
@@ -32698,13 +32698,13 @@ var ZodEffects = class extends ZodType2 {
         if (result instanceof Promise) {
           throw new Error(`Asynchronous transform encountered during synchronous parse operation. Use .parseAsync instead.`);
         }
-        return { status: status.value, value: result };
+        return { status: status2.value, value: result };
       } else {
         return this._def.schema._parseAsync({ data: ctx.data, path: ctx.path, parent: ctx }).then((base) => {
           if (!isValid(base))
             return INVALID2;
           return Promise.resolve(effect.transform(base.value, checkCtx)).then((result) => ({
-            status: status.value,
+            status: status2.value,
             value: result
           }));
         });
@@ -32882,7 +32882,7 @@ var ZodBranded = class extends ZodType2 {
 };
 var ZodPipeline = class _ZodPipeline extends ZodType2 {
   _parse(input2) {
-    const { status, ctx } = this._processInputParams(input2);
+    const { status: status2, ctx } = this._processInputParams(input2);
     if (ctx.common.async) {
       const handleAsync = async () => {
         const inResult = await this._def.in._parseAsync({
@@ -32893,7 +32893,7 @@ var ZodPipeline = class _ZodPipeline extends ZodType2 {
         if (inResult.status === "aborted")
           return INVALID2;
         if (inResult.status === "dirty") {
-          status.dirty();
+          status2.dirty();
           return DIRTY(inResult.value);
         } else {
           return this._def.out._parseAsync({
@@ -32913,7 +32913,7 @@ var ZodPipeline = class _ZodPipeline extends ZodType2 {
       if (inResult.status === "aborted")
         return INVALID2;
       if (inResult.status === "dirty") {
-        status.dirty();
+        status2.dirty();
         return {
           status: "dirty",
           value: inResult.value
@@ -33261,8 +33261,8 @@ function getLiteralValue(schema) {
 }
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
-function isTerminal(status) {
-  return status === "completed" || status === "failed" || status === "cancelled";
+function isTerminal(status2) {
+  return status2 === "completed" || status2 === "failed" || status2 === "cancelled";
 }
 
 // node_modules/zod-to-json-schema/dist/esm/Options.js
@@ -34621,12 +34621,12 @@ var Protocol = class {
     this._taskMessageQueue = _options?.taskMessageQueue;
     if (this._taskStore) {
       this.setRequestHandler(GetTaskRequestSchema, async (request, extra) => {
-        const task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
-        if (!task) {
+        const task2 = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+        if (!task2) {
           throw new McpError(ErrorCode.InvalidParams, "Failed to retrieve task: Task not found");
         }
         return {
-          ...task
+          ...task2
         };
       });
       this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
@@ -34657,15 +34657,15 @@ var Protocol = class {
               await this._transport?.send(queuedMessage.message, { relatedRequestId: extra.requestId });
             }
           }
-          const task = await this._taskStore.getTask(taskId, extra.sessionId);
-          if (!task) {
+          const task2 = await this._taskStore.getTask(taskId, extra.sessionId);
+          if (!task2) {
             throw new McpError(ErrorCode.InvalidParams, `Task not found: ${taskId}`);
           }
-          if (!isTerminal(task.status)) {
+          if (!isTerminal(task2.status)) {
             await this._waitForTaskUpdate(taskId, extra.signal);
             return await handleTaskResult();
           }
-          if (isTerminal(task.status)) {
+          if (isTerminal(task2.status)) {
             const result = await this._taskStore.getTaskResult(taskId, extra.sessionId);
             this._clearTaskQueue(taskId);
             return {
@@ -34696,12 +34696,12 @@ var Protocol = class {
       });
       this.setRequestHandler(CancelTaskRequestSchema, async (request, extra) => {
         try {
-          const task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
-          if (!task) {
+          const task2 = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+          if (!task2) {
             throw new McpError(ErrorCode.InvalidParams, `Task not found: ${request.params.taskId}`);
           }
-          if (isTerminal(task.status)) {
-            throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task.status}`);
+          if (isTerminal(task2.status)) {
+            throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task2.status}`);
           }
           await this._taskStore.updateTaskStatus(request.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
           this._clearTaskQueue(request.params.taskId);
@@ -34833,7 +34833,7 @@ var Protocol = class {
     const capturedTransport = this._transport;
     const relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
     if (handler === void 0) {
-      const errorResponse = {
+      const errorResponse2 = {
         jsonrpc: "2.0",
         id: request.id,
         error: {
@@ -34844,11 +34844,11 @@ var Protocol = class {
       if (relatedTaskId && this._taskMessageQueue) {
         this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
-          message: errorResponse,
+          message: errorResponse2,
           timestamp: Date.now()
         }, capturedTransport?.sessionId).catch((error62) => this._onerror(new Error(`Failed to enqueue error response: ${error62}`)));
       } else {
-        capturedTransport?.send(errorResponse).catch((error62) => this._onerror(new Error(`Failed to send an error response: ${error62}`)));
+        capturedTransport?.send(errorResponse2).catch((error62) => this._onerror(new Error(`Failed to send an error response: ${error62}`)));
       }
       return;
     }
@@ -34918,7 +34918,7 @@ var Protocol = class {
       if (abortController.signal.aborted) {
         return;
       }
-      const errorResponse = {
+      const errorResponse2 = {
         jsonrpc: "2.0",
         id: request.id,
         error: {
@@ -34930,11 +34930,11 @@ var Protocol = class {
       if (relatedTaskId && this._taskMessageQueue) {
         await this._enqueueTaskMessage(relatedTaskId, {
           type: "error",
-          message: errorResponse,
+          message: errorResponse2,
           timestamp: Date.now()
         }, capturedTransport?.sessionId);
       } else {
-        await capturedTransport?.send(errorResponse);
+        await capturedTransport?.send(errorResponse2);
       }
     }).catch((error62) => this._onerror(new Error(`Failed to send response: ${error62}`))).finally(() => {
       if (this._requestHandlerAbortControllers.get(request.id) === abortController) {
@@ -34989,10 +34989,10 @@ var Protocol = class {
     if (isJSONRPCResultResponse(response2) && response2.result && typeof response2.result === "object") {
       const result = response2.result;
       if (result.task && typeof result.task === "object") {
-        const task = result.task;
-        if (typeof task.taskId === "string") {
+        const task2 = result.task;
+        if (typeof task2.taskId === "string") {
           isTaskResponse = true;
-          this._taskProgressTokens.set(task.taskId, messageId);
+          this._taskProgressTokens.set(task2.taskId, messageId);
         }
       }
     }
@@ -35043,8 +35043,8 @@ var Protocol = class {
    * @experimental Use `client.experimental.tasks.requestStream()` to access this method.
    */
   async *requestStream(request, resultSchema, options) {
-    const { task } = options ?? {};
-    if (!task) {
+    const { task: task2 } = options ?? {};
+    if (!task2) {
       try {
         const result = await this.request(request, resultSchema, options);
         yield { type: "result", result };
@@ -35066,18 +35066,18 @@ var Protocol = class {
         throw new McpError(ErrorCode.InternalError, "Task creation did not return a task");
       }
       while (true) {
-        const task2 = await this.getTask({ taskId }, options);
-        yield { type: "taskStatus", task: task2 };
-        if (isTerminal(task2.status)) {
-          if (task2.status === "completed") {
+        const task3 = await this.getTask({ taskId }, options);
+        yield { type: "taskStatus", task: task3 };
+        if (isTerminal(task3.status)) {
+          if (task3.status === "completed") {
             const result = await this.getTaskResult({ taskId }, resultSchema, options);
             yield { type: "result", result };
-          } else if (task2.status === "failed") {
+          } else if (task3.status === "failed") {
             yield {
               type: "error",
               error: new McpError(ErrorCode.InternalError, `Task ${taskId} failed`)
             };
-          } else if (task2.status === "cancelled") {
+          } else if (task3.status === "cancelled") {
             yield {
               type: "error",
               error: new McpError(ErrorCode.InternalError, `Task ${taskId} was cancelled`)
@@ -35085,12 +35085,12 @@ var Protocol = class {
           }
           return;
         }
-        if (task2.status === "input_required") {
+        if (task3.status === "input_required") {
           const result = await this.getTaskResult({ taskId }, resultSchema, options);
           yield { type: "result", result };
           return;
         }
-        const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
+        const pollInterval = task3.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
         options?.signal?.throwIfAborted();
       }
@@ -35107,7 +35107,7 @@ var Protocol = class {
    * Do not use this method to emit notifications! Use notification() instead.
    */
   request(request, resultSchema, options) {
-    const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
+    const { relatedRequestId, resumptionToken, onresumptiontoken, task: task2, relatedTask } = options ?? {};
     return new Promise((resolve, reject) => {
       const earlyReject = (error62) => {
         reject(error62);
@@ -35119,7 +35119,7 @@ var Protocol = class {
       if (this._options?.enforceStrictCapabilities === true) {
         try {
           this.assertCapabilityForMethod(request.method);
-          if (task) {
+          if (task2) {
             this.assertTaskCapability(request.method);
           }
         } catch (e) {
@@ -35144,10 +35144,10 @@ var Protocol = class {
           }
         };
       }
-      if (task) {
+      if (task2) {
         jsonrpcRequest.params = {
           ...jsonrpcRequest.params,
-          task
+          task: task2
         };
       }
       if (relatedTask) {
@@ -35441,9 +35441,9 @@ var Protocol = class {
   async _waitForTaskUpdate(taskId, signal) {
     let interval = this._options?.defaultTaskPollInterval ?? 1e3;
     try {
-      const task = await this._taskStore?.getTask(taskId);
-      if (task?.pollInterval) {
-        interval = task.pollInterval;
+      const task2 = await this._taskStore?.getTask(taskId);
+      if (task2?.pollInterval) {
+        interval = task2.pollInterval;
       }
     } catch {
     }
@@ -35475,22 +35475,22 @@ var Protocol = class {
         }, sessionId);
       },
       getTask: async (taskId) => {
-        const task = await taskStore.getTask(taskId, sessionId);
-        if (!task) {
+        const task2 = await taskStore.getTask(taskId, sessionId);
+        if (!task2) {
           throw new McpError(ErrorCode.InvalidParams, "Failed to retrieve task: Task not found");
         }
-        return task;
+        return task2;
       },
-      storeTaskResult: async (taskId, status, result) => {
-        await taskStore.storeTaskResult(taskId, status, result, sessionId);
-        const task = await taskStore.getTask(taskId, sessionId);
-        if (task) {
+      storeTaskResult: async (taskId, status2, result) => {
+        await taskStore.storeTaskResult(taskId, status2, result, sessionId);
+        const task2 = await taskStore.getTask(taskId, sessionId);
+        if (task2) {
           const notification = TaskStatusNotificationSchema.parse({
             method: "notifications/tasks/status",
-            params: task
+            params: task2
           });
           await this.notification(notification);
-          if (isTerminal(task.status)) {
+          if (isTerminal(task2.status)) {
             this._cleanupTaskProgressHandler(taskId);
           }
         }
@@ -35498,15 +35498,15 @@ var Protocol = class {
       getTaskResult: (taskId) => {
         return taskStore.getTaskResult(taskId, sessionId);
       },
-      updateTaskStatus: async (taskId, status, statusMessage) => {
-        const task = await taskStore.getTask(taskId, sessionId);
-        if (!task) {
+      updateTaskStatus: async (taskId, status2, statusMessage) => {
+        const task2 = await taskStore.getTask(taskId, sessionId);
+        if (!task2) {
           throw new McpError(ErrorCode.InvalidParams, `Task "${taskId}" not found - it may have been cleaned up`);
         }
-        if (isTerminal(task.status)) {
-          throw new McpError(ErrorCode.InvalidParams, `Cannot update task "${taskId}" from terminal status "${task.status}" to "${status}". Terminal states (completed, failed, cancelled) cannot transition to other states.`);
+        if (isTerminal(task2.status)) {
+          throw new McpError(ErrorCode.InvalidParams, `Cannot update task "${taskId}" from terminal status "${task2.status}" to "${status2}". Terminal states (completed, failed, cancelled) cannot transition to other states.`);
         }
-        await taskStore.updateTaskStatus(taskId, status, statusMessage, sessionId);
+        await taskStore.updateTaskStatus(taskId, status2, statusMessage, sessionId);
         const updatedTask = await taskStore.getTask(taskId, sessionId);
         if (updatedTask) {
           const notification = TaskStatusNotificationSchema.parse({
@@ -35701,7 +35701,7 @@ var ExperimentalServerTasks = class {
       if (hasPreviousToolUse) {
         const toolUseIds = new Set(previousContent.filter((c) => c.type === "tool_use").map((c) => c.id));
         const toolResultIds = new Set(lastContent.filter((c) => c.type === "tool_result").map((c) => c.toolUseId));
-        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id) => toolResultIds.has(id))) {
+        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id2) => toolResultIds.has(id2))) {
           throw new Error("ids of tool_result blocks and tool_use blocks from previous message do not match");
         }
       }
@@ -36126,7 +36126,7 @@ var Server = class extends Protocol {
       if (hasPreviousToolUse) {
         const toolUseIds = new Set(previousContent.filter((c) => c.type === "tool_use").map((c) => c.id));
         const toolResultIds = new Set(lastContent.filter((c) => c.type === "tool_result").map((c) => c.toolUseId));
-        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id) => toolResultIds.has(id))) {
+        if (toolUseIds.size !== toolResultIds.size || ![...toolUseIds].every((id2) => toolResultIds.has(id2))) {
           throw new Error("ids of tool_result blocks and tool_use blocks from previous message do not match");
         }
       }
@@ -36540,15 +36540,15 @@ var McpServer = class {
       await Promise.resolve(handler.createTask(taskExtra))
     );
     const taskId = createTaskResult.task.taskId;
-    let task = createTaskResult.task;
-    const pollInterval = task.pollInterval ?? 5e3;
-    while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
+    let task2 = createTaskResult.task;
+    const pollInterval = task2.pollInterval ?? 5e3;
+    while (task2.status !== "completed" && task2.status !== "failed" && task2.status !== "cancelled") {
       await new Promise((resolve) => setTimeout(resolve, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
       }
-      task = updatedTask;
+      task2 = updatedTask;
     }
     return await extra.taskStore.getTaskResult(taskId);
   }
@@ -37142,7 +37142,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   }
   const fileHashes = /* @__PURE__ */ Object.create(null);
   const contents = /* @__PURE__ */ new Map();
-  async function file2(relative) {
+  async function file3(relative) {
     if (contents.has(relative))
       return contents.get(relative);
     try {
@@ -37171,7 +37171,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
     let checkPassed;
     if (criterion.check) {
       const { kind, path: path7, text } = criterion.check;
-      const content = await file2(path7);
+      const content = await file3(path7);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -37184,16 +37184,16 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
     const review = reviews.find((item) => item.criterionId === criterion.id);
     let grounded = false;
     if (review) {
-      const content = await file2(review.path);
+      const content = await file3(review.path);
       const lines = content?.toString("utf8").split(/\r?\n/);
       const quoteLines = review.quote.split(/\r?\n/);
       grounded = Boolean(lines && lines.slice(review.line - 1, review.line - 1 + quoteLines.length).join("\n") === quoteLines.join("\n"));
     }
-    const status2 = checkPassed === false || review && (!grounded || review.verdict === "failed") ? "failed" : !review || review.verdict === "unverified" ? "unverified" : "passed";
-    checks.push({ criterionId: criterion.id, status: status2, observation: checkPassed === false ? "Artifact check failed" : review && !grounded ? "Review quote does not match the file and line" : !review ? "Codex review evidence is missing" : "Artifact check: " + (checkPassed === void 0 ? "not specified" : "passed") + "; client review: " + review.verdict });
+    const status3 = checkPassed === false || review && (!grounded || review.verdict === "failed") ? "failed" : !review || review.verdict === "unverified" ? "unverified" : "passed";
+    checks.push({ criterionId: criterion.id, status: status3, observation: checkPassed === false ? "Artifact check failed" : review && !grounded ? "Review quote does not match the file and line" : !review ? "Codex review evidence is missing" : "Artifact check: " + (checkPassed === void 0 ? "not specified" : "passed") + "; client review: " + review.verdict });
   }
-  const status = checks.some((check2) => check2.status === "failed") ? "failed" : !checks.length || checks.some((check2) => check2.status === "unverified") ? "unverified" : "passed";
-  return { sha256, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), status, checks, review: { source: "client-reported", evidence: reviews }, fileHashes };
+  const status2 = checks.some((check2) => check2.status === "failed") ? "failed" : !checks.length || checks.some((check2) => check2.status === "unverified") ? "unverified" : "passed";
+  return { sha256, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), status: status2, checks, review: { source: "client-reported", evidence: reviews }, fileHashes };
 }
 
 // dist/src/native-tests.js
@@ -37244,14 +37244,14 @@ async function nativeRunner(settings) {
         }
         if (!fs.lstatSync(current).isFile())
           throw new Error("Test snapshot contains a non-file");
-        const hash2 = crypto.createHash("sha256");
+        const hash3 = crypto.createHash("sha256");
         for await (const chunk of fs.createReadStream(current)) {
           bytes += chunk.length;
           if (bytes > settings.maxCopyBytes)
             throw new Error("Test snapshot byte limit exceeded");
-          hash2.update(chunk);
+          hash3.update(chunk);
         }
-        tree.update(relative + "\0" + hash2.digest("hex") + "\0");
+        tree.update(relative + "\0" + hash3.digest("hex") + "\0");
       }
       return tree.digest("hex");
     }
@@ -37296,15 +37296,15 @@ async function nativeRunner(settings) {
 async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID();
-  const file2 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path5.join(project.copyDirectory, file2);
-  const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file2, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash2 = createHash3("sha256").update(script).digest("hex");
+  const file3 = ".agy-bridge-test-" + nonce + ".cjs";
+  const absolute = path5.join(project.copyDirectory, file3);
+  const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
+  const hash3 = createHash3("sha256").update(script).digest("hex");
   const exclude = path5.join(project.gitDirectory, "info", "exclude");
   await mkdir2(path5.dirname(exclude), { recursive: true });
-  await appendFile(exclude, "\n/" + file2 + "\n");
+  await appendFile(exclude, "\n/" + file3 + "\n");
   await writeFile(absolute, script, { flag: "wx", mode: 384 });
-  const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file2 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash2 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
+  const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
   let commandLine;
   if (process.platform === "win32") {
     const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
@@ -37322,7 +37322,7 @@ async function prepareNativeTest(project, request, settings) {
     async cleanup() {
       await rm2(absolute, { force: true });
       const content = await readFile2(exclude, "utf8");
-      await writeFile(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file2).join("\n"));
+      await writeFile(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
     }
   };
 }
@@ -37345,6 +37345,279 @@ function readNativeReceipt(step, expected) {
     return;
   }
 }
+
+// dist/src/usage.js
+var usageCountersSchema = external_exports.object({
+  inputTokens: external_exports.number().int().nonnegative().nullable(),
+  outputTokens: external_exports.number().int().nonnegative().nullable(),
+  totalTokens: external_exports.number().int().nonnegative().nullable(),
+  thinkingTokens: external_exports.number().int().nonnegative().nullable(),
+  cacheReadTokens: external_exports.number().int().nonnegative().nullable()
+});
+var fields = {
+  inputTokens: "input_tokens",
+  outputTokens: "output_tokens",
+  totalTokens: "total_tokens",
+  thinkingTokens: "thinking_tokens",
+  cacheReadTokens: "cache_read_tokens"
+};
+var keys = Object.keys(fields);
+function normalizeUsage(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  return Object.fromEntries(keys.map((key) => {
+    const value = data[fields[key]];
+    return [key, typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null];
+  }));
+}
+function taskTokenUsage(task2) {
+  const raw = task2.result?.usage;
+  const current = normalizeUsage(raw);
+  const counters = { ...current };
+  const warnings = [];
+  if (task2.usageIsResume) {
+    for (const key of keys) {
+      const before = task2.usageBaseline?.[key];
+      const after = current[key];
+      counters[key] = before !== void 0 && before !== null && after !== null && after >= before ? after - before : null;
+      if (before !== null && before !== void 0 && after !== null && after < before)
+        warnings.push("Counter reset: " + key);
+    }
+    if (!task2.usageBaseline)
+      warnings.push("Previous session counters are unavailable; cumulative usage is not task usage");
+  }
+  const available = keys.some((key) => counters[key] !== null);
+  const partial2 = keys.some((key) => counters[key] === null);
+  if (raw === void 0)
+    warnings.push("Final CLI usage is unavailable");
+  if (partial2)
+    warnings.push("Missing counters remain null; no estimate or zero substitution");
+  return {
+    scope: "task",
+    source: available ? task2.usageIsResume ? "session-delta" : "session-total" : "unavailable",
+    counters,
+    available,
+    partial: partial2,
+    warnings
+  };
+}
+function sum(rows) {
+  return Object.fromEntries(keys.map((key) => {
+    if (!rows.length || rows.some((row) => row[key] === null))
+      return [key, null];
+    const total = rows.reduce((total2, row) => total2 + row[key], 0);
+    return [key, Number.isSafeInteger(total) ? total : null];
+  }));
+}
+function aggregateUsage(tasks2) {
+  const byTask = tasks2.map((task2) => ({ taskId: task2.taskId, sessionId: task2.sessionId ?? null, model: task2.model ?? null, status: task2.status, ...taskTokenUsage(task2) }));
+  const models = [...new Set(tasks2.map((task2) => task2.model ?? null))];
+  const sessions = [...new Set(tasks2.map((task2) => task2.sessionId).filter((id2) => id2 !== void 0))];
+  return {
+    scope: "retained-tasks",
+    taskCount: tasks2.length,
+    measuredTaskCount: byTask.filter((task2) => task2.available).length,
+    counters: sum(byTask.map((task2) => task2.counters)),
+    byTask,
+    byModel: models.map((model) => {
+      const rows = byTask.filter((task2) => task2.model === model);
+      return { model, taskCount: rows.length, counters: sum(rows.map((task2) => task2.counters)) };
+    }),
+    bySession: sessions.map((sessionId) => {
+      const rows = byTask.filter((task2) => task2.sessionId === sessionId);
+      const latest = tasks2.filter((task2) => task2.sessionId === sessionId && task2.result?.usage !== void 0).at(-1);
+      return {
+        sessionId,
+        taskCount: rows.length,
+        counters: sum(rows.map((task2) => task2.counters)),
+        observedCumulative: latest ? normalizeUsage(latest.result.usage) : null
+      };
+    })
+  };
+}
+
+// dist/src/output-schemas.js
+var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
+var id = external_exports.string().uuid();
+var count = external_exports.number().int().nonnegative();
+var timestamp = external_exports.string().datetime();
+var status = external_exports.enum(["queued", "starting", "running", "streaming", "completed", "failed", "cancelled", "timeout"]);
+var verificationStatus = external_exports.enum(["passed", "failed", "unverified"]);
+var testEvidenceSchema = external_exports.object({
+  command: external_exports.string(),
+  exitCode: external_exports.number().int().min(0).max(255),
+  output: external_exports.string(),
+  sha256: hash2,
+  recordedAt: timestamp,
+  source: external_exports.enum(["client-reported", "agy-tool"]),
+  treeSha256: hash2.optional(),
+  beforeTreeSha256: hash2.optional(),
+  executionError: external_exports.string().optional(),
+  truncated: external_exports.boolean().optional(),
+  attempt: count.optional(),
+  testTaskId: id.optional(),
+  sandbox: external_exports.literal("agy-native-requested").optional()
+}).strict();
+var verification = external_exports.object({
+  sha256: hash2,
+  checkedAt: timestamp,
+  status: verificationStatus,
+  checks: external_exports.array(external_exports.object({ criterionId: external_exports.string(), status: verificationStatus, observation: external_exports.string() }).strict()),
+  review: external_exports.object({ source: external_exports.literal("client-reported"), evidence: external_exports.array(reviewEvidenceSchema) }).strict(),
+  fileHashes: external_exports.record(external_exports.string(), hash2.nullable())
+}).strict();
+var tokenUsage = external_exports.object({
+  scope: external_exports.literal("task"),
+  source: external_exports.enum(["session-total", "session-delta", "unavailable"]),
+  counters: usageCountersSchema,
+  available: external_exports.boolean(),
+  partial: external_exports.boolean(),
+  warnings: external_exports.array(external_exports.string())
+}).strict();
+var report = external_exports.discriminatedUnion("role", [
+  external_exports.object({ role: external_exports.literal("planner"), source: external_exports.literal("agy-reported"), data: plannerReportSchema }).strict(),
+  external_exports.object({ role: external_exports.literal("reviewer"), source: external_exports.literal("agy-reported"), data: reviewerReportSchema, citationsChecked: external_exports.literal(true) }).strict()
+]);
+var taskRecordSchema = external_exports.object({
+  taskId: id,
+  workingDirectory: external_exports.string(),
+  status,
+  createdAt: timestamp,
+  prompt: external_exports.string().optional(),
+  sessionId: external_exports.string().optional(),
+  pid: external_exports.number().int().positive().optional(),
+  model: external_exports.string().optional(),
+  startedAt: timestamp.optional(),
+  completedAt: timestamp.optional(),
+  exitCode: external_exports.number().int().nullable().optional(),
+  error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional(),
+  usage: external_exports.unknown().optional(),
+  result: external_exports.unknown().optional(),
+  copyDirectory: external_exports.string().optional(),
+  includedFiles: external_exports.array(external_exports.string()).optional(),
+  integratedAt: timestamp.optional(),
+  discardedAt: timestamp.optional(),
+  mode: external_exports.enum(["write", "read-only"]).optional(),
+  tests: external_exports.array(testEvidenceSchema).optional(),
+  acceptanceCriteria: external_exports.array(criterionSchema).optional(),
+  verification: verification.optional(),
+  role: roleSchema.optional(),
+  report: report.optional(),
+  usageIsResume: external_exports.boolean().optional(),
+  usageBaseline: usageCountersSchema.optional(),
+  tokenUsage: tokenUsage.optional()
+}).strict();
+var task = external_exports.object({ task: taskRecordSchema }).strict();
+var file2 = external_exports.object({ status: external_exports.enum(["A", "M", "D"]), path: external_exports.string() }).strict();
+var fileSummary = file2.extend({ insertions: count.nullable(), deletions: count.nullable(), binary: external_exports.boolean() });
+var previewShape = {
+  files: external_exports.array(file2),
+  fileSummaries: external_exports.array(fileSummary),
+  summary: external_exports.object({ filesChanged: count, added: count, modified: count, deleted: count, insertions: count, deletions: count, binaryFiles: count }).strict(),
+  patch: external_exports.string(),
+  sha256: hash2,
+  sourceDirectory: external_exports.string(),
+  copyDirectory: external_exports.string()
+};
+var chunkShape = {
+  text: external_exports.string(),
+  offset: count,
+  length: count,
+  totalLength: count,
+  nextOffset: count,
+  hasMore: external_exports.boolean(),
+  contentSha256: hash2,
+  offsetUnit: external_exports.literal("utf16-code-units")
+};
+var usageRow = external_exports.object({ taskId: id, sessionId: external_exports.string().nullable(), model: external_exports.string().nullable(), status, ...tokenUsage.shape }).strict();
+var successOutputSchemas = {
+  antigravity_health: external_exports.object({
+    installed: external_exports.boolean(),
+    path: external_exports.string(),
+    version: external_exports.string().optional(),
+    authenticated: external_exports.boolean().nullable(),
+    capabilities: external_exports.object({
+      structuredOutput: external_exports.boolean(),
+      streaming: external_exports.boolean(),
+      sandbox: external_exports.boolean(),
+      readOnlyMode: external_exports.boolean(),
+      models: external_exports.boolean(),
+      modelSelection: external_exports.boolean(),
+      resume: external_exports.boolean(),
+      sessionsList: external_exports.boolean(),
+      cancel: external_exports.boolean()
+    }).strict(),
+    error: external_exports.string().optional(),
+    integrationApproval: external_exports.object({ available: external_exports.boolean(), method: external_exports.literal("mcp-form-elicitation") }).strict()
+  }).strict(),
+  antigravity_list_models: external_exports.object({ models: external_exports.array(external_exports.object({ id: external_exports.string(), name: external_exports.string() }).strict()) }).strict(),
+  antigravity_get_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
+  antigravity_set_model: external_exports.object({ model: external_exports.string() }).strict(),
+  antigravity_usage: external_exports.object({
+    scope: external_exports.literal("retained-tasks"),
+    taskCount: count,
+    measuredTaskCount: count,
+    counters: usageCountersSchema,
+    byTask: external_exports.array(usageRow),
+    byModel: external_exports.array(external_exports.object({ model: external_exports.string().nullable(), taskCount: count, counters: usageCountersSchema }).strict()),
+    bySession: external_exports.array(external_exports.object({ sessionId: external_exports.string(), taskCount: count, counters: usageCountersSchema, observedCumulative: usageCountersSchema.nullable() }).strict())
+  }).strict(),
+  antigravity_list_project_files: external_exports.object({ files: external_exports.array(external_exports.string()) }).strict(),
+  antigravity_run: task,
+  antigravity_resume: task,
+  antigravity_preview: external_exports.object({
+    ...previewShape,
+    patch: external_exports.string().optional(),
+    patchLength: count,
+    tests: external_exports.array(testEvidenceSchema.extend({ stale: external_exports.boolean() })),
+    verification: verification.extend({ stale: external_exports.boolean() }).nullable()
+  }).strict(),
+  antigravity_read_patch: external_exports.object({ taskId: id, sha256: hash2, path: external_exports.string().nullable(), ...chunkShape }).strict(),
+  antigravity_read_result: external_exports.object({
+    ready: external_exports.boolean(),
+    taskId: id,
+    status,
+    text: external_exports.string().optional(),
+    offset: count.optional(),
+    length: count.optional(),
+    totalLength: count.optional(),
+    nextOffset: count.optional(),
+    hasMore: external_exports.boolean().optional(),
+    contentSha256: hash2.optional(),
+    offsetUnit: external_exports.literal("utf16-code-units").optional()
+  }).strict().refine((value) => !value.ready || Object.keys(chunkShape).every((key) => value[key] !== void 0), "Ready results require all chunk fields").meta({ allOf: [{ if: { properties: { ready: { const: true } }, required: ["ready"] }, then: { required: Object.keys(chunkShape) } }] }),
+  antigravity_verify: verification,
+  antigravity_test: task,
+  antigravity_record_test: testEvidenceSchema,
+  antigravity_integrate: external_exports.object(previewShape).strict(),
+  antigravity_discard: task,
+  antigravity_cleanup: external_exports.object({ discardedTaskIds: external_exports.array(id) }).strict(),
+  antigravity_status: task,
+  antigravity_tasks: external_exports.object({ tasks: external_exports.array(taskRecordSchema) }).strict(),
+  antigravity_events: external_exports.object({
+    events: external_exports.array(external_exports.object({ taskId: id, sequence: external_exports.number().int().positive(), timestamp, type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() }).strict()),
+    nextCursor: count,
+    oldestAvailable: external_exports.number().int().positive(),
+    truncated: external_exports.boolean()
+  }).strict(),
+  antigravity_result: external_exports.object({
+    task: taskRecordSchema,
+    ready: external_exports.boolean(),
+    resultAvailable: external_exports.boolean().optional(),
+    reportAvailable: external_exports.boolean().optional(),
+    includedFileCount: count.optional()
+  }).strict(),
+  antigravity_cancel: task,
+  antigravity_sessions: external_exports.object({ sessions: external_exports.array(external_exports.object({ sessionId: external_exports.string(), taskIds: external_exports.array(id) }).strict()), scope: external_exports.literal("local bridge state") }).strict()
+};
+var errorResponse = external_exports.object({ error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict() }).strict();
+function withError(schema) {
+  return external_exports.object(schema.shape).partial().extend({ error: errorResponse.shape.error.optional() }).strict().superRefine((value, context) => {
+    const checked = (value.error !== void 0 ? errorResponse : schema).safeParse(value);
+    if (!checked.success)
+      context.addIssue({ code: "custom", message: "Response must match the success or error contract" });
+  }).meta({ anyOf: [external_exports.toJSONSchema(schema), external_exports.toJSONSchema(errorResponse)] });
+}
+var outputSchemas = Object.fromEntries(Object.entries(successOutputSchemas).map(([name, schema]) => [name, withError(schema)]));
 
 // dist/src/mcp-server.js
 function response(value) {
@@ -37372,36 +37645,42 @@ function createMcpServer(adapter2, tasks2) {
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   server2.registerTool("antigravity_health", {
+    outputSchema: outputSchemas.antigravity_health,
     title: "Check Antigravity CLI",
     description: "Inspect installed agy version, authentication and supported capabilities.",
     inputSchema: {},
     annotations: readOnly
   }, safe(async () => ({ ...await adapter2.health(), integrationApproval: { available: Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" } })));
   server2.registerTool("antigravity_list_models", {
+    outputSchema: outputSchemas.antigravity_list_models,
     title: "List Antigravity models",
     description: "List model IDs actually returned by agy models for this account.",
     inputSchema: {},
     annotations: readOnly
   }, safe(async () => ({ models: await adapter2.listModels() })));
   server2.registerTool("antigravity_get_model", {
+    outputSchema: outputSchemas.antigravity_get_model,
     title: "Get selected model",
     description: "Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.",
     inputSchema: {},
     annotations: readOnly
   }, safe(() => ({ model: tasks2.getModel() ?? null })));
   server2.registerTool("antigravity_usage", {
+    outputSchema: outputSchemas.antigravity_usage,
     title: "Read observed token usage",
     description: "Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.",
     inputSchema: { taskId: external_exports.string().uuid().optional(), sessionId: external_exports.string().min(1).max(128).optional(), model: external_exports.string().min(1).max(128).optional() },
     annotations: readOnly
   }, async (filters) => safe(() => tasks2.usage(filters))());
   server2.registerTool("antigravity_list_project_files", {
+    outputSchema: outputSchemas.antigravity_list_project_files,
     title: "List files eligible for a project copy",
     description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
     inputSchema: { workingDirectory: external_exports.string().min(1) },
     annotations: readOnly
   }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
   server2.registerTool("antigravity_set_model", {
+    outputSchema: outputSchemas.antigravity_set_model,
     title: "Select Antigravity model",
     description: "Select an exact model ID from agy models as the bridge default. Does not alter agy global settings.",
     inputSchema: { model: external_exports.string().min(1).max(128) },
@@ -37420,18 +37699,21 @@ function createMcpServer(adapter2, tasks2) {
     role: roleSchema.optional()
   };
   server2.registerTool("antigravity_run", {
+    outputSchema: outputSchemas.antigravity_run,
     title: "Run Antigravity task",
     description: "Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.",
     inputSchema: runSchema,
     annotations: action
   }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
   server2.registerTool("antigravity_resume", {
+    outputSchema: outputSchemas.antigravity_resume,
     title: "Resume Antigravity conversation",
     description: "Continue a completed session in its existing isolated copy.",
     inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
     annotations: action
   }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
   server2.registerTool("antigravity_preview", {
+    outputSchema: outputSchemas.antigravity_preview,
     title: "Preview isolated changes",
     description: "Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.",
     inputSchema: { taskId: external_exports.string().uuid(), includePatch: external_exports.boolean().optional() },
@@ -37439,24 +37721,28 @@ function createMcpServer(adapter2, tasks2) {
   }, async ({ taskId, includePatch }) => safe(() => tasks2.preview(taskId, includePatch))());
   const chunkInput = { offset: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(2).max(5e4).optional() };
   server2.registerTool("antigravity_read_patch", {
+    outputSchema: outputSchemas.antigravity_read_patch,
     title: "Read patch by file or chunk",
     description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
     inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
     annotations: readOnly
   }, async ({ taskId, expectedSha256, path: path7, offset, limit }) => safe(() => tasks2.readPatch(taskId, expectedSha256, path7, offset, limit))());
   server2.registerTool("antigravity_read_result", {
+    outputSchema: outputSchemas.antigravity_read_result,
     title: "Read result in chunks",
     description: "Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.",
     inputSchema: { taskId: external_exports.string().uuid(), expectedContentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
     annotations: readOnly
   }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks2.readResult(taskId, offset, limit, expectedContentSha256))());
   server2.registerTool("antigravity_verify", {
+    outputSchema: outputSchemas.antigravity_verify,
     title: "Verify task acceptance criteria",
     description: "Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.",
     inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
     annotations: { ...readOnly, readOnlyHint: false }
   }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks2.verify(taskId, expectedSha256, reviews))());
   server2.registerTool("antigravity_test", {
+    outputSchema: outputSchemas.antigravity_test,
     title: "Run tests in the native agy sandbox",
     description: "Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.",
     inputSchema: {
@@ -37469,6 +37755,7 @@ function createMcpServer(adapter2, tasks2) {
     annotations: action
   }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks2.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
   server2.registerTool("antigravity_record_test", {
+    outputSchema: outputSchemas.antigravity_record_test,
     title: "Record review test evidence",
     description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
     inputSchema: {
@@ -37481,6 +37768,7 @@ function createMcpServer(adapter2, tasks2) {
     annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
   }, async ({ taskId, expectedSha256, command, exitCode, output: output2 }) => safe(() => tasks2.recordTest(taskId, expectedSha256, command, exitCode, output2))());
   server2.registerTool("antigravity_integrate", {
+    outputSchema: outputSchemas.antigravity_integrate,
     title: "Integrate reviewed changes",
     description: "Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.",
     inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
@@ -37489,7 +37777,7 @@ function createMcpServer(adapter2, tasks2) {
     if (!server2.server.getClientCapabilities()?.elicitation?.form) {
       throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
     }
-    const files = preview.fileSummaries.map((file2) => `${file2.status} ${JSON.stringify(file2.path)} (${file2.binary ? "bin\xE1rio" : "+" + file2.insertions + " -" + file2.deletions})`).join("\n");
+    const files = preview.fileSummaries.map((file3) => `${file3.status} ${JSON.stringify(file3.path)} (${file3.binary ? "bin\xE1rio" : "+" + file3.insertions + " -" + file3.deletions})`).join("\n");
     const answer = await server2.server.elicitInput({
       mode: "form",
       message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?
@@ -37505,36 +37793,42 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
     return answer.action === "accept" && answer.content?.confirm === true;
   }))());
   server2.registerTool("antigravity_discard", {
+    outputSchema: outputSchemas.antigravity_discard,
     title: "Discard an isolated copy",
     description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: { ...action, openWorldHint: false }
   }, async ({ taskId }) => safe(async () => ({ task: await tasks2.discard(taskId) }))());
   server2.registerTool("antigravity_cleanup", {
+    outputSchema: outputSchemas.antigravity_cleanup,
     title: "Clean expired isolated copies",
     description: "Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.",
     inputSchema: {},
     annotations: { ...action, openWorldHint: false }
   }, safe(() => tasks2.cleanup()));
   server2.registerTool("antigravity_status", {
+    outputSchema: outputSchemas.antigravity_status,
     title: "Get Antigravity task status",
     description: "Return task metadata, status, process ID and isolated copy path when available.",
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: readOnly
   }, async ({ taskId }) => safe(() => ({ task: tasks2.status(taskId) }))());
   server2.registerTool("antigravity_tasks", {
+    outputSchema: outputSchemas.antigravity_tasks,
     title: "List persisted tasks",
     description: "Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.",
     inputSchema: {},
     annotations: readOnly
-  }, safe(() => ({ tasks: tasks2.list().map(({ prompt: _prompt, ...task }) => task) })));
+  }, safe(() => ({ tasks: tasks2.list().map(({ prompt: _prompt, ...task2 }) => task2) })));
   server2.registerTool("antigravity_events", {
+    outputSchema: outputSchemas.antigravity_events,
     title: "Read Antigravity events",
     description: "Read live normalized agy events after a sequence cursor. Includes original agy event payloads.",
     inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(1).max(1e3).optional() },
     annotations: readOnly
   }, async ({ taskId, after, limit }) => safe(() => tasks2.readEvents(taskId, after, limit))());
   server2.registerTool("antigravity_result", {
+    outputSchema: outputSchemas.antigravity_result,
     title: "Get Antigravity result",
     description: "Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.",
     inputSchema: { taskId: external_exports.string().uuid(), includeResult: external_exports.boolean().optional() },
@@ -37543,16 +37837,18 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
     const result = tasks2.result(taskId);
     if (includeResult !== false)
       return result;
-    const { prompt, result: output2, includedFiles, report, ...metadata } = result.task;
-    return { ...result, task: metadata, resultAvailable: output2 !== void 0, reportAvailable: report !== void 0, includedFileCount: includedFiles?.length ?? 0 };
+    const { prompt, result: output2, includedFiles, report: report2, ...metadata } = result.task;
+    return { ...result, task: metadata, resultAvailable: output2 !== void 0, reportAvailable: report2 !== void 0, includedFileCount: includedFiles?.length ?? 0 };
   })());
   server2.registerTool("antigravity_cancel", {
+    outputSchema: outputSchemas.antigravity_cancel,
     title: "Cancel Antigravity task",
     description: "Cancel a queued task or terminate its local agy process.",
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
   }, async ({ taskId }) => safe(async () => ({ task: await tasks2.cancel(taskId) }))());
   server2.registerTool("antigravity_sessions", {
+    outputSchema: outputSchemas.antigravity_sessions,
     title: "List known Antigravity sessions",
     description: "List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.",
     inputSchema: {},
@@ -37673,97 +37969,6 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path6 from "node:path";
 import os3 from "node:os";
-
-// dist/src/usage.js
-var usageCountersSchema = external_exports.object({
-  inputTokens: external_exports.number().int().nonnegative().nullable(),
-  outputTokens: external_exports.number().int().nonnegative().nullable(),
-  totalTokens: external_exports.number().int().nonnegative().nullable(),
-  thinkingTokens: external_exports.number().int().nonnegative().nullable(),
-  cacheReadTokens: external_exports.number().int().nonnegative().nullable()
-});
-var fields = {
-  inputTokens: "input_tokens",
-  outputTokens: "output_tokens",
-  totalTokens: "total_tokens",
-  thinkingTokens: "thinking_tokens",
-  cacheReadTokens: "cache_read_tokens"
-};
-var keys = Object.keys(fields);
-function normalizeUsage(raw) {
-  const data = raw && typeof raw === "object" ? raw : {};
-  return Object.fromEntries(keys.map((key) => {
-    const value = data[fields[key]];
-    return [key, typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null];
-  }));
-}
-function taskTokenUsage(task) {
-  const raw = task.result?.usage;
-  const current = normalizeUsage(raw);
-  const counters = { ...current };
-  const warnings = [];
-  if (task.usageIsResume) {
-    for (const key of keys) {
-      const before = task.usageBaseline?.[key];
-      const after = current[key];
-      counters[key] = before !== void 0 && before !== null && after !== null && after >= before ? after - before : null;
-      if (before !== null && before !== void 0 && after !== null && after < before)
-        warnings.push("Counter reset: " + key);
-    }
-    if (!task.usageBaseline)
-      warnings.push("Previous session counters are unavailable; cumulative usage is not task usage");
-  }
-  const available = keys.some((key) => counters[key] !== null);
-  const partial2 = keys.some((key) => counters[key] === null);
-  if (raw === void 0)
-    warnings.push("Final CLI usage is unavailable");
-  if (partial2)
-    warnings.push("Missing counters remain null; no estimate or zero substitution");
-  return {
-    scope: "task",
-    source: available ? task.usageIsResume ? "session-delta" : "session-total" : "unavailable",
-    counters,
-    available,
-    partial: partial2,
-    warnings
-  };
-}
-function sum(rows) {
-  return Object.fromEntries(keys.map((key) => {
-    if (!rows.length || rows.some((row) => row[key] === null))
-      return [key, null];
-    const total = rows.reduce((total2, row) => total2 + row[key], 0);
-    return [key, Number.isSafeInteger(total) ? total : null];
-  }));
-}
-function aggregateUsage(tasks2) {
-  const byTask = tasks2.map((task) => ({ taskId: task.taskId, sessionId: task.sessionId ?? null, model: task.model ?? null, status: task.status, ...taskTokenUsage(task) }));
-  const models = [...new Set(tasks2.map((task) => task.model ?? null))];
-  const sessions = [...new Set(tasks2.map((task) => task.sessionId).filter((id) => id !== void 0))];
-  return {
-    scope: "retained-tasks",
-    taskCount: tasks2.length,
-    measuredTaskCount: byTask.filter((task) => task.available).length,
-    counters: sum(byTask.map((task) => task.counters)),
-    byTask,
-    byModel: models.map((model) => {
-      const rows = byTask.filter((task) => task.model === model);
-      return { model, taskCount: rows.length, counters: sum(rows.map((task) => task.counters)) };
-    }),
-    bySession: sessions.map((sessionId) => {
-      const rows = byTask.filter((task) => task.sessionId === sessionId);
-      const latest = tasks2.filter((task) => task.sessionId === sessionId && task.result?.usage !== void 0).at(-1);
-      return {
-        sessionId,
-        taskCount: rows.length,
-        counters: sum(rows.map((task) => task.counters)),
-        observedCumulative: latest ? normalizeUsage(latest.result.usage) : null
-      };
-    })
-  };
-}
-
-// dist/src/state-store.js
 var uuid3 = /^[a-f0-9-]{36}$/;
 var snapshotSchema = external_exports.object({
   version: external_exports.literal(1),
@@ -37816,10 +38021,10 @@ var StateStore = class {
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
     return path6.join(this.directory, taskId + ".json");
   }
-  save(task) {
-    const target = this.file(task.record.taskId);
+  save(task2) {
+    const target = this.file(task2.record.taskId);
     const temporary = target + "." + randomUUID2() + ".tmp";
-    const snapshot = { ...task, version: 1, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
+    const snapshot = { ...task2, version: 1, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
       renameSync(temporary, target);
@@ -37829,12 +38034,12 @@ var StateStore = class {
   }
   load() {
     return readdirSync(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file2 = path6.join(this.directory, name);
-      if (lstatSync(file2).isSymbolicLink() || lstatSync(file2).size > 7e7)
+      const file3 = path6.join(this.directory, name);
+      if (lstatSync(file3).isSymbolicLink() || lstatSync(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
       try {
-        data = snapshotSchema.parse(JSON.parse(readFileSync(file2, "utf8")));
+        data = snapshotSchema.parse(JSON.parse(readFileSync(file3, "utf8")));
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
@@ -37864,23 +38069,23 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file2 = path6.join(this.directory, name + ".lock");
+    const file3 = path6.join(this.directory, name + ".lock");
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        writeFileSync(file2, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
-        return () => rmSync(file2, { force: true });
+        writeFileSync(file3, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
+        return () => rmSync(file3, { force: true });
       } catch (error62) {
         if (error62.code !== "EEXIST")
           throw error62;
         let pid;
         try {
-          pid = JSON.parse(readFileSync(file2, "utf8")).pid;
+          pid = JSON.parse(readFileSync(file3, "utf8")).pid;
         } catch {
         }
         if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 1 || processAlive(pid)) {
           throw new BridgeError("STATE_BUSY", "Another bridge operation owns this task or copy");
         }
-        rmSync(file2);
+        rmSync(file3);
       }
     }
     throw new BridgeError("STATE_BUSY", "Could not acquire bridge state lock");
@@ -37936,21 +38141,21 @@ var TaskManager = class {
     this.refresh();
   }
   persist(taskId) {
-    const task = this.tasks.get(taskId);
-    if (task)
-      this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
+    const task2 = this.tasks.get(taskId);
+    if (task2)
+      this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
     return "copy-" + createHash5("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
-    const projects = new Map([...this.tasks.values()].filter((task) => task.project && (task.owned || this.busyProjects.has(task.project))).map((task) => [task.project.copyDirectory, task.project]));
-    const ids = new Set(stored.map((task) => task.record.taskId));
-    for (const [id, task] of this.tasks)
-      if (!ids.has(id) && !task.owned && !this.busyProjects.has(task.project)) {
-        this.tasks.delete(id);
-        this.events.drop(id);
+    const projects = new Map([...this.tasks.values()].filter((task2) => task2.project && (task2.owned || this.busyProjects.has(task2.project))).map((task2) => [task2.project.copyDirectory, task2.project]));
+    const ids = new Set(stored.map((task2) => task2.record.taskId));
+    for (const [id2, task2] of this.tasks)
+      if (!ids.has(id2) && !task2.owned && !this.busyProjects.has(task2.project)) {
+        this.tasks.delete(id2);
+        this.events.drop(id2);
       }
     for (const item of stored) {
       item.record.usageIsResume ??= Boolean(item.options.sessionId);
@@ -37962,15 +38167,15 @@ var TaskManager = class {
           projects.set(item.project.copyDirectory, item.project);
         item.project = projects.get(item.project.copyDirectory);
       }
-      const task = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
-      this.tasks.set(item.record.taskId, task);
+      const task2 = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
+      this.tasks.set(item.record.taskId, task2);
       this.events.restore(item.record.taskId, item.events, item.cursor);
       if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
         if (item.record.pid && processAlive(item.record.pid)) {
           item.record.error = { code: "ORPHAN_PROCESS_RUNNING", message: "The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination" };
         } else {
-          task.ownerPid = process.pid;
-          this.finish(task, "failed", "SERVER_RESTARTED", "Previous execution was interrupted; inspect its copy before starting new work");
+          task2.ownerPid = process.pid;
+          this.finish(task2, "failed", "SERVER_RESTARTED", "Previous execution was interrupted; inspect its copy before starting new work");
         }
       }
     }
@@ -38010,7 +38215,7 @@ var TaskManager = class {
     let pendingProjectRelease;
     try {
       this.refresh();
-      const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task) => task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : void 0;
+      const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task2) => task2.record.sessionId === options.sessionId && task2.record.workingDirectory === workingDirectory && task2.project) : void 0;
       if (options.sessionId && (!previous || previous.record.status !== "completed" && previous.record.error?.code !== "TEST_FAILED" || previous.record.integratedAt)) {
         throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
       }
@@ -38036,7 +38241,7 @@ var TaskManager = class {
       }
       pendingProjectRelease = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : void 0;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
-        const oldestFinished = [...this.tasks.values()].find((task) => terminal.has(task.record.status));
+        const oldestFinished = [...this.tasks.values()].find((task2) => terminal.has(task2.record.status));
         if (!oldestFinished)
           throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
         if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
@@ -38074,23 +38279,23 @@ var TaskManager = class {
   }
   status(taskId) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task)
+    const task2 = this.tasks.get(taskId);
+    if (!task2)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
-    return { ...task.record, tokenUsage: taskTokenUsage(task.record) };
+    return { ...task2.record, tokenUsage: taskTokenUsage(task2.record) };
   }
   list() {
     this.refresh();
-    return [...this.tasks.values()].map((task) => ({ ...task.record, tokenUsage: taskTokenUsage(task.record) }));
+    return [...this.tasks.values()].map((task2) => ({ ...task2.record, tokenUsage: taskTokenUsage(task2.record) }));
   }
   usage(filters = {}) {
     if (filters.taskId)
       this.status(filters.taskId);
-    return aggregateUsage(this.list().filter((task) => (!filters.taskId || task.taskId === filters.taskId) && (!filters.sessionId || task.sessionId === filters.sessionId) && (!filters.model || task.model === filters.model)));
+    return aggregateUsage(this.list().filter((task2) => (!filters.taskId || task2.taskId === filters.taskId) && (!filters.sessionId || task2.sessionId === filters.sessionId) && (!filters.model || task2.model === filters.model)));
   }
   result(taskId) {
-    const task = this.status(taskId);
-    return { task, ready: terminal.has(task.status) };
+    const task2 = this.status(taskId);
+    return { task: task2, ready: terminal.has(task2.status) };
   }
   readResult(taskId, offset = 0, limit = 1e4, expectedContentSha256) {
     const result = this.result(taskId);
@@ -38105,65 +38310,65 @@ var TaskManager = class {
   }
   async readPatch(taskId, expectedSha256, relative, offset = 0, limit = 1e4) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task?.project || !terminal.has(task.record.status))
+    const task2 = this.tasks.get(taskId);
+    if (!task2?.project || !terminal.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before reading its patch");
-    return this.withProject(task.project, async () => {
-      const preview = await previewProjectCopy(task.project, this.config);
+    return this.withProject(task2.project, async () => {
+      const preview = await previewProjectCopy(task2.project, this.config);
       if (preview.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "The patch changed; preview again before reading");
       const selected = relative?.replaceAll("\\", "/");
-      if (selected !== void 0 && !preview.files.some((file2) => file2.path === selected))
+      if (selected !== void 0 && !preview.files.some((file3) => file3.path === selected))
         throw new BridgeError("INVALID_PATCH_PATH", "Select a changed path from the preview");
-      const patch = selected === void 0 ? preview.patch : await readProjectPatch(task.project, selected);
+      const patch = selected === void 0 ? preview.patch : await readProjectPatch(task2.project, selected);
       return { taskId, sha256: preview.sha256, path: selected ?? null, ...textChunk(patch, offset, limit) };
     });
   }
   async preview(taskId, includePatch = true) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task || !task.project || !terminal.has(task.record.status))
+    const task2 = this.tasks.get(taskId);
+    if (!task2 || !task2.project || !terminal.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
-    return this.withProject(task.project, async () => {
-      const preview = await previewProjectCopy(task.project, this.config);
-      const current = task.record.verification && await verifyCriteria(task.project, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
-      const tree = task.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task.project, this.config) : void 0;
+    return this.withProject(task2.project, async () => {
+      const preview = await previewProjectCopy(task2.project, this.config);
+      const current = task2.record.verification && await verifyCriteria(task2.project, preview.sha256, task2.record.acceptanceCriteria, task2.record.verification.review.evidence);
+      const tree = task2.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task2.project, this.config) : void 0;
       return {
         ...preview,
         patch: includePatch ? preview.patch : void 0,
         patchLength: preview.patch.length,
-        tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 || test.treeSha256 !== void 0 && test.treeSha256 !== tree })),
-        verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 || JSON.stringify(current.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null
+        tests: (task2.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 || test.treeSha256 !== void 0 && test.treeSha256 !== tree })),
+        verification: task2.record.verification ? { ...task2.record.verification, stale: task2.record.verification.sha256 !== preview.sha256 || JSON.stringify(current.fileHashes) !== JSON.stringify(task2.record.verification.fileHashes) } : null
       };
     });
   }
   async verify(taskId, expectedSha256, reviews = []) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task?.project || !terminal.has(task.record.status))
+    const task2 = this.tasks.get(taskId);
+    if (!task2?.project || !terminal.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before verification");
-    return this.withProject(task.project, async () => {
-      const preview = await previewProjectCopy(task.project, this.config);
+    return this.withProject(task2.project, async () => {
+      const preview = await previewProjectCopy(task2.project, this.config);
       if (preview.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before verification");
-      const verification = await verifyCriteria(task.project, preview.sha256, task.record.acceptanceCriteria, reviews);
-      task.record.verification = verification;
-      this.events.append(taskId, "review.verified", { sha256: preview.sha256, status: verification.status });
-      return verification;
+      const verification2 = await verifyCriteria(task2.project, preview.sha256, task2.record.acceptanceCriteria, reviews);
+      task2.record.verification = verification2;
+      this.events.append(taskId, "review.verified", { sha256: preview.sha256, status: verification2.status });
+      return verification2;
     });
   }
-  async requireVerification(task, sha256) {
-    const previous = task.record.verification;
+  async requireVerification(task2, sha256) {
+    const previous = task2.record.verification;
     if (!previous || previous.status !== "passed")
       throw new BridgeError("VERIFICATION_REQUIRED", "All acceptance criteria require artifact checks and grounded Codex review before integration");
     if (previous.sha256 !== sha256)
       throw new BridgeError("VERIFICATION_STALE", "Verify the current patch before integration");
-    const current = await verifyCriteria(task.project, sha256, task.record.acceptanceCriteria, previous.review.evidence);
+    const current = await verifyCriteria(task2.project, sha256, task2.record.acceptanceCriteria, previous.review.evidence);
     if (current.status !== "passed" || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
       throw new BridgeError("VERIFICATION_STALE", "Verification files or evidence changed; verify again");
     }
-    const tree = task.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task.project, this.config) : void 0;
-    const latestTests = new Map((task.record.tests || []).filter((test) => test.source === "agy-tool").map((test) => [test.command, test]));
+    const tree = task2.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task2.project, this.config) : void 0;
+    const latestTests = new Map((task2.record.tests || []).filter((test) => test.source === "agy-tool").map((test) => [test.command, test]));
     if ([...latestTests.values()].some((test) => test.sha256 !== sha256 || test.treeSha256 !== tree)) {
       throw new BridgeError("TESTS_STALE", "Run the observed test commands again against the current files");
     }
@@ -38175,41 +38380,41 @@ var TaskManager = class {
     testCommandSchema.parse(command);
     if (!Number.isInteger(retries) || retries < 0 || retries > 3)
       throw new BridgeError("INVALID_TEST_COMMAND", "retries must be between 0 and 3");
-    const task = this.status(taskId);
-    if (!task.sessionId || task.mode === "read-only")
+    const task2 = this.status(taskId);
+    if (!task2.sessionId || task2.mode === "read-only")
       throw new BridgeError("TASK_NOT_READY", "Tests require a completed write task with a CLI conversation");
     const preview = await this.preview(taskId);
     if (preview.sha256 !== expectedSha256)
       throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before starting tests");
     return this.run({
       prompt: "Run the requested tests in the native sandbox.",
-      workingDirectory: task.workingDirectory,
-      sessionId: task.sessionId,
-      model: task.model,
+      workingDirectory: task2.workingDirectory,
+      sessionId: task2.sessionId,
+      model: task2.model,
       timeoutSeconds,
       nativeTest: { ...command, expectedSha256, maxAttempts: retries + 1 }
     });
   }
   async recordTest(taskId, expectedSha256, command, exitCode, output2 = "") {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task?.project || !terminal.has(task.record.status))
+    const task2 = this.tasks.get(taskId);
+    if (!task2?.project || !terminal.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before recording tests");
     if (!command.trim() || command.length > 1e3 || !Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255 || output2.length > 4e3) {
       throw new BridgeError("INVALID_TEST_EVIDENCE", "Invalid command, exit code or output size");
     }
-    return this.withProject(task.project, async () => {
-      const preview = await previewProjectCopy(task.project, this.config);
+    return this.withProject(task2.project, async () => {
+      const preview = await previewProjectCopy(task2.project, this.config);
       if (preview.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "Preview again before recording test evidence");
       const evidence = { command, exitCode, output: output2, sha256: expectedSha256, recordedAt: (/* @__PURE__ */ new Date()).toISOString(), source: "client-reported" };
-      task.record.tests = [...(task.record.tests || []).slice(-19), evidence];
+      task2.record.tests = [...(task2.record.tests || []).slice(-19), evidence];
       this.events.append(taskId, "review.test-recorded", { command, exitCode, sha256: expectedSha256 });
       return evidence;
     });
   }
   async withProject(project, operation) {
-    if (this.busyProjects.has(project) || [...this.tasks.values()].some((task) => task.project === project && !terminal.has(task.record.status))) {
+    if (this.busyProjects.has(project) || [...this.tasks.values()].some((task2) => task2.project === project && !terminal.has(task2.record.status))) {
       throw new BridgeError("TASK_NOT_READY", "Wait for all operations on this copy to finish");
     }
     this.busyProjects.add(project);
@@ -38224,13 +38429,13 @@ var TaskManager = class {
   }
   async discard(taskId) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task)
+    const task2 = this.tasks.get(taskId);
+    if (!task2)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
-    if (!terminal.has(task.record.status))
+    if (!terminal.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Cancel and wait for the task before discarding");
-    if (task.project) {
-      const project = task.project;
+    if (task2.project) {
+      const project = task2.project;
       await this.withProject(project, async () => {
         await discardProjectCopy(project);
         for (const related of this.tasks.values())
@@ -38246,53 +38451,53 @@ var TaskManager = class {
   async cleanup(now = Date.now()) {
     this.refresh();
     const discardedTaskIds = [];
-    for (const project of new Set([...this.tasks.values()].map((task) => task.project).filter((p) => Boolean(p)))) {
-      const related = [...this.tasks.values()].filter((task) => task.project === project);
-      if (this.busyProjects.has(project) || related.some((task) => !terminal.has(task.record.status)))
+    for (const project of new Set([...this.tasks.values()].map((task2) => task2.project).filter((p) => Boolean(p)))) {
+      const related = [...this.tasks.values()].filter((task2) => task2.project === project);
+      if (this.busyProjects.has(project) || related.some((task2) => !terminal.has(task2.record.status)))
         continue;
-      const latest = Math.max(...related.map((task) => Date.parse(task.record.completedAt || task.record.createdAt)));
+      const latest = Math.max(...related.map((task2) => Date.parse(task2.record.completedAt || task2.record.createdAt)));
       if (now - latest < this.config.copyRetentionHours * 36e5)
         continue;
       await this.discard(related[0].record.taskId);
-      discardedTaskIds.push(...related.map((task) => task.record.taskId));
+      discardedTaskIds.push(...related.map((task2) => task2.record.taskId));
     }
     return { discardedTaskIds };
   }
   async integrate(taskId, expectedSha256, confirm) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task || !task.project || task.record.status !== "completed")
+    const task2 = this.tasks.get(taskId);
+    if (!task2 || !task2.project || task2.record.status !== "completed")
       throw new BridgeError("TASK_NOT_READY", "Only completed tasks can be integrated");
-    if (task.record.integratedAt)
+    if (task2.record.integratedAt)
       throw new BridgeError("ALREADY_INTEGRATED", "This task was already integrated");
-    if (task.record.mode === "read-only")
+    if (task2.record.mode === "read-only")
       throw new BridgeError("READ_ONLY_TASK", "Read-only tasks cannot be integrated");
-    if ([...this.tasks.values()].filter((other) => other.project === task.project).at(-1) !== task) {
+    if ([...this.tasks.values()].filter((other) => other.project === task2.project).at(-1) !== task2) {
       throw new BridgeError("TASK_NOT_READY", "Preview and integrate the latest task for this copy");
     }
-    if ([...this.tasks.values()].some((other) => other !== task && other.project === task.project && !terminal.has(other.record.status))) {
+    if ([...this.tasks.values()].some((other) => other !== task2 && other.project === task2.project && !terminal.has(other.record.status))) {
       throw new BridgeError("TASK_NOT_READY", "Wait for the resumed task to finish");
     }
-    return this.withProject(task.project, async () => {
-      const reviewed = await previewProjectCopy(task.project, this.config);
+    return this.withProject(task2.project, async () => {
+      const reviewed = await previewProjectCopy(task2.project, this.config);
       if (!reviewed.files.length)
         throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
       if (reviewed.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before requesting confirmation");
       if (!confirm)
         throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation through the MCP client");
-      await this.requireVerification(task, expectedSha256);
+      await this.requireVerification(task2, expectedSha256);
       if (!await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash5("sha256").update(task.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash5("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
-        const current = await previewProjectCopy(task.project, this.config);
+        const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
           throw new BridgeError("REVIEW_CHANGED", "The copy changed after confirmation");
-        await this.requireVerification(task, expectedSha256);
-        const preview = await integrateProjectCopy(task.project, expectedSha256, this.config);
+        await this.requireVerification(task2, expectedSha256);
+        const preview = await integrateProjectCopy(task2.project, expectedSha256, this.config);
         for (const related of this.tasks.values())
-          if (related.project === task.project) {
+          if (related.project === task2.project) {
             related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
             this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: "mcp-elicitation" });
           }
@@ -38317,94 +38522,94 @@ var TaskManager = class {
   }
   async cancel(taskId) {
     this.refresh();
-    const task = this.tasks.get(taskId);
-    if (!task)
+    const task2 = this.tasks.get(taskId);
+    if (!task2)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
-    if (terminal.has(task.record.status))
+    if (terminal.has(task2.record.status))
       return this.status(taskId);
-    if (!task.owned)
+    if (!task2.owned)
       throw new BridgeError("TASK_OWNED_BY_OTHER_SERVER", "Cancel the task in the bridge process that started it");
-    if (task.record.status === "queued") {
+    if (task2.record.status === "queued") {
       const index = this.queue.indexOf(taskId);
       if (index !== -1)
         this.queue.splice(index, 1);
-      task.record.status = "cancelled";
-      task.record.error = { code: "TASK_CANCELLED", message: "Task cancelled before execution" };
-      task.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      task2.record.status = "cancelled";
+      task2.record.error = { code: "TASK_CANCELLED", message: "Task cancelled before execution" };
+      task2.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
       this.events.append(taskId, "task.cancelled", {});
-      task.owned = false;
-      task.releaseProject?.();
-      task.releaseProject = void 0;
+      task2.owned = false;
+      task2.releaseProject?.();
+      task2.releaseProject = void 0;
     } else {
-      task.termination = "cancelled";
-      if (task.child)
-        this.terminate(task.child);
+      task2.termination = "cancelled";
+      if (task2.child)
+        this.terminate(task2.child);
     }
     return this.status(taskId);
   }
   async shutdown() {
     this.stopped = true;
-    const owned = [...this.tasks.values()].filter((task) => task.owned);
-    await Promise.all(owned.map((task) => this.cancel(task.record.taskId)));
-    await Promise.all(owned.map((task) => task.completion));
+    const owned = [...this.tasks.values()].filter((task2) => task2.owned);
+    await Promise.all(owned.map((task2) => this.cancel(task2.record.taskId)));
+    await Promise.all(owned.map((task2) => task2.completion));
   }
   pump() {
     while (!this.stopped && this.active < this.config.maxConcurrentTasks && this.queue.length) {
-      const task = this.tasks.get(this.queue.shift());
-      if (!task || task.record.status !== "queued")
+      const task2 = this.tasks.get(this.queue.shift());
+      if (!task2 || task2.record.status !== "queued")
         continue;
       this.active++;
-      task.completion = this.execute(task).finally(() => {
-        task.releaseProject?.();
-        task.releaseProject = void 0;
-        task.owned = false;
+      task2.completion = this.execute(task2).finally(() => {
+        task2.releaseProject?.();
+        task2.releaseProject = void 0;
+        task2.owned = false;
         this.active--;
         this.pump();
       });
     }
   }
-  async execute(task) {
-    const record2 = task.record;
+  async execute(task2) {
+    const record2 = task2.record;
     record2.status = "starting";
     record2.startedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.events.append(record2.taskId, "task.started", {});
     let native;
     try {
-      task.project ??= await createProjectCopy(record2.workingDirectory, task.options.includePaths, (project) => {
-        task.project = project;
+      task2.project ??= await createProjectCopy(record2.workingDirectory, task2.options.includePaths, (project) => {
+        task2.project = project;
         this.events.append(record2.taskId, "copy.created", { copyDirectory: project.copyDirectory });
       }, this.config);
-      task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
-      record2.copyDirectory = task.project.copyDirectory;
-      record2.includedFiles = task.project.includedFiles;
+      task2.releaseProject ??= this.state.acquire(this.projectLock(task2.project));
+      record2.copyDirectory = task2.project.copyDirectory;
+      record2.includedFiles = task2.project.includedFiles;
       this.events.append(record2.taskId, "copy.ready", { copyDirectory: record2.copyDirectory });
-      if (task.termination) {
-        this.finish(task, task.termination);
+      if (task2.termination) {
+        this.finish(task2, task2.termination);
         return;
       }
-      if (task.options.nativeTest) {
-        const preview = await previewProjectCopy(task.project, this.config);
-        if (preview.sha256 !== task.options.nativeTest.expectedSha256)
+      if (task2.options.nativeTest) {
+        const preview = await previewProjectCopy(task2.project, this.config);
+        if (preview.sha256 !== task2.options.nativeTest.expectedSha256)
           throw new BridgeError("REVIEW_CHANGED", "Copy changed while tests were queued");
-        native = await prepareNativeTest(task.project, task.options.nativeTest, {
-          timeoutSeconds: task.options.timeoutSeconds,
+        native = await prepareNativeTest(task2.project, task2.options.nativeTest, {
+          timeoutSeconds: task2.options.timeoutSeconds,
           maxCopyFiles: this.config.maxCopyFiles,
           maxCopyBytes: this.config.maxCopyBytes
         });
-        task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: /* @__PURE__ */ new Set() };
+        task2.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: /* @__PURE__ */ new Set() };
       }
-      const child = this.adapter.spawnTask(native ? { ...task.options, prompt: native.prompt } : task.options, record2.model, task.project.copyDirectory);
-      task.child = child;
+      const child = this.adapter.spawnTask(native ? { ...task2.options, prompt: native.prompt } : task2.options, record2.model, task2.project.copyDirectory);
+      task2.child = child;
       record2.pid = child.pid;
       record2.status = "running";
       this.events.append(record2.taskId, "process.started", { pid: child.pid });
-      const timeoutMs = task.options.timeoutSeconds * 1e3;
-      task.timer = setTimeout(() => {
-        task.termination = "timeout";
+      const timeoutMs = task2.options.timeoutSeconds * 1e3;
+      task2.timer = setTimeout(() => {
+        task2.termination = "timeout";
         this.terminate(child);
       }, timeoutMs);
       let stderr = "";
-      const stdoutParser = new LineParser((line) => this.handleStdout(task, line));
+      const stdoutParser = new LineParser((line) => this.handleStdout(task2, line));
       const stderrParser = new LineParser((line) => {
         stderr = (stderr + "\n" + line).slice(-1e4);
         this.events.append(record2.taskId, "process.stderr", { text: line.slice(0, 4e3) });
@@ -38421,22 +38626,22 @@ ${error62.message}`;
       });
       stdoutParser.end();
       stderrParser.end();
-      if (task.timer)
-        clearTimeout(task.timer);
+      if (task2.timer)
+        clearTimeout(task2.timer);
       record2.exitCode = exitCode;
       if (native) {
         await native.cleanup();
         native = void 0;
-        const preview = await previewProjectCopy(task.project, this.config);
-        const tree = await fingerprintProjectCopy(task.project, this.config);
-        const attempts = task.nativeTest.attempts;
+        const preview = await previewProjectCopy(task2.project, this.config);
+        const tree = await fingerprintProjectCopy(task2.project, this.config);
+        const attempts = task2.nativeTest.attempts;
         for (const [index, attempt] of attempts.entries()) {
           const receipt = attempt.receipt;
           record2.tests = [...(record2.tests || []).slice(-19), {
-            command: JSON.stringify({ executable: task.options.nativeTest.executable, args: task.options.nativeTest.args }),
+            command: JSON.stringify({ executable: task2.options.nativeTest.executable, args: task2.options.nativeTest.args }),
             exitCode: receipt.exitCode ?? 255,
             output: attempt.output,
-            sha256: receipt.afterSha256 === tree ? preview.sha256 : task.options.nativeTest.expectedSha256,
+            sha256: receipt.afterSha256 === tree ? preview.sha256 : task2.options.nativeTest.expectedSha256,
             recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
             source: "agy-tool",
             treeSha256: receipt.afterSha256,
@@ -38449,42 +38654,42 @@ ${error62.message}`;
           }];
         }
         this.events.append(record2.taskId, "test.results", { attempts: attempts.length, sha256: preview.sha256 });
-        if (!task.termination) {
+        if (!task2.termination) {
           const last = attempts.at(-1)?.receipt;
           if (!last || last.exitCode === null || last.error)
             throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "No valid execution receipt from the exact run_command call; check native sandbox permissions");
           if (last.beforeSha256 !== last.afterSha256 || last.afterSha256 !== tree)
             throw new BridgeError("TEST_CHANGED_PATCH", "Project files changed during or after the test; run tests again");
           if (last.exitCode !== 0) {
-            this.finish(task, "failed", "TEST_FAILED", "Observed test command failed");
+            this.finish(task2, "failed", "TEST_FAILED", "Observed test command failed");
             return;
           }
         }
       }
       if (record2.mode === "read-only")
-        await verifyReadOnlyCopy(task.project);
-      if (task.termination)
-        this.finish(task, task.termination);
+        await verifyReadOnlyCopy(task2.project);
+      if (task2.termination)
+        this.finish(task2, task2.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))
-        this.finish(task, "failed", "AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
+        this.finish(task2, "failed", "AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
       else if (exitCode !== 0 || !record2.result || record2.result.status !== "SUCCESS") {
         const message = record2.result?.error || `agy exited with code ${exitCode}`;
-        this.finish(task, "failed", !record2.result && task.parseErrors ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message);
+        this.finish(task2, "failed", !record2.result && task2.parseErrors ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message);
       } else {
         if (record2.mode !== "read-only")
-          await previewProjectCopy(task.project, this.config);
-        record2.report = await validateRoleReport(record2.role ?? "implementer", record2.result.structured_output, task.project.copyDirectory);
-        this.finish(task, "completed");
+          await previewProjectCopy(task2.project, this.config);
+        record2.report = await validateRoleReport(record2.role ?? "implementer", record2.result.structured_output, task2.project.copyDirectory);
+        this.finish(task2, "completed");
       }
     } catch (error62) {
       const code = error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED";
-      this.finish(task, "failed", code, error62 instanceof Error ? error62.message : String(error62));
+      this.finish(task2, "failed", code, error62 instanceof Error ? error62.message : String(error62));
     } finally {
       await native?.cleanup();
     }
   }
-  handleStdout(task, line) {
-    const record2 = task.record;
+  handleStdout(task2, line) {
+    const record2 = task2.record;
     let raw;
     try {
       const parsed = JSON.parse(line);
@@ -38492,7 +38697,7 @@ ${error62.message}`;
         throw new Error("Expected event object");
       raw = parsed;
     } catch {
-      task.parseErrors = (task.parseErrors || 0) + 1;
+      task2.parseErrors = (task2.parseErrors || 0) + 1;
       this.events.append(record2.taskId, "stream.unparsed", { line: line.slice(0, 4e3) });
       return;
     }
@@ -38503,16 +38708,16 @@ ${error62.message}`;
       this.events.append(record2.taskId, "agent.started", raw.init || {}, raw);
     } else if (sourceType === "step_update" && raw.step_update && typeof raw.step_update === "object") {
       const step = raw.step_update;
-      if (task.nativeTest && typeof step.step_index === "number" && !task.nativeTest.steps.has(step.step_index)) {
-        const attempt = readNativeReceipt(step, task.nativeTest);
+      if (task2.nativeTest && typeof step.step_index === "number" && !task2.nativeTest.steps.has(step.step_index)) {
+        const attempt = readNativeReceipt(step, task2.nativeTest);
         if (attempt) {
-          task.nativeTest.steps.add(step.step_index);
-          task.nativeTest.attempts.push(attempt);
-          this.events.append(record2.taskId, "test.executed", { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
-          if (task.nativeTest.attempts.length > task.options.nativeTest.maxAttempts) {
-            task.termination = "cancelled";
-            if (task.child)
-              this.terminate(task.child);
+          task2.nativeTest.steps.add(step.step_index);
+          task2.nativeTest.attempts.push(attempt);
+          this.events.append(record2.taskId, "test.executed", { attempt: task2.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
+          if (task2.nativeTest.attempts.length > task2.options.nativeTest.maxAttempts) {
+            task2.termination = "cancelled";
+            if (task2.child)
+              this.terminate(task2.child);
           }
         }
       }
@@ -38537,18 +38742,18 @@ ${error62.message}`;
     } else
       this.events.append(record2.taskId, "agy.event", raw, raw);
   }
-  finish(task, status, code, message) {
-    if (terminal.has(task.record.status))
+  finish(task2, status2, code, message) {
+    if (terminal.has(task2.record.status))
       return;
-    task.record.status = status;
-    task.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
-    if (status === "timeout")
+    task2.record.status = status2;
+    task2.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+    if (status2 === "timeout")
       code = "TASK_TIMEOUT";
-    if (status === "cancelled")
+    if (status2 === "cancelled")
       code = "TASK_CANCELLED";
     if (code)
-      task.record.error = { code, message: message || code };
-    this.events.append(task.record.taskId, `task.${status}`, task.record.error || { exitCode: task.record.exitCode });
+      task2.record.error = { code, message: message || code };
+    this.events.append(task2.record.taskId, `task.${status2}`, task2.record.error || { exitCode: task2.record.exitCode });
   }
   terminate(child) {
     if (child.exitCode !== null || child.killed)

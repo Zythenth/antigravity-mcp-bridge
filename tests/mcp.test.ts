@@ -31,6 +31,12 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     await next.connect(new StdioClientTransport({ command: process.execPath,
       args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
       env: { ...process.env as Record<string, string>, BRIDGE_STATE_DIRECTORY: path.join(dir, 'state') }, stderr: 'pipe' }));
+    const tools = await next.listTools();
+    assert.equal(tools.tools.length, 23);
+    for (const tool of tools.tools) {
+      assert.equal(tool.outputSchema?.type, 'object', tool.name);
+      assert.ok(Object.keys(tool.outputSchema?.properties || {}).length > 0, tool.name);
+    }
     return next;
   }
   async function call(name: string, args: Record<string, unknown> = {}) {
@@ -40,6 +46,11 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   }
   try {
     client = await connect();
+    assert.equal((await call('antigravity_list_models')).models.length, 2);
+    assert.equal((await call('antigravity_get_model')).model, null);
+    assert.equal((await call('antigravity_set_model', { model: 'mock-pro' })).model, 'mock-pro');
+    assert.ok((await call('antigravity_list_project_files', { workingDirectory: submittedSource })).files.includes('source.txt'));
+    assert.deepEqual((await call('antigravity_cleanup')).discardedTaskIds, []);
     assert.equal((await call('antigravity_health')).integrationApproval.available, false);
     let taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
       acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }] })).task.taskId;
@@ -98,11 +109,14 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal(observed?.task.status, 'completed', JSON.stringify(observed?.task.error));
     assert.equal(observed.task.tests.at(-1).source, 'agy-tool');
     assert.equal(observed.task.tests.at(-1).exitCode, 0);
+    assert.equal((await call('antigravity_status', { taskId })).task.status, 'completed');
+    assert.ok((await call('antigravity_sessions')).sessions.some((session: { sessionId: string }) => session.sessionId === observed.task.sessionId));
+    assert.equal((await call('antigravity_cancel', { taskId })).task.status, 'completed');
     assert.equal(observed.task.tokenUsage.counters.totalTokens, 3);
     const consumption = await call('antigravity_usage', { sessionId: observed.task.sessionId });
     assert.equal(consumption.counters.totalTokens, 6);
     assert.equal(consumption.bySession[0].observedCumulative.totalTokens, 6);
-    assert.equal(consumption.byModel[0].model, null);
+    assert.equal(consumption.byModel[0].model, 'mock-pro');
     await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
     for (const response of ['decline', 'cancel', 'accept'] as const) {
