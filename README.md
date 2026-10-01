@@ -61,7 +61,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | --- | --- |
 | `antigravity_health` | Verifica executável, versão, autenticação aparente e capacidades |
 | `antigravity_list_models` | Lista os IDs devolvidos por `agy models` |
-| `antigravity_get_model` / `antigravity_set_model` | Consulta ou define o modelo padrão em memória |
+| `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
@@ -134,7 +134,13 @@ As verificações automáticas demonstram apenas as condições declaradas; a co
 
 ## Eventos, sessões e cancelamento
 
-O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O modelo padrão continua restrito ao processo. O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
+O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
+
+### Modelo padrão
+
+Defina `BRIDGE_DEFAULT_MODEL` com um ID devolvido por `agy models` para o padrão inicial. `antigravity_set_model` grava a preferência no estado privado, compartilhada por servidores que usam o mesmo diretório. A prioridade é: `model` da tarefa, preferência salva, variável de ambiente e padrão do agy. A seleção é conferida contra a lista atual antes de executar; IDs indisponíveis causam `MODEL_NOT_AVAILABLE`.
+
+Passe `model: null` para Auto: por tarefa, ignora os padrões do bridge; em `antigravity_set_model`, persiste o padrão do agy mesmo quando a variável está configurada. Omitir `model` preserva a preferência vigente. Para voltar ao padrão inicial do ambiente, pare o servidor e remova somente `model-selection.json` do diretório privado de estado.
 
 `antigravity_resume` usa o `conversation_id` de uma tarefa concluída, inclusive após reinício, e reutiliza sua cópia isolada. Use `antigravity_tasks` para recuperar IDs e `antigravity_sessions` para consultar sessões persistidas. Execuções interrompidas não são repetidas automaticamente: recebem `SERVER_RESTARTED` quando o processo anterior já terminou. Se o PID registrado ainda estiver vivo, a cópia fica bloqueada com `ORPHAN_PROCESS_RUNNING`; o bridge não encerra processos recuperados apenas por PID. Tarefas de outro servidor ativo podem ser acompanhadas, mas devem ser canceladas no servidor que as iniciou. Locks locais impedem uso simultâneo da mesma cópia. O cancelamento encerra o subprocesso local; alterações parciais na cópia podem permanecer e devem ser revisadas.
 
@@ -173,6 +179,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `DEFAULT_TIMEOUT_SECONDS` | `1800` | Prazo máximo por execução |
 | `EVENT_BUFFER_SIZE` | `2000` | Eventos mantidos em memória |
 | `BRIDGE_STATE_DIRECTORY` | `~/.antigravity-mcp-bridge` | Diretório privado de tarefas e sessões |
+| `BRIDGE_DEFAULT_MODEL` | vazio | Modelo inicial, usado quando não há preferência salva |
 | `MAX_COPY_FILES` | `10000` | Máximo de arquivos selecionados para a cópia |
 | `MAX_COPY_BYTES` | `268435456` | Máximo de bytes copiados (256 MiB) |
 | `MAX_CHANGED_FILES` | `100` | Máximo de arquivos alterados para revisão e integração |

@@ -10,6 +10,7 @@
 - Papéis de planejamento e revisão em consulta, contratos JSON e conferência de citações dos achados.
 - Consumo de tokens por tarefa, sessão e modelo, com deltas de retomada, baseline persistido e identificação de dados indisponíveis.
 - Schemas de saída publicados nas 23 ferramentas, com contratos de sucesso/erro e validação pelo SDK.
+- Modelo padrão por ambiente, preferência persistente e Auto explícito por tarefa ou para tarefas futuras.
 
 ## 0.3.0
 

@@ -65,7 +65,7 @@ export interface RunOptions {
   nativeTest?: NativeTestRequest;
   acceptanceCriteria?: AcceptanceCriterion[];
   prompt: string;
-  model?: string;
+  model?: string | null;
   workingDirectory: string;
   sessionId?: string;
   timeoutSeconds?: number;

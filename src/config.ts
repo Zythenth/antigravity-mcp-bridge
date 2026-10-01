@@ -13,6 +13,7 @@ export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxC
 
 export interface Config extends ProjectLimits {
   agyPath: string;
+  defaultModel?: string;
   maxConcurrentTasks: number;
   maxQueuedTasks: number;
   maxRetainedTasks: number;
@@ -25,8 +26,13 @@ export interface Config extends ProjectLimits {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const defaultModel = env.BRIDGE_DEFAULT_MODEL;
+  if (defaultModel !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
+    throw new Error('BRIDGE_DEFAULT_MODEL must be an exact model ID');
+  }
   return {
     agyPath: env.AGY_PATH || 'agy',
+    defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
     maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1000),
     maxRetainedTasks: positiveInteger(env.MAX_RETAINED_TASKS, 100, 10000),

@@ -10,8 +10,8 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 ## Escolha da ação
 
 - Para disponibilidade ou autenticação, chame `antigravity_health`. Se receber `AGY_AUTH_REQUIRED`, oriente o usuário a abrir `agy` interativamente; não tente ler credenciais nem fazer login pelo bridge.
-- Para saber os modelos, chame `antigravity_list_models`. Use somente IDs devolvidos pelo CLI. Quando o usuário disser “Pro” ou “Flash”, escolha uma variante compatível da lista e diga qual ID escolheu. Se a escolha tiver impacto material e não houver preferência inferível, pergunte. Para “Auto”, omita `model` e deixe o `agy` escolher o padrão; não invente um ID `auto`.
-- Prefira `model` em `antigravity_run` para seleção por tarefa. `antigravity_set_model` define apenas o padrão em memória para tarefas futuras deste processo MCP.
+- Para saber os modelos, chame `antigravity_list_models`. Use somente IDs devolvidos pelo CLI. Quando o usuário disser “Pro” ou “Flash”, escolha uma variante compatível da lista e diga qual ID escolheu. Se a escolha tiver impacto material e não houver preferência inferível, pergunte. Para “Auto”, passe `model: null`; não invente um ID `auto`. Omitir o campo utiliza a preferência existente.
+- Prefira `model` em `antigravity_run` para seleção por tarefa. `antigravity_set_model` persiste o padrão no estado privado para tarefas futuras, inclusive após reinício. `model: null` persiste Auto. A ordem é escolha da tarefa, preferência salva, `BRIDGE_DEFAULT_MODEL` e padrão do agy. Consulte `antigravity_get_model` antes de informar a preferência atual.
 
 ## Delegação e acompanhamento
 

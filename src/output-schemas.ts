@@ -65,7 +65,7 @@ export const successOutputSchemas = {
   }).strict(),
   antigravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
   antigravity_get_model: z.object({ model: z.string().nullable() }).strict(),
-  antigravity_set_model: z.object({ model: z.string() }).strict(),
+  antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),
   antigravity_usage: z.object({
     scope: z.literal('retained-tasks'), taskCount: count, measuredTaskCount: count, counters: usageCountersSchema, byTask: z.array(usageRow),
     byModel: z.array(z.object({ model: z.string().nullable(), taskCount: count, counters: usageCountersSchema }).strict()),
@@ -107,8 +107,9 @@ export const successOutputSchemas = {
 
 const errorResponse = z.object({ error: z.object({ code: z.string(), message: z.string() }).strict() }).strict();
 function withError(schema: z.ZodObject) {
-  return z.object(schema.shape).partial().extend({ error: errorResponse.shape.error.optional() }).strict().superRefine((value, context) => {
-    const checked = (value.error !== undefined ? errorResponse : schema).safeParse(value);
+  const error = schema.shape.error ? z.union([schema.shape.error, errorResponse.shape.error]) : errorResponse.shape.error;
+  return z.object(schema.shape).partial().extend({ error: error.optional() }).strict().superRefine((value, context) => {
+    const checked = (typeof value.error === 'object' && value.error !== null ? errorResponse : schema).safeParse(value);
     if (!checked.success) context.addIssue({ code: 'custom', message: 'Response must match the success or error contract' });
   }).meta({ anyOf: [z.toJSONSchema(schema), z.toJSONSchema(errorResponse)] });
 }

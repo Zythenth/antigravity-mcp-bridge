@@ -22,7 +22,6 @@ export class TaskManager {
   private readonly tasks = new Map<string, InternalTask>();
   private readonly queue: string[] = [];
   private active = 0;
-  private selectedModel?: string;
   private stopped = false;
   private readonly busyProjects = new Set<ProjectCopy>();
   private readonly state: StateStore;
@@ -71,12 +70,17 @@ export class TaskManager {
     }
   }
 
-  getModel(): string | undefined { return this.selectedModel; }
+  getModel(): string | undefined {
+    const selection = this.state.loadModel();
+    return selection === undefined ? this.config.defaultModel : selection.model ?? undefined;
+  }
 
-  async setModel(model: string): Promise<string> {
-    const models = await this.adapter.listModels();
-    if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);
-    this.selectedModel = model;
+  async setModel(model: string | null): Promise<string | null> {
+    if (model !== null) {
+      const models = await this.adapter.listModels();
+      if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);
+    }
+    this.state.saveModel(model);
     return model;
   }
 
@@ -90,7 +94,7 @@ export class TaskManager {
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
       throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
     }
-    const model = options.model ?? this.selectedModel;
+    const model = options.model === null ? undefined : options.model ?? this.getModel();
     if (model) {
       const models = await this.adapter.listModels();
       if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);

@@ -66,13 +66,13 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   server.registerTool('antigravity_set_model', {
     outputSchema: outputSchemas.antigravity_set_model,
-    title: 'Select Antigravity model', description: 'Select an exact model ID from agy models as the bridge default. Does not alter agy global settings.',
-    inputSchema: { model: z.string().min(1).max(128) }, annotations: { ...readOnly, readOnlyHint: false },
+    title: 'Select Antigravity model', description: 'Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.',
+    inputSchema: { model: z.string().min(1).max(128).nullable() }, annotations: { ...readOnly, readOnlyHint: false },
   }, async ({ model }) => safe(async () => ({ model: await tasks.setModel(model) }))());
 
   const runSchema = {
     prompt: z.string().min(1),
-    model: z.string().min(1).max(128).optional(),
+    model: z.string().min(1).max(128).nullable().optional(),
     workingDirectory: z.string().min(1),
     sessionId: z.string().min(1).max(128).optional(),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),

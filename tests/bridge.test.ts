@@ -20,6 +20,35 @@ const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.u
 const stateDirectories: string[] = [];
 const managers: TaskManager[] = [];
 const acceptanceCriteria: AcceptanceCriterion[] = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }];
+test('model preference survives restart, observes other servers and supports per-task Auto', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup([mockPath], { BRIDGE_DEFAULT_MODEL: 'mock-flash' });
+  try {
+    await adapter.discover();
+    assert.equal(tasks.getModel(), 'mock-flash');
+    await tasks.setModel('mock-pro');
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    assert.equal(recovered.getModel(), 'mock-pro');
+    await assert.rejects(recovered.setModel('not-available'), { code: 'MODEL_NOT_AVAILABLE' });
+    assert.equal(tasks.getModel(), 'mock-pro');
+    for (const [override, expected] of [[undefined, 'mock-pro'], ['mock-flash', 'mock-flash'], [null, undefined]] as const) {
+      const task = await recovered.run({ prompt: 'split:test', workingDirectory: dir, model: override });
+      assert.equal((await until(recovered, task.taskId, done)).model, expected);
+      const args = (recovered.readEvents(task.taskId).events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;
+      if (expected) assert.equal(args[args.indexOf('--model') + 1], expected);
+      else assert.ok(!args.includes('--model'));
+    }
+    await recovered.setModel(null);
+    assert.equal(tasks.getModel(), undefined);
+    const auto = new TaskManager(adapter, config); managers.push(auto);
+    assert.equal(auto.getModel(), undefined);
+    const invalidState = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(invalidState);
+    const invalid = new TaskManager(adapter, { ...config, stateDirectory: invalidState, defaultModel: 'not-available' }); managers.push(invalid);
+    await assert.rejects(invalid.run({ prompt: 'split:test', workingDirectory: dir }), { code: 'MODEL_NOT_AVAILABLE' });
+    assert.throws(() => loadConfig({ BRIDGE_DEFAULT_MODEL: 'invalid model' }), /exact model ID/);
+  } finally { await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+});
+
 async function verifyTask(tasks: TaskManager, taskId: string, sha256: string) {
   const quote = await readFile(path.join(tasks.status(taskId).copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8');
   return tasks.verify(taskId, sha256, [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'The requested file exists with the fixture content' }]);

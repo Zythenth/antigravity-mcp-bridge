@@ -28549,8 +28549,13 @@ function positiveInteger(value, fallback, max) {
 }
 var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
 function loadConfig(env = process.env) {
+  const defaultModel = env.BRIDGE_DEFAULT_MODEL;
+  if (defaultModel !== void 0 && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
+    throw new Error("BRIDGE_DEFAULT_MODEL must be an exact model ID");
+  }
   return {
     agyPath: env.AGY_PATH || "agy",
+    defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
     maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1e3),
     maxRetainedTasks: positiveInteger(env.MAX_RETAINED_TASKS, 100, 1e4),
@@ -37551,7 +37556,7 @@ var successOutputSchemas = {
   }).strict(),
   antigravity_list_models: external_exports.object({ models: external_exports.array(external_exports.object({ id: external_exports.string(), name: external_exports.string() }).strict()) }).strict(),
   antigravity_get_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
-  antigravity_set_model: external_exports.object({ model: external_exports.string() }).strict(),
+  antigravity_set_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
   antigravity_usage: external_exports.object({
     scope: external_exports.literal("retained-tasks"),
     taskCount: count,
@@ -37611,8 +37616,9 @@ var successOutputSchemas = {
 };
 var errorResponse = external_exports.object({ error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict() }).strict();
 function withError(schema) {
-  return external_exports.object(schema.shape).partial().extend({ error: errorResponse.shape.error.optional() }).strict().superRefine((value, context) => {
-    const checked = (value.error !== void 0 ? errorResponse : schema).safeParse(value);
+  const error62 = schema.shape.error ? external_exports.union([schema.shape.error, errorResponse.shape.error]) : errorResponse.shape.error;
+  return external_exports.object(schema.shape).partial().extend({ error: error62.optional() }).strict().superRefine((value, context) => {
+    const checked = (typeof value.error === "object" && value.error !== null ? errorResponse : schema).safeParse(value);
     if (!checked.success)
       context.addIssue({ code: "custom", message: "Response must match the success or error contract" });
   }).meta({ anyOf: [external_exports.toJSONSchema(schema), external_exports.toJSONSchema(errorResponse)] });
@@ -37682,13 +37688,13 @@ function createMcpServer(adapter2, tasks2) {
   server2.registerTool("antigravity_set_model", {
     outputSchema: outputSchemas.antigravity_set_model,
     title: "Select Antigravity model",
-    description: "Select an exact model ID from agy models as the bridge default. Does not alter agy global settings.",
-    inputSchema: { model: external_exports.string().min(1).max(128) },
+    description: "Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.",
+    inputSchema: { model: external_exports.string().min(1).max(128).nullable() },
     annotations: { ...readOnly, readOnlyHint: false }
   }, async ({ model }) => safe(async () => ({ model: await tasks2.setModel(model) }))());
   const runSchema = {
     prompt: external_exports.string().min(1),
-    model: external_exports.string().min(1).max(128).optional(),
+    model: external_exports.string().min(1).max(128).nullable().optional(),
     workingDirectory: external_exports.string().min(1),
     sessionId: external_exports.string().min(1).max(128).optional(),
     timeoutSeconds: external_exports.number().int().min(1).max(86400).optional(),
@@ -37970,6 +37976,7 @@ import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, wr
 import path6 from "node:path";
 import os3 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
+var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
 var snapshotSchema = external_exports.object({
   version: external_exports.literal(1),
   ownerPid: external_exports.number().int().positive(),
@@ -38020,6 +38027,33 @@ var StateStore = class {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
     return path6.join(this.directory, taskId + ".json");
+  }
+  loadModel() {
+    const file3 = path6.join(this.directory, "model-selection.json");
+    try {
+      const stat3 = lstatSync(file3);
+      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
+        throw new Error("Unsafe model selection");
+      return modelSelectionSchema.parse(JSON.parse(readFileSync(file3, "utf8")));
+    } catch (error62) {
+      if (error62.code === "ENOENT")
+        return void 0;
+      throw new BridgeError("INVALID_STATE", "Invalid persisted model selection");
+    }
+  }
+  saveModel(model) {
+    const selection = modelSelectionSchema.parse({ version: 1, model });
+    const release = this.acquire("model-selection");
+    const target = path6.join(this.directory, "model-selection.json");
+    const temporary = target + "." + randomUUID2() + ".tmp";
+    try {
+      this.loadModel();
+      writeFileSync(temporary, JSON.stringify(selection), { flag: "wx", mode: 384, flush: true });
+      renameSync(temporary, target);
+    } finally {
+      rmSync(temporary, { force: true });
+      release();
+    }
   }
   save(task2) {
     const target = this.file(task2.record.taskId);
@@ -38129,7 +38163,6 @@ var TaskManager = class {
   tasks = /* @__PURE__ */ new Map();
   queue = [];
   active = 0;
-  selectedModel;
   stopped = false;
   busyProjects = /* @__PURE__ */ new Set();
   state;
@@ -38181,13 +38214,16 @@ var TaskManager = class {
     }
   }
   getModel() {
-    return this.selectedModel;
+    const selection = this.state.loadModel();
+    return selection === void 0 ? this.config.defaultModel : selection.model ?? void 0;
   }
   async setModel(model) {
-    const models = await this.adapter.listModels();
-    if (!models.some((item) => item.id === model))
-      throw new BridgeError("MODEL_NOT_AVAILABLE", `Model is not listed by agy: ${model}`);
-    this.selectedModel = model;
+    if (model !== null) {
+      const models = await this.adapter.listModels();
+      if (!models.some((item) => item.id === model))
+        throw new BridgeError("MODEL_NOT_AVAILABLE", `Model is not listed by agy: ${model}`);
+    }
+    this.state.saveModel(model);
     return model;
   }
   async run(options) {
@@ -38203,7 +38239,7 @@ var TaskManager = class {
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
       throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
     }
-    const model = options.model ?? this.selectedModel;
+    const model = options.model === null ? void 0 : options.model ?? this.getModel();
     if (model) {
       const models = await this.adapter.listModels();
       if (!models.some((item) => item.id === model))

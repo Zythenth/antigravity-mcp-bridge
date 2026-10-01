@@ -9,6 +9,7 @@ import type { BridgeEvent } from './types.js';
 import { usageCountersSchema } from './usage.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
+const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
 const snapshotSchema = z.object({
   version: z.literal(1), ownerPid: z.number().int().positive(),
   record: z.object({ taskId: z.string().uuid(), workingDirectory: z.string(), prompt: z.string(),
@@ -49,6 +50,31 @@ export class StateStore {
   private file(taskId: string): string {
     if (!uuid.test(taskId)) throw new BridgeError('INVALID_STATE', 'Invalid persisted task ID');
     return path.join(this.directory, taskId + '.json');
+  }
+
+  loadModel(): { model: string | null } | undefined {
+    const file = path.join(this.directory, 'model-selection.json');
+    try {
+      const stat = lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1024) throw new Error('Unsafe model selection');
+      return modelSelectionSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw new BridgeError('INVALID_STATE', 'Invalid persisted model selection');
+    }
+  }
+
+  saveModel(model: string | null): void {
+    const selection = modelSelectionSchema.parse({ version: 1, model });
+    const release = this.acquire('model-selection');
+    const target = path.join(this.directory, 'model-selection.json');
+    const temporary = target + '.' + randomUUID() + '.tmp';
+    try {
+      // Validate an existing record before replacing it, including links and malformed data.
+      this.loadModel();
+      writeFileSync(temporary, JSON.stringify(selection), { flag: 'wx', mode: 0o600, flush: true });
+      renameSync(temporary, target);
+    } finally { rmSync(temporary, { force: true }); release(); }
   }
 
   save(task: StoredTask): void {

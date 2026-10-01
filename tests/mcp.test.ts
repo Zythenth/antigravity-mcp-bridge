@@ -81,6 +81,10 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal((unavailable.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
     await client.close();
     client = await connect(true);
+    assert.equal((await call('antigravity_get_model')).model, 'mock-pro');
+    assert.equal((await call('antigravity_set_model', { model: null })).model, null);
+    assert.equal((await call('antigravity_get_model')).model, null);
+    await call('antigravity_set_model', { model: 'mock-pro' });
     assert.equal((await call('antigravity_health')).integrationApproval.available, true);
     assert.equal((await call('antigravity_result', { taskId })).task.copyDirectory, final.task.copyDirectory);
     assert.deepEqual(await call('antigravity_events', { taskId }), events);
