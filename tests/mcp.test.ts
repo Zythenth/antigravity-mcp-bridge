@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-protocol-test-'));
   const source = path.join(dir, 'source');
   execFileSync('git', ['init', '--quiet', source]);
+  const submittedSource = process.platform === 'win32' ? source.toUpperCase() : source;
   await writeFile(path.join(source, 'source.txt'), 'original');
   let client: Client | undefined;
   let decision: 'accept' | 'decline' | 'cancel' = 'accept';
@@ -40,7 +41,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   try {
     client = await connect();
     assert.equal((await call('antigravity_health')).integrationApproval.available, false);
-    const taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: source })).task.taskId;
+    const taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource })).task.taskId;
     const deadline = Date.now() + 10000;
     let final;
     while (Date.now() < deadline) {
@@ -61,6 +62,8 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.ok((await call('antigravity_tasks')).tasks.some((task: { taskId: string }) => task.taskId === taskId));
     await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
     const preview = await call('antigravity_preview', { taskId });
+    const canonicalSource = await realpath(source);
+    assert.equal(preview.sourceDirectory, canonicalSource);
     assert.equal(preview.summary.added, 1);
     const testScript = "if (require('node:fs').readFileSync('AGY_BRIDGE_TEST.md','utf8') !== 'Antigravity MCP bridge test successful.') process.exit(1); console.log('file checked');";
     const output = execFileSync(process.execPath, ['-e', testScript], { cwd: final.task.copyDirectory, encoding: 'utf8' });
@@ -75,7 +78,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     confirmation = true;
     await call('antigravity_integrate', { taskId, expectedSha256: preview.sha256 });
     assert.equal(confirmations.length, 4);
-    assert.ok(confirmations.every(message => message.includes(preview.sha256) && message.includes(JSON.stringify(source))));
+    assert.ok(confirmations.every(message => message.includes(preview.sha256) && message.includes(JSON.stringify(canonicalSource))));
     assert.equal(await readFile(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await call('antigravity_discard', { taskId });
     await assert.rejects(readFile(path.join(final.task.copyDirectory, 'source.txt')), { code: 'ENOENT' });

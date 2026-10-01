@@ -1,12 +1,12 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
-const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-real-'));
+const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-real-')));
 execFileSync('git', ['init', '--quiet', directory]);
 await writeFile(path.join(directory, 'source.txt'), 'Disposable integration test project.');
 const client = new Client({ name: 'agy-mcp-integration-test', version: '1.0.0' }, { capabilities: { elicitation: { form: {} } } });
