@@ -28676,6 +28676,7 @@ function positiveInteger(value, fallback, max) {
     throw new Error(`Invalid numeric configuration: ${value}`);
   return n;
 }
+var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
 function loadConfig(env = process.env) {
   return {
     agyPath: env.AGY_PATH || "agy",
@@ -28687,6 +28688,9 @@ function loadConfig(env = process.env) {
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
     stateDirectory: env.BRIDGE_STATE_DIRECTORY || path2.join(os.homedir(), ".antigravity-mcp-bridge"),
+    maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
+    maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
+    maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path2.delimiter).filter(Boolean).map((p) => path2.resolve(p))
   };
 }
@@ -36775,7 +36779,7 @@ async function listProjectFiles(sourceDirectory) {
   const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
   return candidates.filter((file2) => !ignored.has(file2) && !file2.split("/").includes(".git")).sort();
 }
-async function createProjectCopy(sourceDirectory, includePaths, onCreated) {
+async function createProjectCopy(sourceDirectory, includePaths, onCreated, limits = DEFAULT_PROJECT_LIMITS) {
   const candidates = await listProjectFiles(sourceDirectory);
   let selected = candidates;
   if (includePaths !== void 0) {
@@ -36791,17 +36795,29 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated) {
   }
   if (!selected.length)
     throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
+  if (selected.length > limits.maxCopyFiles)
+    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  let totalBytes = 0;
+  for (const relative of selected) {
+    totalBytes += (await lstat(await checkedPath(sourceDirectory, relative, true))).size;
+    if (totalBytes > limits.maxCopyBytes)
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
+  }
   const copyDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-copy-"));
   const gitDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   try {
     const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
     onCreated?.(project);
+    totalBytes = 0;
     for (const relative of selected) {
       const source = await checkedPath(sourceDirectory, relative, true);
       const target = path3.join(copyDirectory, ...relative.split("/"));
       await mkdir(path3.dirname(target), { recursive: true });
       await copyFile(source, target);
+      totalBytes += (await lstat(target)).size;
+      if (totalBytes > limits.maxCopyBytes)
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Source grew beyond the copy byte limit during copying");
       baseline.set(relative, await sha256File(target));
     }
     await git(copyDirectory, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
@@ -36832,10 +36848,12 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated) {
     throw error62;
   }
 }
-async function previewProjectCopy(project) {
+async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
   await git(project.copyDirectory, [...scope, "add", "-A", "--", "."]);
   const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--name-status", "--no-renames", "-z", "HEAD"]));
+  if (names.length / 2 > limits.maxChangedFiles)
+    throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files = [];
   for (let index = 0; index < names.length; index += 2) {
     const status = names[index];
@@ -36876,8 +36894,8 @@ async function verifyReadOnlyCopy(project) {
       throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task deleted: " + relative);
     }
 }
-async function integrateProjectCopy(project, expectedSha256) {
-  const preview = await previewProjectCopy(project);
+async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PROJECT_LIMITS) {
+  const preview = await previewProjectCopy(project, limits);
   if (!preview.files.length)
     throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
   if (preview.sha256 !== expectedSha256)
@@ -37470,7 +37488,7 @@ var TaskManager = class {
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
-    return this.withProject(task.project, () => previewProjectCopy(task.project));
+    return this.withProject(task.project, () => previewProjectCopy(task.project, this.config));
   }
   async withProject(project, operation) {
     if (this.busyProjects.has(project) || [...this.tasks.values()].some((task) => task.project === project && !terminal.has(task.record.status))) {
@@ -37540,7 +37558,7 @@ var TaskManager = class {
     return this.withProject(task.project, async () => {
       const releaseSource = this.state.acquire("source-" + createHash2("sha256").update(task.record.workingDirectory).digest("hex"));
       try {
-        const preview = await integrateProjectCopy(task.project, expectedSha256);
+        const preview = await integrateProjectCopy(task.project, expectedSha256, this.config);
         for (const related of this.tasks.values())
           if (related.project === task.project) {
             related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -37622,7 +37640,7 @@ var TaskManager = class {
       task.project ??= await createProjectCopy(record2.workingDirectory, task.options.includePaths, (project) => {
         task.project = project;
         this.events.append(record2.taskId, "copy.created", { copyDirectory: project.copyDirectory });
-      });
+      }, this.config);
       task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
       record2.copyDirectory = task.project.copyDirectory;
       record2.includedFiles = task.project.includedFiles;
@@ -37671,8 +37689,11 @@ ${error62.message}`;
       else if (exitCode !== 0 || !record2.result || record2.result.status !== "SUCCESS") {
         const message = record2.result?.error || `agy exited with code ${exitCode}`;
         this.finish(task, "failed", !record2.result && task.parseErrors ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message);
-      } else
+      } else {
+        if (record2.mode !== "read-only")
+          await previewProjectCopy(task.project, this.config);
         this.finish(task, "completed");
+      }
     } catch (error62) {
       const code = error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED";
       this.finish(task, "failed", code, error62 instanceof Error ? error62.message : String(error62));

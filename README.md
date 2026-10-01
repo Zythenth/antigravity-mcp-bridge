@@ -98,6 +98,8 @@ Antes de chamar `agy`, o bridge cria uma cópia temporária dos arquivos elegív
 
 O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas na inicialização e a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
 
+A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
+
 ## Configuração e segurança
 
 | Variável | Padrão | Uso |
@@ -109,6 +111,9 @@ O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias perm
 | `DEFAULT_TIMEOUT_SECONDS` | `1800` | Prazo máximo por execução |
 | `EVENT_BUFFER_SIZE` | `2000` | Eventos mantidos em memória |
 | `BRIDGE_STATE_DIRECTORY` | `~/.antigravity-mcp-bridge` | Diretório privado de tarefas e sessões |
+| `MAX_COPY_FILES` | `10000` | Máximo de arquivos selecionados para a cópia |
+| `MAX_COPY_BYTES` | `268435456` | Máximo de bytes copiados (256 MiB) |
+| `MAX_CHANGED_FILES` | `100` | Máximo de arquivos alterados para revisão e integração |
 | `COPY_RETENTION_HOURS` | `168` | Prazo de retenção das cópias finalizadas |
 | `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt |
 | `FORBIDDEN_DIRECTORIES` | vazio | Diretórios bloqueados, separados por `;` no Windows |

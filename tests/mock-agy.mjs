@@ -41,5 +41,9 @@ if (scenario === 'split') {
   send({ event: 'step_update', step_update: { step_type: 'tool', state: 'DONE', tool_name: 'write_to_file' } });
 }
 if (scenario === 'write') writeFileSync(path.join(process.cwd(), 'AGY_BRIDGE_TEST.md'), 'Antigravity MCP bridge test successful.');
+if (scenario === 'write-many') {
+  writeFileSync(path.join(process.cwd(), 'one.txt'), 'one');
+  writeFileSync(path.join(process.cwd(), 'two.txt'), 'two');
+}
 if (scenario === 'failure') { result('ERROR'); process.exit(1); }
 result();

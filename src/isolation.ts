@@ -5,6 +5,7 @@ import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/
 import os from 'node:os';
 import path from 'node:path';
 import { BridgeError } from './types.js';
+import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
 
 const maxGitOutput = 10_000_000;
 
@@ -120,7 +121,7 @@ export async function listProjectFiles(sourceDirectory: string): Promise<string[
   return candidates.filter(file => !ignored.has(file) && !file.split('/').includes('.git')).sort();
 }
 
-export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void): Promise<ProjectCopy> {
+export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ProjectCopy> {
   const candidates = await listProjectFiles(sourceDirectory);
   let selected = candidates;
   if (includePaths !== undefined) {
@@ -134,6 +135,12 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
     selected = candidates.filter(file => wanted.some(item => file === item || file.startsWith(item + '/')));
   }
   if (!selected.length) throw new BridgeError('ISOLATION_EMPTY', 'No eligible project files to copy');
+  if (selected.length > limits.maxCopyFiles) throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  let totalBytes = 0;
+  for (const relative of selected) {
+    totalBytes += (await lstat(await checkedPath(sourceDirectory, relative, true))).size;
+    if (totalBytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
+  }
 
   const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
   const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
@@ -141,11 +148,14 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   try {
     const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
     onCreated?.(project);
+    totalBytes = 0;
     for (const relative of selected) {
       const source = await checkedPath(sourceDirectory, relative, true);
       const target = path.join(copyDirectory, ...relative.split('/'));
       await mkdir(path.dirname(target), { recursive: true });
       await copyFile(source, target);
+      totalBytes += (await lstat(target)).size;
+      if (totalBytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Source grew beyond the copy byte limit during copying');
       baseline.set(relative, await sha256File(target));
     }
     await git(copyDirectory, ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
@@ -169,11 +179,12 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   }
 }
 
-export async function previewProjectCopy(project: ProjectCopy): Promise<ChangePreview> {
+export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   await git(project.copyDirectory, [...scope, 'add', '-A', '--', '.']);
   const names = splitNull(await git(project.copyDirectory,
     [...scope, 'diff', '--cached', '--name-status', '--no-renames', '-z', 'HEAD']));
+  if (names.length / 2 > limits.maxChangedFiles) throw new BridgeError('CHANGE_LIMIT_EXCEEDED', `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files: ChangePreview['files'] = [];
   for (let index = 0; index < names.length; index += 2) {
     const status = names[index]!;
@@ -209,8 +220,8 @@ export async function verifyReadOnlyCopy(project: ProjectCopy): Promise<void> {
   }
 }
 
-export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string): Promise<ChangePreview> {
-  const preview = await previewProjectCopy(project);
+export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
+  const preview = await previewProjectCopy(project, limits);
   if (!preview.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');
   if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'The copy changed after review; preview it again');
   for (const file of preview.files) {

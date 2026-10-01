@@ -8,7 +8,10 @@ function positiveInteger(value: string | undefined, fallback: number, max: numbe
   return n;
 }
 
-export interface Config {
+export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; maxChangedFiles: number }
+export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
+
+export interface Config extends ProjectLimits {
   agyPath: string;
   maxConcurrentTasks: number;
   maxQueuedTasks: number;
@@ -32,6 +35,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 50000, 1000000),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
     stateDirectory: env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge'),
+    maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1000000),
+    maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
+    maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1000000),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || '').split(path.delimiter).filter(Boolean).map(p => path.resolve(p)),
   };
 }

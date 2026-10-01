@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { CliAdapter } from '../src/cli-adapter.js';
-import { loadConfig } from '../src/config.js';
+import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
 import { EventStore } from '../src/event-store.js';
 import { LineParser } from '../src/stream-parser.js';
 import { TaskManager } from '../src/task-manager.js';
@@ -17,6 +17,49 @@ import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjec
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const stateDirectories: string[] = [];
 const managers: TaskManager[] = [];
+
+test('copy limits enforce count and byte boundaries before copying; includePaths narrows them', async () => {
+  const dir = await repository();
+  try {
+    await writeFile(path.join(dir, 'second.txt'), 'four');
+    let created = false;
+    const limits = { ...DEFAULT_PROJECT_LIMITS, maxCopyFiles: 1, maxCopyBytes: 6 };
+    await assert.rejects(createProjectCopy(dir, undefined, () => { created = true; }, limits), { code: 'COPY_LIMIT_EXCEEDED' });
+    assert.equal(created, false);
+    const copy = await createProjectCopy(dir, ['source.txt'], undefined, limits);
+    assert.equal(await readFile(path.join(copy.copyDirectory, 'source.txt'), 'utf8'), 'source');
+    await discardProjectCopy(copy);
+    await assert.rejects(createProjectCopy(dir, ['source.txt'], undefined, { ...limits, maxCopyBytes: 5 }), { code: 'COPY_LIMIT_EXCEEDED' });
+    let copyDirectory = '', gitDirectory = '';
+    await assert.rejects(createProjectCopy(dir, ['source.txt'], project => {
+      copyDirectory = project.copyDirectory; gitDirectory = project.gitDirectory;
+      writeFileSync(path.join(dir, 'source.txt'), 'longer source');
+    }, limits), { code: 'COPY_LIMIT_EXCEEDED' });
+    await assert.rejects(readFile(path.join(copyDirectory, 'source.txt')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(gitDirectory, 'HEAD')), { code: 'ENOENT' });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('change limits reject preview, integration and successful CLI output above the boundary', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup([mockPath], { MAX_CHANGED_FILES: '1' });
+  try {
+    const project = await createProjectCopy(dir);
+    await writeFile(path.join(project.copyDirectory, 'one.txt'), 'one');
+    const limits = { ...DEFAULT_PROJECT_LIMITS, maxChangedFiles: 1 };
+    assert.equal((await previewProjectCopy(project, limits)).files.length, 1);
+    await writeFile(path.join(project.copyDirectory, 'two.txt'), 'two');
+    await assert.rejects(previewProjectCopy(project, limits), { code: 'CHANGE_LIMIT_EXCEEDED' });
+    await assert.rejects(integrateProjectCopy(project, '0'.repeat(64), limits), { code: 'CHANGE_LIMIT_EXCEEDED' });
+    await assert.rejects(readFile(path.join(dir, 'one.txt')), { code: 'ENOENT' });
+    await discardProjectCopy(project);
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write-many:test', workingDirectory: dir });
+    assert.equal((await until(tasks, task.taskId, done)).error?.code, 'CHANGE_LIMIT_EXCEEDED');
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'source');
+    await tasks.discard(task.taskId);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
 after(async () => {
   for (const tasks of managers) {
     await tasks.shutdown();

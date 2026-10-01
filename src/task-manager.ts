@@ -147,7 +147,7 @@ export class TaskManager {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
-    return this.withProject(task.project, () => previewProjectCopy(task.project!));
+    return this.withProject(task.project, () => previewProjectCopy(task.project!, this.config));
   }
 
   private async withProject<T>(project: ProjectCopy, operation: () => Promise<T>): Promise<T> {
@@ -208,7 +208,7 @@ export class TaskManager {
     return this.withProject(task.project, async () => {
       const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
       try {
-        const preview = await integrateProjectCopy(task.project!, expectedSha256);
+        const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();
           this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256 });
@@ -279,7 +279,7 @@ export class TaskManager {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
         this.events.append(record.taskId, 'copy.created', { copyDirectory: project.copyDirectory });
-      });
+      }, this.config);
       task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
       record.copyDirectory = task.project.copyDirectory;
       record.includedFiles = task.project.includedFiles;
@@ -316,7 +316,10 @@ export class TaskManager {
       else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {
         const message = (record.result as { error?: string } | undefined)?.error || `agy exited with code ${exitCode}`;
         this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
-      } else this.finish(task, 'completed');
+      } else {
+        if (record.mode !== 'read-only') await previewProjectCopy(task.project, this.config);
+        this.finish(task, 'completed');
+      }
     } catch (error) {
       const code = error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED';
       this.finish(task, 'failed', code, error instanceof Error ? error.message : String(error));
