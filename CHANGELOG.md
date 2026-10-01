@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## Em desenvolvimento
+## 0.4.0
 
 - Critérios de aceitação definidos antes da tarefa, conferência de artefatos e revisão com citações verificadas por arquivo e linha.
 - Integração condicionada a verificação atual, com detecção de evidências alteradas e resultados pendentes.
@@ -11,6 +11,8 @@
 - Consumo de tokens por tarefa, sessão e modelo, com deltas de retomada, baseline persistido e identificação de dados indisponíveis.
 - Schemas de saída publicados nas 23 ferramentas, com contratos de sucesso/erro e validação pelo SDK.
 - Modelo padrão por ambiente, preferência persistente e Auto explícito por tarefa ou para tarefas futuras.
+- Pacote npm com executável para npx, servidor incluído sem dependências de runtime e teste do tarball em Windows/Linux.
+- Contrato de health preserva diagnósticos textuais de disponibilidade junto do formato estruturado de erros.
 
 ## 0.3.0
 

@@ -12,12 +12,32 @@ O bridge não acessa endpoints privados, cookies ou arquivos de autenticação. 
 ## Requisitos
 
 - Node.js 24 ou mais recente e npm.
+- Git instalado e disponível no `PATH`.
 - [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/overview/) instalado e disponível no `PATH`. Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
 - Autenticação concluída no `agy` interativo. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
-O bridge foi testado com `agy` 1.2.12 e `@modelcontextprotocol/sdk` 1.30.1. Ele exige que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação.
+O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele exige que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. Consulte abaixo a limitação observada na execução de testes no Windows.
 
 ## Instalação
+
+### Servidor MCP via npm/npx
+
+O pacote 0.4.0 está preparado para publicação no npm. Após a versão ficar disponível no registro, configure seu cliente MCP com:
+
+```json
+{
+  "mcpServers": {
+    "antigravity": {
+      "command": "npx",
+      "args": ["--yes", "antigravity-mcp-bridge@0.4.0"]
+    }
+  }
+}
+```
+
+No Windows, clientes que exigem o nome completo do comando podem usar `npx.cmd`. O executável inicia o servidor em stdio; não é um comando interativo. O pacote contém o servidor compilado e os avisos das dependências incluídas. Node.js 24, Git e o `agy` autenticado continuam necessários. Para validar uma versão ainda não publicada, use `npm run build:plugin`, `npm pack` e o tarball local com `npx --yes --package <caminho-do-tarball> antigravity-mcp-bridge`.
+
+### Instalação pelo código-fonte
 
 ```powershell
 git clone https://github.com/Zythenth/antigravity-mcp-bridge.git
@@ -165,6 +185,8 @@ O executor usa `agy --sandbox` e a ferramenta nativa `run_command`. Não exige D
 Se o CLI negar a ferramenta ou omitir o recibo, o resultado é `TEST_EXECUTION_UNVERIFIED`. Um comando não zero produz `TEST_FAILED`; mudanças nos arquivos durante/depois do comando produzem `TEST_CHANGED_PATCH`. Testes observados precisam continuar atuais para a integração; um relato manual não substitui um teste observado falho. Após `TEST_FAILED`, é possível retomar a conversa para corrigir ou executar os testes novamente. A orientação de correção mantém o comando original e proíbe enfraquecer os testes; tentativas observadas além do limite encerram a tarefa.
 
 No Windows, use executáveis nativos como `node.exe` e `python.exe`; para npm, use `npm.cmd`. Arquivos `.cmd`/`.bat` aceitam argumentos comuns, mas metacaracteres de shell são recusados. A execução depende das permissões do sandbox nativo do CLI. Uma restrição de terminal não demonstra isolamento de todas as ferramentas do agente nem permite afirmar proteção completa do sistema de arquivos. Consulte a [configuração oficial do sandbox](https://www.antigravity.google/docs/sandbox/) e os [eventos de ferramentas no modo headless](https://www.antigravity.google/docs/cli/headless/#tool-calls-in-the-stream).
+
+No teste real com `agy` 1.2.14 no Windows, o CLI negou o terminal com `escalate_admin`/`Bash`, inclusive com `enableTerminalSandbox: true` e `toolPermission: "proceed-in-sandbox"`. A captura de comandos nesse ambiente permanece sem validação real. O bridge preserva `TEST_EXECUTION_UNVERIFIED` e não considera a narrativa do modelo como teste aprovado. Os testes automatizados do repositório usam um CLI simulado e não substituem essa validação de compatibilidade.
 
 Para testar com a conta real em um projeto descartável, execute `npm run build` e `node tests/native-integration.mjs`. Esse teste usa a conta do agy e verifica a captura de uma execução real; a suíte padrão usa o CLI simulado e não consome quota.
 
