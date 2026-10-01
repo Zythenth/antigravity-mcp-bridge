@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ import { EventStore } from '../src/event-store.js';
 import { LineParser } from '../src/stream-parser.js';
 import { TaskManager } from '../src/task-manager.js';
 import type { TaskRecord } from '../src/types.js';
+import { createProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 
@@ -31,6 +32,13 @@ async function until(tasks: TaskManager, taskId: string, predicate: (record: Tas
 }
 
 const done = (task: TaskRecord) => ['completed', 'failed', 'cancelled', 'timeout'].includes(task.status);
+
+async function repository(): Promise<string> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-bridge-test-'));
+  execFileSync('git', ['init', '--quiet', dir]);
+  await writeFile(path.join(dir, 'source.txt'), 'source');
+  return dir;
+}
 
 test('discovery distinguishes missing executable and authentication', async () => {
   const missing = new CliAdapter(loadConfig({ AGY_PATH: path.join(os.tmpdir(), 'absent-agy-executable') }));
@@ -74,7 +82,7 @@ test('event store enforces a global bound and reports lost cursors', () => {
 });
 
 test('run streams official event shapes and captures result, stderr and malformed lines', async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-bridge-test-'));
+  const dir = await repository();
   try {
     const { adapter, tasks } = setup();
     await adapter.discover();
@@ -100,7 +108,7 @@ test('run streams official event shapes and captures result, stderr and malforme
 });
 
 test('failure, timeout, cancellation, queue and concurrency', async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-bridge-test-'));
+  const dir = await repository();
   try {
     const { adapter, tasks } = setup([mockPath], { MAX_CONCURRENT_TASKS: '1', MAX_QUEUED_TASKS: '1' });
     await adapter.discover();
@@ -124,7 +132,14 @@ test('failure, timeout, cancellation, queue and concurrency', async () => {
     assert.equal((await until(tasks, cancel.taskId, done)).error?.code, 'TASK_CANCELLED');
     const write = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
     assert.equal((await until(tasks, write.taskId, done)).status, 'completed');
+    const written = tasks.status(write.taskId).copyDirectory!;
+    assert.equal(await readFile(path.join(written, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
+    const preview = await tasks.preview(write.taskId);
+    assert.deepEqual(preview.files, [{ status: 'A', path: 'AGY_BRIDGE_TEST.md' }]);
+    await tasks.integrate(write.taskId, preview.sha256);
     assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    await assert.rejects(tasks.integrate(write.taskId, preview.sha256), { code: 'ALREADY_INTEGRATED' });
     await tasks.shutdown();
     await assert.rejects(tasks.run({ prompt: 'after shutdown', workingDirectory: dir }), { code: 'AGY_PROCESS_FAILED' });
   } finally { await rm(dir, { recursive: true, force: true }); }
@@ -138,24 +153,59 @@ test('working directory and prompt validation', async () => {
   await assert.rejects(tasks.run({ prompt: '', workingDirectory: os.tmpdir() }), { code: 'INVALID_PROMPT' });
 });
 
-test('resume uses a known conversation and isolated worktree keeps the source clean', async () => {
-  const repository = await mkdtemp(path.join(os.tmpdir(), 'agy-bridge-repo-'));
-  let worktreePath: string | undefined;
+test('resumed conversation reuses the isolated copy and source remains clean', async () => {
+  const dir = await repository();
   try {
-    execFileSync('git', ['init', repository]);
-    execFileSync('git', ['-C', repository, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '-m', 'initial']);
     const { adapter, tasks } = setup();
     await adapter.discover();
-    const run = await tasks.run({ prompt: 'write:test', workingDirectory: repository, sessionId: 'prior-conversation', isolateWorktree: true });
+    const run = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
     const final = await until(tasks, run.taskId, done);
     assert.equal(final.status, 'completed');
-    assert.equal(final.sessionId, 'prior-conversation');
-    worktreePath = final.worktreePath;
-    assert.ok(worktreePath);
-    assert.equal(await readFile(path.join(worktreePath, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
-    await assert.rejects(readFile(path.join(repository, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
+    assert.equal(final.sessionId, 'mock-conversation');
+    const resumed = await tasks.run({ prompt: 'split:again', workingDirectory: dir, sessionId: final.sessionId });
+    const continued = await until(tasks, resumed.taskId, done);
+    assert.equal(continued.status, 'completed');
+    assert.equal(continued.copyDirectory, final.copyDirectory);
+    assert.equal(await readFile(path.join(final.copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
   } finally {
-    if (worktreePath) execFileSync('git', ['-C', repository, 'worktree', 'remove', '--force', worktreePath]);
-    await rm(repository, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('copy excludes Git ignores and excludes, includes untracked files and can narrow paths', async () => {
+  const dir = await repository();
+  try {
+    await writeFile(path.join(dir, '.gitignore'), 'ignored.txt\n');
+    await writeFile(path.join(dir, '.git', 'info', 'exclude'), 'excluded.txt\n');
+    await writeFile(path.join(dir, 'ignored.txt'), 'private');
+    await writeFile(path.join(dir, 'excluded.txt'), 'private');
+    await writeFile(path.join(dir, 'untracked.txt'), 'included');
+    execFileSync('git', ['-C', dir, 'add', '-f', 'ignored.txt']);
+    const eligible = await listProjectFiles(dir);
+    assert.ok(eligible.includes('untracked.txt'));
+    assert.ok(!eligible.includes('ignored.txt'));
+    assert.ok(!eligible.includes('excluded.txt'));
+    const copy = await createProjectCopy(dir, ['untracked.txt']);
+    assert.deepEqual(copy.includedFiles, ['untracked.txt']);
+    assert.equal(await readFile(path.join(copy.copyDirectory, 'untracked.txt'), 'utf8'), 'included');
+    await assert.rejects(readFile(path.join(copy.copyDirectory, 'ignored.txt'), 'utf8'), { code: 'ENOENT' });
+    await assert.rejects(createProjectCopy(dir, ['ignored.txt']), { code: 'INVALID_INCLUDE_PATH' });
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('review digest gates integration and source edits block stale patches', async () => {
+  const dir = await repository();
+  try {
+    const copy = await createProjectCopy(dir);
+    await writeFile(path.join(copy.copyDirectory, 'source.txt'), 'changed');
+    const preview = await previewProjectCopy(copy);
+    assert.deepEqual(preview.files, [{ status: 'M', path: 'source.txt' }]);
+    await assert.rejects(integrateProjectCopy(copy, '0'.repeat(64)), { code: 'REVIEW_CHANGED' });
+    await writeFile(path.join(dir, 'source.txt'), 'source changed locally');
+    await assert.rejects(integrateProjectCopy(copy, preview.sha256), { code: 'SOURCE_CHANGED' });
+    await writeFile(path.join(dir, 'source.txt'), 'source');
+    await integrateProjectCopy(copy, preview.sha256);
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'changed');
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

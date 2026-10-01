@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CliAdapter } from './cli-adapter.js';
 import { TaskManager } from './task-manager.js';
 import { BridgeError } from './types.js';
+import { listProjectFiles } from './isolation.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -23,8 +24,8 @@ function safe<T>(operation: () => Promise<T> | T) {
 }
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
-  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.1.0' }, {
-    instructions: 'Use antigravity_health before relying on CLI capabilities. Run returns a taskId; poll antigravity_events and antigravity_result for live progress and completion. Model IDs must come from antigravity_list_models. Antigravity may modify files in the selected directory; review Git changes after completion.',
+  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.2.0' }, {
+    instructions: 'Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Review antigravity_preview before asking the user whether to integrate. antigravity_integrate requires explicit user approval and the reviewed SHA-256. The original project is not modified by antigravity_run.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -44,6 +45,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: {}, annotations: readOnly,
   }, safe(() => ({ model: tasks.getModel() ?? null })));
 
+  server.registerTool('antigravity_list_project_files', {
+    title: 'List files eligible for a project copy', description: 'List tracked and untracked files excluding Git ignore and local exclude matches.',
+    inputSchema: { workingDirectory: z.string().min(1) }, annotations: readOnly,
+  }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
+
   server.registerTool('antigravity_set_model', {
     title: 'Select Antigravity model', description: 'Select an exact model ID from agy models as the bridge default. Does not alter agy global settings.',
     inputSchema: { model: z.string().min(1).max(128) }, annotations: { ...readOnly, readOnlyHint: false },
@@ -56,19 +62,30 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     sessionId: z.string().min(1).max(128).optional(),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
     isolateWorktree: z.boolean().optional(),
+    includePaths: z.array(z.string().min(1)).min(1).optional(),
   };
   server.registerTool('antigravity_run', {
-    title: 'Run Antigravity task', description: 'Start a programming task asynchronously through official agy stream-json. Returns a taskId. The agent can modify files in workingDirectory.',
+    title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
     inputSchema: runSchema, annotations: action,
   }, async args => safe(async () => ({ task: await tasks.run(args) }))());
 
   server.registerTool('antigravity_resume', {
-    title: 'Resume Antigravity conversation', description: 'Start another agy task in an existing conversation using its conversation ID.',
+    title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy.',
     inputSchema: { ...runSchema, sessionId: z.string().min(1).max(128) }, annotations: action,
   }, async args => safe(async () => ({ task: await tasks.run(args) }))());
 
+  server.registerTool('antigravity_preview', {
+    title: 'Preview isolated changes', description: 'Return file list, patch and SHA-256 for Codex review. Requires a finished task.',
+    inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
+  }, async ({ taskId }) => safe(() => tasks.preview(taskId))());
+
+  server.registerTool('antigravity_integrate', {
+    title: 'Integrate reviewed changes', description: 'Apply the reviewed patch to the source after explicit user approval. Requires the SHA-256 from antigravity_preview.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
+  }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256))());
+
   server.registerTool('antigravity_status', {
-    title: 'Get Antigravity task status', description: 'Return task metadata, status, process ID and Git snapshots when available.',
+    title: 'Get Antigravity task status', description: 'Return task metadata, status, process ID and isolated copy path when available.',
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
   }, async ({ taskId }) => safe(() => ({ task: tasks.status(taskId) }))());
 
@@ -79,7 +96,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, after, limit }) => safe(() => tasks.readEvents(taskId, after, limit))());
 
   server.registerTool('antigravity_result', {
-    title: 'Get Antigravity result', description: 'Return terminal result, usage, error and Git diff once the task finishes.',
+    title: 'Get Antigravity result', description: 'Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.',
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
   }, async ({ taskId }) => safe(() => tasks.result(taskId))());
 

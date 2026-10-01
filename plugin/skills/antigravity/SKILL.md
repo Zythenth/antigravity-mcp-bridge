@@ -15,13 +15,15 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 
 ## Delegação e acompanhamento
 
-1. Identifique o diretório absoluto do projeto. Antes de formular a tarefa, leia as instruções e arquivos relevantes do projeto e observe mudanças Git existentes. Não inclua segredos nem documentos privados no prompt enviado ao Antigravity sem autorização do usuário.
-2. Chame `antigravity_run` com uma instrução concreta, escopo de arquivos e critério verificável. Use `isolateWorktree: true` quando Codex e Antigravity precisarem editar o mesmo repositório em paralelo e a árvore Git estiver limpa.
+1. Identifique a raiz Git absoluta do projeto. Antes de formular a tarefa, leia as instruções e arquivos relevantes e observe mudanças Git existentes. Não inclua segredos nem documentos privados no prompt enviado ao Antigravity. Use `antigravity_list_project_files` para verificar o que pode entrar na cópia.
+2. Chame `antigravity_run` com uma instrução concreta e critério verificável. Por padrão, a cópia inclui arquivos rastreados e não rastreados que não estejam em `.gitignore` ou `.git/info/exclude`, mesmo quando um arquivo ignorado é rastreado. Selecione `includePaths` quando somente alguns arquivos ou pastas forem necessários; a seleção não pode incluir arquivos ignorados. O bridge exige `agy --sandbox` e trabalha sempre na cópia.
 3. Guarde o `taskId`. Chame `antigravity_events` com `after: 0` e continue com o `nextCursor` retornado; consulte `antigravity_result` até `ready: true`. Os eventos informam atividade observável, não raciocínio privado. Se `truncated` for verdadeiro, informe a perda de eventos antigos.
-4. Após `completed`, revise `gitBefore`/`gitAfter` e os arquivos alterados; execute os testes pertinentes do projeto. Um resultado `SUCCESS` do CLI não substitui essa verificação. Relate falhas e limitações com precisão.
+4. Após `completed`, chame `antigravity_preview`, revise o patch inteiro e execute os testes pertinentes na cópia. Um resultado `SUCCESS` do CLI não substitui essa verificação. Somente após aprovação explícita do usuário, chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia. Relate falhas e limitações com precisão.
 
 ## Continuação e controle
 
-- Use o `sessionId` devolvido pela tarefa com `antigravity_resume` para continuar a conversa. `antigravity_sessions` lista apenas sessões vistas pela instância atual do bridge.
+- Use o `sessionId` de uma tarefa concluída com `antigravity_resume` para continuar na mesma cópia. `antigravity_sessions` lista apenas sessões vistas pela instância atual do bridge.
 - Quando o usuário pedir cancelamento, chame `antigravity_cancel` com o `taskId` e confirme o status. O cancelamento encerra o processo local; alterações parciais podem permanecer.
-- Depois de falha ou timeout, examine eventos e estado Git antes de repetir a tarefa. Não faça nova execução automaticamente se ela puder repetir efeitos ou consumir quota.
+- Depois de falha ou timeout, examine eventos e a cópia antes de repetir a tarefa. Não faça nova execução automaticamente se ela puder repetir efeitos ou consumir quota.
+
+O `--sandbox` restringe comandos de terminal do CLI, mas não garante isolamento completo do sistema de arquivos no Windows. Não delegue acesso a arquivos sensíveis apenas com base nessa opção; use a lista de arquivos e revise o conteúdo efetivamente copiado.

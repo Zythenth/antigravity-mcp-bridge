@@ -3,12 +3,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createWorktree, gitSnapshot } from './git.js';
+import { createProjectCopy, integrateProjectCopy, previewProjectCopy, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
 
-interface InternalTask { record: TaskRecord; options: RunOptions; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number }
+interface InternalTask { record: TaskRecord; options: RunOptions; project?: ProjectCopy; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 export class TaskManager {
@@ -36,6 +36,7 @@ export class TaskManager {
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     validatePrompt(options.prompt, this.config.maxPromptChars);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
+    if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
     const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
       throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
@@ -46,6 +47,12 @@ export class TaskManager {
       if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);
     }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', 'Invalid conversation ID');
+    const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
+      task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : undefined;
+    if (options.sessionId && (!previous || previous.record.status !== 'completed' || previous.record.integratedAt)) {
+      throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
+    }
+    if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
     if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
       throw new BridgeError('QUEUE_FULL', 'Task queue is full');
     }
@@ -57,7 +64,7 @@ export class TaskManager {
     }
     const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, prompt: options.prompt,
       workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
-    this.tasks.set(record.taskId, { record, options: { ...options, workingDirectory, timeoutSeconds } });
+    this.tasks.set(record.taskId, { record, options: { ...options, workingDirectory, timeoutSeconds }, project: previous?.project });
     this.queue.push(record.taskId);
     this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
     this.pump();
@@ -73,6 +80,27 @@ export class TaskManager {
   result(taskId: string): { task: TaskRecord; ready: boolean } {
     const task = this.status(taskId);
     return { task, ready: terminal.has(task.status) };
+  }
+
+  async preview(taskId: string) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
+    return previewProjectCopy(task.project);
+  }
+
+  async integrate(taskId: string, expectedSha256: string) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
+    if (task.record.integratedAt) throw new BridgeError('ALREADY_INTEGRATED', 'This task was already integrated');
+    if ([...this.tasks.values()].filter(other => other.project === task.project).at(-1) !== task) {
+      throw new BridgeError('TASK_NOT_READY', 'Preview and integrate the latest task for this copy');
+    }
+    if ([...this.tasks.values()].some(other => other !== task && other.project === task.project && !terminal.has(other.record.status))) {
+      throw new BridgeError('TASK_NOT_READY', 'Wait for the resumed task to finish');
+    }
+    const preview = await integrateProjectCopy(task.project, expectedSha256);
+    for (const related of this.tasks.values()) if (related.project === task.project) related.record.integratedAt = new Date().toISOString();
+    return preview;
   }
 
   readEvents(taskId: string, after = 0, limit = 200) {
@@ -126,13 +154,11 @@ export class TaskManager {
     record.startedAt = new Date().toISOString();
     this.events.append(record.taskId, 'task.started', {});
     try {
-      if (task.options.isolateWorktree) {
-        record.worktreePath = await createWorktree(record.workingDirectory);
-        record.workingDirectory = await validateWorkingDirectory(record.worktreePath, this.config.forbiddenDirectories);
-      }
-      record.gitBefore = await gitSnapshot(record.workingDirectory);
+      task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths);
+      record.copyDirectory = task.project.copyDirectory;
+      record.includedFiles = task.project.includedFiles;
       if (task.termination) { this.finish(task, task.termination); return; }
-      const child = this.adapter.spawnTask(task.options, record.model, record.workingDirectory);
+      const child = this.adapter.spawnTask(task.options, record.model, task.project.copyDirectory);
       task.child = child;
       record.pid = child.pid;
       record.status = 'running';
@@ -157,7 +183,6 @@ export class TaskManager {
       stdoutParser.end(); stderrParser.end();
       if (task.timer) clearTimeout(task.timer);
       record.exitCode = exitCode;
-      record.gitAfter = await gitSnapshot(record.workingDirectory);
       if (task.termination) this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
       else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {

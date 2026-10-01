@@ -28587,6 +28587,7 @@ var CliAdapter = class {
         capabilities: {
           structuredOutput: streaming,
           streaming,
+          sandbox: this.help.includes("--sandbox"),
           models: this.help.includes("models"),
           modelSelection: this.help.includes("--model"),
           resume: this.help.includes("--conversation"),
@@ -28600,7 +28601,7 @@ var CliAdapter = class {
         installed: false,
         path: this.config.agyPath,
         authenticated: null,
-        capabilities: { structuredOutput: false, streaming: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
+        capabilities: { structuredOutput: false, streaming: false, sandbox: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: error62 instanceof Error ? error62.message : String(error62)
       };
     }
@@ -28642,7 +28643,9 @@ var CliAdapter = class {
       throw new BridgeError("AGY_NOT_FOUND", "agy executable not found");
     if (!this.help.includes("stream-json"))
       throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise stream-json");
-    const args = ["--input-format", "stream-json", "--output-format", "stream-json", "--print-timeout", `${options.timeoutSeconds ?? this.config.defaultTimeoutSeconds}s`];
+    if (!this.help.includes("--sandbox"))
+      throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise --sandbox");
+    const args = ["--sandbox", "--input-format", "stream-json", "--output-format", "stream-json", "--print-timeout", `${options.timeoutSeconds ?? this.config.defaultTimeoutSeconds}s`];
     if (model)
       args.push("--model", model);
     if (options.sessionId)
@@ -36651,6 +36654,203 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
+// dist/src/isolation.js
+import { createHash } from "node:crypto";
+import { spawn as spawn2 } from "node:child_process";
+import { createReadStream } from "node:fs";
+import { copyFile, lstat, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import os from "node:os";
+import path3 from "node:path";
+var maxGitOutput = 1e7;
+async function git(cwd, args, input2, allowedCodes = [0]) {
+  return new Promise((resolve, reject) => {
+    const child = spawn2("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const chunks = [];
+    let length = 0;
+    let stderr = "";
+    let overflow = false;
+    child.stdout.on("data", (chunk) => {
+      length += chunk.length;
+      if (length > maxGitOutput) {
+        overflow = true;
+        child.kill();
+      } else
+        chunks.push(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (overflow)
+        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      else if (!allowedCodes.includes(code ?? -1))
+        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
+      else
+        resolve(Buffer.concat(chunks));
+    });
+    child.stdin.end(input2);
+  });
+}
+function splitNull(bytes) {
+  return bytes.toString("utf8").split("\0").filter(Boolean);
+}
+function validRelative(input2) {
+  const value = input2.replaceAll("\\", "/").replace(/\/$/, "");
+  const parts = value.split("/");
+  if (!value || value.startsWith("/") || /^[A-Za-z]:/.test(value) || parts.some((part) => !part || part === "." || part === ".." || part === ".git")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths must contain project-relative files or directories");
+  }
+  return value;
+}
+async function checkedPath(root, relative, mustExist) {
+  const parts = validRelative(relative).split("/");
+  let current = root;
+  for (let index = 0; index < parts.length; index++) {
+    current = path3.join(current, parts[index]);
+    let info;
+    try {
+      info = await lstat(current);
+    } catch (error62) {
+      if (!mustExist && error62.code === "ENOENT")
+        break;
+      throw error62;
+    }
+    if (info.isSymbolicLink() || index < parts.length - 1 && !info.isDirectory() || index === parts.length - 1 && mustExist && !info.isFile()) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Project copy cannot use links or non-regular files: " + relative);
+    }
+  }
+  return current;
+}
+async function sha256File(file2) {
+  const digest = createHash("sha256");
+  for await (const chunk of createReadStream(file2))
+    digest.update(chunk);
+  return digest.digest("hex");
+}
+async function listProjectFiles(sourceDirectory) {
+  let top;
+  try {
+    top = (await git(sourceDirectory, ["rev-parse", "--show-toplevel"])).toString("utf8").trim();
+  } catch {
+    throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
+  }
+  if (path3.relative(await realpath(top), sourceDirectory) !== "") {
+    throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
+  }
+  const candidates = [...new Set(splitNull(await git(sourceDirectory, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
+  if (!candidates.length)
+    return [];
+  const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
+  return candidates.filter((file2) => !ignored.has(file2) && !file2.split("/").includes(".git")).sort();
+}
+async function createProjectCopy(sourceDirectory, includePaths) {
+  const candidates = await listProjectFiles(sourceDirectory);
+  let selected = candidates;
+  if (includePaths !== void 0) {
+    if (!includePaths.length)
+      throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths cannot be empty");
+    const wanted = includePaths.map(validRelative);
+    for (const item of wanted) {
+      if (!candidates.some((file2) => file2 === item || file2.startsWith(item + "/"))) {
+        throw new BridgeError("INVALID_INCLUDE_PATH", "No eligible file matches: " + item);
+      }
+    }
+    selected = candidates.filter((file2) => wanted.some((item) => file2 === item || file2.startsWith(item + "/")));
+  }
+  if (!selected.length)
+    throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
+  const copyDirectory = await mkdtemp(path3.join(os.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path3.join(os.tmpdir(), "agy-mcp-baseline-"));
+  const baseline = /* @__PURE__ */ new Map();
+  try {
+    for (const relative of selected) {
+      const source = await checkedPath(sourceDirectory, relative, true);
+      const target = path3.join(copyDirectory, ...relative.split("/"));
+      await mkdir(path3.dirname(target), { recursive: true });
+      await copyFile(source, target);
+      baseline.set(relative, await sha256File(target));
+    }
+    await git(copyDirectory, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    const scope = ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory];
+    await git(copyDirectory, [...scope, "add", "-A", "-f", "--", "."]);
+    await git(copyDirectory, [
+      ...scope,
+      "-c",
+      "user.name=Bridge Snapshot",
+      "-c",
+      "user.email=bridge@invalid.local",
+      "-c",
+      "core.hooksPath=" + path3.join(gitDirectory, "disabled-hooks"),
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "-m",
+      "baseline"
+    ]);
+    return { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+  } catch (error62) {
+    if (path3.dirname(copyDirectory) === os.tmpdir() && path3.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+      await rm(copyDirectory, { recursive: true, force: true });
+    }
+    if (path3.dirname(gitDirectory) === os.tmpdir() && path3.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+      await rm(gitDirectory, { recursive: true, force: true });
+    }
+    throw error62;
+  }
+}
+async function previewProjectCopy(project) {
+  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
+  await git(project.copyDirectory, [...scope, "add", "-A", "--", "."]);
+  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--name-status", "--no-renames", "-z", "HEAD"]));
+  const files = [];
+  for (let index = 0; index < names.length; index += 2) {
+    const status = names[index];
+    const relative = validRelative(names[index + 1] || "");
+    if (!["A", "M", "D"].includes(status))
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Unsupported file change: " + relative);
+    if (status !== "D")
+      await checkedPath(project.copyDirectory, relative, true);
+    files.push({ status, path: relative });
+  }
+  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--binary", "--no-renames", "HEAD"]);
+  return {
+    files,
+    patch: bytes.toString("utf8"),
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceDirectory: project.sourceDirectory,
+    copyDirectory: project.copyDirectory
+  };
+}
+async function integrateProjectCopy(project, expectedSha256) {
+  const preview = await previewProjectCopy(project);
+  if (!preview.files.length)
+    throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
+  if (preview.sha256 !== expectedSha256)
+    throw new BridgeError("REVIEW_CHANGED", "The copy changed after review; preview it again");
+  for (const file2 of preview.files) {
+    const source = await checkedPath(project.sourceDirectory, file2.path, false);
+    const expected = project.baseline.get(file2.path);
+    if (expected) {
+      const current = await sha256File(source).catch(() => void 0);
+      if (current !== expected)
+        throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file2.path);
+    } else {
+      try {
+        await lstat(source);
+        throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file2.path);
+      } catch (error62) {
+        if (error62.code !== "ENOENT")
+          throw error62;
+      }
+    }
+  }
+  const patch = Buffer.from(preview.patch, "utf8");
+  await git(project.sourceDirectory, ["apply", "--check", "--binary", "-"], patch);
+  await git(project.sourceDirectory, ["apply", "--binary", "-"], patch);
+  return preview;
+}
+
 // dist/src/mcp-server.js
 function response(value) {
   const structuredContent = value && typeof value === "object" && !Array.isArray(value) ? value : { value };
@@ -36671,8 +36871,8 @@ function safe(operation) {
   };
 }
 function createMcpServer(adapter2, tasks2) {
-  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.1.0" }, {
-    instructions: "Use antigravity_health before relying on CLI capabilities. Run returns a taskId; poll antigravity_events and antigravity_result for live progress and completion. Model IDs must come from antigravity_list_models. Antigravity may modify files in the selected directory; review Git changes after completion."
+  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.2.0" }, {
+    instructions: "Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Review antigravity_preview before asking the user whether to integrate. antigravity_integrate requires explicit user approval and the reviewed SHA-256. The original project is not modified by antigravity_run."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -36694,6 +36894,12 @@ function createMcpServer(adapter2, tasks2) {
     inputSchema: {},
     annotations: readOnly
   }, safe(() => ({ model: tasks2.getModel() ?? null })));
+  server2.registerTool("antigravity_list_project_files", {
+    title: "List files eligible for a project copy",
+    description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
+    inputSchema: { workingDirectory: external_exports.string().min(1) },
+    annotations: readOnly
+  }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
   server2.registerTool("antigravity_set_model", {
     title: "Select Antigravity model",
     description: "Select an exact model ID from agy models as the bridge default. Does not alter agy global settings.",
@@ -36706,23 +36912,36 @@ function createMcpServer(adapter2, tasks2) {
     workingDirectory: external_exports.string().min(1),
     sessionId: external_exports.string().min(1).max(128).optional(),
     timeoutSeconds: external_exports.number().int().min(1).max(86400).optional(),
-    isolateWorktree: external_exports.boolean().optional()
+    isolateWorktree: external_exports.boolean().optional(),
+    includePaths: external_exports.array(external_exports.string().min(1)).min(1).optional()
   };
   server2.registerTool("antigravity_run", {
     title: "Run Antigravity task",
-    description: "Start a programming task asynchronously through official agy stream-json. Returns a taskId. The agent can modify files in workingDirectory.",
+    description: "Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.",
     inputSchema: runSchema,
     annotations: action
   }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
   server2.registerTool("antigravity_resume", {
     title: "Resume Antigravity conversation",
-    description: "Start another agy task in an existing conversation using its conversation ID.",
+    description: "Continue a completed session in its existing isolated copy.",
     inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
     annotations: action
   }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
+  server2.registerTool("antigravity_preview", {
+    title: "Preview isolated changes",
+    description: "Return file list, patch and SHA-256 for Codex review. Requires a finished task.",
+    inputSchema: { taskId: external_exports.string().uuid() },
+    annotations: readOnly
+  }, async ({ taskId }) => safe(() => tasks2.preview(taskId))());
+  server2.registerTool("antigravity_integrate", {
+    title: "Integrate reviewed changes",
+    description: "Apply the reviewed patch to the source after explicit user approval. Requires the SHA-256 from antigravity_preview.",
+    inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
+    annotations: action
+  }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256))());
   server2.registerTool("antigravity_status", {
     title: "Get Antigravity task status",
-    description: "Return task metadata, status, process ID and Git snapshots when available.",
+    description: "Return task metadata, status, process ID and isolated copy path when available.",
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: readOnly
   }, async ({ taskId }) => safe(() => ({ task: tasks2.status(taskId) }))());
@@ -36734,7 +36953,7 @@ function createMcpServer(adapter2, tasks2) {
   }, async ({ taskId, after, limit }) => safe(() => tasks2.readEvents(taskId, after, limit))());
   server2.registerTool("antigravity_result", {
     title: "Get Antigravity result",
-    description: "Return terminal result, usage, error and Git diff once the task finishes.",
+    description: "Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.",
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: readOnly
   }, async ({ taskId }) => safe(() => tasks2.result(taskId))());
@@ -36754,7 +36973,7 @@ function createMcpServer(adapter2, tasks2) {
 }
 
 // dist/src/task-manager.js
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/logger.js
@@ -36809,66 +37028,6 @@ var EventStore = class {
   }
 };
 
-// dist/src/git.js
-import { spawn as spawn2 } from "node:child_process";
-import os from "node:os";
-import path3 from "node:path";
-import { mkdir } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-async function git(cwd, args, maxBytes = 1e6) {
-  return new Promise((resolve) => {
-    const child = spawn2("git", args, { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    let output2 = "", truncated = false;
-    const timer = setTimeout(() => child.kill(), 1e4);
-    child.stdout.on("data", (chunk) => {
-      if (output2.length + chunk.length > maxBytes)
-        truncated = true;
-      output2 = (output2 + chunk.toString("utf8")).slice(0, maxBytes);
-    });
-    child.on("error", () => {
-      clearTimeout(timer);
-      resolve({ ok: false, output: "", truncated: false });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ ok: code === 0, output: output2, truncated });
-    });
-  });
-}
-async function gitSnapshot(cwd) {
-  const top = await git(cwd, ["rev-parse", "--show-toplevel"], 4096);
-  if (!top.ok)
-    return void 0;
-  const [branch, status, diff, diffStat] = await Promise.all([
-    git(cwd, ["branch", "--show-current"], 4096),
-    git(cwd, ["status", "--short", "--branch"], 2e5),
-    git(cwd, ["diff", "--no-ext-diff"], 1e6),
-    git(cwd, ["diff", "--stat", "--no-ext-diff"], 2e5)
-  ]);
-  return {
-    branch: branch.output.trim(),
-    status: status.output,
-    diff: diff.output,
-    diffStat: diffStat.output,
-    truncated: status.truncated || diff.truncated || diffStat.truncated
-  };
-}
-async function createWorktree(cwd) {
-  const top = await git(cwd, ["rev-parse", "--show-toplevel"], 4096);
-  if (!top.ok)
-    throw new Error("Worktree isolation requires a Git repository");
-  const dirty = await git(cwd, ["status", "--porcelain"], 2e5);
-  if (!dirty.ok || dirty.output.trim())
-    throw new Error("Worktree isolation requires a clean Git working tree");
-  const parent = path3.join(os.tmpdir(), "agy-mcp-worktrees");
-  await mkdir(parent, { recursive: true });
-  const target = path3.join(parent, randomUUID());
-  const created = await git(cwd, ["worktree", "add", "--detach", target, "HEAD"]);
-  if (!created.ok)
-    throw new Error("git worktree add failed");
-  return target;
-}
-
 // dist/src/stream-parser.js
 import { StringDecoder } from "node:string_decoder";
 var LineParser = class {
@@ -36908,7 +37067,7 @@ var LineParser = class {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access as access2, realpath, stat } from "node:fs/promises";
+import { access as access2, realpath as realpath2, stat } from "node:fs/promises";
 import path4 from "node:path";
 function within(root, candidate) {
   const relative = path4.relative(root, candidate);
@@ -36918,12 +37077,12 @@ async function validateWorkingDirectory(input2, forbidden) {
   if (!path4.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
-    const directory = await realpath(input2);
+    const directory = await realpath2(input2);
     if (!(await stat(directory)).isDirectory())
       throw new Error("not a directory");
     await access2(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath(excluded).catch(() => path4.resolve(excluded));
+      const resolved = await realpath2(excluded).catch(() => path4.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -36971,6 +37130,8 @@ var TaskManager = class {
       throw new BridgeError("AGY_PROCESS_FAILED", "Server is shutting down");
     validatePrompt(options.prompt, this.config.maxPromptChars);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
+    if (options.isolateWorktree === false)
+      throw new BridgeError("ISOLATION_REQUIRED", "Direct execution in the source project is disabled");
     const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
       throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
@@ -36983,6 +37144,12 @@ var TaskManager = class {
     }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId))
       throw new BridgeError("INVALID_SESSION", "Invalid conversation ID");
+    const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task) => task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : void 0;
+    if (options.sessionId && (!previous || previous.record.status !== "completed" || previous.record.integratedAt)) {
+      throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
+    }
+    if (previous && options.includePaths !== void 0)
+      throw new BridgeError("INVALID_INCLUDE_PATH", "A resumed task reuses its original file selection");
     if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
       throw new BridgeError("QUEUE_FULL", "Task queue is full");
     }
@@ -36994,7 +37161,7 @@ var TaskManager = class {
       this.events.drop(oldestFinished.record.taskId);
     }
     const record2 = {
-      taskId: randomUUID2(),
+      taskId: randomUUID(),
       sessionId: options.sessionId,
       model,
       prompt: options.prompt,
@@ -37002,7 +37169,7 @@ var TaskManager = class {
       status: "queued",
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    this.tasks.set(record2.taskId, { record: record2, options: { ...options, workingDirectory, timeoutSeconds } });
+    this.tasks.set(record2.taskId, { record: record2, options: { ...options, workingDirectory, timeoutSeconds }, project: previous?.project });
     this.queue.push(record2.taskId);
     this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
     this.pump();
@@ -37017,6 +37184,30 @@ var TaskManager = class {
   result(taskId) {
     const task = this.status(taskId);
     return { task, ready: terminal.has(task.status) };
+  }
+  async preview(taskId) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.project || !terminal.has(task.record.status))
+      throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
+    return previewProjectCopy(task.project);
+  }
+  async integrate(taskId, expectedSha256) {
+    const task = this.tasks.get(taskId);
+    if (!task || !task.project || task.record.status !== "completed")
+      throw new BridgeError("TASK_NOT_READY", "Only completed tasks can be integrated");
+    if (task.record.integratedAt)
+      throw new BridgeError("ALREADY_INTEGRATED", "This task was already integrated");
+    if ([...this.tasks.values()].filter((other) => other.project === task.project).at(-1) !== task) {
+      throw new BridgeError("TASK_NOT_READY", "Preview and integrate the latest task for this copy");
+    }
+    if ([...this.tasks.values()].some((other) => other !== task && other.project === task.project && !terminal.has(other.record.status))) {
+      throw new BridgeError("TASK_NOT_READY", "Wait for the resumed task to finish");
+    }
+    const preview = await integrateProjectCopy(task.project, expectedSha256);
+    for (const related of this.tasks.values())
+      if (related.project === task.project)
+        related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
+    return preview;
   }
   readEvents(taskId, after = 0, limit = 200) {
     this.status(taskId);
@@ -37073,16 +37264,14 @@ var TaskManager = class {
     record2.startedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.events.append(record2.taskId, "task.started", {});
     try {
-      if (task.options.isolateWorktree) {
-        record2.worktreePath = await createWorktree(record2.workingDirectory);
-        record2.workingDirectory = await validateWorkingDirectory(record2.worktreePath, this.config.forbiddenDirectories);
-      }
-      record2.gitBefore = await gitSnapshot(record2.workingDirectory);
+      task.project ??= await createProjectCopy(record2.workingDirectory, task.options.includePaths);
+      record2.copyDirectory = task.project.copyDirectory;
+      record2.includedFiles = task.project.includedFiles;
       if (task.termination) {
         this.finish(task, task.termination);
         return;
       }
-      const child = this.adapter.spawnTask(task.options, record2.model, record2.workingDirectory);
+      const child = this.adapter.spawnTask(task.options, record2.model, task.project.copyDirectory);
       task.child = child;
       record2.pid = child.pid;
       record2.status = "running";
@@ -37113,7 +37302,6 @@ ${error62.message}`;
       if (task.timer)
         clearTimeout(task.timer);
       record2.exitCode = exitCode;
-      record2.gitAfter = await gitSnapshot(record2.workingDirectory);
       if (task.termination)
         this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))

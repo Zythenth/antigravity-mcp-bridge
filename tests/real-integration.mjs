@@ -1,10 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
 const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-real-'));
+execFileSync('git', ['init', '--quiet', directory]);
+await writeFile(path.join(directory, 'source.txt'), 'Disposable integration test project.');
 const client = new Client({ name: 'agy-mcp-integration-test', version: '1.0.0' });
 const serverPath = process.env.AGY_BRIDGE_SERVER || path.resolve('dist/src/index.js');
 const transport = new StdioClientTransport({ command: process.execPath,
@@ -14,7 +17,7 @@ try {
   await client.connect(transport);
   const listed = await client.listTools();
   const names = listed.tools.map(tool => tool.name);
-  for (const name of ['antigravity_health', 'antigravity_list_models', 'antigravity_run', 'antigravity_events', 'antigravity_result', 'antigravity_cancel']) {
+  for (const name of ['antigravity_health', 'antigravity_list_models', 'antigravity_run', 'antigravity_events', 'antigravity_result', 'antigravity_preview', 'antigravity_integrate', 'antigravity_cancel']) {
     if (!names.includes(name)) throw new Error(`Missing MCP tool ${name}`);
   }
   console.log(`MCP_TOOLS=${names.length}`);
@@ -50,6 +53,12 @@ try {
   console.log(`EVENT_COUNT=${eventCount}`);
   console.log(`SAW_LIVE=${sawLive}`);
   if (final.status !== 'completed') throw new Error(JSON.stringify(final.error || final.result || final));
+  try { await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8'); throw new Error('Source was modified before integration'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const preview = await client.callTool({ name: 'antigravity_preview', arguments: { taskId } });
+  if (preview.isError || !preview.structuredContent.files.some(file => file.path === 'AGY_BRIDGE_TEST.md')) throw new Error(JSON.stringify(preview.structuredContent));
+  const integrated = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.structuredContent.sha256 } });
+  if (integrated.isError) throw new Error(JSON.stringify(integrated.structuredContent));
   const contents = await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8');
   console.log(`FILE=${contents.trim()}`);
   if (final.status !== 'completed' || contents.trim() !== 'Antigravity MCP bridge test successful.' || eventCount < 3) process.exitCode = 1;

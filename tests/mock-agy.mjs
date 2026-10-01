@@ -4,7 +4,7 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) { console.log('1.2.11'); process.exit(0); }
 if (args.includes('--help')) {
-  console.log('--input-format stream-json\n--output-format stream-json\n--model\n--conversation\nmodels');
+  console.log('--input-format stream-json\n--output-format stream-json\n--model\n--conversation\n--sandbox\nmodels');
   process.exit(0);
 }
 if (args.includes('models')) {
@@ -12,6 +12,8 @@ if (args.includes('models')) {
   console.log('mock-pro\tMock Pro\nmock-flash\tMock Flash');
   process.exit(0);
 }
+
+if (!args.includes('--sandbox')) { console.error('sandbox flag required'); process.exit(2); }
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk;

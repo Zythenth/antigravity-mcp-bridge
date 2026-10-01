@@ -9,14 +9,6 @@ export interface BridgeEvent {
   raw?: unknown;
 }
 
-export interface GitSnapshot {
-  branch: string;
-  status: string;
-  diff: string;
-  diffStat: string;
-  truncated: boolean;
-}
-
 export interface TaskRecord {
   taskId: string;
   sessionId?: string;
@@ -32,9 +24,9 @@ export interface TaskRecord {
   error?: { code: string; message: string };
   usage?: unknown;
   result?: unknown;
-  gitBefore?: GitSnapshot;
-  gitAfter?: GitSnapshot;
-  worktreePath?: string;
+  copyDirectory?: string;
+  includedFiles?: string[];
+  integratedAt?: string;
 }
 
 export interface RunOptions {
@@ -44,6 +36,7 @@ export interface RunOptions {
   sessionId?: string;
   timeoutSeconds?: number;
   isolateWorktree?: boolean;
+  includePaths?: string[];
 }
 
 export class BridgeError extends Error {
