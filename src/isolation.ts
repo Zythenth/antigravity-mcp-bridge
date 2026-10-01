@@ -84,7 +84,7 @@ function validRelative(input: string): string {
   return value;
 }
 
-async function checkedPath(root: string, relative: string, mustExist: boolean): Promise<string> {
+export async function checkedPath(root: string, relative: string, mustExist: boolean): Promise<string> {
   const parts = validRelative(relative).split('/');
   let current = root;
   for (let index = 0; index < parts.length; index++) {

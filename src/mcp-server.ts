@@ -4,6 +4,7 @@ import { CliAdapter } from './cli-adapter.js';
 import { TaskManager } from './task-manager.js';
 import { BridgeError } from './types.js';
 import { listProjectFiles } from './isolation.js';
+import { criteriaSchema, reviewSchema } from './verification.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -64,6 +65,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     isolateWorktree: z.boolean().optional(),
     includePaths: z.array(z.string().min(1)).min(1).optional(),
     mode: z.enum(['write', 'read-only']).optional(),
+    acceptanceCriteria: criteriaSchema.optional(),
   };
   server.registerTool('antigravity_run', {
     title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
@@ -79,6 +81,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     title: 'Preview isolated changes', description: 'Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.',
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
   }, async ({ taskId }) => safe(() => tasks.preview(taskId))());
+
+  server.registerTool('antigravity_verify', {
+    title: 'Verify task acceptance criteria', description: 'Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() }, annotations: { ...readOnly, readOnlyHint: false },
+  }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks.verify(taskId, expectedSha256, reviews))());
 
   server.registerTool('antigravity_record_test', {
     title: 'Record review test evidence', description: 'Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.',

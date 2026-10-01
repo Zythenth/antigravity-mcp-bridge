@@ -8,6 +8,7 @@ import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
+import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -77,6 +78,7 @@ export class TaskManager {
   async run(options: RunOptions): Promise<TaskRecord> {
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     validatePrompt(options.prompt, this.config.maxPromptChars);
+    if (options.acceptanceCriteria !== undefined) criteriaSchema.parse(options.acceptanceCriteria);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
     const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
@@ -100,6 +102,8 @@ export class TaskManager {
       }
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
+      if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
+      const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria;
       const mode = options.mode ?? previous?.record.mode ?? 'write';
       if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
       if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
@@ -118,8 +122,8 @@ export class TaskManager {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
-        workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
-      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+        acceptanceCriteria, workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
+      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
       pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
       this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
@@ -151,8 +155,35 @@ export class TaskManager {
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
     return this.withProject(task.project, async () => {
       const preview = await previewProjectCopy(task.project!, this.config);
-      return { ...preview, tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 })) };
+      const current = task.record.verification && await verifyCriteria(task.project!, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
+      return { ...preview, tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 })),
+        verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 ||
+          JSON.stringify(current!.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null };
     });
+  }
+
+  async verify(taskId: string, expectedSha256: string, reviews: ReviewEvidence[] = []) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before verification');
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project!, this.config);
+      if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before verification');
+      const verification = await verifyCriteria(task.project!, preview.sha256, task.record.acceptanceCriteria, reviews);
+      task.record.verification = verification;
+      this.events.append(taskId, 'review.verified', { sha256: preview.sha256, status: verification.status });
+      return verification;
+    });
+  }
+
+  private async requireVerification(task: InternalTask, sha256: string): Promise<void> {
+    const previous = task.record.verification;
+    if (!previous || previous.status !== 'passed') throw new BridgeError('VERIFICATION_REQUIRED', 'All acceptance criteria require artifact checks and grounded Codex review before integration');
+    if (previous.sha256 !== sha256) throw new BridgeError('VERIFICATION_STALE', 'Verify the current patch before integration');
+    const current = await verifyCriteria(task.project!, sha256, task.record.acceptanceCriteria, previous.review.evidence);
+    if (current.status !== 'passed' || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
+      throw new BridgeError('VERIFICATION_STALE', 'Verification files or evidence changed; verify again');
+    }
   }
 
   async recordTest(taskId: string, expectedSha256: string, command: string, exitCode: number, output = '') {
@@ -232,9 +263,13 @@ export class TaskManager {
       if (!reviewed.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');
       if (reviewed.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before requesting confirmation');
       if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation through the MCP client');
+      await this.requireVerification(task, expectedSha256);
       if (!await confirm(reviewed)) throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
       const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
       try {
+        const current = await previewProjectCopy(task.project!, this.config);
+        if (current.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'The copy changed after confirmation');
+        await this.requireVerification(task, expectedSha256);
         const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();

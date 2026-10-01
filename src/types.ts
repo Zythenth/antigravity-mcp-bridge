@@ -1,3 +1,5 @@
+import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
+
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
 export interface BridgeEvent {
@@ -30,6 +32,8 @@ export interface TaskRecord {
   discardedAt?: string;
   mode?: 'write' | 'read-only';
   tests?: TestEvidence[];
+  acceptanceCriteria?: AcceptanceCriterion[];
+  verification?: VerificationRecord;
 }
 
 export interface TestEvidence {
@@ -42,6 +46,7 @@ export interface TestEvidence {
 }
 
 export interface RunOptions {
+  acceptanceCriteria?: AcceptanceCriterion[];
   prompt: string;
   model?: string;
   workingDirectory: string;

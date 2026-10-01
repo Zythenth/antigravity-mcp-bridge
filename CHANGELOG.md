@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## Em desenvolvimento
+
+- Critérios de aceitação definidos antes da tarefa, conferência de artefatos e revisão com citações verificadas por arquivo e linha.
+- Integração condicionada a verificação atual, com detecção de evidências alteradas e resultados pendentes.
+
 ## 0.3.0
 
 - Descarte pelo MCP e limpeza automática de cópias finalizadas, com retenção padrão de 7 dias.

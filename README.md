@@ -64,6 +64,7 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
 | `antigravity_record_test` | Registra comando, saída e exit code relatados pelo cliente, vinculados ao hash |
+| `antigravity_verify` | Confere critérios da tarefa e evidências de revisão contra arquivos reais |
 | `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
@@ -88,6 +89,16 @@ Fluxo típico:
 5. Use `antigravity_preview` para revisar o patch e executar os testes na cópia. Registre cada execução com `antigravity_record_test` (`command`, `exitCode`, `output` e `expectedSha256`). Chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia para solicitar a confirmação final pelo cliente MCP. O bridge recusa integração se a cópia ou os arquivos afetados no original mudaram após a revisão.
 
 A integração exige suporte do cliente a **MCP form elicitation**. `antigravity_health` informa `integrationApproval.available`. O formulário mostra origem, tarefa, hash, arquivos e contagens de linhas; só `accept` com `confirm: true` permite aplicar. Recusa, cancelamento, timeout ou falta de suporte preservam o original. O hash identifica o patch e a confirmação vem de uma resposta separada do cliente; nenhum argumento `approved` é aceito como autorização. Após a resposta, o bridge confere novamente hash e origem. A confirmação depende de um cliente confiável que apresente a decisão ao usuário.
+
+## Verificação dos resultados
+
+Defina `acceptanceCriteria` antes de iniciar uma tarefa. Cada critério tem `id`, `description` e, opcionalmente, `check` com `kind`, `path` e `text`. As verificações disponíveis são `file-exists`, `file-absent`, `file-contains` e `file-not-contains`; as duas últimas exigem `text`. Critérios são preservados em retomadas e não podem ser substituídos depois da execução.
+
+Após revisar o patch, chame `antigravity_verify` com o hash atual e `reviews`. Para cada critério, informe `criterionId`, `verdict` (`passed`, `failed` ou `unverified`), `path`, `line`, `quote` e `explanation`. O bridge lê os arquivos da cópia, executa as verificações e confere se a citação corresponde exatamente à linha indicada. Uma alegação do Gemini, um resultado `SUCCESS` ou um registro de teste do cliente não substitui essas evidências.
+
+A integração exige todos os critérios aprovados e uma revisão atual. Critérios ausentes ou pendentes geram `VERIFICATION_REQUIRED`. Alterações no patch ou nos arquivos usados como evidência invalidam a verificação, inclusive alterações em arquivos ignorados que não aparecem no diff. O servidor verifica novamente após a confirmação humana. A prévia inclui `verification` e `stale`.
+
+As verificações automáticas demonstram apenas as condições declaradas; a correção funcional mais ampla depende dos testes pertinentes e da revisão do Codex. O parecer permanece identificado como `client-reported`: conferir uma citação não demonstra que sua interpretação está correta. Esse fluxo aplica a distinção entre alegação e estado final e combina verificações determinísticas com revisão, conforme a [orientação sobre avaliações de agentes](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents).
 
 ## Eventos, sessões e cancelamento
 

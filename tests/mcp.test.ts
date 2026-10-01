@@ -41,7 +41,8 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   try {
     client = await connect();
     assert.equal((await call('antigravity_health')).integrationApproval.available, false);
-    const taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource })).task.taskId;
+    const taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
+      acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }] })).task.taskId;
     const deadline = Date.now() + 10000;
     let final;
     while (Date.now() < deadline) {
@@ -50,8 +51,10 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.equal(final?.task.status, 'completed');
-    const events = await call('antigravity_events', { taskId });
     const firstPreview = await call('antigravity_preview', { taskId });
+    await call('antigravity_verify', { taskId, expectedSha256: firstPreview.sha256,
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
+    const events = await call('antigravity_events', { taskId });
     const unavailable = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: firstPreview.sha256, approved: true } });
     assert.equal((unavailable.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
     await client.close();
@@ -65,6 +68,9 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     const canonicalSource = await realpath(source);
     assert.equal(preview.sourceDirectory, canonicalSource);
     assert.equal(preview.summary.added, 1);
+    const verified = await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
+    assert.equal(verified.status, 'passed');
     const testScript = "if (require('node:fs').readFileSync('AGY_BRIDGE_TEST.md','utf8') !== 'Antigravity MCP bridge test successful.') process.exit(1); console.log('file checked');";
     const output = execFileSync(process.execPath, ['-e', testScript], { cwd: final.task.copyDirectory, encoding: 'utf8' });
     await call('antigravity_record_test', { taskId, expectedSha256: preview.sha256, command: 'node -e ' + testScript, exitCode: 0, output });

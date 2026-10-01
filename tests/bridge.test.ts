@@ -12,21 +12,28 @@ import { EventStore } from '../src/event-store.js';
 import { LineParser } from '../src/stream-parser.js';
 import { TaskManager } from '../src/task-manager.js';
 import type { TaskRecord } from '../src/types.js';
+import type { AcceptanceCriterion } from '../src/verification.js';
 import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const stateDirectories: string[] = [];
 const managers: TaskManager[] = [];
+const acceptanceCriteria: AcceptanceCriterion[] = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }];
+async function verifyTask(tasks: TaskManager, taskId: string, sha256: string) {
+  const quote = await readFile(path.join(tasks.status(taskId).copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8');
+  return tasks.verify(taskId, sha256, [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'The requested file exists with the fixture content' }]);
+}
 
 test('a denied concurrent resume preserves the retained task while another server awaits approval', async () => {
   const dir = await repository();
   const { adapter, tasks, config } = setup([mockPath], { MAX_RETAINED_TASKS: '1' });
   try {
     await adapter.discover();
-    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
     const finished = await until(tasks, task.taskId, done);
     const other = new TaskManager(adapter, config); managers.push(other);
     const preview = await other.preview(task.taskId);
+    await verifyTask(other, task.taskId, preview.sha256);
     let deny!: (value: boolean) => void;
     let waiting!: () => void;
     const awaitingApproval = new Promise<void>(resolve => { waiting = resolve; });
@@ -48,9 +55,10 @@ test('integration requires confirmation and rechecks the patch after confirmatio
   const { adapter, tasks } = setup();
   try {
     await adapter.discover();
-    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
     const finished = await until(tasks, task.taskId, done);
     const preview = await tasks.preview(task.taskId);
+    await verifyTask(tasks, task.taskId, preview.sha256);
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256), { code: 'APPROVAL_REQUIRED' });
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => false), { code: 'APPROVAL_DENIED' });
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
@@ -61,9 +69,70 @@ test('integration requires confirmation and rechecks the patch after confirmatio
     }), { code: 'REVIEW_CHANGED' });
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
     const current = await tasks.preview(task.taskId);
+    await verifyTask(tasks, task.taskId, current.sha256);
     await tasks.integrate(task.taskId, current.sha256, async () => true);
     assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'changed after confirmation');
     await tasks.discard(task.taskId);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('CLI success and fabricated reviews cannot bypass acceptance verification', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const claimed = await tasks.run({ prompt: 'claim-only:test', workingDirectory: dir, acceptanceCriteria });
+    assert.equal((await until(tasks, claimed.taskId, done)).status, 'completed');
+    const absent = await tasks.preview(claimed.taskId);
+    assert.equal((await tasks.verify(claimed.taskId, absent.sha256)).status, 'failed');
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+    await until(tasks, task.taskId, done);
+    const preview = await tasks.preview(task.taskId);
+    await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => true), { code: 'VERIFICATION_REQUIRED' });
+    assert.equal((await tasks.verify(task.taskId, preview.sha256)).status, 'unverified');
+    const fabricated = { criterionId: 'created', verdict: 'passed' as const, path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'invented content', explanation: 'Unsupported assertion' };
+    assert.equal((await tasks.verify(task.taskId, preview.sha256, [fabricated])).status, 'failed');
+    await assert.rejects(tasks.verify(task.taskId, preview.sha256, [{ ...fabricated, path: '../outside.txt' }]), { code: 'INVALID_INCLUDE_PATH' });
+    await assert.rejects(tasks.verify(task.taskId, preview.sha256, [{ ...fabricated, criterionId: 'unknown' }]), { code: 'INVALID_REVIEW' });
+    const verification = await verifyTask(tasks, task.taskId, preview.sha256);
+    assert.equal(verification.status, 'passed');
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    assert.deepEqual(recovered.status(task.taskId).verification, JSON.parse(JSON.stringify(verification)));
+    await recovered.integrate(task.taskId, preview.sha256, async () => true);
+    assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    const noCriteria = await tasks.run({ prompt: 'write-many:test', workingDirectory: dir });
+    await until(tasks, noCriteria.taskId, done);
+    const unchecked = await tasks.preview(noCriteria.taskId);
+    assert.equal((await tasks.verify(noCriteria.taskId, unchecked.sha256)).status, 'unverified');
+    await assert.rejects(tasks.integrate(noCriteria.taskId, unchecked.sha256, async () => true), { code: 'VERIFICATION_REQUIRED' });
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('verification detects changed ignored evidence even when the patch hash stays equal', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  try {
+    await writeFile(path.join(dir, '.gitignore'), 'generated.txt\n');
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir,
+      acceptanceCriteria: [{ id: 'output', description: 'Generated output is correct', check: { kind: 'file-contains', path: 'generated.txt', text: 'expected' } }] });
+    const finished = await until(tasks, task.taskId, done);
+    const file = path.join(finished.copyDirectory!, 'generated.txt');
+    await writeFile(file, 'expected');
+    const preview = await tasks.preview(task.taskId);
+    const reviews = [{ criterionId: 'output', verdict: 'passed' as const, path: 'generated.txt', line: 1, quote: 'expected', explanation: 'Checked generated output' }];
+    assert.equal((await tasks.verify(task.taskId, preview.sha256, reviews)).status, 'passed');
+    await writeFile(file, 'expected but changed');
+    const current = await tasks.preview(task.taskId);
+    assert.equal(current.sha256, preview.sha256);
+    assert.equal(current.verification?.stale, true);
+    await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => true), { code: 'VERIFICATION_STALE' });
+    await writeFile(file, 'expected');
+    await tasks.verify(task.taskId, preview.sha256, reviews);
+    await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => {
+      await writeFile(file, 'expected but changed'); return true;
+    }), { code: 'VERIFICATION_STALE' });
+    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -170,7 +239,7 @@ test('restart recovers tasks, bounded events, sessions and the original copy', a
   const { adapter, tasks, config } = setup();
   try {
     await adapter.discover();
-    const first = await tasks.run({ prompt: 'split:test', workingDirectory: dir });
+    const first = await tasks.run({ prompt: 'split:test', workingDirectory: dir, acceptanceCriteria });
     const finished = await until(tasks, first.taskId, done);
     const events = tasks.readEvents(first.taskId);
     await tasks.shutdown();
@@ -183,6 +252,7 @@ test('restart recovers tasks, bounded events, sessions and the original copy', a
     assert.equal(recovered.status(next.taskId).copyDirectory, finished.copyDirectory);
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
     const preview = await recovered.preview(next.taskId);
+    await verifyTask(recovered, next.taskId, preview.sha256);
     await recovered.integrate(next.taskId, preview.sha256, async () => true);
     assert.ok(tasks.status(first.taskId).integratedAt);
     await tasks.discard(first.taskId);
@@ -362,7 +432,7 @@ test('run streams official event shapes and captures result, stderr and malforme
     const final = await until(tasks, first.taskId, done);
     assert.equal(final.status, 'completed');
     assert.equal(final.sessionId, 'mock-conversation');
-    assert.equal((final.result as { response: string }).response, 'split: $() `echo injected`');
+    assert.ok((final.result as { response: string }).response.startsWith('split: $() `echo injected`\n\n<bridge-verification>'));
     const events = tasks.readEvents(first.taskId).events;
     assert.ok(events.some(event => event.type === 'response.chunk' && (event.data as { text_delta: string }).text_delta === 'Olá'));
     assert.ok(events.some(event => event.type === 'tool.started'));
@@ -402,13 +472,14 @@ test('failure, timeout, cancellation, queue and concurrency', async () => {
     await until(tasks, cancel.taskId, task => Boolean(task.pid));
     await tasks.cancel(cancel.taskId);
     assert.equal((await until(tasks, cancel.taskId, done)).error?.code, 'TASK_CANCELLED');
-    const write = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const write = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
     assert.equal((await until(tasks, write.taskId, done)).status, 'completed');
     const written = tasks.status(write.taskId).copyDirectory!;
     assert.equal(await readFile(path.join(written, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
     const preview = await tasks.preview(write.taskId);
     assert.deepEqual(preview.files, [{ status: 'A', path: 'AGY_BRIDGE_TEST.md' }]);
+    await verifyTask(tasks, write.taskId, preview.sha256);
     await tasks.integrate(write.taskId, preview.sha256, async () => true);
     assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await assert.rejects(tasks.integrate(write.taskId, preview.sha256), { code: 'ALREADY_INTEGRATED' });

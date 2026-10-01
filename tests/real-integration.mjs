@@ -36,6 +36,7 @@ try {
   const run = await client.callTool({ name: 'antigravity_run', arguments: {
     prompt: 'Create a file named AGY_BRIDGE_TEST.md in the current directory containing exactly this sentence: Antigravity MCP bridge test successful. Do not change other files.',
     workingDirectory: directory, timeoutSeconds: 180,
+    acceptanceCriteria: [{ id: 'created', description: 'Create the requested file with the exact sentence', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'Antigravity MCP bridge test successful.' } }],
   } });
   if (run.isError) throw new Error(JSON.stringify(run.structuredContent));
   taskId = run.structuredContent.task.taskId;
@@ -63,6 +64,10 @@ try {
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const preview = await client.callTool({ name: 'antigravity_preview', arguments: { taskId } });
   if (preview.isError || !preview.structuredContent.files.some(file => file.path === 'AGY_BRIDGE_TEST.md')) throw new Error(JSON.stringify(preview.structuredContent));
+  const quote = await readFile(path.join(final.copyDirectory, 'AGY_BRIDGE_TEST.md'), 'utf8');
+  const verification = await client.callTool({ name: 'antigravity_verify', arguments: { taskId, expectedSha256: preview.structuredContent.sha256,
+    reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'Fixture content inspected independently' }] } });
+  if (verification.isError || verification.structuredContent.status !== 'passed') throw new Error(JSON.stringify(verification.structuredContent));
   const integrated = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.structuredContent.sha256 } });
   if (integrated.isError) throw new Error(JSON.stringify(integrated.structuredContent));
   const contents = await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8');

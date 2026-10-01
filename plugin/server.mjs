@@ -28657,7 +28657,8 @@ var CliAdapter = class {
     if (options.sessionId)
       args.push("--conversation", options.sessionId);
     const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    child.stdin.end(JSON.stringify({ event: "user", message: { content: options.prompt } }) + "\n");
+    const instructions = "\n\n<bridge-verification>\nInspect actual files before claiming changes. Report changed paths and evidence. Never claim a command or test ran without observed output and exit status. Distinguish completed work, failed work and unverified work. CLI SUCCESS only means execution ended; Codex will independently inspect the patch and acceptance criteria.\nAcceptance criteria: " + JSON.stringify(options.acceptanceCriteria || []) + "\n</bridge-verification>";
+    child.stdin.end(JSON.stringify({ event: "user", message: { content: options.prompt + instructions } }) + "\n");
     return child;
   }
   static authError(message) {
@@ -36944,6 +36945,91 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
   return preview;
 }
 
+// dist/src/verification.js
+import { createHash as createHash2 } from "node:crypto";
+import { createReadStream as createReadStream2 } from "node:fs";
+var criterionSchema = external_exports.object({
+  id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+  description: external_exports.string().min(1).max(2e3),
+  check: external_exports.object({
+    kind: external_exports.enum(["file-exists", "file-absent", "file-contains", "file-not-contains"]),
+    path: external_exports.string().min(1).max(1e3),
+    text: external_exports.string().min(1).max(4e3).optional()
+  }).strict().refine((check2) => !["file-contains", "file-not-contains"].includes(check2.kind) || Boolean(check2.text), "A text check requires text").optional()
+}).strict();
+var criteriaSchema = external_exports.array(criterionSchema).min(1).max(100).refine((criteria) => new Set(criteria.map((item) => item.id)).size === criteria.length, "Criterion IDs must be unique");
+var reviewEvidenceSchema = external_exports.object({
+  criterionId: external_exports.string().min(1).max(64),
+  verdict: external_exports.enum(["passed", "failed", "unverified"]),
+  path: external_exports.string().min(1).max(1e3),
+  line: external_exports.number().int().min(1),
+  quote: external_exports.string().min(1).max(4e3),
+  explanation: external_exports.string().min(1).max(2e3)
+}).strict();
+var reviewSchema = external_exports.array(reviewEvidenceSchema).max(100).refine((reviews) => new Set(reviews.map((item) => item.criterionId)).size === reviews.length, "One review per criterion");
+async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
+  if (criteria.length)
+    criteria = criteriaSchema.parse(criteria);
+  reviews = reviewSchema.parse(reviews);
+  if (reviews.some((review) => !criteria.some((criterion) => criterion.id === review.criterionId))) {
+    throw new BridgeError("INVALID_REVIEW", "Review refers to an unknown acceptance criterion");
+  }
+  const fileHashes = /* @__PURE__ */ Object.create(null);
+  const contents = /* @__PURE__ */ new Map();
+  async function file2(relative) {
+    if (contents.has(relative))
+      return contents.get(relative);
+    try {
+      const chunks = [];
+      let length = 0;
+      for await (const chunk of createReadStream2(await checkedPath(project.copyDirectory, relative, true))) {
+        length += chunk.length;
+        if (length > 1e7)
+          throw new BridgeError("VERIFICATION_TOO_LARGE", "Verification file exceeds 10 MB");
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      fileHashes[relative] = createHash2("sha256").update(buffer).digest("hex");
+      contents.set(relative, buffer);
+      return buffer;
+    } catch (error62) {
+      if (error62.code !== "ENOENT")
+        throw error62;
+      fileHashes[relative] = null;
+      contents.set(relative, void 0);
+      return void 0;
+    }
+  }
+  const checks = [];
+  for (const criterion of criteria) {
+    let checkPassed;
+    if (criterion.check) {
+      const { kind, path: path6, text } = criterion.check;
+      const content = await file2(path6);
+      if (kind === "file-exists")
+        checkPassed = content !== void 0;
+      if (kind === "file-absent")
+        checkPassed = content === void 0;
+      if (kind === "file-contains")
+        checkPassed = content !== void 0 && content.toString("utf8").includes(text);
+      if (kind === "file-not-contains")
+        checkPassed = content !== void 0 && !content.toString("utf8").includes(text);
+    }
+    const review = reviews.find((item) => item.criterionId === criterion.id);
+    let grounded = false;
+    if (review) {
+      const content = await file2(review.path);
+      const lines = content?.toString("utf8").split(/\r?\n/);
+      const quoteLines = review.quote.split(/\r?\n/);
+      grounded = Boolean(lines && lines.slice(review.line - 1, review.line - 1 + quoteLines.length).join("\n") === quoteLines.join("\n"));
+    }
+    const status2 = checkPassed === false || review && (!grounded || review.verdict === "failed") ? "failed" : !review || review.verdict === "unverified" ? "unverified" : "passed";
+    checks.push({ criterionId: criterion.id, status: status2, observation: checkPassed === false ? "Artifact check failed" : review && !grounded ? "Review quote does not match the file and line" : !review ? "Codex review evidence is missing" : "Artifact check: " + (checkPassed === void 0 ? "not specified" : "passed") + "; client review: " + review.verdict });
+  }
+  const status = checks.some((check2) => check2.status === "failed") ? "failed" : !checks.length || checks.some((check2) => check2.status === "unverified") ? "unverified" : "passed";
+  return { sha256, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), status, checks, review: { source: "client-reported", evidence: reviews }, fileHashes };
+}
+
 // dist/src/mcp-server.js
 function response(value) {
   const structuredContent = value && typeof value === "object" && !Array.isArray(value) ? value : { value };
@@ -37007,7 +37093,8 @@ function createMcpServer(adapter2, tasks2) {
     timeoutSeconds: external_exports.number().int().min(1).max(86400).optional(),
     isolateWorktree: external_exports.boolean().optional(),
     includePaths: external_exports.array(external_exports.string().min(1)).min(1).optional(),
-    mode: external_exports.enum(["write", "read-only"]).optional()
+    mode: external_exports.enum(["write", "read-only"]).optional(),
+    acceptanceCriteria: criteriaSchema.optional()
   };
   server2.registerTool("antigravity_run", {
     title: "Run Antigravity task",
@@ -37027,6 +37114,12 @@ function createMcpServer(adapter2, tasks2) {
     inputSchema: { taskId: external_exports.string().uuid() },
     annotations: readOnly
   }, async ({ taskId }) => safe(() => tasks2.preview(taskId))());
+  server2.registerTool("antigravity_verify", {
+    title: "Verify task acceptance criteria",
+    description: "Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.",
+    inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
+    annotations: { ...readOnly, readOnlyHint: false }
+  }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks2.verify(taskId, expectedSha256, reviews))());
   server2.registerTool("antigravity_record_test", {
     title: "Record review test evidence",
     description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
@@ -37115,7 +37208,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash2, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/logger.js
@@ -37407,7 +37500,7 @@ var TaskManager = class {
       this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash2("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash3("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -37454,6 +37547,8 @@ var TaskManager = class {
     if (this.stopped)
       throw new BridgeError("AGY_PROCESS_FAILED", "Server is shutting down");
     validatePrompt(options.prompt, this.config.maxPromptChars);
+    if (options.acceptanceCriteria !== void 0)
+      criteriaSchema.parse(options.acceptanceCriteria);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     if (options.isolateWorktree === false)
       throw new BridgeError("ISOLATION_REQUIRED", "Direct execution in the source project is disabled");
@@ -37481,6 +37576,9 @@ var TaskManager = class {
         throw new BridgeError("TASK_NOT_READY", "The copy is being reviewed or removed");
       if (previous && options.includePaths !== void 0)
         throw new BridgeError("INVALID_INCLUDE_PATH", "A resumed task reuses its original file selection");
+      if (previous && options.acceptanceCriteria !== void 0)
+        throw new BridgeError("INVALID_CRITERIA", "A resumed task retains its original acceptance criteria");
+      const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria;
       const mode = options.mode ?? previous?.record.mode ?? "write";
       if (!["write", "read-only"].includes(mode))
         throw new BridgeError("INVALID_MODE", "mode must be write or read-only");
@@ -37507,11 +37605,12 @@ var TaskManager = class {
         model,
         mode,
         prompt: options.prompt,
+        acceptanceCriteria,
         workingDirectory,
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
       pendingProjectRelease = void 0;
       this.queue.push(record2.taskId);
       this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
@@ -37544,8 +37643,39 @@ var TaskManager = class {
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
     return this.withProject(task.project, async () => {
       const preview = await previewProjectCopy(task.project, this.config);
-      return { ...preview, tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 })) };
+      const current = task.record.verification && await verifyCriteria(task.project, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
+      return {
+        ...preview,
+        tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 })),
+        verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 || JSON.stringify(current.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null
+      };
     });
+  }
+  async verify(taskId, expectedSha256, reviews = []) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status))
+      throw new BridgeError("TASK_NOT_READY", "Wait for the task before verification");
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project, this.config);
+      if (preview.sha256 !== expectedSha256)
+        throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before verification");
+      const verification = await verifyCriteria(task.project, preview.sha256, task.record.acceptanceCriteria, reviews);
+      task.record.verification = verification;
+      this.events.append(taskId, "review.verified", { sha256: preview.sha256, status: verification.status });
+      return verification;
+    });
+  }
+  async requireVerification(task, sha256) {
+    const previous = task.record.verification;
+    if (!previous || previous.status !== "passed")
+      throw new BridgeError("VERIFICATION_REQUIRED", "All acceptance criteria require artifact checks and grounded Codex review before integration");
+    if (previous.sha256 !== sha256)
+      throw new BridgeError("VERIFICATION_STALE", "Verify the current patch before integration");
+    const current = await verifyCriteria(task.project, sha256, task.record.acceptanceCriteria, previous.review.evidence);
+    if (current.status !== "passed" || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
+      throw new BridgeError("VERIFICATION_STALE", "Verification files or evidence changed; verify again");
+    }
   }
   async recordTest(taskId, expectedSha256, command, exitCode, output2 = "") {
     this.refresh();
@@ -37638,10 +37768,15 @@ var TaskManager = class {
         throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before requesting confirmation");
       if (!confirm)
         throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation through the MCP client");
+      await this.requireVerification(task, expectedSha256);
       if (!await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash2("sha256").update(task.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash3("sha256").update(task.record.workingDirectory).digest("hex"));
       try {
+        const current = await previewProjectCopy(task.project, this.config);
+        if (current.sha256 !== expectedSha256)
+          throw new BridgeError("REVIEW_CHANGED", "The copy changed after confirmation");
+        await this.requireVerification(task, expectedSha256);
         const preview = await integrateProjectCopy(task.project, expectedSha256, this.config);
         for (const related of this.tasks.values())
           if (related.project === task.project) {

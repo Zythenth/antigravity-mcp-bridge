@@ -114,7 +114,8 @@ export class CliAdapter {
     if (model) args.push('--model', model);
     if (options.sessionId) args.push('--conversation', options.sessionId);
     const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    child.stdin.end(JSON.stringify({ event: 'user', message: { content: options.prompt } }) + '\n');
+    const instructions = '\n\n<bridge-verification>\nInspect actual files before claiming changes. Report changed paths and evidence. Never claim a command or test ran without observed output and exit status. Distinguish completed work, failed work and unverified work. CLI SUCCESS only means execution ended; Codex will independently inspect the patch and acceptance criteria.\nAcceptance criteria: ' + JSON.stringify(options.acceptanceCriteria || []) + '\n</bridge-verification>';
+    child.stdin.end(JSON.stringify({ event: 'user', message: { content: options.prompt + instructions } }) + '\n');
     return child;
   }
 
