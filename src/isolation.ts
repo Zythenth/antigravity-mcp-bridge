@@ -236,6 +236,12 @@ export async function verifyReadOnlyCopy(project: ProjectCopy): Promise<void> {
   }
 }
 
+export async function readProjectPatch(project: ProjectCopy, relative: string): Promise<string> {
+  const file = validRelative(relative);
+  return (await git(project.copyDirectory, ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory,
+    'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD', '--', file])).toString('utf8');
+}
+
 export async function fingerprintProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<string> {
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))].sort();

@@ -148,7 +148,7 @@ test('native test execution captures real command results, repair attempts and s
     const command = { executable: process.execPath, args: ['-e', "const fs=require('node:fs');console.log('actual test output');process.exit(fs.readFileSync('source.txt','utf8')==='fixed'?0:9)"] };
     const tested = await tasks.startTests(task.taskId, preview.sha256, command, 1, 20);
     const final = await until(tasks, tested.taskId, done, 30000);
-    assert.equal(final.status, 'completed', JSON.stringify(final.error));
+    assert.equal(final.status, 'completed', JSON.stringify({ error: final.error, tests: final.tests, diagnostics: tasks.readEvents(tested.taskId).events.filter(event => event.type === 'process.stderr') }));
     assert.deepEqual(final.tests?.map(test => test.exitCode), [9, 0]);
     assert.ok(final.tests?.every(test => test.source === 'agy-tool' && test.output.includes('actual test output')));
     const after = await tasks.preview(tested.taskId);
@@ -174,7 +174,7 @@ test('native test failure is preserved and narrative success never counts as exe
       const preview = await current.preview(task.taskId);
       const tested = await current.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'console.log("failed assertion");process.exit(7)'] }, 0, 20);
       const final = await until(current, tested.taskId, done, 30000);
-      assert.equal(final.error?.code, current === tasks ? 'TEST_FAILED' : 'TEST_EXECUTION_UNVERIFIED');
+      assert.equal(final.error?.code, current === tasks ? 'TEST_FAILED' : 'TEST_EXECUTION_UNVERIFIED', JSON.stringify({ error: final.error, tests: final.tests }));
       assert.equal(final.tests?.at(-1)?.exitCode, current === tasks ? 7 : undefined);
       await assert.rejects(current.integrate(tested.taskId, preview.sha256, async () => true), { code: 'TASK_NOT_READY' });
     }
@@ -191,6 +191,38 @@ test('native test receipts require the exact tool command and reject malformed o
   assert.equal(readNativeReceipt(step, { nonce, commandLine: 'different command' }), undefined);
   assert.equal(readNativeReceipt({ ...step, step_type: 'agent_response' }, { nonce, commandLine: 'exact command' }), undefined);
   assert.equal(readNativeReceipt({ ...step, tool_info: { parameters: { CommandLine: 'exact command' }, output: output + '\n' + output } }, { nonce, commandLine: 'exact command' }), undefined);
+});
+
+test('patch readers bind pages to the full hash and select changed files without mixing paths', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const final = await until(tasks, task.taskId, done);
+    await writeFile(path.join(final.copyDirectory!, 'source.txt'), 'updated 😀 source\n');
+    const preview = await tasks.preview(task.taskId);
+    const metadata = await tasks.preview(task.taskId, false);
+    assert.equal(metadata.patch, undefined);
+    assert.equal(metadata.patchLength, preview.patch!.length);
+    let offset = 0, combined = '';
+    for (;;) {
+      const page = await tasks.readPatch(task.taskId, preview.sha256, undefined, offset, 47);
+      combined += page.text;
+      if (!page.hasMore) break;
+      offset = page.nextOffset;
+    }
+    assert.equal(combined, preview.patch);
+    const selected = await tasks.readPatch(task.taskId, preview.sha256, 'source.txt');
+    assert.ok(selected.text.includes('+updated 😀 source'));
+    assert.ok(!selected.text.includes('AGY_BRIDGE_TEST.md'));
+    await assert.rejects(tasks.readPatch(task.taskId, preview.sha256, '../outside'), { code: 'INVALID_PATCH_PATH' });
+    const result = tasks.readResult(task.taskId, 0, 50000);
+    assert.equal(result.ready, true);
+    if (result.ready) assert.deepEqual(JSON.parse(result.text), final.result);
+    await writeFile(path.join(final.copyDirectory!, 'source.txt'), 'changed again');
+    await assert.rejects(tasks.readPatch(task.taskId, preview.sha256, 'source.txt', selected.nextOffset), { code: 'REVIEW_CHANGED' });
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
 test('preview reports line totals, A/M/D counts and binary files independently of patch text', async () => {
@@ -491,6 +523,9 @@ test('run streams official event shapes and captures result, stderr and malforme
     assert.equal(final.sessionId, 'mock-conversation');
     assert.ok((final.result as { response: string }).response.startsWith('split: $() `echo injected`\n\n<bridge-verification>'));
     const events = tasks.readEvents(first.taskId).events;
+    const initialArgs = (events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;
+    assert.equal(initialArgs[initialArgs.indexOf('--add-dir') + 1], final.copyDirectory);
+    assert.ok(initialArgs.includes('--new-project'));
     assert.ok(events.some(event => event.type === 'response.chunk' && (event.data as { text_delta: string }).text_delta === 'Olá'));
     assert.ok(events.some(event => event.type === 'tool.started'));
     assert.ok(events.some(event => event.type === 'tool.completed'));
@@ -566,6 +601,9 @@ test('resumed conversation reuses the isolated copy and source remains clean', a
     const continued = await until(tasks, resumed.taskId, done);
     assert.equal(continued.status, 'completed');
     assert.equal(continued.copyDirectory, final.copyDirectory);
+    const resumedArgs = (tasks.readEvents(resumed.taskId).events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;
+    assert.equal(resumedArgs[resumedArgs.indexOf('--add-dir') + 1], final.copyDirectory);
+    assert.ok(!resumedArgs.includes('--new-project'));
     assert.equal(await readFile(path.join(final.copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
   } finally {

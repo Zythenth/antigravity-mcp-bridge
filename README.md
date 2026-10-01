@@ -66,6 +66,8 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_record_test` | Registra comando, saída e exit code relatados pelo cliente, vinculados ao hash |
 | `antigravity_test` | Executa testes pelo terminal do agy com sandbox nativo e captura recibos reais |
 | `antigravity_verify` | Confere critérios da tarefa e evidências de revisão contra arquivos reais |
+| `antigravity_read_patch` | Lê o patch por arquivo ou em trechos vinculados ao hash completo |
+| `antigravity_read_result` | Lê o JSON final do CLI em trechos com hash de conteúdo |
 | `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
@@ -93,6 +95,14 @@ A integração exige suporte do cliente a **MCP form elicitation**. `antigravity
 
 ## Verificação dos resultados
 
+### Ler respostas grandes em partes
+
+Use `antigravity_preview` com `includePatch: false` para obter arquivos, estatísticas, hash e `patchLength` sem enviar o diff inteiro. Depois chame `antigravity_read_patch` com `expectedSha256` e, opcionalmente, um `path` devolvido na prévia. A seleção é feita pelo Git, incluindo arquivos binários e caminhos com espaços; não depende de interpretar cabeçalhos do patch. Qualquer alteração do patch completo invalida a leitura, mesmo quando você seleciona apenas um arquivo.
+
+`antigravity_result` aceita `includeResult: false` para omitir o resultado bruto, o prompt e a lista completa de arquivos da cópia. Quando `ready: true`, consulte `antigravity_read_result` para ler o resultado serializado como JSON. Guarde `contentSha256` e envie-o como `expectedContentSha256` nas páginas seguintes para detectar mudanças.
+
+Os leitores recebem `offset` (padrão 0) e `limit` (padrão 10.000, entre 2 e 50.000). Retornam `text`, `nextOffset`, `hasMore`, `totalLength` e `contentSha256`. Concatene `text` até `hasMore: false`; use sempre o `nextOffset` devolvido. Os offsets usam unidades UTF-16 e o leitor preserva caracteres representados por pares substitutos, como emojis. As opções antigas continuam devolvendo o conteúdo inteiro quando os campos de omissão não são usados.
+
 Defina `acceptanceCriteria` antes de iniciar uma tarefa. Cada critério tem `id`, `description` e, opcionalmente, `check` com `kind`, `path` e `text`. As verificações disponíveis são `file-exists`, `file-absent`, `file-contains` e `file-not-contains`; as duas últimas exigem `text`. Critérios são preservados em retomadas e não podem ser substituídos depois da execução.
 
 Após revisar o patch, chame `antigravity_verify` com o hash atual e `reviews`. Para cada critério, informe `criterionId`, `verdict` (`passed`, `failed` ou `unverified`), `path`, `line`, `quote` e `explanation`. O bridge lê os arquivos da cópia, executa as verificações e confere se a citação corresponde exatamente à linha indicada. Uma alegação do Gemini, um resultado `SUCCESS` ou um registro de teste do cliente não substitui essas evidências.
@@ -110,6 +120,8 @@ O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos est
 ## Cópia, revisão e integração
 
 Antes de chamar `agy`, o bridge cria uma cópia temporária dos arquivos elegíveis e mantém um baseline Git separado da cópia. O CLI recebe a cópia como diretório de trabalho e a opção `--sandbox`. O projeto original só muda por `antigravity_integrate`, depois da revisão do patch. O bridge não faz commit, merge nem push.
+
+Quando o CLI anuncia `--add-dir` e `--new-project`, o bridge declara a cópia como workspace e cria um projeto CLI separado na primeira execução. A retomada preserva o projeto da conversa. Essas opções não equivalem a uma comprovação de todas as fronteiras do sandbox; permissões negadas continuam sendo respeitadas.
 
 O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas na inicialização e a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
 

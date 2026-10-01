@@ -51,7 +51,18 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.equal(final?.task.status, 'completed');
+    const compact = await call('antigravity_result', { taskId, includeResult: false });
+    assert.equal(compact.task.result, undefined);
+    assert.equal(compact.task.prompt, undefined);
+    assert.ok(compact.includedFileCount >= 1);
+    const resultChunk = await call('antigravity_read_result', { taskId, limit: 50000 });
+    assert.deepEqual(JSON.parse(resultChunk.text), final.task.result);
     const firstPreview = await call('antigravity_preview', { taskId });
+    const compactPreview = await call('antigravity_preview', { taskId, includePatch: false });
+    assert.equal(compactPreview.patch, undefined);
+    assert.equal(compactPreview.sha256, firstPreview.sha256);
+    const patchChunk = await call('antigravity_read_patch', { taskId, expectedSha256: firstPreview.sha256, path: 'AGY_BRIDGE_TEST.md' });
+    assert.equal(patchChunk.text, firstPreview.patch);
     await call('antigravity_verify', { taskId, expectedSha256: firstPreview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
     const events = await call('antigravity_events', { taskId });

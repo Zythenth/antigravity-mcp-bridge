@@ -80,8 +80,19 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   server.registerTool('antigravity_preview', {
     title: 'Preview isolated changes', description: 'Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.',
-    inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
-  }, async ({ taskId }) => safe(() => tasks.preview(taskId))());
+    inputSchema: { taskId: z.string().uuid(), includePatch: z.boolean().optional() }, annotations: readOnly,
+  }, async ({ taskId, includePatch }) => safe(() => tasks.preview(taskId, includePatch))());
+
+  const chunkInput = { offset: z.number().int().min(0).optional(), limit: z.number().int().min(2).max(50000).optional() };
+  server.registerTool('antigravity_read_patch', {
+    title: 'Read patch by file or chunk', description: 'Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), path: z.string().min(1).max(1000).optional(), ...chunkInput }, annotations: readOnly,
+  }, async ({ taskId, expectedSha256, path, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path, offset, limit))());
+
+  server.registerTool('antigravity_read_result', {
+    title: 'Read result in chunks', description: 'Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.',
+    inputSchema: { taskId: z.string().uuid(), expectedContentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput }, annotations: readOnly,
+  }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks.readResult(taskId, offset, limit, expectedContentSha256))());
 
   server.registerTool('antigravity_verify', {
     title: 'Verify task acceptance criteria', description: 'Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.',
@@ -146,8 +157,13 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   server.registerTool('antigravity_result', {
     title: 'Get Antigravity result', description: 'Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.',
-    inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
-  }, async ({ taskId }) => safe(() => tasks.result(taskId))());
+    inputSchema: { taskId: z.string().uuid(), includeResult: z.boolean().optional() }, annotations: readOnly,
+  }, async ({ taskId, includeResult }) => safe(() => {
+    const result = tasks.result(taskId);
+    if (includeResult !== false) return result;
+    const { prompt, result: output, includedFiles, ...metadata } = result.task;
+    return { ...result, task: metadata, resultAvailable: output !== undefined, includedFileCount: includedFiles?.length ?? 0 };
+  })());
 
   server.registerTool('antigravity_cancel', {
     title: 'Cancel Antigravity task', description: 'Cancel a queued task or terminate its local agy process.',

@@ -3,13 +3,14 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, integrateProjectCopy, previewProjectCopy, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
+import { textChunk } from './chunks.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -145,12 +146,33 @@ export class TaskManager {
     return [...this.tasks.values()].map(task => ({ ...task.record }));
   }
 
-  result(taskId: string): { task: TaskRecord; ready: boolean } {
+  result(taskId: string) {
     const task = this.status(taskId);
     return { task, ready: terminal.has(task.status) };
   }
 
-  async preview(taskId: string) {
+  readResult(taskId: string, offset = 0, limit = 10000, expectedContentSha256?: string) {
+    const result = this.result(taskId);
+    if (!result.ready) return { ready: false as const, taskId, status: result.task.status };
+    return { ready: true as const, taskId, status: result.task.status,
+      ...textChunk(JSON.stringify(result.task.result ?? null), offset, limit, expectedContentSha256) };
+  }
+
+  async readPatch(taskId: string, expectedSha256: string, relative?: string, offset = 0, limit = 10000) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before reading its patch');
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project!, this.config);
+      if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'The patch changed; preview again before reading');
+      const selected = relative?.replaceAll('\\', '/');
+      if (selected !== undefined && !preview.files.some(file => file.path === selected)) throw new BridgeError('INVALID_PATCH_PATH', 'Select a changed path from the preview');
+      const patch = selected === undefined ? preview.patch : await readProjectPatch(task.project!, selected);
+      return { taskId, sha256: preview.sha256, path: selected ?? null, ...textChunk(patch, offset, limit) };
+    });
+  }
+
+  async preview(taskId: string, includePatch = true) {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
@@ -158,7 +180,8 @@ export class TaskManager {
       const preview = await previewProjectCopy(task.project!, this.config);
       const current = task.record.verification && await verifyCriteria(task.project!, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
       const tree = task.record.tests?.some(test => test.source === 'agy-tool') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
-      return { ...preview, tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 || (test.treeSha256 !== undefined && test.treeSha256 !== tree) })),
+      return { ...preview, patch: includePatch ? preview.patch : undefined, patchLength: preview.patch.length,
+        tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 || (test.treeSha256 !== undefined && test.treeSha256 !== tree) })),
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 ||
           JSON.stringify(current!.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null };
     });

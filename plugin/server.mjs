@@ -28653,6 +28653,10 @@ var CliAdapter = class {
     if (!this.help.includes("--sandbox"))
       throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise --sandbox");
     const args = ["--sandbox", "--input-format", "stream-json", "--output-format", "stream-json", "--print-timeout", `${options.timeoutSeconds ?? this.config.defaultTimeoutSeconds}s`];
+    if (this.help.includes("--add-dir"))
+      args.push("--add-dir", cwd);
+    if (!options.sessionId && this.help.includes("--new-project"))
+      args.push("--new-project");
     if (options.mode === "read-only") {
       if (!this.help.includes("--mode") || !this.help.includes("plan"))
         throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise plan mode");
@@ -36922,6 +36926,22 @@ async function verifyReadOnlyCopy(project) {
       throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task deleted: " + relative);
     }
 }
+async function readProjectPatch(project, relative) {
+  const file2 = validRelative(relative);
+  return (await git(project.copyDirectory, [
+    "--git-dir=" + project.gitDirectory,
+    "--work-tree=" + project.copyDirectory,
+    "diff",
+    "--cached",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--binary",
+    "--no-renames",
+    "HEAD",
+    "--",
+    file2
+  ])).toString("utf8");
+}
 async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
@@ -37295,9 +37315,22 @@ function createMcpServer(adapter2, tasks2) {
   server2.registerTool("antigravity_preview", {
     title: "Preview isolated changes",
     description: "Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.",
-    inputSchema: { taskId: external_exports.string().uuid() },
+    inputSchema: { taskId: external_exports.string().uuid(), includePatch: external_exports.boolean().optional() },
     annotations: readOnly
-  }, async ({ taskId }) => safe(() => tasks2.preview(taskId))());
+  }, async ({ taskId, includePatch }) => safe(() => tasks2.preview(taskId, includePatch))());
+  const chunkInput = { offset: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(2).max(5e4).optional() };
+  server2.registerTool("antigravity_read_patch", {
+    title: "Read patch by file or chunk",
+    description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
+    inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
+    annotations: readOnly
+  }, async ({ taskId, expectedSha256, path: path7, offset, limit }) => safe(() => tasks2.readPatch(taskId, expectedSha256, path7, offset, limit))());
+  server2.registerTool("antigravity_read_result", {
+    title: "Read result in chunks",
+    description: "Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.",
+    inputSchema: { taskId: external_exports.string().uuid(), expectedContentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
+    annotations: readOnly
+  }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks2.readResult(taskId, offset, limit, expectedContentSha256))());
   server2.registerTool("antigravity_verify", {
     title: "Verify task acceptance criteria",
     description: "Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.",
@@ -37385,9 +37418,15 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
   server2.registerTool("antigravity_result", {
     title: "Get Antigravity result",
     description: "Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.",
-    inputSchema: { taskId: external_exports.string().uuid() },
+    inputSchema: { taskId: external_exports.string().uuid(), includeResult: external_exports.boolean().optional() },
     annotations: readOnly
-  }, async ({ taskId }) => safe(() => tasks2.result(taskId))());
+  }, async ({ taskId, includeResult }) => safe(() => {
+    const result = tasks2.result(taskId);
+    if (includeResult !== false)
+      return result;
+    const { prompt, result: output2, includedFiles, ...metadata } = result.task;
+    return { ...result, task: metadata, resultAvailable: output2 !== void 0, includedFileCount: includedFiles?.length ?? 0 };
+  })());
   server2.registerTool("antigravity_cancel", {
     title: "Cancel Antigravity task",
     description: "Cancel a queued task or terminate its local agy process.",
@@ -37404,7 +37443,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypto";
+import { createHash as createHash5, randomUUID as randomUUID3 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/logger.js
@@ -37670,6 +37709,34 @@ var StateStore = class {
   }
 };
 
+// dist/src/chunks.js
+import { createHash as createHash4 } from "node:crypto";
+function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
+  const sha256 = createHash4("sha256").update(text).digest("hex");
+  if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
+    throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
+  if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
+    throw new BridgeError("INVALID_CURSOR", "offset must be within the content and limit between 2 and 50000");
+  }
+  const low = (value) => value >= 56320 && value <= 57343;
+  const high = (value) => value >= 55296 && value <= 56319;
+  if (offset > 0 && low(text.charCodeAt(offset)) && high(text.charCodeAt(offset - 1)))
+    throw new BridgeError("INVALID_CURSOR", "Offset splits a Unicode character; use nextOffset");
+  let end = Math.min(text.length, offset + limit);
+  if (end < text.length && high(text.charCodeAt(end - 1)) && low(text.charCodeAt(end)))
+    end--;
+  return {
+    text: text.slice(offset, end),
+    offset,
+    length: end - offset,
+    totalLength: text.length,
+    nextOffset: end,
+    hasMore: end < text.length,
+    contentSha256: sha256,
+    offsetUnit: "utf16-code-units"
+  };
+}
+
 // dist/src/task-manager.js
 var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
 var TaskManager = class {
@@ -37696,7 +37763,7 @@ var TaskManager = class {
       this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash4("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash5("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -37833,7 +37900,34 @@ var TaskManager = class {
     const task = this.status(taskId);
     return { task, ready: terminal.has(task.status) };
   }
-  async preview(taskId) {
+  readResult(taskId, offset = 0, limit = 1e4, expectedContentSha256) {
+    const result = this.result(taskId);
+    if (!result.ready)
+      return { ready: false, taskId, status: result.task.status };
+    return {
+      ready: true,
+      taskId,
+      status: result.task.status,
+      ...textChunk(JSON.stringify(result.task.result ?? null), offset, limit, expectedContentSha256)
+    };
+  }
+  async readPatch(taskId, expectedSha256, relative, offset = 0, limit = 1e4) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status))
+      throw new BridgeError("TASK_NOT_READY", "Wait for the task before reading its patch");
+    return this.withProject(task.project, async () => {
+      const preview = await previewProjectCopy(task.project, this.config);
+      if (preview.sha256 !== expectedSha256)
+        throw new BridgeError("REVIEW_CHANGED", "The patch changed; preview again before reading");
+      const selected = relative?.replaceAll("\\", "/");
+      if (selected !== void 0 && !preview.files.some((file2) => file2.path === selected))
+        throw new BridgeError("INVALID_PATCH_PATH", "Select a changed path from the preview");
+      const patch = selected === void 0 ? preview.patch : await readProjectPatch(task.project, selected);
+      return { taskId, sha256: preview.sha256, path: selected ?? null, ...textChunk(patch, offset, limit) };
+    });
+  }
+  async preview(taskId, includePatch = true) {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status))
@@ -37844,6 +37938,8 @@ var TaskManager = class {
       const tree = task.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task.project, this.config) : void 0;
       return {
         ...preview,
+        patch: includePatch ? preview.patch : void 0,
+        patchLength: preview.patch.length,
         tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 || test.treeSha256 !== void 0 && test.treeSha256 !== tree })),
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 || JSON.stringify(current.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null
       };
@@ -37996,7 +38092,7 @@ var TaskManager = class {
       await this.requireVerification(task, expectedSha256);
       if (!await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash4("sha256").update(task.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash5("sha256").update(task.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task.project, this.config);
         if (current.sha256 !== expectedSha256)

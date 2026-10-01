@@ -107,6 +107,8 @@ export class CliAdapter {
     if (!this.help.includes('stream-json')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise stream-json');
     if (!this.help.includes('--sandbox')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --sandbox');
     const args = ['--sandbox', '--input-format', 'stream-json', '--output-format', 'stream-json', '--print-timeout', `${options.timeoutSeconds ?? this.config.defaultTimeoutSeconds}s`];
+    if (this.help.includes('--add-dir')) args.push('--add-dir', cwd);
+    if (!options.sessionId && this.help.includes('--new-project')) args.push('--new-project');
     if (options.mode === 'read-only') {
       if (!this.help.includes('--mode') || !this.help.includes('plan')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise plan mode');
       args.push('--mode', 'plan');

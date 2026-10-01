@@ -20,6 +20,12 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 3. Guarde o `taskId`. Chame `antigravity_events` com `after: 0` e continue com o `nextCursor` retornado; consulte `antigravity_result` até `ready: true`. Os eventos informam atividade observável, não raciocínio privado. Se `truncated` for verdadeiro, informe a perda de eventos antigos.
 4. Após `completed`, chame `antigravity_preview`, apresente `summary` e `fileSummaries` (A/M/D, linhas adicionadas/removidas e binários), revise o patch inteiro e execute os testes pertinentes na cópia. Registre os comandos realmente executados com `antigravity_record_test`, usando o hash atual e a saída sem segredos. Esses registros são relatos do cliente, não verificação independente do bridge. Apresente falhas e registros `stale: true`; não os use como evidência válida do patch atual. Um resultado `SUCCESS` do CLI não substitui essa verificação. Chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia para solicitar a confirmação final pela interface MCP. O servidor exige `form elicitation` e uma resposta do cliente com `accept` e `confirm: true`; hash ou argumentos como `approved` não autorizam a operação. Se `integrationApproval.available` for falso, informe que esse cliente não permite integração pelo bridge. Não contorne a confirmação aplicando o patch por outro caminho sem uma autorização específica do usuário para esse caminho. Relate falhas e limitações com precisão.
 
+## Leitura por partes
+
+- Acompanhe `antigravity_result` com `includeResult: false`. Depois de `ready: true`, leia somente os trechos necessários por `antigravity_read_result`, mantendo `contentSha256` nas páginas seguintes.
+- Peça `antigravity_preview` com `includePatch: false`. Leia o diff de cada arquivo alterado por `antigravity_read_patch`, com o hash completo e o caminho informado na prévia. Siga `nextOffset` até `hasMore: false`; não declare revisão completa se restarem trechos.
+- Se houver `REVIEW_CHANGED` ou `CONTENT_CHANGED`, obtenha uma nova prévia/primeira página e reinicie a revisão afetada. Nunca concatene páginas de versões diferentes. Não calcule offsets manualmente nem assuma que o trecho recebido é todo o conteúdo.
+
 ## Evidência antes da integração
 
 - Defina `acceptanceCriteria` em `antigravity_run` antes da implementação, cobrindo cada requisito explícito. Use verificações de arquivo quando aplicáveis e critérios de revisão para comportamentos que exigem interpretação. A retomada mantém os critérios originais.

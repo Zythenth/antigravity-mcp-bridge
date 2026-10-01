@@ -5,7 +5,7 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) { console.log('1.2.11'); process.exit(0); }
 if (args.includes('--help')) {
-  console.log('--input-format stream-json\n--output-format stream-json\n--model\n--conversation\n--sandbox\n--mode (accept-edits, plan)\nmodels');
+  console.log('--input-format stream-json\n--output-format stream-json\n--model\n--conversation\n--sandbox\n--add-dir\n--new-project\n--mode (accept-edits, plan)\nmodels');
   process.exit(0);
 }
 if (args.includes('models')) {
