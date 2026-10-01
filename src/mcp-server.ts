@@ -6,6 +6,7 @@ import { BridgeError } from './types.js';
 import { listProjectFiles } from './isolation.js';
 import { criteriaSchema, reviewSchema } from './verification.js';
 import { testCommandSchema } from './native-tests.js';
+import { roleSchema } from './roles.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -67,6 +68,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     includePaths: z.array(z.string().min(1)).min(1).optional(),
     mode: z.enum(['write', 'read-only']).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
+    role: roleSchema.optional(),
   };
   server.registerTool('antigravity_run', {
     title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
@@ -161,8 +163,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
     if (includeResult !== false) return result;
-    const { prompt, result: output, includedFiles, ...metadata } = result.task;
-    return { ...result, task: metadata, resultAvailable: output !== undefined, includedFileCount: includedFiles?.length ?? 0 };
+    const { prompt, result: output, includedFiles, report, ...metadata } = result.task;
+    return { ...result, task: metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined, includedFileCount: includedFiles?.length ?? 0 };
   })());
 
   server.registerTool('antigravity_cancel', {

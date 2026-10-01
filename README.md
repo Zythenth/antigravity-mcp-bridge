@@ -95,6 +95,14 @@ A integração exige suporte do cliente a **MCP form elicitation**. `antigravity
 
 ## Verificação dos resultados
 
+### Papéis de trabalho
+
+`antigravity_run` aceita `role: "implementer"` (padrão), `"planner"` ou `"reviewer"`. Planejamento e revisão usam obrigatoriamente `mode: "read-only"` e `agy --mode plan`; selecionar escrita nesses papéis é recusado. A retomada mantém o papel original.
+
+Os papéis de consulta exigem suporte a `agy --json-schema`. O planejamento devolve `summary`, `steps` com arquivos e verificações observáveis, e `unverified`. A revisão devolve `summary`, `reviewedFiles`, `findings` e `unverified`; cada achado contém gravidade P0–P3, caminho, linha, citação literal, mensagem, impacto e sugestão.
+
+O relatório validado aparece em `task.report` na resposta completa. Com resposta compacta, use `antigravity_read_result` para ler o `structured_output` original do CLI. Relatórios são identificados como `agy-reported`; na revisão, `citationsChecked: true` significa que arquivos e citações foram conferidos, sem atestar a interpretação ou provar ausência de defeitos. Formato inválido, arquivos inexistentes ou citações inventadas impedem a conclusão normal da tarefa. Uma resposta de planejamento não significa que suas etapas foram executadas.
+
 ### Ler respostas grandes em partes
 
 Use `antigravity_preview` com `includePatch: false` para obter arquivos, estatísticas, hash e `patchLength` sem enviar o diff inteiro. Depois chame `antigravity_read_patch` com `expectedSha256` e, opcionalmente, um `path` devolvido na prévia. A seleção é feita pelo Git, incluindo arquivos binários e caminhos com espaços; não depende de interpretar cabeçalhos do patch. Qualquer alteração do patch completo invalida a leitura, mesmo quando você seleciona apenas um arquivo.
@@ -156,7 +164,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `MAX_COPY_BYTES` | `268435456` | Máximo de bytes copiados (256 MiB) |
 | `MAX_CHANGED_FILES` | `100` | Máximo de arquivos alterados para revisão e integração |
 | `COPY_RETENTION_HOURS` | `168` | Prazo de retenção das cópias finalizadas |
-| `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt |
+| `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt enviado, incluindo critérios e instruções do bridge |
 | `FORBIDDEN_DIRECTORIES` | vazio | Diretórios bloqueados, separados por `;` no Windows |
 
 Entradas e diretórios são validados. O processo é iniciado com `spawn` sem shell e exige `--sandbox`; não passa `--dangerously-skip-permissions`. Não inclua credenciais ou documentos privados nos prompts. O sandbox do CLI restringe comandos de terminal, mas não constitui garantia de isolamento completo do sistema de arquivos no Windows. Mantenha arquivos sensíveis fora da cópia por regras de ignore e selecione apenas os caminhos necessários com `includePaths`. Consulte a [documentação do sandbox](https://antigravity.google/docs/sandbox/) e [do modo headless](https://www.antigravity.google/docs/cli/headless/).

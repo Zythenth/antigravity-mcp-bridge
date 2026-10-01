@@ -11,6 +11,7 @@ import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
 import { textChunk } from './chunks.js';
+import { roleSchema, validateRoleReport } from './roles.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -106,7 +107,10 @@ export class TaskManager {
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria;
-      const mode = options.mode ?? previous?.record.mode ?? 'write';
+      const role = roleSchema.parse(options.role ?? previous?.record.role ?? 'implementer');
+      if (previous && role !== (previous.record.role ?? 'implementer')) throw new BridgeError('INVALID_ROLE', 'A resumed task retains its original role');
+      const mode = options.mode ?? previous?.record.mode ?? (role === 'implementer' ? 'write' : 'read-only');
+      if (role !== 'implementer' && mode !== 'read-only') throw new BridgeError('INVALID_ROLE', 'Planner and reviewer roles require read-only mode');
       if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
       if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
@@ -123,9 +127,9 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
+      const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, prompt: options.prompt,
         acceptanceCriteria, tests: previous?.record.tests, workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
-      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
       pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
       this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
@@ -454,6 +458,7 @@ export class TaskManager {
         this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
       } else {
         if (record.mode !== 'read-only') await previewProjectCopy(task.project, this.config);
+        record.report = await validateRoleReport(record.role ?? 'implementer', (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
         this.finish(task, 'completed');
       }
     } catch (error) {

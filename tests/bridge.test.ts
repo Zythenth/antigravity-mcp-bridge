@@ -225,6 +225,35 @@ test('patch readers bind pages to the full hash and select changed files without
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('planner and reviewer roles preserve read-only mode and reject fabricated citations', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    await assert.rejects(tasks.run({ prompt: 'review', workingDirectory: dir, role: 'reviewer', mode: 'write' }), { code: 'INVALID_ROLE' });
+    const planned = await tasks.run({ prompt: 'plan:test', workingDirectory: dir, role: 'planner' });
+    const plan = await until(tasks, planned.taskId, done);
+    assert.equal(plan.mode, 'read-only');
+    assert.equal(plan.report?.role, 'planner');
+    assert.equal(plan.report?.source, 'agy-reported');
+    assert.deepEqual(plan.report?.data.unverified, ['Runtime not tested']);
+    const reviewed = await tasks.run({ prompt: 'review:test', workingDirectory: dir, role: 'reviewer' });
+    const review = await until(tasks, reviewed.taskId, done);
+    assert.equal(review.status, 'completed', JSON.stringify(review.error));
+    assert.equal(review.report?.role, 'reviewer');
+    if (review.report?.role === 'reviewer') assert.equal(review.report.citationsChecked, true);
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    assert.deepEqual(recovered.status(reviewed.taskId).report, review.report);
+    await assert.rejects(tasks.integrate(reviewed.taskId, '0'.repeat(64)), { code: 'READ_ONLY_TASK' });
+    await assert.rejects(tasks.run({ prompt: 'change role', workingDirectory: dir, sessionId: review.sessionId, role: 'implementer' }), { code: 'INVALID_ROLE' });
+    const invalid = await tasks.run({ prompt: 'fabricated-review:test', workingDirectory: dir, role: 'reviewer' });
+    assert.equal((await until(tasks, invalid.taskId, done)).error?.code, 'ROLE_OUTPUT_INVALID');
+    const modified = await tasks.run({ prompt: 'write:test', workingDirectory: dir, role: 'reviewer' });
+    assert.equal((await until(tasks, modified.taskId, done)).error?.code, 'READ_ONLY_VIOLATION');
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'source');
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('preview reports line totals, A/M/D counts and binary files independently of patch text', async () => {
   const dir = await repository();
   try {

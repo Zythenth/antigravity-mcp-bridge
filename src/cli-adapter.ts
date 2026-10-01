@@ -3,6 +3,8 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { BridgeError, type RunOptions } from './types.js';
 import type { Config } from './config.js';
+import { roleContract } from './roles.js';
+import { validatePrompt } from './validation.js';
 
 interface ProbeResult { code: number | null; stdout: string; stderr: string }
 export interface Model { id: string; name: string }
@@ -115,9 +117,16 @@ export class CliAdapter {
     }
     if (model) args.push('--model', model);
     if (options.sessionId) args.push('--conversation', options.sessionId);
-    const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const contract = roleContract(options.role ?? 'implementer');
+    if (contract) {
+      if (!this.help.includes('--json-schema')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Structured roles require agy --json-schema');
+      args.push('--json-schema', JSON.stringify(contract.schema));
+    }
     const instructions = '\n\n<bridge-verification>\nInspect actual files before claiming changes. Report changed paths and evidence. Never claim a command or test ran without observed output and exit status. Distinguish completed work, failed work and unverified work. CLI SUCCESS only means execution ended; Codex will independently inspect the patch and acceptance criteria.\nAcceptance criteria: ' + JSON.stringify(options.acceptanceCriteria || []) + '\n</bridge-verification>';
-    child.stdin.end(JSON.stringify({ event: 'user', message: { content: options.prompt + instructions } }) + '\n');
+    const content = options.prompt + instructions + (contract ? '\n' + contract.instruction : '');
+    validatePrompt(content, this.config.maxPromptChars);
+    const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    child.stdin.end(JSON.stringify({ event: 'user', message: { content } }) + '\n');
     return child;
   }
 

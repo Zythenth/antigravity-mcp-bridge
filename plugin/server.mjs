@@ -28511,9 +28511,9 @@ var StdioServerTransport = class {
 };
 
 // dist/src/cli-adapter.js
-import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
-import path from "node:path";
+import { spawn as spawn2 } from "node:child_process";
+import { access as access2 } from "node:fs/promises";
+import path4 from "node:path";
 
 // dist/src/types.js
 var BridgeError = class extends Error {
@@ -28525,21 +28525,474 @@ var BridgeError = class extends Error {
   }
 };
 
+// dist/src/roles.js
+import { readFile, stat } from "node:fs/promises";
+
+// dist/src/isolation.js
+import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createReadStream } from "node:fs";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
+import os2 from "node:os";
+import path2 from "node:path";
+
+// dist/src/config.js
+import path from "node:path";
+import os from "node:os";
+function positiveInteger(value, fallback, max) {
+  if (value === void 0)
+    return fallback;
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1 || n > max)
+    throw new Error(`Invalid numeric configuration: ${value}`);
+  return n;
+}
+var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
+function loadConfig(env = process.env) {
+  return {
+    agyPath: env.AGY_PATH || "agy",
+    maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
+    maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1e3),
+    maxRetainedTasks: positiveInteger(env.MAX_RETAINED_TASKS, 100, 1e4),
+    defaultTimeoutSeconds: positiveInteger(env.DEFAULT_TIMEOUT_SECONDS, 1800, 86400),
+    eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
+    maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
+    copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
+    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), ".antigravity-mcp-bridge"),
+    maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
+    maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
+    maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
+    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path.delimiter).filter(Boolean).map((p) => path.resolve(p))
+  };
+}
+
+// dist/src/isolation.js
+var maxGitOutput = 1e7;
+async function discardProjectCopy(project) {
+  const root = await realpath(os2.tmpdir());
+  const targets = [
+    [project.copyDirectory, "agy-mcp-copy-"],
+    [project.gitDirectory, "agy-mcp-baseline-"]
+  ];
+  for (const [directory, prefix] of targets) {
+    const absolute = path2.resolve(directory);
+    if (path2.relative(root, await realpath(path2.dirname(absolute))) !== "" || !path2.basename(absolute).startsWith(prefix)) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
+    }
+    const info = await lstat(absolute).catch((error62) => {
+      if (error62.code === "ENOENT")
+        return void 0;
+      throw error62;
+    });
+    if (info && (!info.isDirectory() || info.isSymbolicLink()))
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
+  }
+  for (const [directory] of targets)
+    await rm(path2.resolve(directory), { recursive: true, force: true });
+}
+async function git(cwd, args, input2, allowedCodes = [0]) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const chunks = [];
+    let length = 0;
+    let stderr = "";
+    let overflow = false;
+    child.stdout.on("data", (chunk) => {
+      length += chunk.length;
+      if (length > maxGitOutput) {
+        overflow = true;
+        child.kill();
+      } else
+        chunks.push(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (overflow)
+        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      else if (!allowedCodes.includes(code ?? -1))
+        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
+      else
+        resolve(Buffer.concat(chunks));
+    });
+    child.stdin.end(input2);
+  });
+}
+function splitNull(bytes) {
+  return bytes.toString("utf8").split("\0").filter(Boolean);
+}
+function validRelative(input2) {
+  const value = input2.replaceAll("\\", "/").replace(/\/$/, "");
+  const parts = value.split("/");
+  if (!value || value.startsWith("/") || /^[A-Za-z]:/.test(value) || parts.some((part) => !part || part === "." || part === ".." || part === ".git")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths must contain project-relative files or directories");
+  }
+  return value;
+}
+async function checkedPath(root, relative, mustExist) {
+  const parts = validRelative(relative).split("/");
+  let current = root;
+  for (let index = 0; index < parts.length; index++) {
+    current = path2.join(current, parts[index]);
+    let info;
+    try {
+      info = await lstat(current);
+    } catch (error62) {
+      if (!mustExist && error62.code === "ENOENT")
+        break;
+      throw error62;
+    }
+    if (info.isSymbolicLink() || index < parts.length - 1 && !info.isDirectory() || index === parts.length - 1 && mustExist && !info.isFile()) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Project copy cannot use links or non-regular files: " + relative);
+    }
+  }
+  return current;
+}
+async function sha256File(file2) {
+  const digest = createHash("sha256");
+  for await (const chunk of createReadStream(file2))
+    digest.update(chunk);
+  return digest.digest("hex");
+}
+async function listProjectFiles(sourceDirectory) {
+  let top;
+  try {
+    top = (await git(sourceDirectory, ["rev-parse", "--show-toplevel"])).toString("utf8").trim();
+  } catch {
+    throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
+  }
+  if (path2.relative(await realpath(top), await realpath(sourceDirectory)) !== "") {
+    throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
+  }
+  const candidates = [...new Set(splitNull(await git(sourceDirectory, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
+  if (!candidates.length)
+    return [];
+  const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
+  return candidates.filter((file2) => !ignored.has(file2) && !file2.split("/").includes(".git")).sort();
+}
+async function createProjectCopy(sourceDirectory, includePaths, onCreated, limits = DEFAULT_PROJECT_LIMITS) {
+  const candidates = await listProjectFiles(sourceDirectory);
+  let selected = candidates;
+  if (includePaths !== void 0) {
+    if (!includePaths.length)
+      throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths cannot be empty");
+    const wanted = includePaths.map(validRelative);
+    for (const item of wanted) {
+      if (!candidates.some((file2) => file2 === item || file2.startsWith(item + "/"))) {
+        throw new BridgeError("INVALID_INCLUDE_PATH", "No eligible file matches: " + item);
+      }
+    }
+    selected = candidates.filter((file2) => wanted.some((item) => file2 === item || file2.startsWith(item + "/")));
+  }
+  if (!selected.length)
+    throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
+  if (selected.length > limits.maxCopyFiles)
+    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  let totalBytes = 0;
+  for (const relative of selected) {
+    totalBytes += (await lstat(await checkedPath(sourceDirectory, relative, true))).size;
+    if (totalBytes > limits.maxCopyBytes)
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
+  }
+  const copyDirectory = await mkdtemp(path2.join(os2.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path2.join(os2.tmpdir(), "agy-mcp-baseline-"));
+  const baseline = /* @__PURE__ */ new Map();
+  try {
+    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    onCreated?.(project);
+    totalBytes = 0;
+    for (const relative of selected) {
+      const source = await checkedPath(sourceDirectory, relative, true);
+      const target = path2.join(copyDirectory, ...relative.split("/"));
+      await mkdir(path2.dirname(target), { recursive: true });
+      await copyFile(source, target);
+      totalBytes += (await lstat(target)).size;
+      if (totalBytes > limits.maxCopyBytes)
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Source grew beyond the copy byte limit during copying");
+      baseline.set(relative, await sha256File(target));
+    }
+    await git(copyDirectory, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    const scope = ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory];
+    await git(copyDirectory, [...scope, "add", "-A", "-f", "--", "."]);
+    await git(copyDirectory, [
+      ...scope,
+      "-c",
+      "user.name=Bridge Snapshot",
+      "-c",
+      "user.email=bridge@invalid.local",
+      "-c",
+      "core.hooksPath=" + path2.join(gitDirectory, "disabled-hooks"),
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "-m",
+      "baseline"
+    ]);
+    return project;
+  } catch (error62) {
+    if (path2.dirname(copyDirectory) === os2.tmpdir() && path2.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+      await rm(copyDirectory, { recursive: true, force: true });
+    }
+    if (path2.dirname(gitDirectory) === os2.tmpdir() && path2.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+      await rm(gitDirectory, { recursive: true, force: true });
+    }
+    throw error62;
+  }
+}
+async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
+  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
+  await git(project.copyDirectory, [...scope, "add", "-A", "--", "."]);
+  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
+  if (names.length / 2 > limits.maxChangedFiles)
+    throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
+  const files = [];
+  for (let index = 0; index < names.length; index += 2) {
+    const status = names[index];
+    const relative = validRelative(names[index + 1] || "");
+    if (!["A", "M", "D"].includes(status))
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Unsupported file change: " + relative);
+    if (status !== "D")
+      await checkedPath(project.copyDirectory, relative, true);
+    files.push({ status, path: relative });
+  }
+  const stats = new Map(splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
+    const [added, removed, ...relative] = line.split("	");
+    return [relative.join("	"), { insertions: added === "-" ? null : Number(added), deletions: removed === "-" ? null : Number(removed), binary: added === "-" }];
+  }));
+  const fileSummaries = files.map((file2) => {
+    const stat3 = stats.get(file2.path);
+    if (!stat3)
+      throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file2.path);
+    return { ...file2, ...stat3 };
+  });
+  const summary = {
+    filesChanged: files.length,
+    added: files.filter((file2) => file2.status === "A").length,
+    modified: files.filter((file2) => file2.status === "M").length,
+    deleted: files.filter((file2) => file2.status === "D").length,
+    insertions: fileSummaries.reduce((total, file2) => total + (file2.insertions ?? 0), 0),
+    deletions: fileSummaries.reduce((total, file2) => total + (file2.deletions ?? 0), 0),
+    binaryFiles: fileSummaries.filter((file2) => file2.binary).length
+  };
+  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
+  return {
+    files,
+    fileSummaries,
+    summary,
+    patch: bytes.toString("utf8"),
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceDirectory: project.sourceDirectory,
+    copyDirectory: project.copyDirectory
+  };
+}
+async function verifyReadOnlyCopy(project) {
+  const seen = /* @__PURE__ */ new Set();
+  async function visit2(directory, prefix = "") {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const relative = prefix + entry.name;
+      if (entry.isDirectory())
+        await visit2(path2.join(directory, entry.name), relative + "/");
+      else {
+        seen.add(relative);
+        if (!entry.isFile() || project.baseline.get(relative) !== await sha256File(path2.join(directory, entry.name))) {
+          throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative);
+        }
+      }
+    }
+  }
+  await visit2(project.copyDirectory);
+  for (const relative of project.baseline.keys())
+    if (!seen.has(relative)) {
+      throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task deleted: " + relative);
+    }
+}
+async function readProjectPatch(project, relative) {
+  const file2 = validRelative(relative);
+  return (await git(project.copyDirectory, [
+    "--git-dir=" + project.gitDirectory,
+    "--work-tree=" + project.copyDirectory,
+    "diff",
+    "--cached",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--binary",
+    "--no-renames",
+    "HEAD",
+    "--",
+    file2
+  ])).toString("utf8");
+}
+async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
+  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
+  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
+  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
+  const digest = createHash("sha256");
+  let count = 0, bytes = 0;
+  for (const relative of candidates.filter((file2) => !ignored.has(file2))) {
+    let file2;
+    try {
+      file2 = await checkedPath(project.copyDirectory, relative, true);
+    } catch (error62) {
+      if (error62.code === "ENOENT")
+        continue;
+      throw error62;
+    }
+    if (++count > limits.maxCopyFiles)
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot file limit exceeded");
+    const hash2 = createHash("sha256");
+    for await (const chunk of createReadStream(file2)) {
+      bytes += chunk.length;
+      if (bytes > limits.maxCopyBytes)
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot byte limit exceeded");
+      hash2.update(chunk);
+    }
+    digest.update(relative + "\0" + hash2.digest("hex") + "\0");
+  }
+  return digest.digest("hex");
+}
+async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PROJECT_LIMITS) {
+  const preview = await previewProjectCopy(project, limits);
+  if (!preview.files.length)
+    throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
+  if (preview.sha256 !== expectedSha256)
+    throw new BridgeError("REVIEW_CHANGED", "The copy changed after review; preview it again");
+  for (const file2 of preview.files) {
+    const source = await checkedPath(project.sourceDirectory, file2.path, false);
+    const expected = project.baseline.get(file2.path);
+    if (expected) {
+      const current = await sha256File(source).catch(() => void 0);
+      if (current !== expected)
+        throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file2.path);
+    } else {
+      try {
+        await lstat(source);
+        throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file2.path);
+      } catch (error62) {
+        if (error62.code !== "ENOENT")
+          throw error62;
+      }
+    }
+  }
+  const patch = Buffer.from(preview.patch, "utf8");
+  await git(project.sourceDirectory, ["apply", "--check", "--binary", "-"], patch);
+  await git(project.sourceDirectory, ["apply", "--binary", "-"], patch);
+  return preview;
+}
+
+// dist/src/roles.js
+var roleSchema = external_exports.enum(["implementer", "planner", "reviewer"]);
+var plannerReportSchema = external_exports.object({
+  summary: external_exports.string().min(1).max(4e3),
+  steps: external_exports.array(external_exports.object({
+    description: external_exports.string().min(1).max(2e3),
+    files: external_exports.array(external_exports.string().min(1)).max(100),
+    verification: external_exports.string().min(1).max(2e3)
+  }).strict()).min(1).max(100),
+  unverified: external_exports.array(external_exports.string().min(1).max(2e3)).max(100)
+}).strict();
+var reviewerReportSchema = external_exports.object({
+  summary: external_exports.string().min(1).max(4e3),
+  reviewedFiles: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100),
+  findings: external_exports.array(external_exports.object({
+    severity: external_exports.enum(["P0", "P1", "P2", "P3"]),
+    path: external_exports.string().min(1).max(1e3),
+    line: external_exports.number().int().positive(),
+    quote: external_exports.string().min(1).max(4e3),
+    message: external_exports.string().min(1).max(2e3),
+    impact: external_exports.string().min(1).max(2e3),
+    suggestion: external_exports.string().min(1).max(2e3)
+  }).strict()).max(100),
+  unverified: external_exports.array(external_exports.string().min(1).max(2e3)).max(100)
+}).strict();
+function roleContract(role) {
+  if (role === "implementer")
+    return;
+  const schema = role === "planner" ? plannerReportSchema : reviewerReportSchema;
+  return { schema: external_exports.toJSONSchema(schema), instruction: role === "planner" ? "Plan the requested work without editing files. Inspect existing sources. Return a concise structured plan with files, observable verification for each step and unverified assumptions. Distinguish proposed changes from existing behavior." : "Review the requested scope without editing files. Report actionable findings with severity P0-P3, project-relative file, one-based line, exact whole-line quote, impact and suggestion. List actually reviewed files and limitations in unverified. Do not invent findings or claim tests ran without evidence. A report with no findings is not proof of correctness." };
+}
+async function validateRoleReport(role, raw, copyDirectory) {
+  if (role === "implementer")
+    return;
+  if (role === "planner") {
+    const parsed2 = plannerReportSchema.safeParse(raw);
+    if (!parsed2.success)
+      throw new BridgeError("ROLE_OUTPUT_INVALID", "Planner response does not match its structured contract");
+    for (const step of parsed2.data.steps)
+      for (const file2 of step.files)
+        await checkedPath(copyDirectory, file2, false);
+    return { role, source: "agy-reported", data: parsed2.data };
+  }
+  const parsed = reviewerReportSchema.safeParse(raw);
+  if (!parsed.success)
+    throw new BridgeError("ROLE_OUTPUT_INVALID", "Reviewer response does not match its structured contract");
+  for (const file2 of parsed.data.reviewedFiles)
+    await checkedPath(copyDirectory, file2, true);
+  for (const finding of parsed.data.findings) {
+    if (!parsed.data.reviewedFiles.includes(finding.path))
+      throw new BridgeError("ROLE_OUTPUT_INVALID", "Finding refers to a file outside reviewedFiles");
+    const file2 = await checkedPath(copyDirectory, finding.path, true);
+    if ((await stat(file2)).size > 1e7)
+      throw new BridgeError("VERIFICATION_TOO_LARGE", "Review citation exceeds the text file limit");
+    const lines = (await readFile(file2, "utf8")).split(/\r?\n/);
+    const quote = finding.quote.split(/\r?\n/);
+    if (lines.slice(finding.line - 1, finding.line - 1 + quote.length).join("\n") !== quote.join("\n")) {
+      throw new BridgeError("ROLE_OUTPUT_INVALID", "Review citation does not match its file and line");
+    }
+  }
+  return { role, source: "agy-reported", data: parsed.data, citationsChecked: true };
+}
+
+// dist/src/validation.js
+import { constants } from "node:fs";
+import { access, realpath as realpath2, stat as stat2 } from "node:fs/promises";
+import path3 from "node:path";
+function within(root, candidate) {
+  const relative = path3.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path3.sep}`) && !path3.isAbsolute(relative);
+}
+async function validateWorkingDirectory(input2, forbidden) {
+  if (!path3.isAbsolute(input2))
+    throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
+  try {
+    const directory = await realpath2(input2);
+    if (!(await stat2(directory)).isDirectory())
+      throw new Error("not a directory");
+    await access(directory, constants.R_OK | constants.W_OK);
+    for (const excluded of forbidden) {
+      const resolved = await realpath2(excluded).catch(() => path3.resolve(excluded));
+      if (within(resolved, directory))
+        throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
+    }
+    return directory;
+  } catch (error62) {
+    if (error62 instanceof BridgeError)
+      throw error62;
+    throw new BridgeError("INVALID_WORKING_DIRECTORY", `workingDirectory is unavailable: ${input2}`);
+  }
+}
+function validatePrompt(prompt, maxChars) {
+  if (!prompt.trim() || prompt.length > maxChars || prompt.includes("\0")) {
+    throw new BridgeError("INVALID_PROMPT", `prompt must contain 1 to ${maxChars} characters and no NUL`);
+  }
+}
+
 // dist/src/cli-adapter.js
 function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
 async function resolveExecutable(command) {
-  if (path.isAbsolute(command))
-    return path.resolve(command);
+  if (path4.isAbsolute(command))
+    return path4.resolve(command);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
-  for (const directory of (process.env.PATH || "").split(path.delimiter)) {
+  for (const directory of (process.env.PATH || "").split(path4.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path.join(directory, command + extension);
+      const candidate = path4.join(directory, command + extension);
       try {
-        await access(candidate);
+        await access2(candidate);
         return candidate;
       } catch {
       }
@@ -28559,7 +29012,7 @@ var CliAdapter = class {
   }
   probe(args, timeoutMs = 1e4) {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "", stderr = "";
       const timer = setTimeout(() => child.kill(), timeoutMs);
       child.stdout.on("data", (chunk) => {
@@ -28666,45 +29119,23 @@ var CliAdapter = class {
       args.push("--model", model);
     if (options.sessionId)
       args.push("--conversation", options.sessionId);
-    const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const contract = roleContract(options.role ?? "implementer");
+    if (contract) {
+      if (!this.help.includes("--json-schema"))
+        throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Structured roles require agy --json-schema");
+      args.push("--json-schema", JSON.stringify(contract.schema));
+    }
     const instructions = "\n\n<bridge-verification>\nInspect actual files before claiming changes. Report changed paths and evidence. Never claim a command or test ran without observed output and exit status. Distinguish completed work, failed work and unverified work. CLI SUCCESS only means execution ended; Codex will independently inspect the patch and acceptance criteria.\nAcceptance criteria: " + JSON.stringify(options.acceptanceCriteria || []) + "\n</bridge-verification>";
-    child.stdin.end(JSON.stringify({ event: "user", message: { content: options.prompt + instructions } }) + "\n");
+    const content = options.prompt + instructions + (contract ? "\n" + contract.instruction : "");
+    validatePrompt(content, this.config.maxPromptChars);
+    const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    child.stdin.end(JSON.stringify({ event: "user", message: { content } }) + "\n");
     return child;
   }
   static authError(message) {
     return isAuthError(message);
   }
 };
-
-// dist/src/config.js
-import path2 from "node:path";
-import os from "node:os";
-function positiveInteger(value, fallback, max) {
-  if (value === void 0)
-    return fallback;
-  const n = Number(value);
-  if (!Number.isSafeInteger(n) || n < 1 || n > max)
-    throw new Error(`Invalid numeric configuration: ${value}`);
-  return n;
-}
-var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
-function loadConfig(env = process.env) {
-  return {
-    agyPath: env.AGY_PATH || "agy",
-    maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
-    maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1e3),
-    maxRetainedTasks: positiveInteger(env.MAX_RETAINED_TASKS, 100, 1e4),
-    defaultTimeoutSeconds: positiveInteger(env.DEFAULT_TIMEOUT_SECONDS, 1800, 86400),
-    eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
-    maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
-    copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path2.join(os.homedir(), ".antigravity-mcp-bridge"),
-    maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
-    maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
-    maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path2.delimiter).filter(Boolean).map((p) => path2.resolve(p))
-  };
-}
 
 // node_modules/zod/v3/helpers/util.js
 var util;
@@ -36678,327 +37109,6 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// dist/src/isolation.js
-import { createHash } from "node:crypto";
-import { spawn as spawn2 } from "node:child_process";
-import { createReadStream } from "node:fs";
-import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
-import os2 from "node:os";
-import path3 from "node:path";
-var maxGitOutput = 1e7;
-async function discardProjectCopy(project) {
-  const root = await realpath(os2.tmpdir());
-  const targets = [
-    [project.copyDirectory, "agy-mcp-copy-"],
-    [project.gitDirectory, "agy-mcp-baseline-"]
-  ];
-  for (const [directory, prefix] of targets) {
-    const absolute = path3.resolve(directory);
-    if (path3.relative(root, await realpath(path3.dirname(absolute))) !== "" || !path3.basename(absolute).startsWith(prefix)) {
-      throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
-    }
-    const info = await lstat(absolute).catch((error62) => {
-      if (error62.code === "ENOENT")
-        return void 0;
-      throw error62;
-    });
-    if (info && (!info.isDirectory() || info.isSymbolicLink()))
-      throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
-  }
-  for (const [directory] of targets)
-    await rm(path3.resolve(directory), { recursive: true, force: true });
-}
-async function git(cwd, args, input2, allowedCodes = [0]) {
-  return new Promise((resolve, reject) => {
-    const child = spawn2("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    const chunks = [];
-    let length = 0;
-    let stderr = "";
-    let overflow = false;
-    child.stdout.on("data", (chunk) => {
-      length += chunk.length;
-      if (length > maxGitOutput) {
-        overflow = true;
-        child.kill();
-      } else
-        chunks.push(chunk);
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
-    });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (overflow)
-        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      else if (!allowedCodes.includes(code ?? -1))
-        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
-      else
-        resolve(Buffer.concat(chunks));
-    });
-    child.stdin.end(input2);
-  });
-}
-function splitNull(bytes) {
-  return bytes.toString("utf8").split("\0").filter(Boolean);
-}
-function validRelative(input2) {
-  const value = input2.replaceAll("\\", "/").replace(/\/$/, "");
-  const parts = value.split("/");
-  if (!value || value.startsWith("/") || /^[A-Za-z]:/.test(value) || parts.some((part) => !part || part === "." || part === ".." || part === ".git")) {
-    throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths must contain project-relative files or directories");
-  }
-  return value;
-}
-async function checkedPath(root, relative, mustExist) {
-  const parts = validRelative(relative).split("/");
-  let current = root;
-  for (let index = 0; index < parts.length; index++) {
-    current = path3.join(current, parts[index]);
-    let info;
-    try {
-      info = await lstat(current);
-    } catch (error62) {
-      if (!mustExist && error62.code === "ENOENT")
-        break;
-      throw error62;
-    }
-    if (info.isSymbolicLink() || index < parts.length - 1 && !info.isDirectory() || index === parts.length - 1 && mustExist && !info.isFile()) {
-      throw new BridgeError("UNSAFE_PROJECT_PATH", "Project copy cannot use links or non-regular files: " + relative);
-    }
-  }
-  return current;
-}
-async function sha256File(file2) {
-  const digest = createHash("sha256");
-  for await (const chunk of createReadStream(file2))
-    digest.update(chunk);
-  return digest.digest("hex");
-}
-async function listProjectFiles(sourceDirectory) {
-  let top;
-  try {
-    top = (await git(sourceDirectory, ["rev-parse", "--show-toplevel"])).toString("utf8").trim();
-  } catch {
-    throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
-  }
-  if (path3.relative(await realpath(top), await realpath(sourceDirectory)) !== "") {
-    throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
-  }
-  const candidates = [...new Set(splitNull(await git(sourceDirectory, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
-  if (!candidates.length)
-    return [];
-  const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
-  return candidates.filter((file2) => !ignored.has(file2) && !file2.split("/").includes(".git")).sort();
-}
-async function createProjectCopy(sourceDirectory, includePaths, onCreated, limits = DEFAULT_PROJECT_LIMITS) {
-  const candidates = await listProjectFiles(sourceDirectory);
-  let selected = candidates;
-  if (includePaths !== void 0) {
-    if (!includePaths.length)
-      throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths cannot be empty");
-    const wanted = includePaths.map(validRelative);
-    for (const item of wanted) {
-      if (!candidates.some((file2) => file2 === item || file2.startsWith(item + "/"))) {
-        throw new BridgeError("INVALID_INCLUDE_PATH", "No eligible file matches: " + item);
-      }
-    }
-    selected = candidates.filter((file2) => wanted.some((item) => file2 === item || file2.startsWith(item + "/")));
-  }
-  if (!selected.length)
-    throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
-  if (selected.length > limits.maxCopyFiles)
-    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
-  let totalBytes = 0;
-  for (const relative of selected) {
-    totalBytes += (await lstat(await checkedPath(sourceDirectory, relative, true))).size;
-    if (totalBytes > limits.maxCopyBytes)
-      throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
-  }
-  const copyDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-baseline-"));
-  const baseline = /* @__PURE__ */ new Map();
-  try {
-    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
-    onCreated?.(project);
-    totalBytes = 0;
-    for (const relative of selected) {
-      const source = await checkedPath(sourceDirectory, relative, true);
-      const target = path3.join(copyDirectory, ...relative.split("/"));
-      await mkdir(path3.dirname(target), { recursive: true });
-      await copyFile(source, target);
-      totalBytes += (await lstat(target)).size;
-      if (totalBytes > limits.maxCopyBytes)
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Source grew beyond the copy byte limit during copying");
-      baseline.set(relative, await sha256File(target));
-    }
-    await git(copyDirectory, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
-    const scope = ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory];
-    await git(copyDirectory, [...scope, "add", "-A", "-f", "--", "."]);
-    await git(copyDirectory, [
-      ...scope,
-      "-c",
-      "user.name=Bridge Snapshot",
-      "-c",
-      "user.email=bridge@invalid.local",
-      "-c",
-      "core.hooksPath=" + path3.join(gitDirectory, "disabled-hooks"),
-      "commit",
-      "--quiet",
-      "--allow-empty",
-      "-m",
-      "baseline"
-    ]);
-    return project;
-  } catch (error62) {
-    if (path3.dirname(copyDirectory) === os2.tmpdir() && path3.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
-      await rm(copyDirectory, { recursive: true, force: true });
-    }
-    if (path3.dirname(gitDirectory) === os2.tmpdir() && path3.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
-      await rm(gitDirectory, { recursive: true, force: true });
-    }
-    throw error62;
-  }
-}
-async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
-  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  await git(project.copyDirectory, [...scope, "add", "-A", "--", "."]);
-  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
-  if (names.length / 2 > limits.maxChangedFiles)
-    throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
-  const files = [];
-  for (let index = 0; index < names.length; index += 2) {
-    const status = names[index];
-    const relative = validRelative(names[index + 1] || "");
-    if (!["A", "M", "D"].includes(status))
-      throw new BridgeError("UNSAFE_PROJECT_PATH", "Unsupported file change: " + relative);
-    if (status !== "D")
-      await checkedPath(project.copyDirectory, relative, true);
-    files.push({ status, path: relative });
-  }
-  const stats = new Map(splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
-    const [added, removed, ...relative] = line.split("	");
-    return [relative.join("	"), { insertions: added === "-" ? null : Number(added), deletions: removed === "-" ? null : Number(removed), binary: added === "-" }];
-  }));
-  const fileSummaries = files.map((file2) => {
-    const stat2 = stats.get(file2.path);
-    if (!stat2)
-      throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file2.path);
-    return { ...file2, ...stat2 };
-  });
-  const summary = {
-    filesChanged: files.length,
-    added: files.filter((file2) => file2.status === "A").length,
-    modified: files.filter((file2) => file2.status === "M").length,
-    deleted: files.filter((file2) => file2.status === "D").length,
-    insertions: fileSummaries.reduce((total, file2) => total + (file2.insertions ?? 0), 0),
-    deletions: fileSummaries.reduce((total, file2) => total + (file2.deletions ?? 0), 0),
-    binaryFiles: fileSummaries.filter((file2) => file2.binary).length
-  };
-  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
-  return {
-    files,
-    fileSummaries,
-    summary,
-    patch: bytes.toString("utf8"),
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-    sourceDirectory: project.sourceDirectory,
-    copyDirectory: project.copyDirectory
-  };
-}
-async function verifyReadOnlyCopy(project) {
-  const seen = /* @__PURE__ */ new Set();
-  async function visit2(directory, prefix = "") {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const relative = prefix + entry.name;
-      if (entry.isDirectory())
-        await visit2(path3.join(directory, entry.name), relative + "/");
-      else {
-        seen.add(relative);
-        if (!entry.isFile() || project.baseline.get(relative) !== await sha256File(path3.join(directory, entry.name))) {
-          throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative);
-        }
-      }
-    }
-  }
-  await visit2(project.copyDirectory);
-  for (const relative of project.baseline.keys())
-    if (!seen.has(relative)) {
-      throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task deleted: " + relative);
-    }
-}
-async function readProjectPatch(project, relative) {
-  const file2 = validRelative(relative);
-  return (await git(project.copyDirectory, [
-    "--git-dir=" + project.gitDirectory,
-    "--work-tree=" + project.copyDirectory,
-    "diff",
-    "--cached",
-    "--no-ext-diff",
-    "--no-textconv",
-    "--binary",
-    "--no-renames",
-    "HEAD",
-    "--",
-    file2
-  ])).toString("utf8");
-}
-async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
-  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
-  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
-  const digest = createHash("sha256");
-  let count = 0, bytes = 0;
-  for (const relative of candidates.filter((file2) => !ignored.has(file2))) {
-    let file2;
-    try {
-      file2 = await checkedPath(project.copyDirectory, relative, true);
-    } catch (error62) {
-      if (error62.code === "ENOENT")
-        continue;
-      throw error62;
-    }
-    if (++count > limits.maxCopyFiles)
-      throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot file limit exceeded");
-    const hash2 = createHash("sha256");
-    for await (const chunk of createReadStream(file2)) {
-      bytes += chunk.length;
-      if (bytes > limits.maxCopyBytes)
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot byte limit exceeded");
-      hash2.update(chunk);
-    }
-    digest.update(relative + "\0" + hash2.digest("hex") + "\0");
-  }
-  return digest.digest("hex");
-}
-async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PROJECT_LIMITS) {
-  const preview = await previewProjectCopy(project, limits);
-  if (!preview.files.length)
-    throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
-  if (preview.sha256 !== expectedSha256)
-    throw new BridgeError("REVIEW_CHANGED", "The copy changed after review; preview it again");
-  for (const file2 of preview.files) {
-    const source = await checkedPath(project.sourceDirectory, file2.path, false);
-    const expected = project.baseline.get(file2.path);
-    if (expected) {
-      const current = await sha256File(source).catch(() => void 0);
-      if (current !== expected)
-        throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file2.path);
-    } else {
-      try {
-        await lstat(source);
-        throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file2.path);
-      } catch (error62) {
-        if (error62.code !== "ENOENT")
-          throw error62;
-      }
-    }
-  }
-  const patch = Buffer.from(preview.patch, "utf8");
-  await git(project.sourceDirectory, ["apply", "--check", "--binary", "-"], patch);
-  await git(project.sourceDirectory, ["apply", "--binary", "-"], patch);
-  return preview;
-}
-
 // dist/src/verification.js
 import { createHash as createHash2 } from "node:crypto";
 import { createReadStream as createReadStream2 } from "node:fs";
@@ -37086,8 +37196,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
 
 // dist/src/native-tests.js
 import { createHash as createHash3, randomUUID } from "node:crypto";
-import { appendFile, mkdir as mkdir2, readFile, rm as rm2, writeFile } from "node:fs/promises";
-import path4 from "node:path";
+import { appendFile, mkdir as mkdir2, readFile as readFile2, rm as rm2, writeFile } from "node:fs/promises";
+import path5 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
   args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
@@ -37185,11 +37295,11 @@ async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID();
   const file2 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path4.join(project.copyDirectory, file2);
+  const absolute = path5.join(project.copyDirectory, file2);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file2, copyDirectory: project.copyDirectory, ...settings }) + ");";
   const hash2 = createHash3("sha256").update(script).digest("hex");
-  const exclude = path4.join(project.gitDirectory, "info", "exclude");
-  await mkdir2(path4.dirname(exclude), { recursive: true });
+  const exclude = path5.join(project.gitDirectory, "info", "exclude");
+  await mkdir2(path5.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file2 + "\n");
   await writeFile(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file2 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash2 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
@@ -37209,7 +37319,7 @@ async function prepareNativeTest(project, request, settings) {
     prompt: "Execute this exact CommandLine with run_command in the current copy, inside the native sandbox: " + JSON.stringify(commandLine) + ". Do not replace, edit or summarize its execution. The runner prints the actual command output and a receipt. Maximum attempts: " + request.maxAttempts + ". Only after a nonzero command receipt, make relevant fixes and retry the same CommandLine if attempts remain. Do not run outside the sandbox, change the runner, weaken tests, or claim success without the receipt. Stop when the command passes or attempts are exhausted.\n<bridge-test-command>" + JSON.stringify({ commandLine, maxAttempts: request.maxAttempts }) + "</bridge-test-command>",
     async cleanup() {
       await rm2(absolute, { force: true });
-      const content = await readFile(exclude, "utf8");
+      const content = await readFile2(exclude, "utf8");
       await writeFile(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file2).join("\n"));
     }
   };
@@ -37298,7 +37408,8 @@ function createMcpServer(adapter2, tasks2) {
     isolateWorktree: external_exports.boolean().optional(),
     includePaths: external_exports.array(external_exports.string().min(1)).min(1).optional(),
     mode: external_exports.enum(["write", "read-only"]).optional(),
-    acceptanceCriteria: criteriaSchema.optional()
+    acceptanceCriteria: criteriaSchema.optional(),
+    role: roleSchema.optional()
   };
   server2.registerTool("antigravity_run", {
     title: "Run Antigravity task",
@@ -37424,8 +37535,8 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
     const result = tasks2.result(taskId);
     if (includeResult !== false)
       return result;
-    const { prompt, result: output2, includedFiles, ...metadata } = result.task;
-    return { ...result, task: metadata, resultAvailable: output2 !== void 0, includedFileCount: includedFiles?.length ?? 0 };
+    const { prompt, result: output2, includedFiles, report, ...metadata } = result.task;
+    return { ...result, task: metadata, resultAvailable: output2 !== void 0, reportAvailable: report !== void 0, includedFileCount: includedFiles?.length ?? 0 };
   })());
   server2.registerTool("antigravity_cancel", {
     title: "Cancel Antigravity task",
@@ -37548,40 +37659,6 @@ var LineParser = class {
     }
   }
 };
-
-// dist/src/validation.js
-import { constants } from "node:fs";
-import { access as access2, realpath as realpath2, stat } from "node:fs/promises";
-import path5 from "node:path";
-function within(root, candidate) {
-  const relative = path5.relative(root, candidate);
-  return relative === "" || relative !== ".." && !relative.startsWith(`..${path5.sep}`) && !path5.isAbsolute(relative);
-}
-async function validateWorkingDirectory(input2, forbidden) {
-  if (!path5.isAbsolute(input2))
-    throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
-  try {
-    const directory = await realpath2(input2);
-    if (!(await stat(directory)).isDirectory())
-      throw new Error("not a directory");
-    await access2(directory, constants.R_OK | constants.W_OK);
-    for (const excluded of forbidden) {
-      const resolved = await realpath2(excluded).catch(() => path5.resolve(excluded));
-      if (within(resolved, directory))
-        throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
-    }
-    return directory;
-  } catch (error62) {
-    if (error62 instanceof BridgeError)
-      throw error62;
-    throw new BridgeError("INVALID_WORKING_DIRECTORY", `workingDirectory is unavailable: ${input2}`);
-  }
-}
-function validatePrompt(prompt, maxChars) {
-  if (!prompt.trim() || prompt.length > maxChars || prompt.includes("\0")) {
-    throw new BridgeError("INVALID_PROMPT", `prompt must contain 1 to ${maxChars} characters and no NUL`);
-  }
-}
 
 // dist/src/state-store.js
 import { randomUUID as randomUUID2 } from "node:crypto";
@@ -37842,7 +37919,12 @@ var TaskManager = class {
       if (previous && options.acceptanceCriteria !== void 0)
         throw new BridgeError("INVALID_CRITERIA", "A resumed task retains its original acceptance criteria");
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria;
-      const mode = options.mode ?? previous?.record.mode ?? "write";
+      const role = roleSchema.parse(options.role ?? previous?.record.role ?? "implementer");
+      if (previous && role !== (previous.record.role ?? "implementer"))
+        throw new BridgeError("INVALID_ROLE", "A resumed task retains its original role");
+      const mode = options.mode ?? previous?.record.mode ?? (role === "implementer" ? "write" : "read-only");
+      if (role !== "implementer" && mode !== "read-only")
+        throw new BridgeError("INVALID_ROLE", "Planner and reviewer roles require read-only mode");
       if (!["write", "read-only"].includes(mode))
         throw new BridgeError("INVALID_MODE", "mode must be write or read-only");
       if (previous && mode !== previous.record.mode)
@@ -37867,6 +37949,7 @@ var TaskManager = class {
         sessionId: options.sessionId,
         model,
         mode,
+        role,
         prompt: options.prompt,
         acceptanceCriteria,
         tests: previous?.record.tests,
@@ -37874,7 +37957,7 @@ var TaskManager = class {
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
       pendingProjectRelease = void 0;
       this.queue.push(record2.taskId);
       this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
@@ -38281,6 +38364,7 @@ ${error62.message}`;
       } else {
         if (record2.mode !== "read-only")
           await previewProjectCopy(task.project, this.config);
+        record2.report = await validateRoleReport(record2.role ?? "implementer", record2.result.structured_output, task.project.copyDirectory);
         this.finish(task, "completed");
       }
     } catch (error62) {

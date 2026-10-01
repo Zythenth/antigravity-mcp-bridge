@@ -1,5 +1,6 @@
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
 import type { NativeTestRequest } from './native-tests.js';
+import type { RoleReport, TaskRole } from './roles.js';
 
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
@@ -35,6 +36,8 @@ export interface TaskRecord {
   tests?: TestEvidence[];
   acceptanceCriteria?: AcceptanceCriterion[];
   verification?: VerificationRecord;
+  role?: TaskRole;
+  report?: RoleReport;
 }
 
 export interface TestEvidence {
@@ -54,6 +57,7 @@ export interface TestEvidence {
 }
 
 export interface RunOptions {
+  role?: TaskRole;
   nativeTest?: NativeTestRequest;
   acceptanceCriteria?: AcceptanceCriterion[];
   prompt: string;
