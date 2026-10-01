@@ -134,3 +134,7 @@ npm test
 ```
 
 `npm test` usa um mock do `agy` e não consome quota. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
+
+## Licença e políticas
+
+O projeto usa a [licença MIT](LICENSE). Consulte a [política de segurança](SECURITY.md), a [política de privacidade](PRIVACY.md), o [histórico de versões](CHANGELOG.md) e os [avisos das dependências distribuídas](THIRD_PARTY_NOTICES.md). `npm run build:plugin` atualiza o bundle e os avisos a partir das dependências efetivamente incluídas.

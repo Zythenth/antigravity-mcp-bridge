@@ -2,10 +2,11 @@
   "name": "antigravity-mcp-bridge",
   "version": "0.2.1",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:plugin": "npm run build && esbuild dist/src/index.js --bundle --platform=node --format=esm --target=node24 --outfile=plugin/server.mjs",
+    "build:plugin": "npm run build && node scripts/build-plugin.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/*.test.js",
