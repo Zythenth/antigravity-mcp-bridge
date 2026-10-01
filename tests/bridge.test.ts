@@ -13,6 +13,7 @@ import { LineParser } from '../src/stream-parser.js';
 import { TaskManager } from '../src/task-manager.js';
 import type { TaskRecord } from '../src/types.js';
 import type { AcceptanceCriterion } from '../src/verification.js';
+import { readNativeReceipt } from '../src/native-tests.js';
 import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
@@ -134,6 +135,62 @@ test('verification detects changed ignored evidence even when the patch hash sta
     }), { code: 'VERIFICATION_STALE' });
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('native test execution captures real command results, repair attempts and stale source state', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+    await until(tasks, task.taskId, done);
+    const preview = await tasks.preview(task.taskId);
+    const command = { executable: process.execPath, args: ['-e', "const fs=require('node:fs');console.log('actual test output');process.exit(fs.readFileSync('source.txt','utf8')==='fixed'?0:9)"] };
+    const tested = await tasks.startTests(task.taskId, preview.sha256, command, 1, 20);
+    const final = await until(tasks, tested.taskId, done, 30000);
+    assert.equal(final.status, 'completed', JSON.stringify(final.error));
+    assert.deepEqual(final.tests?.map(test => test.exitCode), [9, 0]);
+    assert.ok(final.tests?.every(test => test.source === 'agy-tool' && test.output.includes('actual test output')));
+    const after = await tasks.preview(tested.taskId);
+    assert.equal(after.tests[0]?.stale, true);
+    assert.equal(after.tests[1]?.stale, false);
+    assert.equal(after.tests[1]?.beforeTreeSha256, after.tests[1]?.treeSha256);
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'source');
+    await verifyTask(tasks, tested.taskId, after.sha256);
+    await tasks.integrate(tested.taskId, after.sha256, async () => true);
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'fixed');
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('native test failure is preserved and narrative success never counts as executed tests', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  const unchecked = setup([mockPath, 'no-test-events']);
+  try {
+    await adapter.discover(); await unchecked.adapter.discover();
+    for (const current of [tasks, unchecked.tasks]) {
+      const task = await current.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+      await until(current, task.taskId, done);
+      const preview = await current.preview(task.taskId);
+      const tested = await current.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'console.log("failed assertion");process.exit(7)'] }, 0, 20);
+      const final = await until(current, tested.taskId, done, 30000);
+      assert.equal(final.error?.code, current === tasks ? 'TEST_FAILED' : 'TEST_EXECUTION_UNVERIFIED');
+      assert.equal(final.tests?.at(-1)?.exitCode, current === tasks ? 7 : undefined);
+      await assert.rejects(current.integrate(tested.taskId, preview.sha256, async () => true), { code: 'TASK_NOT_READY' });
+    }
+    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+  } finally { await tasks.shutdown(); await unchecked.tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('native test receipts require the exact tool command and reject malformed or duplicate receipts', () => {
+  const nonce = 'd16a1fe6-5488-4c44-89a3-2972d0e4d9b1';
+  const receipt = Buffer.from(JSON.stringify({ nonce, exitCode: 0, beforeSha256: 'a'.repeat(64), afterSha256: 'a'.repeat(64), truncated: false })).toString('base64');
+  const output = 'observed output\nAGY_BRIDGE_TEST:' + nonce + ':' + receipt;
+  const step = { step_index: 1, state: 'DONE', step_type: 'tool', tool_name: 'run_command', tool_info: { parameters: { CommandLine: 'exact command' }, output } };
+  assert.equal(readNativeReceipt(step, { nonce, commandLine: 'exact command' })?.receipt.exitCode, 0);
+  assert.equal(readNativeReceipt(step, { nonce, commandLine: 'different command' }), undefined);
+  assert.equal(readNativeReceipt({ ...step, step_type: 'agent_response' }, { nonce, commandLine: 'exact command' }), undefined);
+  assert.equal(readNativeReceipt({ ...step, tool_info: { parameters: { CommandLine: 'exact command' }, output: output + '\n' + output } }, { nonce, commandLine: 'exact command' }), undefined);
 });
 
 test('preview reports line totals, A/M/D counts and binary files independently of patch text', async () => {

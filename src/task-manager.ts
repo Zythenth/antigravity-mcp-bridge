@@ -3,14 +3,15 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewProjectCopy, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, integrateProjectCopy, previewProjectCopy, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
+import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
 
-interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number }
+interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 export class TaskManager {
@@ -97,7 +98,7 @@ export class TaskManager {
       this.refresh();
       const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
         task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : undefined;
-      if (options.sessionId && (!previous || previous.record.status !== 'completed' || previous.record.integratedAt)) {
+      if (options.sessionId && (!previous || (previous.record.status !== 'completed' && previous.record.error?.code !== 'TEST_FAILED') || previous.record.integratedAt)) {
         throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
       }
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
@@ -122,7 +123,7 @@ export class TaskManager {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
-        acceptanceCriteria, workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
+        acceptanceCriteria, tests: previous?.record.tests, workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
       this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
       pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
@@ -156,7 +157,8 @@ export class TaskManager {
     return this.withProject(task.project, async () => {
       const preview = await previewProjectCopy(task.project!, this.config);
       const current = task.record.verification && await verifyCriteria(task.project!, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
-      return { ...preview, tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 })),
+      const tree = task.record.tests?.some(test => test.source === 'agy-tool') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
+      return { ...preview, tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 || (test.treeSha256 !== undefined && test.treeSha256 !== tree) })),
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 ||
           JSON.stringify(current!.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null };
     });
@@ -184,6 +186,25 @@ export class TaskManager {
     if (current.status !== 'passed' || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
       throw new BridgeError('VERIFICATION_STALE', 'Verification files or evidence changed; verify again');
     }
+    const tree = task.record.tests?.some(test => test.source === 'agy-tool') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
+    const latestTests = new Map((task.record.tests || []).filter(test => test.source === 'agy-tool').map(test => [test.command, test]));
+    if ([...latestTests.values()].some(test => test.sha256 !== sha256 || test.treeSha256 !== tree)) {
+      throw new BridgeError('TESTS_STALE', 'Run the observed test commands again against the current files');
+    }
+    if ([...latestTests.values()].some(test => test.exitCode !== 0 || test.executionError || test.beforeTreeSha256 !== test.treeSha256)) {
+      throw new BridgeError('TESTS_FAILED', 'The latest observed command failed or changed project files');
+    }
+  }
+
+  async startTests(taskId: string, expectedSha256: string, command: TestCommand, retries = 0, timeoutSeconds = 600) {
+    testCommandSchema.parse(command);
+    if (!Number.isInteger(retries) || retries < 0 || retries > 3) throw new BridgeError('INVALID_TEST_COMMAND', 'retries must be between 0 and 3');
+    const task = this.status(taskId);
+    if (!task.sessionId || task.mode === 'read-only') throw new BridgeError('TASK_NOT_READY', 'Tests require a completed write task with a CLI conversation');
+    const preview = await this.preview(taskId);
+    if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before starting tests');
+    return this.run({ prompt: 'Run the requested tests in the native sandbox.', workingDirectory: task.workingDirectory, sessionId: task.sessionId,
+      model: task.model, timeoutSeconds, nativeTest: { ...command, expectedSha256, maxAttempts: retries + 1 } });
   }
 
   async recordTest(taskId: string, expectedSha256: string, command: string, exitCode: number, output = '') {
@@ -337,6 +358,7 @@ export class TaskManager {
     record.status = 'starting';
     record.startedAt = new Date().toISOString();
     this.events.append(record.taskId, 'task.started', {});
+    let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
     try {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
@@ -347,7 +369,14 @@ export class TaskManager {
       record.includedFiles = task.project.includedFiles;
       this.events.append(record.taskId, 'copy.ready', { copyDirectory: record.copyDirectory });
       if (task.termination) { this.finish(task, task.termination); return; }
-      const child = this.adapter.spawnTask(task.options, record.model, task.project.copyDirectory);
+      if (task.options.nativeTest) {
+        const preview = await previewProjectCopy(task.project, this.config);
+        if (preview.sha256 !== task.options.nativeTest.expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Copy changed while tests were queued');
+        native = await prepareNativeTest(task.project, task.options.nativeTest, { timeoutSeconds: task.options.timeoutSeconds!,
+          maxCopyFiles: this.config.maxCopyFiles, maxCopyBytes: this.config.maxCopyBytes });
+        task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: new Set() };
+      }
+      const child = this.adapter.spawnTask(native ? { ...task.options, prompt: native.prompt } : task.options, record.model, task.project.copyDirectory);
       task.child = child;
       record.pid = child.pid;
       record.status = 'running';
@@ -372,6 +401,28 @@ export class TaskManager {
       stdoutParser.end(); stderrParser.end();
       if (task.timer) clearTimeout(task.timer);
       record.exitCode = exitCode;
+      if (native) {
+        await native.cleanup(); native = undefined;
+        const preview = await previewProjectCopy(task.project, this.config);
+        const tree = await fingerprintProjectCopy(task.project, this.config);
+        const attempts = task.nativeTest!.attempts;
+        for (const [index, attempt] of attempts.entries()) {
+          const receipt = attempt.receipt;
+          record.tests = [...(record.tests || []).slice(-19), {
+            command: JSON.stringify({ executable: task.options.nativeTest!.executable, args: task.options.nativeTest!.args }),
+            exitCode: receipt.exitCode ?? 255, output: attempt.output, sha256: receipt.afterSha256 === tree ? preview.sha256 : task.options.nativeTest!.expectedSha256,
+            recordedAt: new Date().toISOString(), source: 'agy-tool', treeSha256: receipt.afterSha256, beforeTreeSha256: receipt.beforeSha256,
+            executionError: receipt.error, truncated: receipt.truncated, attempt: index + 1, testTaskId: record.taskId, sandbox: 'agy-native-requested',
+          }];
+        }
+        this.events.append(record.taskId, 'test.results', { attempts: attempts.length, sha256: preview.sha256 });
+        if (!task.termination) {
+          const last = attempts.at(-1)?.receipt;
+          if (!last || last.exitCode === null || last.error) throw new BridgeError('TEST_EXECUTION_UNVERIFIED', 'No valid execution receipt from the exact run_command call; check native sandbox permissions');
+          if (last.beforeSha256 !== last.afterSha256 || last.afterSha256 !== tree) throw new BridgeError('TEST_CHANGED_PATCH', 'Project files changed during or after the test; run tests again');
+          if (last.exitCode !== 0) { this.finish(task, 'failed', 'TEST_FAILED', 'Observed test command failed'); return; }
+        }
+      }
       if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project);
       if (task.termination) this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
@@ -385,7 +436,7 @@ export class TaskManager {
     } catch (error) {
       const code = error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED';
       this.finish(task, 'failed', code, error instanceof Error ? error.message : String(error));
-    }
+    } finally { await native?.cleanup(); }
   }
 
   private handleStdout(task: InternalTask, line: string): void {
@@ -406,6 +457,18 @@ export class TaskManager {
       this.events.append(record.taskId, 'agent.started', raw.init || {}, raw);
     } else if (sourceType === 'step_update' && raw.step_update && typeof raw.step_update === 'object') {
       const step = raw.step_update as Record<string, unknown>;
+      if (task.nativeTest && typeof step.step_index === 'number' && !task.nativeTest.steps.has(step.step_index)) {
+        const attempt = readNativeReceipt(step, task.nativeTest);
+        if (attempt) {
+          task.nativeTest.steps.add(step.step_index);
+          task.nativeTest.attempts.push(attempt);
+          this.events.append(record.taskId, 'test.executed', { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
+          if (task.nativeTest.attempts.length > task.options.nativeTest!.maxAttempts) {
+            task.termination = 'cancelled';
+            if (task.child) this.terminate(task.child);
+          }
+        }
+      }
       let type = 'step.update';
       if (step.step_type === 'tool') type = step.state === 'DONE' ? 'tool.completed' : 'tool.started';
       else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') type = 'response.chunk';

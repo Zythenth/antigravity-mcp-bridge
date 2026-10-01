@@ -1,4 +1,5 @@
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
+import type { NativeTestRequest } from './native-tests.js';
 
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
@@ -42,10 +43,18 @@ export interface TestEvidence {
   output: string;
   sha256: string;
   recordedAt: string;
-  source: 'client-reported';
+  source: 'client-reported' | 'agy-tool';
+  treeSha256?: string;
+  beforeTreeSha256?: string;
+  executionError?: string;
+  truncated?: boolean;
+  attempt?: number;
+  testTaskId?: string;
+  sandbox?: 'agy-native-requested';
 }
 
 export interface RunOptions {
+  nativeTest?: NativeTestRequest;
   acceptanceCriteria?: AcceptanceCriterion[];
   prompt: string;
   model?: string;

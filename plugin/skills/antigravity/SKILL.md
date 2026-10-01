@@ -27,6 +27,13 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 - `completed` e `SUCCESS` indicam o término da execução. Só relate um requisito como atendido com evidência pertinente. Confira também testes, efeitos observáveis, requisitos não cobertos e limitações; uma busca textual ou citação correta não comprova todo o comportamento.
 - Sem critérios, revisão completa ou verificação atual, o servidor bloqueia a integração. Se o patch ou a evidência mudar, revise e verifique novamente. A aprovação humana continua necessária.
 
+## Testes no sandbox nativo
+
+- Use `antigravity_test` com comando separado em `executable` e `args`, hash atual e prazo adequado. No Windows, selecione `npm.cmd` para scripts npm. O servidor usa o sandbox do agy; Docker não é necessário. Não contorne permissões negadas com execução no host.
+- A ferramenta devolve uma continuação com outro `taskId`. Acompanhe esse ID e faça a revisão/integração da tarefa mais recente. Examine os registros `source: "agy-tool"`, exit code, saída, erros e `stale`. Não atribua execução real a `client-reported` ou à narrativa do Gemini.
+- `retries: 0` preserva o padrão sem correção automática. Só peça até 3 correções adicionais quando autorizadas pela tarefa e informe o consumo. O comando permanece o mesmo; confira o diff para detectar testes enfraquecidos ou mudanças fora do escopo.
+- `TEST_EXECUTION_UNVERIFIED` indica que faltou um recibo do terminal. Não diga que o teste passou. `TEST_FAILED` preserva a falha observada e permite retomada para correção. Rode novamente os comandos depois de mudar os arquivos; registros antigos não validam o patch atual.
+
 ## Continuação e controle
 
 - Use o `sessionId` de uma tarefa concluída com `antigravity_resume` para continuar na mesma cópia. `antigravity_sessions` lista sessões persistidas e `antigravity_tasks` recupera IDs de tarefas após reinício. Execuções interrompidas não são repetidas: examine `SERVER_RESTARTED` e a cópia antes de iniciar outro trabalho. Se houver `ORPHAN_PROCESS_RUNNING`, aguarde o processo registrado terminar; não tente aplicar ou descartar sua cópia.

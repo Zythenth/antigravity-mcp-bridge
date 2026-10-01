@@ -5,6 +5,7 @@ import { TaskManager } from './task-manager.js';
 import { BridgeError } from './types.js';
 import { listProjectFiles } from './isolation.js';
 import { criteriaSchema, reviewSchema } from './verification.js';
+import { testCommandSchema } from './native-tests.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -86,6 +87,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     title: 'Verify task acceptance criteria', description: 'Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.',
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() }, annotations: { ...readOnly, readOnlyHint: false },
   }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks.verify(taskId, expectedSha256, reviews))());
+
+  server.registerTool('antigravity_test', {
+    title: 'Run tests in the native agy sandbox', description: 'Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), command: testCommandSchema,
+      retries: z.number().int().min(0).max(3).optional(), timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
+  }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
 
   server.registerTool('antigravity_record_test', {
     title: 'Record review test evidence', description: 'Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.',

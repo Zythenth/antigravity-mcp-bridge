@@ -236,6 +236,29 @@ export async function verifyReadOnlyCopy(project: ProjectCopy): Promise<void> {
   }
 }
 
+export async function fingerprintProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<string> {
+  const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))].sort();
+  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory,
+    [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], Buffer.from(candidates.join('\0') + '\0'), [0, 1])) : []);
+  const digest = createHash('sha256');
+  let count = 0, bytes = 0;
+  for (const relative of candidates.filter(file => !ignored.has(file))) {
+    let file;
+    try { file = await checkedPath(project.copyDirectory, relative, true); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
+    if (++count > limits.maxCopyFiles) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Test snapshot file limit exceeded');
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(file)) {
+      bytes += chunk.length;
+      if (bytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Test snapshot byte limit exceeded');
+      hash.update(chunk);
+    }
+    digest.update(relative + '\0' + hash.digest('hex') + '\0');
+  }
+  return digest.digest('hex');
+}
+
 export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
   const preview = await previewProjectCopy(project, limits);
   if (!preview.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');

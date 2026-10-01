@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
@@ -24,6 +25,19 @@ const send = obj => process.stdout.write(JSON.stringify(obj) + '\n');
 const result = (status = 'SUCCESS') => send({ event: 'result', result: { conversation_id: conversationId, status,
   response: prompt, usage: { input_tokens: 1, output_tokens: 2 }, ...(status === 'ERROR' ? { error: 'mock failure' } : {}) } });
 send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
+const nativeTest = prompt.match(/<bridge-test-command>(.*?)<\/bridge-test-command>/s);
+if (nativeTest && !args.includes('no-test-events')) {
+  const request = JSON.parse(nativeTest[1]);
+  for (let index = 0; index < request.maxAttempts; index++) {
+    const output = execSync(request.commandLine, { cwd: process.cwd(), encoding: 'utf8', windowsHide: true,
+      shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/sh' });
+    send({ event: 'step_update', step_update: { step_index: index, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+      tool_info: { name: 'run_command', parameters: { CommandLine: request.commandLine }, output } } });
+    const encoded = output.trim().split('\n').at(-1).split(':').at(-1);
+    if (JSON.parse(Buffer.from(encoded, 'base64').toString()).exitCode === 0) break;
+    if (request.maxAttempts > 1) writeFileSync('source.txt', 'fixed');
+  }
+}
 
 if (scenario === 'crash') process.exit(7);
 if (scenario === 'timeout' || scenario === 'cancel' || scenario === 'slow') {

@@ -4,6 +4,7 @@
 
 - Critérios de aceitação definidos antes da tarefa, conferência de artefatos e revisão com citações verificadas por arquivo e linha.
 - Integração condicionada a verificação atual, com detecção de evidências alteradas e resultados pendentes.
+- Execução assíncrona de testes no sandbox nativo do agy, com recibos do terminal, exit code, fingerprints e correções opcionais limitadas.
 
 ## 0.3.0
 

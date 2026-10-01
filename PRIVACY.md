@@ -11,9 +11,10 @@ O bridge não lê diretamente cookies, tokens nem arquivos de autenticação. A 
 ## Dados locais e retenção
 
 - A cópia e o baseline Git ficam no diretório temporário do sistema. São removidos pelo descarte, pela expulsão do último registro retido ou após 7 dias da última tarefa finalizada, conforme `COPY_RETENTION_HOURS`. A limpeza ocorre na inicialização e a cada minuto enquanto o servidor está ativo. Cópias em uso são preservadas. O sistema operacional também pode apagar arquivos temporários.
-- `~/.antigravity-mcp-bridge`, ou `BRIDGE_STATE_DIRECTORY`, armazena prompts, opções, IDs de tarefa/sessão, caminhos, hashes, status, resultados, eventos disponíveis e testes relatados pelo cliente. O padrão retém até 100 tarefas. Esse estado não tem criptografia própria; proteja-o com as permissões do sistema operacional e mantenha-o fora de pastas compartilhadas e repositórios.
+- `~/.antigravity-mcp-bridge`, ou `BRIDGE_STATE_DIRECTORY`, armazena prompts, critérios, opções, IDs de tarefa/sessão, caminhos, hashes, status, resultados, eventos disponíveis, citações de revisão e testes relatados pelo cliente ou capturados do terminal do agy. O padrão retém até 100 tarefas. Esse estado não tem criptografia própria; proteja-o com as permissões do sistema operacional e mantenha-o fora de pastas compartilhadas e repositórios.
 - O buffer de eventos é limitado. Eventos e saídas podem ser truncados. São mantidos até 20 registros de testes por tarefa, com até 4.000 caracteres de saída por registro.
 - Logs operacionais em `stderr` incluem horário, ID de tarefa, status, PID e códigos de erro. O bridge não acrescenta o prompt nesses logs. O cliente MCP e o CLI podem manter seus próprios históricos e logs.
+- Testes nativos criam um runner temporário na cópia e um snapshot Git temporário sem histórico do original. Esses arquivos são removidos ao final da execução. Os comandos e sua saída são enviados ao agy e aparecem nos eventos e registros locais.
 
 ## Remoção
 

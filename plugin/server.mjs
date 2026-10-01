@@ -4,7 +4,13 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJS = (cb, mod) => function __require() {
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __commonJS = (cb, mod) => function __require2() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   } catch (e) {
@@ -3261,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path6) {
-      let input2 = path6;
+    function removeDotSegments(path7) {
+      let input2 = path7;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3671,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path6 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
+        const path7 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8017,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path6) {
-  if (!path6)
+function getElementAtPath(obj, path7) {
+  if (!path7)
     return obj;
-  return path6.reduce((acc, key) => acc?.[key], obj);
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -8360,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path6, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path6);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -8814,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path6 = []) => {
+  const processError = (error63, path7 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path6, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8862,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path6 = []) => {
+  const processError = (error63, path7 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path6, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path6, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
       } else {
-        const fullpath = [...path6, ...issue2.path];
+        const fullpath = [...path7, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8911,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path6 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path6) {
+  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path7) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26014,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path6 = ref.slice(1).split("/").filter(Boolean);
-  if (path6.length === 0) {
+  const path7 = ref.slice(1).split("/").filter(Boolean);
+  if (path7.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path6[0] === defsKey) {
-    const key = path6[1] === void 0 ? void 0 : decodeJSONPointerSegment(path6[1]);
+  if (path7[0] === defsKey) {
+    const key = path7[1] === void 0 ? void 0 : decodeJSONPointerSegment(path7[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -29070,8 +29076,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path6, errorMaps, issueData } = params;
-  const fullPath = [...path6, ...issueData.path || []];
+  const { data, path: path7, errorMaps, issueData } = params;
+  const fullPath = [...path7, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -29186,11 +29192,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path6, key) {
+  constructor(parent, value, path7, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path6;
+    this._path = path7;
     this._key = key;
   }
   get path() {
@@ -32741,11 +32747,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path6) {
-  if (path6.length === 0) {
+function getDotPath(path7) {
+  if (path7.length === 0) {
     return "object root";
   }
-  return path6.reduce((acc, seg, index) => {
+  return path7.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -36916,6 +36922,34 @@ async function verifyReadOnlyCopy(project) {
       throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task deleted: " + relative);
     }
 }
+async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
+  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
+  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
+  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
+  const digest = createHash("sha256");
+  let count = 0, bytes = 0;
+  for (const relative of candidates.filter((file2) => !ignored.has(file2))) {
+    let file2;
+    try {
+      file2 = await checkedPath(project.copyDirectory, relative, true);
+    } catch (error62) {
+      if (error62.code === "ENOENT")
+        continue;
+      throw error62;
+    }
+    if (++count > limits.maxCopyFiles)
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot file limit exceeded");
+    const hash2 = createHash("sha256");
+    for await (const chunk of createReadStream(file2)) {
+      bytes += chunk.length;
+      if (bytes > limits.maxCopyBytes)
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot byte limit exceeded");
+      hash2.update(chunk);
+    }
+    digest.update(relative + "\0" + hash2.digest("hex") + "\0");
+  }
+  return digest.digest("hex");
+}
 async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PROJECT_LIMITS) {
   const preview = await previewProjectCopy(project, limits);
   if (!preview.files.length)
@@ -37004,8 +37038,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path6, text } = criterion.check;
-      const content = await file2(path6);
+      const { kind, path: path7, text } = criterion.check;
+      const content = await file2(path7);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -37028,6 +37062,156 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   }
   const status = checks.some((check2) => check2.status === "failed") ? "failed" : !checks.length || checks.some((check2) => check2.status === "unverified") ? "unverified" : "passed";
   return { sha256, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), status, checks, review: { source: "client-reported", evidence: reviews }, fileHashes };
+}
+
+// dist/src/native-tests.js
+import { createHash as createHash3, randomUUID } from "node:crypto";
+import { appendFile, mkdir as mkdir2, readFile, rm as rm2, writeFile } from "node:fs/promises";
+import path4 from "node:path";
+var testCommandSchema = external_exports.object({
+  executable: external_exports.string().min(1).max(1e3),
+  args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
+}).strict();
+var receiptSchema = external_exports.object({
+  nonce: external_exports.string().uuid(),
+  exitCode: external_exports.number().int().min(0).max(255).nullable(),
+  beforeSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(),
+  afterSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(),
+  error: external_exports.string().optional(),
+  truncated: external_exports.boolean()
+}).strict();
+async function nativeRunner(settings) {
+  const fs = __require("node:fs");
+  const crypto = __require("node:crypto");
+  const paths = __require("node:path");
+  const os4 = __require("node:os");
+  const processes = __require("node:child_process");
+  const receipt = { nonce: settings.nonce, exitCode: null, truncated: false };
+  const gitDirectory = fs.mkdtempSync(paths.join(os4.tmpdir(), "agy-test-snapshot-"));
+  let output2 = "";
+  try {
+    if (paths.relative(settings.copyDirectory, process.cwd()) !== "")
+      throw new Error("Test working directory differs from the copy");
+    processes.execFileSync("git", ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    fs.mkdirSync(paths.join(gitDirectory, "info"), { recursive: true });
+    fs.appendFileSync(paths.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n");
+    async function fingerprint() {
+      const list = processes.execFileSync("git", ["--git-dir=" + gitDirectory, "--work-tree=" + process.cwd(), "ls-files", "--others", "--exclude-standard", "-z"], { maxBuffer: 1e7 }).toString("utf8").split("\0").filter(Boolean).sort();
+      if (list.length > settings.maxCopyFiles)
+        throw new Error("Test snapshot file limit exceeded");
+      const tree = crypto.createHash("sha256");
+      let bytes = 0;
+      for (const relative of list) {
+        let current = process.cwd();
+        for (const part of relative.split("/")) {
+          if (!part || part === ".." || part === "." || part === ".git")
+            throw new Error("Unsafe test path");
+          current = paths.join(current, part);
+          if (fs.lstatSync(current).isSymbolicLink())
+            throw new Error("Test snapshot contains a link");
+        }
+        if (!fs.lstatSync(current).isFile())
+          throw new Error("Test snapshot contains a non-file");
+        const hash2 = crypto.createHash("sha256");
+        for await (const chunk of fs.createReadStream(current)) {
+          bytes += chunk.length;
+          if (bytes > settings.maxCopyBytes)
+            throw new Error("Test snapshot byte limit exceeded");
+          hash2.update(chunk);
+        }
+        tree.update(relative + "\0" + hash2.digest("hex") + "\0");
+      }
+      return tree.digest("hex");
+    }
+    receipt.beforeSha256 = await fingerprint();
+    let executable = settings.executable, args = settings.args;
+    if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
+      if (args.some((arg) => /[&|<>^()%!"\r\n]/.test(arg)))
+        throw new Error("Batch arguments contain unsupported shell metacharacters; use a native executable");
+      const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
+      const script = "$ErrorActionPreference='Stop'; try { $global:LASTEXITCODE=0; & (Get-Command -Name " + quote(executable) + " -CommandType Application -ErrorAction Stop).Source " + args.map(quote).join(" ") + "; exit $LASTEXITCODE } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 127 }";
+      executable = paths.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      args = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
+    }
+    const child = processes.spawn(executable, args, { cwd: process.cwd(), windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const append = (chunk) => {
+      const text = chunk.toString("utf8");
+      if (output2.length + text.length > 4e3)
+        receipt.truncated = true;
+      output2 = (output2 + text).slice(-4e3);
+    };
+    child.stdout.on("data", append);
+    child.stderr.on("data", append);
+    const timer = setTimeout(() => {
+      receipt.error = "Command timed out";
+      child.kill();
+    }, settings.timeoutSeconds * 1e3);
+    child.once("error", (error62) => {
+      receipt.error = error62.message;
+    });
+    receipt.exitCode = await new Promise((resolve) => child.once("close", resolve));
+    clearTimeout(timer);
+    receipt.afterSha256 = await fingerprint();
+  } catch (error62) {
+    receipt.error = error62 instanceof Error ? error62.message : String(error62);
+  } finally {
+    if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(os4.tmpdir()) || !paths.basename(gitDirectory).startsWith("agy-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
+      throw new Error("Unsafe snapshot cleanup path");
+    fs.rmSync(gitDirectory, { recursive: true, force: true });
+  }
+  process.stdout.write(output2 + "\nAGY_BRIDGE_TEST:" + settings.nonce + ":" + Buffer.from(JSON.stringify(receipt)).toString("base64") + "\n");
+}
+async function prepareNativeTest(project, request, settings) {
+  testCommandSchema.parse({ executable: request.executable, args: request.args });
+  const nonce = randomUUID();
+  const file2 = ".agy-bridge-test-" + nonce + ".cjs";
+  const absolute = path4.join(project.copyDirectory, file2);
+  const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file2, copyDirectory: project.copyDirectory, ...settings }) + ");";
+  const hash2 = createHash3("sha256").update(script).digest("hex");
+  const exclude = path4.join(project.gitDirectory, "info", "exclude");
+  await mkdir2(path4.dirname(exclude), { recursive: true });
+  await appendFile(exclude, "\n/" + file2 + "\n");
+  await writeFile(absolute, script, { flag: "wx", mode: 384 });
+  const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file2 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash2 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
+  let commandLine;
+  if (process.platform === "win32") {
+    const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
+    commandLine = "& " + quote(process.execPath) + " -e " + quote(bootstrap);
+  } else {
+    const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+    commandLine = quote(process.execPath) + " -e " + quote(bootstrap);
+  }
+  if (commandLine.length > 3e4)
+    throw new BridgeError("INVALID_TEST_COMMAND", "Test command exceeds the process argument limit");
+  return {
+    nonce,
+    commandLine,
+    prompt: "Execute this exact CommandLine with run_command in the current copy, inside the native sandbox: " + JSON.stringify(commandLine) + ". Do not replace, edit or summarize its execution. The runner prints the actual command output and a receipt. Maximum attempts: " + request.maxAttempts + ". Only after a nonzero command receipt, make relevant fixes and retry the same CommandLine if attempts remain. Do not run outside the sandbox, change the runner, weaken tests, or claim success without the receipt. Stop when the command passes or attempts are exhausted.\n<bridge-test-command>" + JSON.stringify({ commandLine, maxAttempts: request.maxAttempts }) + "</bridge-test-command>",
+    async cleanup() {
+      await rm2(absolute, { force: true });
+      const content = await readFile(exclude, "utf8");
+      await writeFile(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file2).join("\n"));
+    }
+  };
+}
+function readNativeReceipt(step, expected) {
+  if (step.state !== "DONE" || step.step_type !== "tool" || step.tool_name !== "run_command")
+    return;
+  const info = step.tool_info;
+  if (info?.parameters?.CommandLine !== expected.commandLine || typeof info.output !== "string")
+    return;
+  const prefix = "AGY_BRIDGE_TEST:" + expected.nonce + ":";
+  const lines = info.output.split(/\r?\n/).filter((line) => line.startsWith(prefix));
+  if (lines.length !== 1)
+    return;
+  try {
+    const receipt = receiptSchema.parse(JSON.parse(Buffer.from(lines[0].slice(prefix.length), "base64").toString("utf8")));
+    if (receipt.nonce !== expected.nonce)
+      return;
+    return { receipt, output: info.output.slice(0, info.output.indexOf(prefix)).trim().slice(-4e3) };
+  } catch {
+    return;
+  }
 }
 
 // dist/src/mcp-server.js
@@ -37120,6 +37304,18 @@ function createMcpServer(adapter2, tasks2) {
     inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
     annotations: { ...readOnly, readOnlyHint: false }
   }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks2.verify(taskId, expectedSha256, reviews))());
+  server2.registerTool("antigravity_test", {
+    title: "Run tests in the native agy sandbox",
+    description: "Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.",
+    inputSchema: {
+      taskId: external_exports.string().uuid(),
+      expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+      command: testCommandSchema,
+      retries: external_exports.number().int().min(0).max(3).optional(),
+      timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
+    },
+    annotations: action
+  }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks2.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
   server2.registerTool("antigravity_record_test", {
     title: "Record review test evidence",
     description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
@@ -37208,7 +37404,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/logger.js
@@ -37317,13 +37513,13 @@ var LineParser = class {
 // dist/src/validation.js
 import { constants } from "node:fs";
 import { access as access2, realpath as realpath2, stat } from "node:fs/promises";
-import path4 from "node:path";
+import path5 from "node:path";
 function within(root, candidate) {
-  const relative = path4.relative(root, candidate);
-  return relative === "" || relative !== ".." && !relative.startsWith(`..${path4.sep}`) && !path4.isAbsolute(relative);
+  const relative = path5.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path5.sep}`) && !path5.isAbsolute(relative);
 }
 async function validateWorkingDirectory(input2, forbidden) {
-  if (!path4.isAbsolute(input2))
+  if (!path5.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
     const directory = await realpath2(input2);
@@ -37331,7 +37527,7 @@ async function validateWorkingDirectory(input2, forbidden) {
       throw new Error("not a directory");
     await access2(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath2(excluded).catch(() => path4.resolve(excluded));
+      const resolved = await realpath2(excluded).catch(() => path5.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -37349,9 +37545,9 @@ function validatePrompt(prompt, maxChars) {
 }
 
 // dist/src/state-store.js
-import { randomUUID } from "node:crypto";
+import { randomUUID as randomUUID2 } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import path5 from "node:path";
+import path6 from "node:path";
 import os3 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var snapshotSchema = external_exports.object({
@@ -37392,7 +37588,7 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path5.isAbsolute(directory))
+    if (!path6.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
     mkdirSync(directory, { recursive: true, mode: 448 });
     if (lstatSync(directory).isSymbolicLink())
@@ -37401,11 +37597,11 @@ var StateStore = class {
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path5.join(this.directory, taskId + ".json");
+    return path6.join(this.directory, taskId + ".json");
   }
   save(task) {
     const target = this.file(task.record.taskId);
-    const temporary = target + "." + randomUUID() + ".tmp";
+    const temporary = target + "." + randomUUID2() + ".tmp";
     const snapshot = { ...task, version: 1, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
@@ -37416,7 +37612,7 @@ var StateStore = class {
   }
   load() {
     return readdirSync(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file2 = path5.join(this.directory, name);
+      const file2 = path6.join(this.directory, name);
       if (lstatSync(file2).isSymbolicLink() || lstatSync(file2).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
@@ -37425,12 +37621,12 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path5.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path6.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path5.isAbsolute(directory) || path5.relative(os3.tmpdir(), path5.dirname(directory)) !== "" || !path5.basename(directory).startsWith(prefix)) {
+          if (!path6.isAbsolute(directory) || path6.relative(os3.tmpdir(), path6.dirname(directory)) !== "" || !path6.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -37451,7 +37647,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file2 = path5.join(this.directory, name + ".lock");
+    const file2 = path6.join(this.directory, name + ".lock");
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         writeFileSync(file2, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
@@ -37500,7 +37696,7 @@ var TaskManager = class {
       this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash3("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash4("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -37569,7 +37765,7 @@ var TaskManager = class {
     try {
       this.refresh();
       const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task) => task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : void 0;
-      if (options.sessionId && (!previous || previous.record.status !== "completed" || previous.record.integratedAt)) {
+      if (options.sessionId && (!previous || previous.record.status !== "completed" && previous.record.error?.code !== "TEST_FAILED" || previous.record.integratedAt)) {
         throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
       }
       if (previous?.project && this.busyProjects.has(previous.project))
@@ -37600,12 +37796,13 @@ var TaskManager = class {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record2 = {
-        taskId: randomUUID2(),
+        taskId: randomUUID3(),
         sessionId: options.sessionId,
         model,
         mode,
         prompt: options.prompt,
         acceptanceCriteria,
+        tests: previous?.record.tests,
         workingDirectory,
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -37644,9 +37841,10 @@ var TaskManager = class {
     return this.withProject(task.project, async () => {
       const preview = await previewProjectCopy(task.project, this.config);
       const current = task.record.verification && await verifyCriteria(task.project, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
+      const tree = task.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task.project, this.config) : void 0;
       return {
         ...preview,
-        tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 })),
+        tests: (task.record.tests || []).map((test) => ({ ...test, stale: test.sha256 !== preview.sha256 || test.treeSha256 !== void 0 && test.treeSha256 !== tree })),
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 || JSON.stringify(current.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null
       };
     });
@@ -37676,6 +37874,33 @@ var TaskManager = class {
     if (current.status !== "passed" || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
       throw new BridgeError("VERIFICATION_STALE", "Verification files or evidence changed; verify again");
     }
+    const tree = task.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task.project, this.config) : void 0;
+    const latestTests = new Map((task.record.tests || []).filter((test) => test.source === "agy-tool").map((test) => [test.command, test]));
+    if ([...latestTests.values()].some((test) => test.sha256 !== sha256 || test.treeSha256 !== tree)) {
+      throw new BridgeError("TESTS_STALE", "Run the observed test commands again against the current files");
+    }
+    if ([...latestTests.values()].some((test) => test.exitCode !== 0 || test.executionError || test.beforeTreeSha256 !== test.treeSha256)) {
+      throw new BridgeError("TESTS_FAILED", "The latest observed command failed or changed project files");
+    }
+  }
+  async startTests(taskId, expectedSha256, command, retries = 0, timeoutSeconds = 600) {
+    testCommandSchema.parse(command);
+    if (!Number.isInteger(retries) || retries < 0 || retries > 3)
+      throw new BridgeError("INVALID_TEST_COMMAND", "retries must be between 0 and 3");
+    const task = this.status(taskId);
+    if (!task.sessionId || task.mode === "read-only")
+      throw new BridgeError("TASK_NOT_READY", "Tests require a completed write task with a CLI conversation");
+    const preview = await this.preview(taskId);
+    if (preview.sha256 !== expectedSha256)
+      throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before starting tests");
+    return this.run({
+      prompt: "Run the requested tests in the native sandbox.",
+      workingDirectory: task.workingDirectory,
+      sessionId: task.sessionId,
+      model: task.model,
+      timeoutSeconds,
+      nativeTest: { ...command, expectedSha256, maxAttempts: retries + 1 }
+    });
   }
   async recordTest(taskId, expectedSha256, command, exitCode, output2 = "") {
     this.refresh();
@@ -37771,7 +37996,7 @@ var TaskManager = class {
       await this.requireVerification(task, expectedSha256);
       if (!await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash3("sha256").update(task.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash4("sha256").update(task.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -37855,6 +38080,7 @@ var TaskManager = class {
     record2.status = "starting";
     record2.startedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.events.append(record2.taskId, "task.started", {});
+    let native;
     try {
       task.project ??= await createProjectCopy(record2.workingDirectory, task.options.includePaths, (project) => {
         task.project = project;
@@ -37868,7 +38094,18 @@ var TaskManager = class {
         this.finish(task, task.termination);
         return;
       }
-      const child = this.adapter.spawnTask(task.options, record2.model, task.project.copyDirectory);
+      if (task.options.nativeTest) {
+        const preview = await previewProjectCopy(task.project, this.config);
+        if (preview.sha256 !== task.options.nativeTest.expectedSha256)
+          throw new BridgeError("REVIEW_CHANGED", "Copy changed while tests were queued");
+        native = await prepareNativeTest(task.project, task.options.nativeTest, {
+          timeoutSeconds: task.options.timeoutSeconds,
+          maxCopyFiles: this.config.maxCopyFiles,
+          maxCopyBytes: this.config.maxCopyBytes
+        });
+        task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: /* @__PURE__ */ new Set() };
+      }
+      const child = this.adapter.spawnTask(native ? { ...task.options, prompt: native.prompt } : task.options, record2.model, task.project.copyDirectory);
       task.child = child;
       record2.pid = child.pid;
       record2.status = "running";
@@ -37899,6 +38136,43 @@ ${error62.message}`;
       if (task.timer)
         clearTimeout(task.timer);
       record2.exitCode = exitCode;
+      if (native) {
+        await native.cleanup();
+        native = void 0;
+        const preview = await previewProjectCopy(task.project, this.config);
+        const tree = await fingerprintProjectCopy(task.project, this.config);
+        const attempts = task.nativeTest.attempts;
+        for (const [index, attempt] of attempts.entries()) {
+          const receipt = attempt.receipt;
+          record2.tests = [...(record2.tests || []).slice(-19), {
+            command: JSON.stringify({ executable: task.options.nativeTest.executable, args: task.options.nativeTest.args }),
+            exitCode: receipt.exitCode ?? 255,
+            output: attempt.output,
+            sha256: receipt.afterSha256 === tree ? preview.sha256 : task.options.nativeTest.expectedSha256,
+            recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            source: "agy-tool",
+            treeSha256: receipt.afterSha256,
+            beforeTreeSha256: receipt.beforeSha256,
+            executionError: receipt.error,
+            truncated: receipt.truncated,
+            attempt: index + 1,
+            testTaskId: record2.taskId,
+            sandbox: "agy-native-requested"
+          }];
+        }
+        this.events.append(record2.taskId, "test.results", { attempts: attempts.length, sha256: preview.sha256 });
+        if (!task.termination) {
+          const last = attempts.at(-1)?.receipt;
+          if (!last || last.exitCode === null || last.error)
+            throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "No valid execution receipt from the exact run_command call; check native sandbox permissions");
+          if (last.beforeSha256 !== last.afterSha256 || last.afterSha256 !== tree)
+            throw new BridgeError("TEST_CHANGED_PATCH", "Project files changed during or after the test; run tests again");
+          if (last.exitCode !== 0) {
+            this.finish(task, "failed", "TEST_FAILED", "Observed test command failed");
+            return;
+          }
+        }
+      }
       if (record2.mode === "read-only")
         await verifyReadOnlyCopy(task.project);
       if (task.termination)
@@ -37916,6 +38190,8 @@ ${error62.message}`;
     } catch (error62) {
       const code = error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED";
       this.finish(task, "failed", code, error62 instanceof Error ? error62.message : String(error62));
+    } finally {
+      await native?.cleanup();
     }
   }
   handleStdout(task, line) {
@@ -37938,6 +38214,19 @@ ${error62.message}`;
       this.events.append(record2.taskId, "agent.started", raw.init || {}, raw);
     } else if (sourceType === "step_update" && raw.step_update && typeof raw.step_update === "object") {
       const step = raw.step_update;
+      if (task.nativeTest && typeof step.step_index === "number" && !task.nativeTest.steps.has(step.step_index)) {
+        const attempt = readNativeReceipt(step, task.nativeTest);
+        if (attempt) {
+          task.nativeTest.steps.add(step.step_index);
+          task.nativeTest.attempts.push(attempt);
+          this.events.append(record2.taskId, "test.executed", { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
+          if (task.nativeTest.attempts.length > task.options.nativeTest.maxAttempts) {
+            task.termination = "cancelled";
+            if (task.child)
+              this.terminate(task.child);
+          }
+        }
+      }
       let type = "step.update";
       if (step.step_type === "tool")
         type = step.state === "DONE" ? "tool.completed" : "tool.started";

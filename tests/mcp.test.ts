@@ -41,7 +41,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   try {
     client = await connect();
     assert.equal((await call('antigravity_health')).integrationApproval.available, false);
-    const taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
+    let taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
       acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }] })).task.taskId;
     const deadline = Date.now() + 10000;
     let final;
@@ -75,6 +75,20 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     const output = execFileSync(process.execPath, ['-e', testScript], { cwd: final.task.copyDirectory, encoding: 'utf8' });
     await call('antigravity_record_test', { taskId, expectedSha256: preview.sha256, command: 'node -e ' + testScript, exitCode: 0, output });
     assert.equal((await call('antigravity_preview', { taskId })).tests[0].stale, false);
+    taskId = (await call('antigravity_test', { taskId, expectedSha256: preview.sha256, timeoutSeconds: 20,
+      command: { executable: process.execPath, args: ['-e', testScript] } })).task.taskId;
+    const testDeadline = Date.now() + 15000;
+    let observed;
+    while (Date.now() < testDeadline) {
+      observed = await call('antigravity_result', { taskId });
+      if (observed.ready) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(observed?.task.status, 'completed', JSON.stringify(observed?.task.error));
+    assert.equal(observed.task.tests.at(-1).source, 'agy-tool');
+    assert.equal(observed.task.tests.at(-1).exitCode, 0);
+    await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
     for (const response of ['decline', 'cancel', 'accept'] as const) {
       decision = response;
       const denied = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.sha256 } });

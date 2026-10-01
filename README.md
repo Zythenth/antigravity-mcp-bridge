@@ -64,6 +64,7 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
 | `antigravity_record_test` | Registra comando, saída e exit code relatados pelo cliente, vinculados ao hash |
+| `antigravity_test` | Executa testes pelo terminal do agy com sandbox nativo e captura recibos reais |
 | `antigravity_verify` | Confere critérios da tarefa e evidências de revisão contra arquivos reais |
 | `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
@@ -115,6 +116,18 @@ O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias perm
 `antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Os testes são relatos do cliente, identificados por `source: "client-reported"`; o bridge não executa nem verifica o comando. Cada registro leva hash, data, exit code e até 4.000 caracteres de saída. Resultados antigos recebem `stale: true` se o patch atual diferir. Falhas são preservadas e devem ser apresentadas na revisão.
 
 A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
+
+### Executar testes sem Docker
+
+Chame `antigravity_test` com `taskId`, `expectedSha256` e `command: { executable, args }`. A ferramenta inicia uma continuação na mesma cópia e devolve outro `taskId`. Acompanhe esse ID pelos eventos e pelo resultado; revise e integre a tarefa mais recente. `retries` vale 0 por padrão e aceita até 3 tentativas de correção adicionais, solicitadas explicitamente. `timeoutSeconds` vale 600 por padrão.
+
+O executor usa `agy --sandbox` e a ferramenta nativa `run_command`. Não exige Docker nem executa o comando diretamente no host como alternativa. Um runner temporário, conferido por SHA-256 antes da execução, captura saída, exit code e fingerprints dos arquivos elegíveis antes/depois do teste. O bridge aceita o recibo apenas no evento da chamada exata do terminal; uma mensagem do Gemini dizendo que o teste passou não conta. Os registros têm `source: "agy-tool"` e `sandbox: "agy-native-requested"`. A saída é limitada a 4.000 caracteres, com indicação de truncamento.
+
+Se o CLI negar a ferramenta ou omitir o recibo, o resultado é `TEST_EXECUTION_UNVERIFIED`. Um comando não zero produz `TEST_FAILED`; mudanças nos arquivos durante/depois do comando produzem `TEST_CHANGED_PATCH`. Testes observados precisam continuar atuais para a integração; um relato manual não substitui um teste observado falho. Após `TEST_FAILED`, é possível retomar a conversa para corrigir ou executar os testes novamente. A orientação de correção mantém o comando original e proíbe enfraquecer os testes; tentativas observadas além do limite encerram a tarefa.
+
+No Windows, use executáveis nativos como `node.exe` e `python.exe`; para npm, use `npm.cmd`. Arquivos `.cmd`/`.bat` aceitam argumentos comuns, mas metacaracteres de shell são recusados. A execução depende das permissões do sandbox nativo do CLI. Uma restrição de terminal não demonstra isolamento de todas as ferramentas do agente nem permite afirmar proteção completa do sistema de arquivos. Consulte a [configuração oficial do sandbox](https://www.antigravity.google/docs/sandbox/) e os [eventos de ferramentas no modo headless](https://www.antigravity.google/docs/cli/headless/#tool-calls-in-the-stream).
+
+Para testar com a conta real em um projeto descartável, execute `npm run build` e `node tests/native-integration.mjs`. Esse teste usa a conta do agy e verifica a captura de uma execução real; a suíte padrão usa o CLI simulado e não consome quota.
 
 ## Configuração e segurança
 
