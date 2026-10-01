@@ -4,7 +4,7 @@ import path from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) { console.log('1.2.11'); process.exit(0); }
 if (args.includes('--help')) {
-  console.log('--input-format stream-json\n--output-format stream-json\n--model\n--conversation\n--sandbox\nmodels');
+  console.log('--input-format stream-json\n--output-format stream-json\n--model\n--conversation\n--sandbox\n--mode (accept-edits, plan)\nmodels');
   process.exit(0);
 }
 if (args.includes('models')) {
@@ -23,7 +23,7 @@ const conversationId = args.includes('--conversation') ? args[args.indexOf('--co
 const send = obj => process.stdout.write(JSON.stringify(obj) + '\n');
 const result = (status = 'SUCCESS') => send({ event: 'result', result: { conversation_id: conversationId, status,
   response: prompt, usage: { input_tokens: 1, output_tokens: 2 }, ...(status === 'ERROR' ? { error: 'mock failure' } : {}) } });
-send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1] } });
+send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
 
 if (scenario === 'crash') process.exit(7);
 if (scenario === 'timeout' || scenario === 'cancel' || scenario === 'slow') {

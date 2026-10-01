@@ -28588,6 +28588,7 @@ var CliAdapter = class {
           structuredOutput: streaming,
           streaming,
           sandbox: this.help.includes("--sandbox"),
+          readOnlyMode: this.help.includes("--mode") && this.help.includes("plan"),
           models: this.help.includes("models"),
           modelSelection: this.help.includes("--model"),
           resume: this.help.includes("--conversation"),
@@ -28601,7 +28602,7 @@ var CliAdapter = class {
         installed: false,
         path: this.config.agyPath,
         authenticated: null,
-        capabilities: { structuredOutput: false, streaming: false, sandbox: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
+        capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: error62 instanceof Error ? error62.message : String(error62)
       };
     }
@@ -28646,6 +28647,11 @@ var CliAdapter = class {
     if (!this.help.includes("--sandbox"))
       throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise --sandbox");
     const args = ["--sandbox", "--input-format", "stream-json", "--output-format", "stream-json", "--print-timeout", `${options.timeoutSeconds ?? this.config.defaultTimeoutSeconds}s`];
+    if (options.mode === "read-only") {
+      if (!this.help.includes("--mode") || !this.help.includes("plan"))
+        throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise plan mode");
+      args.push("--mode", "plan");
+    }
     if (model)
       args.push("--model", model);
     if (options.sessionId)
@@ -36659,7 +36665,7 @@ var EMPTY_COMPLETION_RESULT = {
 import { createHash } from "node:crypto";
 import { spawn as spawn2 } from "node:child_process";
 import { createReadStream } from "node:fs";
-import { copyFile, lstat, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises";
 import os from "node:os";
 import path3 from "node:path";
 var maxGitOutput = 1e7;
@@ -36845,6 +36851,27 @@ async function previewProjectCopy(project) {
     copyDirectory: project.copyDirectory
   };
 }
+async function verifyReadOnlyCopy(project) {
+  const seen = /* @__PURE__ */ new Set();
+  async function visit2(directory, prefix = "") {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const relative = prefix + entry.name;
+      if (entry.isDirectory())
+        await visit2(path3.join(directory, entry.name), relative + "/");
+      else {
+        seen.add(relative);
+        if (!entry.isFile() || project.baseline.get(relative) !== await sha256File(path3.join(directory, entry.name))) {
+          throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative);
+        }
+      }
+    }
+  }
+  await visit2(project.copyDirectory);
+  for (const relative of project.baseline.keys())
+    if (!seen.has(relative)) {
+      throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task deleted: " + relative);
+    }
+}
 async function integrateProjectCopy(project, expectedSha256) {
   const preview = await previewProjectCopy(project);
   if (!preview.files.length)
@@ -36936,7 +36963,8 @@ function createMcpServer(adapter2, tasks2) {
     sessionId: external_exports.string().min(1).max(128).optional(),
     timeoutSeconds: external_exports.number().int().min(1).max(86400).optional(),
     isolateWorktree: external_exports.boolean().optional(),
-    includePaths: external_exports.array(external_exports.string().min(1)).min(1).optional()
+    includePaths: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+    mode: external_exports.enum(["write", "read-only"]).optional()
   };
   server2.registerTool("antigravity_run", {
     title: "Run Antigravity task",
@@ -37188,6 +37216,11 @@ var TaskManager = class {
       throw new BridgeError("TASK_NOT_READY", "The copy is being reviewed or removed");
     if (previous && options.includePaths !== void 0)
       throw new BridgeError("INVALID_INCLUDE_PATH", "A resumed task reuses its original file selection");
+    const mode = options.mode ?? previous?.record.mode ?? "write";
+    if (!["write", "read-only"].includes(mode))
+      throw new BridgeError("INVALID_MODE", "mode must be write or read-only");
+    if (previous && mode !== previous.record.mode)
+      throw new BridgeError("INVALID_MODE", "A resumed task must retain its original mode");
     if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
       throw new BridgeError("QUEUE_FULL", "Task queue is full");
     }
@@ -37195,7 +37228,7 @@ var TaskManager = class {
       const oldestFinished = [...this.tasks.values()].find((task) => terminal.has(task.record.status));
       if (!oldestFinished)
         throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
-      if (oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
+      if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
         await this.discard(oldestFinished.record.taskId);
       }
       this.tasks.delete(oldestFinished.record.taskId);
@@ -37205,12 +37238,13 @@ var TaskManager = class {
       taskId: randomUUID(),
       sessionId: options.sessionId,
       model,
+      mode,
       prompt: options.prompt,
       workingDirectory,
       status: "queued",
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    this.tasks.set(record2.taskId, { record: record2, options: { ...options, workingDirectory, timeoutSeconds }, project: previous?.project });
+    this.tasks.set(record2.taskId, { record: record2, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project });
     this.queue.push(record2.taskId);
     this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
     this.pump();
@@ -37283,6 +37317,8 @@ var TaskManager = class {
       throw new BridgeError("TASK_NOT_READY", "Only completed tasks can be integrated");
     if (task.record.integratedAt)
       throw new BridgeError("ALREADY_INTEGRATED", "This task was already integrated");
+    if (task.record.mode === "read-only")
+      throw new BridgeError("READ_ONLY_TASK", "Read-only tasks cannot be integrated");
     if ([...this.tasks.values()].filter((other) => other.project === task.project).at(-1) !== task) {
       throw new BridgeError("TASK_NOT_READY", "Preview and integrate the latest task for this copy");
     }
@@ -37390,6 +37426,8 @@ ${error62.message}`;
       if (task.timer)
         clearTimeout(task.timer);
       record2.exitCode = exitCode;
+      if (record2.mode === "read-only")
+        await verifyReadOnlyCopy(task.project);
       if (task.termination)
         this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))

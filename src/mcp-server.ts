@@ -63,6 +63,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
     isolateWorktree: z.boolean().optional(),
     includePaths: z.array(z.string().min(1)).min(1).optional(),
+    mode: z.enum(['write', 'read-only']).optional(),
   };
   server.registerTool('antigravity_run', {
     title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',

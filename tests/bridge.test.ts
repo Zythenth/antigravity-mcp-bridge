@@ -15,6 +15,31 @@ import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjec
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 
+test('read-only uses plan mode, survives resume, rejects integration and detects edits', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup([mockPath], { MAX_RETAINED_TASKS: '1' });
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'consult:test', workingDirectory: dir, mode: 'read-only' });
+    const finished = await until(tasks, first.taskId, done);
+    assert.equal(finished.status, 'completed');
+    const init = tasks.readEvents(first.taskId).events.find(event => event.type === 'agent.started')!;
+    const args = (init.data as { args: string[] }).args;
+    assert.equal(args[args.indexOf('--mode') + 1], 'plan');
+    await assert.rejects(tasks.integrate(first.taskId, '0'.repeat(64)), { code: 'READ_ONLY_TASK' });
+    await assert.rejects(tasks.run({ prompt: 'switch', workingDirectory: dir, sessionId: finished.sessionId, mode: 'write' }), { code: 'INVALID_MODE' });
+    const resumed = await tasks.run({ prompt: 'consult:resume', workingDirectory: dir, sessionId: finished.sessionId });
+    assert.equal((await until(tasks, resumed.taskId, done)).status, 'completed');
+    assert.equal(tasks.status(resumed.taskId).copyDirectory, finished.copyDirectory);
+    assert.equal(tasks.status(resumed.taskId).mode, 'read-only');
+    await tasks.discard(resumed.taskId);
+    const violation = await tasks.run({ prompt: 'write:test', workingDirectory: dir, mode: 'read-only' });
+    assert.equal((await until(tasks, violation.taskId, done)).error?.code, 'READ_ONLY_VIOLATION');
+    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await tasks.discard(violation.taskId);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('discard removes copy and baseline, refuses active shared copies, and is idempotent', async () => {
   const dir = await repository();
   const { adapter, tasks } = setup();

@@ -11,7 +11,7 @@ export interface Discovery {
   path: string;
   version?: string;
   authenticated: boolean | null;
-  capabilities: { structuredOutput: boolean; streaming: boolean; sandbox: boolean; models: boolean; modelSelection: boolean; resume: boolean; sessionsList: boolean; cancel: boolean };
+  capabilities: { structuredOutput: boolean; streaming: boolean; sandbox: boolean; readOnlyMode: boolean; models: boolean; modelSelection: boolean; resume: boolean; sessionsList: boolean; cancel: boolean };
   error?: string;
 }
 
@@ -61,6 +61,7 @@ export class CliAdapter {
         installed: true, path: await resolveExecutable(this.config.agyPath), version: this.version, authenticated: null,
         capabilities: {
           structuredOutput: streaming, streaming, sandbox: this.help.includes('--sandbox'),
+          readOnlyMode: this.help.includes('--mode') && this.help.includes('plan'),
           models: this.help.includes('models'), modelSelection: this.help.includes('--model'),
           resume: this.help.includes('--conversation'), sessionsList: false, cancel: false,
         },
@@ -68,7 +69,7 @@ export class CliAdapter {
     } catch (error) {
       this.installed = false;
       return { installed: false, path: this.config.agyPath, authenticated: null,
-        capabilities: { structuredOutput: false, streaming: false, sandbox: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
+        capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: error instanceof Error ? error.message : String(error) };
     }
   }
@@ -106,6 +107,10 @@ export class CliAdapter {
     if (!this.help.includes('stream-json')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise stream-json');
     if (!this.help.includes('--sandbox')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --sandbox');
     const args = ['--sandbox', '--input-format', 'stream-json', '--output-format', 'stream-json', '--print-timeout', `${options.timeoutSeconds ?? this.config.defaultTimeoutSeconds}s`];
+    if (options.mode === 'read-only') {
+      if (!this.help.includes('--mode') || !this.help.includes('plan')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise plan mode');
+      args.push('--mode', 'plan');
+    }
     if (model) args.push('--model', model);
     if (options.sessionId) args.push('--conversation', options.sessionId);
     const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });

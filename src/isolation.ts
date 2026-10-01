@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { copyFile, lstat, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { BridgeError } from './types.js';
@@ -185,6 +185,26 @@ export async function previewProjectCopy(project: ProjectCopy): Promise<ChangePr
     files, patch: bytes.toString('utf8'), sha256: createHash('sha256').update(bytes).digest('hex'),
     sourceDirectory: project.sourceDirectory, copyDirectory: project.copyDirectory,
   };
+}
+
+export async function verifyReadOnlyCopy(project: ProjectCopy): Promise<void> {
+  const seen = new Set<string>();
+  async function visit(directory: string, prefix = ''): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const relative = prefix + entry.name;
+      if (entry.isDirectory()) await visit(path.join(directory, entry.name), relative + '/');
+      else {
+        seen.add(relative);
+        if (!entry.isFile() || project.baseline.get(relative) !== await sha256File(path.join(directory, entry.name))) {
+          throw new BridgeError('READ_ONLY_VIOLATION', 'Read-only task changed the copy: ' + relative);
+        }
+      }
+    }
+  }
+  await visit(project.copyDirectory);
+  for (const relative of project.baseline.keys()) if (!seen.has(relative)) {
+    throw new BridgeError('READ_ONLY_VIOLATION', 'Read-only task deleted: ' + relative);
+  }
 }
 
 export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string): Promise<ChangePreview> {

@@ -28,6 +28,7 @@ export interface TaskRecord {
   includedFiles?: string[];
   integratedAt?: string;
   discardedAt?: string;
+  mode?: 'write' | 'read-only';
 }
 
 export interface RunOptions {
@@ -38,6 +39,7 @@ export interface RunOptions {
   timeoutSeconds?: number;
   isolateWorktree?: boolean;
   includePaths?: string[];
+  mode?: 'write' | 'read-only';
 }
 
 export class BridgeError extends Error {

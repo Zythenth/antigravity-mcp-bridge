@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewProjectCopy, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewProjectCopy, verifyReadOnlyCopy, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
@@ -55,21 +55,24 @@ export class TaskManager {
     }
     if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
     if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
+    const mode = options.mode ?? previous?.record.mode ?? 'write';
+    if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
+    if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
     if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
       throw new BridgeError('QUEUE_FULL', 'Task queue is full');
     }
     if (this.tasks.size >= this.config.maxRetainedTasks) {
       const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status));
       if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
-      if (oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
+      if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
         await this.discard(oldestFinished.record.taskId);
       }
       this.tasks.delete(oldestFinished.record.taskId);
       this.events.drop(oldestFinished.record.taskId);
     }
-    const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, prompt: options.prompt,
+    const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
       workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
-    this.tasks.set(record.taskId, { record, options: { ...options, workingDirectory, timeoutSeconds }, project: previous?.project });
+    this.tasks.set(record.taskId, { record, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project });
     this.queue.push(record.taskId);
     this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
     this.pump();
@@ -137,6 +140,7 @@ export class TaskManager {
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
     if (task.record.integratedAt) throw new BridgeError('ALREADY_INTEGRATED', 'This task was already integrated');
+    if (task.record.mode === 'read-only') throw new BridgeError('READ_ONLY_TASK', 'Read-only tasks cannot be integrated');
     if ([...this.tasks.values()].filter(other => other.project === task.project).at(-1) !== task) {
       throw new BridgeError('TASK_NOT_READY', 'Preview and integrate the latest task for this copy');
     }
@@ -230,6 +234,7 @@ export class TaskManager {
       stdoutParser.end(); stderrParser.end();
       if (task.timer) clearTimeout(task.timer);
       record.exitCode = exitCode;
+      if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project);
       if (task.termination) this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
       else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {
