@@ -29,7 +29,7 @@ async function nativeRunner(settings: TestCommand & { nonce: string; copyDirecto
   const gitDirectory = fs.mkdtempSync(paths.join(os.tmpdir(), 'agy-test-snapshot-'));
   let output = '';
   try {
-    if (paths.relative(settings.copyDirectory, process.cwd()) !== '') throw new Error('Test working directory differs from the copy');
+    if (paths.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== '') throw new Error('Test working directory differs from the copy');
     processes.execFileSync('git', ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
     fs.mkdirSync(paths.join(gitDirectory, 'info'), { recursive: true });
     fs.appendFileSync(paths.join(gitDirectory, 'info', 'exclude'), '\n/' + settings.file + '\n');

@@ -48,10 +48,13 @@ try {
   if (after.tests.at(-1).stale || after.sha256 !== preview.sha256) throw Error('Native test evidence or patch changed');
   if (await readFile(path.join(source, 'source.txt'), 'utf8') !== 'original') throw Error('Original source changed');
   console.log(JSON.stringify({ status: 'passed', source: evidence.source, exitCode: evidence.exitCode, output: evidence.output, sandbox: evidence.sandbox, usage: final.usage }));
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
 } finally {
   for (const taskId of [testId, firstId].filter(Boolean)) await call('antigravity_cancel', { taskId }).catch(() => {});
   for (const taskId of [testId, firstId].filter(Boolean)) await call('antigravity_discard', { taskId }).catch(() => {});
   await client.close();
   if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('agy-native-integration-')) throw Error('Unsafe test cleanup path');
-  await rm(directory, { recursive: true, force: true });
+  await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
