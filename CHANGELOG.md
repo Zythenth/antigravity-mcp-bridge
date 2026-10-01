@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## Não lançado
+## 0.3.0
 
 - Descarte pelo MCP e limpeza automática de cópias finalizadas, com retenção padrão de 7 dias.
 - Modo de consulta com `agy --mode plan`, verificação de alterações e bloqueio de integração.
@@ -8,6 +8,7 @@
 - Limites padrão de 10.000 arquivos/256 MiB copiados e 100 arquivos alterados.
 - Estatísticas de linhas e arquivos na prévia, identificação de binários e testes relatados vinculados ao hash.
 - Licença MIT, políticas de segurança e privacidade e avisos das dependências distribuídas.
+- Integração condicionada a confirmação via formulário MCP, vinculada ao hash revisado e conferida novamente antes da aplicação.
 
 ## 0.2.1
 

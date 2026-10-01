@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { CliAdapter } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewProjectCopy, verifyReadOnlyCopy, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, integrateProjectCopy, previewProjectCopy, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
@@ -90,6 +90,7 @@ export class TaskManager {
     }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', 'Invalid conversation ID');
     const releaseRegistry = this.state.acquire('registry');
+    let pendingProjectRelease: (() => void) | undefined;
     try {
       this.refresh();
       const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
@@ -105,6 +106,7 @@ export class TaskManager {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError('QUEUE_FULL', 'Task queue is full');
       }
+      pendingProjectRelease = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : undefined;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status));
         if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
@@ -117,13 +119,13 @@ export class TaskManager {
       }
       const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, prompt: options.prompt,
         workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
-      const releaseProject = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : undefined;
-      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject });
+      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+      pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
       this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
       this.pump();
       return { ...record };
-    } finally { releaseRegistry(); }
+    } finally { pendingProjectRelease?.(); releaseRegistry(); }
   }
 
   status(taskId: string): TaskRecord {
@@ -213,7 +215,7 @@ export class TaskManager {
     return { discardedTaskIds };
   }
 
-  async integrate(taskId: string, expectedSha256: string) {
+  async integrate(taskId: string, expectedSha256: string, confirm?: (preview: ChangePreview) => Promise<boolean>) {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
@@ -226,12 +228,17 @@ export class TaskManager {
       throw new BridgeError('TASK_NOT_READY', 'Wait for the resumed task to finish');
     }
     return this.withProject(task.project, async () => {
+      const reviewed = await previewProjectCopy(task.project!, this.config);
+      if (!reviewed.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');
+      if (reviewed.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before requesting confirmation');
+      if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation through the MCP client');
+      if (!await confirm(reviewed)) throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
       const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
       try {
         const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();
-          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256 });
+          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: 'mcp-elicitation' });
         }
         return preview;
       } finally { releaseSource(); }

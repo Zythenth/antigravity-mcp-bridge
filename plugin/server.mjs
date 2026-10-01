@@ -36964,8 +36964,8 @@ function safe(operation) {
   };
 }
 function createMcpServer(adapter2, tasks2) {
-  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.2.1" }, {
-    instructions: "Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Review antigravity_preview before asking the user whether to integrate. antigravity_integrate requires explicit user approval and the reviewed SHA-256. The original project is not modified by antigravity_run."
+  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.3.0" }, {
+    instructions: "Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Use read-only mode for consultations. Review antigravity_preview and actual tests before integration. antigravity_integrate requests confirmation through MCP form elicitation, bound to the reviewed SHA-256; clients without form support cannot integrate. A tool argument or patch hash does not constitute approval. The original project is not modified by antigravity_run."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -36974,7 +36974,7 @@ function createMcpServer(adapter2, tasks2) {
     description: "Inspect installed agy version, authentication and supported capabilities.",
     inputSchema: {},
     annotations: readOnly
-  }, safe(() => adapter2.health()));
+  }, safe(async () => ({ ...await adapter2.health(), integrationApproval: { available: Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" } })));
   server2.registerTool("antigravity_list_models", {
     title: "List Antigravity models",
     description: "List model IDs actually returned by agy models for this account.",
@@ -37041,10 +37041,28 @@ function createMcpServer(adapter2, tasks2) {
   }, async ({ taskId, expectedSha256, command, exitCode, output: output2 }) => safe(() => tasks2.recordTest(taskId, expectedSha256, command, exitCode, output2))());
   server2.registerTool("antigravity_integrate", {
     title: "Integrate reviewed changes",
-    description: "Apply the reviewed patch to the source after explicit user approval. Requires the SHA-256 from antigravity_preview.",
+    description: "Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.",
     inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
     annotations: action
-  }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256))());
+  }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256, async (preview) => {
+    if (!server2.server.getClientCapabilities()?.elicitation?.form) {
+      throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
+    }
+    const files = preview.fileSummaries.map((file2) => `${file2.status} ${JSON.stringify(file2.path)} (${file2.binary ? "bin\xE1rio" : "+" + file2.insertions + " -" + file2.deletions})`).join("\n");
+    const answer = await server2.server.elicitInput({
+      mode: "form",
+      message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?
+Origem: ${JSON.stringify(preview.sourceDirectory)}
+Tarefa: ${taskId}
+SHA-256 revisado: ${preview.sha256}
+${files}
+A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch e os testes.`,
+      requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "Confirmo a integra\xE7\xE3o deste patch", default: false } }, required: ["confirm"] }
+    }, { timeout: 3e5 }).catch(() => {
+      throw new BridgeError("APPROVAL_FAILED", "Client confirmation failed or timed out; no changes were applied");
+    });
+    return answer.action === "accept" && answer.content?.confirm === true;
+  }))());
   server2.registerTool("antigravity_discard", {
     title: "Discard an isolated copy",
     description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
@@ -37452,6 +37470,7 @@ var TaskManager = class {
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId))
       throw new BridgeError("INVALID_SESSION", "Invalid conversation ID");
     const releaseRegistry = this.state.acquire("registry");
+    let pendingProjectRelease;
     try {
       this.refresh();
       const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task) => task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : void 0;
@@ -37470,6 +37489,7 @@ var TaskManager = class {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError("QUEUE_FULL", "Task queue is full");
       }
+      pendingProjectRelease = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : void 0;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find((task) => terminal.has(task.record.status));
         if (!oldestFinished)
@@ -37491,13 +37511,14 @@ var TaskManager = class {
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      const releaseProject = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : void 0;
-      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject });
+      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+      pendingProjectRelease = void 0;
       this.queue.push(record2.taskId);
       this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
       this.pump();
       return { ...record2 };
     } finally {
+      pendingProjectRelease?.();
       releaseRegistry();
     }
   }
@@ -37594,7 +37615,7 @@ var TaskManager = class {
     }
     return { discardedTaskIds };
   }
-  async integrate(taskId, expectedSha256) {
+  async integrate(taskId, expectedSha256, confirm) {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== "completed")
@@ -37610,13 +37631,22 @@ var TaskManager = class {
       throw new BridgeError("TASK_NOT_READY", "Wait for the resumed task to finish");
     }
     return this.withProject(task.project, async () => {
+      const reviewed = await previewProjectCopy(task.project, this.config);
+      if (!reviewed.files.length)
+        throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
+      if (reviewed.sha256 !== expectedSha256)
+        throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before requesting confirmation");
+      if (!confirm)
+        throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation through the MCP client");
+      if (!await confirm(reviewed))
+        throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
       const releaseSource = this.state.acquire("source-" + createHash2("sha256").update(task.record.workingDirectory).digest("hex"));
       try {
         const preview = await integrateProjectCopy(task.project, expectedSha256, this.config);
         for (const related of this.tasks.values())
           if (related.project === task.project) {
             related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
-            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256 });
+            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: "mcp-elicitation" });
           }
         return preview;
       } finally {

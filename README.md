@@ -38,7 +38,7 @@ codex plugin marketplace add Zythenth/antigravity-mcp-bridge
 codex plugin add antigravity@antigravity-mcp-bridge
 ```
 
-Abra uma **nova conversa** depois da instalação. Peça, por exemplo: “Use `$antigravity` para implementar esta mudança e revisar o resultado.” A skill orienta a escolha de modelos, o acompanhamento da tarefa e a revisão final. Sessões já abertas não recarregam as ferramentas do plugin. Se o aplicativo não encontrar `agy`, configure `AGY_PATH` no ambiente em que o Codex é iniciado.
+Para atualizar, execute `codex plugin marketplace upgrade antigravity-mcp-bridge` e `codex plugin add antigravity@antigravity-mcp-bridge`. Abra uma **nova conversa** depois da instalação ou atualização. Peça, por exemplo: “Use `$antigravity` para implementar esta mudança e revisar o resultado.” A skill orienta a escolha de modelos, o acompanhamento da tarefa e a revisão final. Sessões já abertas não recarregam as ferramentas do plugin. Se o aplicativo não encontrar `agy`, configure `AGY_PATH` no ambiente em que o Codex é iniciado.
 
 O [guia oficial de plugins](https://developers.openai.com/plugins/build/plugins) explica o formato do catálogo e outras opções de instalação.
 
@@ -64,7 +64,7 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
 | `antigravity_record_test` | Registra comando, saída e exit code relatados pelo cliente, vinculados ao hash |
-| `antigravity_integrate` | Aplica o patch revisado ao projeto original após aprovação |
+| `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
 | `antigravity_events` | Lê eventos após um cursor `after` |
@@ -85,7 +85,9 @@ Fluxo típico:
 2. Inicie a tarefa com `antigravity_run` e guarde o `taskId`.
 3. Leia `antigravity_events` com `after: 0` e continue usando `nextCursor`.
 4. Consulte `antigravity_result` até `ready: true`.
-5. Use `antigravity_preview` para revisar o patch e executar os testes na cópia. Registre cada execução com `antigravity_record_test` (`command`, `exitCode`, `output` e `expectedSha256`). Após aprovação do usuário, chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia. O bridge recusa integração se a cópia ou os arquivos afetados no original mudaram após a revisão.
+5. Use `antigravity_preview` para revisar o patch e executar os testes na cópia. Registre cada execução com `antigravity_record_test` (`command`, `exitCode`, `output` e `expectedSha256`). Chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia para solicitar a confirmação final pelo cliente MCP. O bridge recusa integração se a cópia ou os arquivos afetados no original mudaram após a revisão.
+
+A integração exige suporte do cliente a **MCP form elicitation**. `antigravity_health` informa `integrationApproval.available`. O formulário mostra origem, tarefa, hash, arquivos e contagens de linhas; só `accept` com `confirm: true` permite aplicar. Recusa, cancelamento, timeout ou falta de suporte preservam o original. O hash identifica o patch e a confirmação vem de uma resposta separada do cliente; nenhum argumento `approved` é aceito como autorização. Após a resposta, o bridge confere novamente hash e origem. A confirmação depende de um cliente confiável que apresente a decisão ao usuário.
 
 ## Eventos, sessões e cancelamento
 
@@ -133,7 +135,7 @@ npm run lint
 npm test
 ```
 
-`npm test` usa um mock do `agy` e não consome quota. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
+`npm test` usa um mock do `agy` e não consome quota. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
 
 ## Licença e políticas
 

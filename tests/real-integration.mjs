@@ -1,5 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
@@ -8,7 +9,12 @@ import path from 'node:path';
 const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-real-'));
 execFileSync('git', ['init', '--quiet', directory]);
 await writeFile(path.join(directory, 'source.txt'), 'Disposable integration test project.');
-const client = new Client({ name: 'agy-mcp-integration-test', version: '1.0.0' });
+const client = new Client({ name: 'agy-mcp-integration-test', version: '1.0.0' }, { capabilities: { elicitation: { form: {} } } });
+client.setRequestHandler(ElicitRequestSchema, async request => {
+  if (request.params.mode !== 'form' || !request.params.message.includes(JSON.stringify(directory))) throw new Error('Approval must refer only to the disposable test project');
+  console.log('APPROVAL=simulated MCP client confirmation for disposable test project');
+  return { action: 'accept', content: { confirm: true } };
+});
 const serverPath = process.env.AGY_BRIDGE_SERVER || path.resolve('dist/src/index.js');
 const transport = new StdioClientTransport({ command: process.execPath,
   args: [serverPath], env: { ...process.env, AGY_PATH: process.env.AGY_PATH || 'agy' } });
@@ -67,6 +73,7 @@ try {
   process.exitCode = 1;
 } finally {
   if (taskId) await client.callTool({ name: 'antigravity_cancel', arguments: { taskId } }).catch(() => {});
+  if (taskId) await client.callTool({ name: 'antigravity_discard', arguments: { taskId } }).catch(() => {});
   await client.close().catch(() => {});
   await rm(directory, { recursive: true, force: true });
 }

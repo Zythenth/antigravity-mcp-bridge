@@ -24,8 +24,8 @@ function safe<T>(operation: () => Promise<T> | T) {
 }
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
-  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.2.1' }, {
-    instructions: 'Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Review antigravity_preview before asking the user whether to integrate. antigravity_integrate requires explicit user approval and the reviewed SHA-256. The original project is not modified by antigravity_run.',
+  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.3.0' }, {
+    instructions: 'Tasks run with agy --sandbox in a temporary copy. The copy excludes .gitignore and .git/info/exclude matches by default; includePaths can narrow it. Use read-only mode for consultations. Review antigravity_preview and actual tests before integration. antigravity_integrate requests confirmation through MCP form elicitation, bound to the reviewed SHA-256; clients without form support cannot integrate. A tool argument or patch hash does not constitute approval. The original project is not modified by antigravity_run.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -33,7 +33,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   server.registerTool('antigravity_health', {
     title: 'Check Antigravity CLI', description: 'Inspect installed agy version, authentication and supported capabilities.',
     inputSchema: {}, annotations: readOnly,
-  }, safe(() => adapter.health()));
+  }, safe(async () => ({ ...await adapter.health(), integrationApproval: { available: Boolean(server.server.getClientCapabilities()?.elicitation?.form), method: 'mcp-form-elicitation' } })));
 
   server.registerTool('antigravity_list_models', {
     title: 'List Antigravity models', description: 'List model IDs actually returned by agy models for this account.',
@@ -88,9 +88,21 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, expectedSha256, command, exitCode, output }) => safe(() => tasks.recordTest(taskId, expectedSha256, command, exitCode, output))());
 
   server.registerTool('antigravity_integrate', {
-    title: 'Integrate reviewed changes', description: 'Apply the reviewed patch to the source after explicit user approval. Requires the SHA-256 from antigravity_preview.',
+    title: 'Integrate reviewed changes', description: 'Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.',
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
-  }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256))());
+  }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, async preview => {
+    if (!server.server.getClientCapabilities()?.elicitation?.form) {
+      throw new BridgeError('APPROVAL_UNAVAILABLE', 'The MCP client must support form elicitation to confirm integration');
+    }
+    const files = preview.fileSummaries.map(file => `${file.status} ${JSON.stringify(file.path)} (${file.binary ? 'binário' : '+' + file.insertions + ' -' + file.deletions})`).join('\n');
+    const answer = await server.server.elicitInput({ mode: 'form',
+      message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?\nOrigem: ${JSON.stringify(preview.sourceDirectory)}\nTarefa: ${taskId}\nSHA-256 revisado: ${preview.sha256}\n${files}\nA integração modifica o original. Confirme apenas após revisar o patch e os testes.`,
+      requestedSchema: { type: 'object', properties: { confirm: { type: 'boolean', title: 'Confirmo a integração deste patch', default: false } }, required: ['confirm'] },
+    }, { timeout: 300000 }).catch(() => {
+      throw new BridgeError('APPROVAL_FAILED', 'Client confirmation failed or timed out; no changes were applied');
+    });
+    return answer.action === 'accept' && answer.content?.confirm === true;
+  }))());
 
   server.registerTool('antigravity_discard', {
     title: 'Discard an isolated copy', description: 'Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.',
