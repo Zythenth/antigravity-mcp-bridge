@@ -172,7 +172,7 @@ Quando o CLI anuncia `--add-dir` e `--new-project`, o bridge declara a cópia co
 
 O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas na inicialização e a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
 
-`antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Os testes são relatos do cliente, identificados por `source: "client-reported"`; o bridge não executa nem verifica o comando. Cada registro leva hash, data, exit code e até 4.000 caracteres de saída. Resultados antigos recebem `stale: true` se o patch atual diferir. Falhas são preservadas e devem ser apresentadas na revisão.
+`antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Registros de `antigravity_record_test` têm `source: "client-reported"`: são relatos cujo comando o bridge não executou. Registros capturados por `antigravity_test` têm `source: "agy-tool"` e incluem o recibo observado do terminal. Cada registro leva hash, data, exit code e até 4.000 caracteres de saída. Resultados antigos recebem `stale: true` quando a evidência já não corresponde aos arquivos atuais. Falhas são preservadas e devem ser apresentadas na revisão.
 
 A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
 
@@ -219,6 +219,8 @@ Erros comuns incluem `AGY_NOT_FOUND`, `AGY_AUTH_REQUIRED`, `MODEL_NOT_AVAILABLE`
 npm run typecheck
 npm run lint
 npm test
+npm run build:plugin
+npm run test:package
 ```
 
 `npm test` usa um mock do `agy` e não consome quota. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
