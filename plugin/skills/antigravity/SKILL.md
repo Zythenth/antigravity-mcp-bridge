@@ -52,6 +52,7 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 - A ferramenta devolve uma continuação com outro `taskId`. Acompanhe esse ID e faça a revisão/integração da tarefa mais recente. Examine os registros `source: "agy-tool"`, exit code, saída, erros e `stale`. Não atribua execução real a `client-reported` ou à narrativa do Gemini.
 - `retries: 0` preserva o padrão sem correção automática. Só peça até 3 correções adicionais quando autorizadas pela tarefa e informe o consumo. O comando permanece o mesmo; confira o diff para detectar testes enfraquecidos ou mudanças fora do escopo.
 - `TEST_EXECUTION_UNVERIFIED` indica que faltou um recibo do terminal. Não diga que o teste passou. `TEST_FAILED` preserva a falha observada e permite retomada para correção. Rode novamente os comandos depois de mudar os arquivos; registros antigos não validam o patch atual.
+- No Windows, `escalate_admin`/`Bash` pode indicar a configuração inicial do sandbox. O CLI interativo mostra um cartão UAC que identifica essa finalidade. Oriente a configuração em pasta descartável com `agy --sandbox` e `node --version`; a elevação depende de autorização do usuário e da confirmação do Windows. Não aprove privilégios automaticamente nem acrescente permissões genéricas. Depois da configuração, tente novamente o executor e confira seu recibo.
 
 ## Continuação e controle
 

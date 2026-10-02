@@ -1,6 +1,6 @@
 {
   "name": "antigravity",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Delegate coding tasks to Google Antigravity through the official agy CLI.",
   "author": {
     "name": "Zythenth"

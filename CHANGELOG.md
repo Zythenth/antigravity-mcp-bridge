@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.4.1
+
+- Snapshot Git temporário dentro da cópia do projeto para compatibilidade com o AppContainer Windows, com exclusão do fingerprint e limpeza validada.
+- Regressão para diretório temporário ambiente indisponível e validação real de execução, origem intacta e acesso externo negado.
+- Orientação da configuração inicial UAC do sandbox Windows e contadores de tokens também nos diagnósticos de falha do teste real.
+
 ## 0.4.0
 
 - Critérios de aceitação definidos antes da tarefa, conferência de artefatos e revisão com citações verificadas por arquivo e linha.

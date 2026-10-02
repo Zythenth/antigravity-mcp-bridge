@@ -23,16 +23,16 @@ async function nativeRunner(settings: TestCommand & { nonce: string; copyDirecto
   const fs = require('node:fs') as typeof import('node:fs');
   const crypto = require('node:crypto') as typeof import('node:crypto');
   const paths = require('node:path') as typeof import('node:path');
-  const os = require('node:os') as typeof import('node:os');
   const processes = require('node:child_process') as typeof import('node:child_process');
   const receipt: NativeTestReceipt = { nonce: settings.nonce, exitCode: null, truncated: false };
-  const gitDirectory = fs.mkdtempSync(paths.join(os.tmpdir(), 'agy-test-snapshot-'));
+  let gitDirectory: string | undefined;
   let output = '';
   try {
     if (paths.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== '') throw new Error('Test working directory differs from the copy');
+    gitDirectory = fs.mkdtempSync(paths.join(process.cwd(), '.agy-test-snapshot-'));
     processes.execFileSync('git', ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
     fs.mkdirSync(paths.join(gitDirectory, 'info'), { recursive: true });
-    fs.appendFileSync(paths.join(gitDirectory, 'info', 'exclude'), '\n/' + settings.file + '\n');
+    fs.appendFileSync(paths.join(gitDirectory, 'info', 'exclude'), '\n/' + settings.file + '\n/' + paths.basename(gitDirectory) + '/\n');
     async function fingerprint() {
       const list = processes.execFileSync('git', ['--git-dir=' + gitDirectory, '--work-tree=' + process.cwd(), 'ls-files', '--others', '--exclude-standard', '-z'], { maxBuffer: 10_000_000 }).toString('utf8').split('\0').filter(Boolean).sort();
       if (list.length > settings.maxCopyFiles) throw new Error('Test snapshot file limit exceeded');
@@ -79,8 +79,10 @@ async function nativeRunner(settings: TestCommand & { nonce: string; copyDirecto
     receipt.afterSha256 = await fingerprint();
   } catch (error) { receipt.error = error instanceof Error ? error.message : String(error); }
   finally {
-    if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(os.tmpdir()) || !paths.basename(gitDirectory).startsWith('agy-test-snapshot-') || fs.lstatSync(gitDirectory).isSymbolicLink()) throw new Error('Unsafe snapshot cleanup path');
-    fs.rmSync(gitDirectory, { recursive: true, force: true });
+    if (gitDirectory) {
+      if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(process.cwd()) || !paths.basename(gitDirectory).startsWith('.agy-test-snapshot-') || fs.lstatSync(gitDirectory).isSymbolicLink()) throw new Error('Unsafe snapshot cleanup path');
+      fs.rmSync(gitDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   }
   process.stdout.write(output + '\nAGY_BRIDGE_TEST:' + settings.nonce + ':' + Buffer.from(JSON.stringify(receipt)).toString('base64') + '\n');
 }

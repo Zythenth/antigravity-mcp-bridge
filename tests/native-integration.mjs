@@ -1,12 +1,17 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 
 const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-native-integration-')));
 const source = path.join(directory, 'source');
+const markerDirectory = await realpath(await mkdtemp(path.join(os.homedir(), '.agy-isolation-check-')));
+const markerPath = path.join(markerDirectory, 'marker.txt');
+const markerContent = randomUUID();
+await writeFile(markerPath, markerContent);
 execFileSync('git', ['init', '--quiet', source]);
 await writeFile(path.join(source, 'source.txt'), 'original');
 const client = new Client({ name: 'native-test-integration', version: '1' });
@@ -35,18 +40,25 @@ try {
   const finished = await wait(firstId);
   if (finished.status !== 'completed') throw Error(JSON.stringify(finished.error));
   const preview = await call('antigravity_preview', { taskId: firstId });
+  const testScript = "const fs=require('node:fs'); if(fs.readFileSync('source.txt','utf8')!=='original')process.exit(8);" +
+    'const marker=' + JSON.stringify(markerPath) + ";const denied=new Set(['EACCES','EPERM','ENOENT']);" +
+    "try{fs.readFileSync(marker);process.exit(9)}catch(error){if(!denied.has(error.code))throw error}" +
+    "try{fs.writeFileSync(marker,'changed');process.exit(10)}catch(error){if(!denied.has(error.code))throw error}" +
+    "console.log('native executor ran; outside read and write denied');";
   const tested = await call('antigravity_test', { taskId: firstId, expectedSha256: preview.sha256, timeoutSeconds: 120,
-    command: { executable: process.execPath, args: ['-e', "console.log('native executor ran');process.exit(require('node:fs').readFileSync('source.txt','utf8')==='original'?0:8)"] } });
+    command: { executable: process.execPath, args: ['-e', testScript] } });
   testId = tested.task.taskId;
   const final = await wait(testId);
   const evidence = final.tests?.at(-1);
   if (final.status !== 'completed' || evidence?.source !== 'agy-tool' || evidence.exitCode !== 0 || !evidence.output.includes('native executor ran')) {
     const events = await call('antigravity_events', { taskId: testId });
-    throw Error(JSON.stringify({ error: final.error, result: final.result, evidence, diagnostics: events.events.filter(event => !['copy.ready', 'copy.created', 'task.queued'].includes(event.type)) }));
+    throw Error(JSON.stringify({ error: final.error, result: final.result, evidence, tokenUsage: final.tokenUsage, sessionUsage: final.usage,
+      diagnostics: events.events.filter(event => !['copy.ready', 'copy.created', 'task.queued'].includes(event.type)) }));
   }
   const after = await call('antigravity_preview', { taskId: testId });
   if (after.tests.at(-1).stale || after.sha256 !== preview.sha256) throw Error('Native test evidence or patch changed');
   if (await readFile(path.join(source, 'source.txt'), 'utf8') !== 'original') throw Error('Original source changed');
+  if (await readFile(markerPath, 'utf8') !== markerContent) throw Error('Host marker changed');
   console.log(JSON.stringify({ status: 'passed', source: evidence.source, exitCode: evidence.exitCode, output: evidence.output, sandbox: evidence.sandbox, tokenUsage: final.tokenUsage, sessionUsage: final.usage }));
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
@@ -57,4 +69,6 @@ try {
   await client.close();
   if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('agy-native-integration-')) throw Error('Unsafe test cleanup path');
   await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  if (path.relative(await realpath(os.homedir()), path.dirname(markerDirectory)) !== '' || !path.basename(markerDirectory).startsWith('.agy-isolation-check-')) throw Error('Unsafe marker cleanup path');
+  await rm(markerDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

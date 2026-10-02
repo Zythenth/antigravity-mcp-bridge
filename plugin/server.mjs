@@ -37221,17 +37221,17 @@ async function nativeRunner(settings) {
   const fs = __require("node:fs");
   const crypto = __require("node:crypto");
   const paths = __require("node:path");
-  const os4 = __require("node:os");
   const processes = __require("node:child_process");
   const receipt = { nonce: settings.nonce, exitCode: null, truncated: false };
-  const gitDirectory = fs.mkdtempSync(paths.join(os4.tmpdir(), "agy-test-snapshot-"));
+  let gitDirectory;
   let output2 = "";
   try {
     if (paths.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== "")
       throw new Error("Test working directory differs from the copy");
+    gitDirectory = fs.mkdtempSync(paths.join(process.cwd(), ".agy-test-snapshot-"));
     processes.execFileSync("git", ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
     fs.mkdirSync(paths.join(gitDirectory, "info"), { recursive: true });
-    fs.appendFileSync(paths.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n");
+    fs.appendFileSync(paths.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n/" + paths.basename(gitDirectory) + "/\n");
     async function fingerprint() {
       const list = processes.execFileSync("git", ["--git-dir=" + gitDirectory, "--work-tree=" + process.cwd(), "ls-files", "--others", "--exclude-standard", "-z"], { maxBuffer: 1e7 }).toString("utf8").split("\0").filter(Boolean).sort();
       if (list.length > settings.maxCopyFiles)
@@ -37292,9 +37292,11 @@ async function nativeRunner(settings) {
   } catch (error62) {
     receipt.error = error62 instanceof Error ? error62.message : String(error62);
   } finally {
-    if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(os4.tmpdir()) || !paths.basename(gitDirectory).startsWith("agy-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
-      throw new Error("Unsafe snapshot cleanup path");
-    fs.rmSync(gitDirectory, { recursive: true, force: true });
+    if (gitDirectory) {
+      if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(process.cwd()) || !paths.basename(gitDirectory).startsWith(".agy-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
+        throw new Error("Unsafe snapshot cleanup path");
+      fs.rmSync(gitDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   }
   process.stdout.write(output2 + "\nAGY_BRIDGE_TEST:" + settings.nonce + ":" + Buffer.from(JSON.stringify(receipt)).toString("base64") + "\n");
 }
@@ -37645,7 +37647,7 @@ function safe(operation) {
   };
 }
 function createMcpServer(adapter2, tasks2) {
-  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.4.0" }, {
+  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.4.1" }, {
     instructions: "Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };

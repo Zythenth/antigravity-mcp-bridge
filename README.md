@@ -22,14 +22,14 @@ O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele 
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.4.0, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.4.1, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.4.0"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.4.1"]
     }
   }
 }
@@ -188,7 +188,9 @@ Se o CLI negar a ferramenta ou omitir o recibo, o resultado é `TEST_EXECUTION_U
 
 No Windows, use executáveis nativos como `node.exe` e `python.exe`; para npm, use `npm.cmd`. Arquivos `.cmd`/`.bat` aceitam argumentos comuns, mas metacaracteres de shell são recusados. A execução depende das permissões do sandbox nativo do CLI. Uma restrição de terminal não demonstra isolamento de todas as ferramentas do agente nem permite afirmar proteção completa do sistema de arquivos. Consulte a [configuração oficial do sandbox](https://www.antigravity.google/docs/sandbox/) e os [eventos de ferramentas no modo headless](https://www.antigravity.google/docs/cli/headless/#tool-calls-in-the-stream).
 
-No teste real com `agy` 1.2.14 no Windows, o CLI negou o terminal com `escalate_admin`/`Bash`, inclusive com `enableTerminalSandbox: true` e `toolPermission: "proceed-in-sandbox"`. A captura de comandos nesse ambiente permanece sem validação real. O bridge preserva `TEST_EXECUTION_UNVERIFIED` e não considera a narrativa do modelo como teste aprovado. Os testes automatizados do repositório usam um CLI simulado e não substituem essa validação de compatibilidade.
+Na configuração inicial do sandbox Windows, o `agy` 1.2.14 pode pedir uma elevação UAC. Abra o CLI interativo com `agy --sandbox` em uma pasta descartável e peça `node --version`. O cartão de configuração do sandbox apresenta `Yes, elevate`; confirme também o diálogo do Windows após conferir o aplicativo solicitante. Em headless, essa aprovação pendente aparece como `escalate_admin`/`Bash` e é negada. O bridge mantém `TEST_EXECUTION_UNVERIFIED` quando não há recibo válido. A configuração inicial precisa ser concluída antes de usar o executor; uma regra genérica de aprovação não substitui esse passo.
+
+A versão 0.4.1 foi validada com execução real no Windows após essa configuração: o recibo capturou exit code 0, a origem permaneceu intacta e um marcador artificial fora da cópia teve leitura e escrita negadas. O snapshot Git do runner fica temporariamente dentro da cópia montada no sandbox, excluído do fingerprint e removido ao terminar. Esse teste comprova os cenários observados; não atesta todas as ferramentas do agente nem todas as fronteiras do sistema de arquivos. A suíte padrão continua usando um CLI simulado.
 
 Para testar com a conta real em um projeto descartável, execute `npm run build` e `node tests/native-integration.mjs`. Esse teste usa a conta do agy e verifica a captura de uma execução real; a suíte padrão usa o CLI simulado e não consome quota.
 

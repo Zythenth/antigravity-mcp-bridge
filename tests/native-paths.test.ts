@@ -1,11 +1,44 @@
 import assert from 'node:assert/strict';
 import { execFileSync, execSync, spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createProjectCopy, discardProjectCopy } from '../src/isolation.js';
+import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy } from '../src/isolation.js';
 import { prepareNativeTest, readNativeReceipt } from '../src/native-tests.js';
+
+test('native runner works when the ambient temp directory is unavailable and keeps snapshot files out of the fingerprint', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-native-temp-test-'));
+  let project: Awaited<ReturnType<typeof createProjectCopy>> | undefined;
+  let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
+  try {
+    execFileSync('git', ['init', '--quiet', directory], { windowsHide: true });
+    await writeFile(path.join(directory, 'source.txt'), 'original');
+    project = await createProjectCopy(directory);
+    native = await prepareNativeTest(project, { executable: process.execPath,
+      args: ['-e', 'process.stdout.write(require("node:fs").readFileSync("source.txt","utf8"))'],
+      maxAttempts: 1, expectedSha256: 'a'.repeat(64),
+    }, { timeoutSeconds: 10, maxCopyFiles: 10000, maxCopyBytes: 268435456 });
+    const unavailable = path.join(directory, 'missing', 'temp');
+    const runner = (await readdir(project.copyDirectory)).find(file => file.endsWith('.cjs'));
+    assert.ok(runner);
+    const output = execFileSync(process.execPath, [path.join(project.copyDirectory, runner)], { cwd: project.copyDirectory, encoding: 'utf8', windowsHide: true,
+      env: { ...process.env, TEMP: unavailable, TMP: unavailable, TMPDIR: unavailable } });
+    const observed = readNativeReceipt({ state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+      tool_info: { parameters: { CommandLine: native.commandLine }, output } }, native);
+    assert.equal(observed?.receipt.error, undefined);
+    assert.equal(observed?.receipt.exitCode, 0);
+    assert.equal(observed?.output, 'original');
+    assert.equal(observed?.receipt.beforeSha256, observed?.receipt.afterSha256);
+    assert.equal(observed?.receipt.afterSha256, await fingerprintProjectCopy(project));
+    assert.ok(!(await readdir(project.copyDirectory)).some(file => file.startsWith('.agy-test-snapshot-')));
+  } finally {
+    await native?.cleanup();
+    if (project) await discardProjectCopy(project);
+    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('agy-native-temp-test-')) throw Error('Unsafe test cleanup path');
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
 
 test('native runner accepts the Windows short alias of the same copy directory', { skip: process.platform !== 'win32' }, async context => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-native-path-test-'));
