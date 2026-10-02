@@ -22,7 +22,7 @@ O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele 
 
 ### Servidor MCP via npm/npx
 
-O pacote 0.4.0 está preparado para publicação no npm. Após a versão ficar disponível no registro, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.4.0, configure seu cliente MCP com:
 
 ```json
 {
@@ -39,12 +39,14 @@ No Windows, clientes que exigem o nome completo do comando podem usar `npx.cmd`.
 
 ### Instalação pelo código-fonte
 
+Os exemplos PowerShell usam `npm.cmd`, o lançador do npm para Windows, que funciona mesmo quando a política de execução bloqueia `npm.ps1`. Em outros shells, use `npm`.
+
 ```powershell
 git clone https://github.com/Zythenth/antigravity-mcp-bridge.git
 cd antigravity-mcp-bridge
-npm ci
-npm run build:plugin
-npm test
+npm.cmd ci
+npm.cmd run build:plugin
+npm.cmd test
 ```
 
 `npm run build:plugin` compila o servidor e gera `plugin/server.mjs`. Esse arquivo também acompanha o repositório para que o plugin possa ser instalado sem executar o build. `npm start` inicia o servidor MCP em stdio; a saída padrão fica reservada para JSON-RPC.
@@ -216,11 +218,11 @@ Erros comuns incluem `AGY_NOT_FOUND`, `AGY_AUTH_REQUIRED`, `MODEL_NOT_AVAILABLE`
 ## Testes
 
 ```powershell
-npm run typecheck
-npm run lint
-npm test
-npm run build:plugin
-npm run test:package
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd test
+npm.cmd run build:plugin
+npm.cmd run test:package
 ```
 
 `npm test` usa um mock do `agy` e não consome quota. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
