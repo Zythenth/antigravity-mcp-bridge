@@ -8,6 +8,7 @@ const queryTools = new Set([
   'antigravity_tasks', 'antigravity_events', 'antigravity_result', 'antigravity_read_result',
   'antigravity_cancel', 'antigravity_sessions', 'antigravity_wait', 'antigravity_context', 'antigravity_handoff',
   'antigravity_compare', 'antigravity_comparison',
+  'antigravity_roles',
 ]);
 const reviewTools = new Set([...queryTools, 'antigravity_preview', 'antigravity_read_patch', 'antigravity_verify']);
 

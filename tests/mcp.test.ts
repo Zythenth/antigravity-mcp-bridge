@@ -66,6 +66,8 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     const compact = await call('antigravity_result', { taskId, includeResult: false });
     assert.equal(compact.task.result, undefined);
     assert.equal(compact.task.prompt, undefined);
+    assert.equal(compact.task.roleDefinition, undefined);
+    assert.equal(compact.task.handoff, undefined);
     assert.ok(compact.includedFileCount >= 1);
     const resultChunk = await call('antigravity_read_result', { taskId, limit: 50000 });
     assert.deepEqual(JSON.parse(resultChunk.text), final.task.result);

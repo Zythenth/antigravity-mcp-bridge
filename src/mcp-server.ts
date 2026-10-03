@@ -6,7 +6,6 @@ import { BridgeError } from './types.js';
 import { listProjectFiles } from './isolation.js';
 import { criteriaSchema, reviewSchema } from './verification.js';
 import { testCommandSchema } from './native-tests.js';
-import { roleSchema } from './roles.js';
 import { outputSchemas } from './output-schemas.js';
 import { toolEnabled } from './tool-profiles.js';
 import { decisionsSchema } from './handoff.js';
@@ -36,6 +35,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
+  const configuredRoleSchema = z.enum(tasks.roles().map(role => role.name) as [string, ...string[]]);
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_health')) server.registerTool('antigravity_health', {
     outputSchema: outputSchemas.antigravity_health,
@@ -78,6 +78,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: { model: z.string().min(1).max(128).nullable() }, annotations: { ...readOnly, readOnlyHint: false },
   }, async ({ model }) => safe(async () => ({ model: await tasks.setModel(model) }))());
 
+  if (toolEnabled(tasks.toolProfile, 'antigravity_roles')) server.registerTool('antigravity_roles', {
+    outputSchema: outputSchemas.antigravity_roles, title: 'List configured task roles',
+    description: 'List built-in and custom role names, base contracts and descriptions. Custom roles are configured in BRIDGE_CUSTOM_ROLES; instructions are snapshotted per task and inherited by resume. Planning/review bases remain read-only with existing structured reports.',
+    inputSchema: {}, annotations: readOnly,
+  }, safe(() => ({ roles: tasks.roles() })));
+
   const runSchema = {
     prompt: z.string().min(1),
     model: z.string().min(1).max(128).nullable().optional(),
@@ -88,7 +94,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     includePaths: z.array(z.string().min(1)).min(1).optional(),
     mode: z.enum(['write', 'read-only']).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
-    role: roleSchema.optional(),
+    role: configuredRoleSchema.optional(),
   };
   if (toolEnabled(tasks.toolProfile, 'antigravity_run')) server.registerTool('antigravity_run', {
     outputSchema: outputSchemas.antigravity_run,
@@ -112,7 +118,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_handoff, title: 'Transfer work to another role',
     description: 'Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.',
     inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
-      prompt: z.string().min(1), role: roleSchema, model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
+      prompt: z.string().min(1), role: configuredRoleSchema, model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
       timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
     const source = tasks.status(sourceTaskId);
@@ -242,8 +248,9 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
     if (includeResult !== false) return result;
-    const { prompt, result: output, includedFiles, report, ...metadata } = result.task;
-    return { ...result, task: metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined, includedFileCount: includedFiles?.length ?? 0 };
+    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, ...metadata } = result.task;
+    return { ...result, task: metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined,
+      handoffAvailable: handoff !== undefined, roleDefinitionAvailable: roleDefinition !== undefined, includedFileCount: includedFiles?.length ?? 0 };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_cancel')) server.registerTool('antigravity_cancel', {

@@ -1,6 +1,6 @@
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
 import type { NativeTestRequest } from './native-tests.js';
-import type { RoleReport, TaskRole } from './roles.js';
+import type { RoleReport, TaskRole, RoleDefinition } from './roles.js';
 import type { UsageCounters, taskTokenUsage } from './usage.js';
 import type { HandoffContext } from './handoff.js';
 import type { Comparison } from './comparison.js';
@@ -40,6 +40,7 @@ export interface TaskRecord {
   acceptanceCriteria?: AcceptanceCriterion[];
   verification?: VerificationRecord;
   role?: TaskRole;
+  roleDefinition?: RoleDefinition;
   report?: RoleReport;
   usageIsResume?: boolean;
   usageBaseline?: UsageCounters;
@@ -65,6 +66,7 @@ export interface TestEvidence {
 }
 
 export interface RunOptions {
+  roleDefinition?: RoleDefinition;
   comparison?: Comparison;
   contextTaskId?: string;
   expectedContextSha256?: string;

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
+import { customRolesSchema, type RoleDefinition } from './roles.js';
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
@@ -14,6 +15,7 @@ export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxC
 
 export interface Config extends ProjectLimits {
   toolProfile: ToolProfile;
+  customRoles: RoleDefinition[];
   agyPath: string;
   defaultModel?: string;
   maxConcurrentTasks: number;
@@ -34,6 +36,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
+    customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),
     agyPath: env.AGY_PATH || 'agy',
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),

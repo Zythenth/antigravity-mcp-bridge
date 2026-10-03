@@ -121,6 +121,18 @@ Guarde `comparisonId` e acompanhe cada `taskId` com `antigravity_wait`. `antigra
 
 Essas limitações não são resolvidas por manter o processo aberto ou inventar mensagens do protocolo. Um suporte futuro exige verificar a versão e o contrato oferecido pelo CLI antes de adicionar a operação.
 
+## Papéis personalizados
+
+Defina `BRIDGE_CUSTOM_ROLES` como um array JSON no ambiente do servidor e reinicie a conexão. Exemplo PowerShell:
+
+```powershell
+$env:BRIDGE_CUSTOM_ROLES = '[{"name":"security-review","baseRole":"reviewer","description":"Revisão de controles de acesso","instruction":"Examine os controles de acesso do escopo solicitado e cite evidências reais."}]'
+```
+
+`antigravity_roles` lista os nomes disponíveis, descrições, base e tamanho das instruções. Selecione o nome em `role` de `antigravity_run` ou `antigravity_handoff`; os schemas MCP anunciam os nomes configurados. Cada papel tem nome de até 32 caracteres em letras minúsculas, números e hífens, `baseRole` e instruções de até 8.000 caracteres. A descrição é opcional, até 500 caracteres. Há até 20 papéis; nomes duplicados, substituição dos três nomes nativos, bases desconhecidas ou instruções vazias impedem a inicialização.
+
+As bases `planner` e `reviewer` conservam modo de leitura, contratos JSON e conferência de citações. `implementer` conserva o fluxo de escrita na cópia e as mesmas exigências de verificação e confirmação para integração. Instruções personalizadas não dão permissões extras e entram no limite total do prompt. A definição usada é salva com a tarefa; a retomada mantém instruções e base originais, mesmo após mudar a configuração. Para trocar de papel, crie uma nova tarefa ou faça handoff.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.
@@ -132,6 +144,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
 | `antigravity_context` / `antigravity_handoff` | Inspeciona e transfere plano, decisões, critérios e evidências para outro papel em cópia independente |
 | `antigravity_compare` / `antigravity_comparison` | Solicita pareceres de 2 a 4 modelos e reúne achados, divergências, falhas e uso observado |
+| `antigravity_roles` | Lista os papéis nativos e personalizados configurados |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
@@ -191,7 +204,7 @@ O relatório validado aparece em `task.report` na resposta completa. Com respost
 
 Use `antigravity_preview` com `includePatch: false` para obter arquivos, estatísticas, hash e `patchLength` sem enviar o diff inteiro. Depois chame `antigravity_read_patch` com `expectedSha256` e, opcionalmente, um `path` devolvido na prévia. A seleção é feita pelo Git, incluindo arquivos binários e caminhos com espaços; não depende de interpretar cabeçalhos do patch. Qualquer alteração do patch completo invalida a leitura, mesmo quando você seleciona apenas um arquivo.
 
-`antigravity_result` aceita `includeResult: false` para omitir o resultado bruto, o prompt e a lista completa de arquivos da cópia. Quando `ready: true`, consulte `antigravity_read_result` para ler o resultado serializado como JSON. Guarde `contentSha256` e envie-o como `expectedContentSha256` nas páginas seguintes para detectar mudanças.
+`antigravity_result` aceita `includeResult: false` para omitir o resultado bruto, o prompt, relatórios transferidos, instruções do papel e a lista completa de arquivos da cópia. Quando `ready: true`, consulte `antigravity_read_result` para ler o resultado serializado como JSON. Guarde `contentSha256` e envie-o como `expectedContentSha256` nas páginas seguintes para detectar mudanças.
 
 Os leitores recebem `offset` (padrão 0) e `limit` (padrão 10.000, entre 2 e 50.000). Retornam `text`, `nextOffset`, `hasMore`, `totalLength` e `contentSha256`. Concatene `text` até `hasMore: false`; use sempre o `nextOffset` devolvido. Os offsets usam unidades UTF-16 e o leitor preserva caracteres representados por pares substitutos, como emojis. As opções antigas continuam devolvendo o conteúdo inteiro quando os campos de omissão não são usados.
 
@@ -247,6 +260,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 
 | Variável | Padrão | Uso |
 | --- | --- | --- |
+| `BRIDGE_CUSTOM_ROLES` | `[]` | Até 20 papéis em JSON com nome, base e instruções |
 | `BRIDGE_TOOL_PROFILE` | `full` | Catálogo: `full`, `query`, `review` ou `implementation` |
 | `AGY_PATH` | `agy` | Caminho do CLI oficial |
 | `MAX_CONCURRENT_TASKS` | `1` | Processos simultâneos |

@@ -45,7 +45,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
 
 test('tool profiles reduce the MCP catalog and reject writes in query/review', async () => {
   assert.throws(() => loadConfig({ BRIDGE_TOOL_PROFILE: 'unknown' }));
-  for (const [profile, count] of [['full', 28], ['query', 19], ['review', 22], ['implementation', 28]] as const) {
+  for (const [profile, count] of [['full', 29], ['query', 20], ['review', 23], ['implementation', 29]] as const) {
     const f = await fixture(profile);
     try {
       const names = (await f.client.listTools()).tools.map(tool => tool.name);
@@ -67,6 +67,43 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
       }
     } finally { await f.close(); }
   }
+});
+
+test('custom roles inherit read-only contracts and freeze instructions across configuration changes', async () => {
+  const role = { name: 'security-review', baseRole: 'reviewer', instruction: 'Inspect the requested access-control boundary.', description: 'Review requested access controls.' };
+  assert.throws(() => loadConfig({ BRIDGE_CUSTOM_ROLES: 'not-json' }));
+  assert.throws(() => loadConfig({ BRIDGE_CUSTOM_ROLES: JSON.stringify([{ ...role, name: 'reviewer' }]) }));
+  assert.throws(() => loadConfig({ BRIDGE_CUSTOM_ROLES: JSON.stringify([role, role]) }));
+  const f = await fixture('full', false, { BRIDGE_CUSTOM_ROLES: JSON.stringify([role]) });
+  let other: Client | undefined;
+  try {
+    const roles = await f.call('antigravity_roles');
+    assert.equal(roles.roles.length, 4);
+    assert.equal(roles.roles.at(-1).instructionChars, role.instruction.length);
+    assert.equal(roles.roles.at(-1).custom, true);
+    const tool = (await f.client.listTools()).tools.find(tool => tool.name === 'antigravity_run');
+    assert.ok((tool?.inputSchema.properties?.role as { enum?: string[] }).enum?.includes(role.name));
+    const forbidden = await f.client.callTool({ name: 'antigravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, role: role.name, mode: 'write' } });
+    assert.equal((forbidden.structuredContent as any).error.code, 'INVALID_ROLE');
+    const run = await f.call('antigravity_run', { prompt: 'review:test', workingDirectory: f.source, role: role.name });
+    assert.equal((await f.call('antigravity_wait', { taskId: run.task.taskId, timeoutSeconds: 10 })).status, 'completed');
+    const finished = (await f.call('antigravity_result', { taskId: run.task.taskId })).task;
+    assert.equal(finished.mode, 'read-only');
+    assert.equal(finished.report.role, 'reviewer');
+    assert.equal(finished.report.citationsChecked, true);
+    assert.ok(finished.result.response.includes(role.instruction));
+    other = new Client({ name: 'role-restart-test', version: '1' });
+    await other.connect(new StdioClientTransport({ command: process.execPath,
+      args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
+      env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: 'full', BRIDGE_CUSTOM_ROLES: '[]',
+        BRIDGE_STATE_DIRECTORY: path.join(path.dirname(f.source), 'state') }, stderr: 'pipe' }));
+    const resumed = await other.callTool({ name: 'antigravity_resume', arguments: { sessionId: finished.sessionId, prompt: 'review:test', workingDirectory: f.source } });
+    assert.equal(resumed.isError, undefined, JSON.stringify(resumed.structuredContent));
+    const resumedTask = (resumed.structuredContent as any).task;
+    assert.deepEqual(resumedTask.roleDefinition, role);
+    const done = await other.callTool({ name: 'antigravity_wait', arguments: { taskId: resumedTask.taskId, timeoutSeconds: 10 } });
+    assert.equal((done.structuredContent as any).status, 'completed');
+  } finally { await other?.close(); await f.close(); }
 });
 
 test('role handoff transfers plans, criteria and decisions to independent copies and rejects stale context', async () => {

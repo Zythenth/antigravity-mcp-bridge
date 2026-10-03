@@ -11,7 +11,7 @@ import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
 import { textChunk } from './chunks.js';
-import { roleSchema, validateRoleReport } from './roles.js';
+import { roleSchema, validateRoleReport, resolveRole, listRoles } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
 import { profileReadOnly } from './tool-profiles.js';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -83,6 +83,7 @@ export class TaskManager {
   }
 
   get toolProfile() { return this.config.toolProfile; }
+  roles() { return listRoles(this.config.customRoles); }
 
   async setModel(model: string | null): Promise<string | null> {
     if (model !== null) {
@@ -135,14 +136,16 @@ export class TaskManager {
       options.handoff ??= previous?.record.handoff;
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
       const role = roleSchema.parse(options.role ?? previous?.record.role ?? 'implementer');
+      const roleDefinition = previous?.record.roleDefinition ?? resolveRole(role, this.config.customRoles);
       if (previous && role !== (previous.record.role ?? 'implementer')) throw new BridgeError('INVALID_ROLE', 'A resumed task retains its original role');
-      const mode = options.mode ?? previous?.record.mode ?? (role === 'implementer' ? 'write' : 'read-only');
-      if (role !== 'implementer' && mode !== 'read-only') throw new BridgeError('INVALID_ROLE', 'Planner and reviewer roles require read-only mode');
+      const mode = options.mode ?? previous?.record.mode ?? (roleDefinition.baseRole === 'implementer' ? 'write' : 'read-only');
+      if (roleDefinition.baseRole !== 'implementer' && mode !== 'read-only') throw new BridgeError('INVALID_ROLE', 'Roles based on planner and reviewer require read-only mode');
       if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
       if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError('QUEUE_FULL', 'Task queue is full');
       }
+      options.roleDefinition = roleDefinition;
       if (contextSource?.project) {
         if (options.includePaths) throw new BridgeError('INVALID_CONTEXT', 'A context task uses the existing copy selection');
         options.handoff = await this.withProject(contextSource.project, async () => {
@@ -184,7 +187,7 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, prompt: options.prompt,
+      const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? normalizeUsage((previous.record.result as { usage?: unknown } | undefined)?.usage) : undefined,
@@ -630,7 +633,8 @@ export class TaskManager {
         this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
       } else {
         if (record.mode !== 'read-only') await previewProjectCopy(task.project, this.config);
-        record.report = await validateRoleReport(record.role ?? 'implementer', (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
+        record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
+          (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
         this.finish(task, 'completed');
       }
     } catch (error) {

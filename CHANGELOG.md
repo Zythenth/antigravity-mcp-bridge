@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Papéis personalizados por configuração, com contratos herdados, descoberta MCP e instruções preservadas nas retomadas.
+
 - Diagnóstico explícito das limitações de respostas de permissão e contagem prévia exata no protocolo headless verificado.
 
 - Comparação de 2 a 4 modelos em leitura sobre cópias do mesmo contexto, com divergências, falhas, uso e verificação de conteúdo atual.

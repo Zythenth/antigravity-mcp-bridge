@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
-import { plannerReportSchema, reviewerReportSchema, roleSchema } from './roles.js';
+import { plannerReportSchema, reviewerReportSchema, roleSchema, builtinRoleSchema, roleDefinitionSchema } from './roles.js';
 import { usageCountersSchema } from './usage.js';
 import { toolProfileSchema } from './tool-profiles.js';
 import { handoffSchema } from './handoff.js';
@@ -44,6 +44,7 @@ export const taskRecordSchema = z.object({
   report: report.optional(), usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(), tokenUsage: tokenUsage.optional(),
   handoff: handoffSchema.optional(),
   comparison: comparisonSchema.optional(),
+  roleDefinition: roleDefinitionSchema.optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -75,6 +76,8 @@ export const successOutputSchemas = {
   }).strict(),
   antigravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
   antigravity_get_model: z.object({ model: z.string().nullable() }).strict(),
+  antigravity_roles: z.object({ roles: z.array(z.object({ name: roleSchema, baseRole: builtinRoleSchema,
+    description: z.string().nullable(), custom: z.boolean(), instructionChars: count }).strict()) }).strict(),
   antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),
   antigravity_usage: z.object({
     scope: z.literal('retained-tasks'), taskCount: count, measuredTaskCount: count, counters: usageCountersSchema, byTask: z.array(usageRow),
@@ -121,6 +124,7 @@ export const successOutputSchemas = {
   }).strict(),
   antigravity_result: z.object({
     task: taskRecordSchema, ready: z.boolean(), resultAvailable: z.boolean().optional(), reportAvailable: z.boolean().optional(), includedFileCount: count.optional(),
+    handoffAvailable: z.boolean().optional(), roleDefinitionAvailable: z.boolean().optional(),
   }).strict(),
   antigravity_wait: z.object({
     taskId: id, status, ready: z.boolean(), timedOut: z.boolean(), tokenUsage: tokenUsage.optional(),

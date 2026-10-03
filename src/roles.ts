@@ -3,8 +3,32 @@ import { z } from 'zod';
 import { checkedPath } from './isolation.js';
 import { BridgeError } from './types.js';
 
-export const roleSchema = z.enum(['implementer', 'planner', 'reviewer']);
+export const builtinRoleSchema = z.enum(['implementer', 'planner', 'reviewer']);
+export type BuiltinRole = z.infer<typeof builtinRoleSchema>;
+export const roleSchema = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
 export type TaskRole = z.infer<typeof roleSchema>;
+export const roleDefinitionSchema = z.object({
+  name: roleSchema, baseRole: builtinRoleSchema, instruction: z.string().max(8000),
+  description: z.string().min(1).max(500).optional(),
+}).strict();
+export type RoleDefinition = z.infer<typeof roleDefinitionSchema>;
+export const customRolesSchema = z.array(roleDefinitionSchema.refine(role => !builtinRoleSchema.safeParse(role.name).success && Boolean(role.instruction.trim()),
+  'Custom roles cannot replace built-in names and require instructions')).max(20)
+  .refine(roles => new Set(roles.map(role => role.name)).size === roles.length, 'Custom role names must be unique');
+const builtinDefinitions: RoleDefinition[] = [
+  { name: 'implementer', baseRole: 'implementer', instruction: '', description: 'Implement requested changes in the isolated copy.' },
+  { name: 'planner', baseRole: 'planner', instruction: '', description: 'Plan requested work in read-only mode with a structured report.' },
+  { name: 'reviewer', baseRole: 'reviewer', instruction: '', description: 'Review files in read-only mode with checked citations.' },
+];
+export function resolveRole(name: string, customRoles: RoleDefinition[] = []): RoleDefinition {
+  const role = [...builtinDefinitions, ...customRoles].find(role => role.name === name);
+  if (!role) throw new BridgeError('INVALID_ROLE', 'Role is not configured: ' + name);
+  return { ...role };
+}
+export function listRoles(customRoles: RoleDefinition[]) {
+  return [...builtinDefinitions, ...customRoles].map(role => ({ name: role.name, baseRole: role.baseRole,
+    description: role.description ?? null, custom: !builtinRoleSchema.safeParse(role.name).success, instructionChars: role.instruction.length }));
+}
 export const plannerReportSchema = z.object({
   summary: z.string().min(1).max(4000),
   steps: z.array(z.object({ description: z.string().min(1).max(2000), files: z.array(z.string().min(1)).max(100),
@@ -24,7 +48,7 @@ export type RoleReport =
   | { role: 'planner'; source: 'agy-reported'; data: z.infer<typeof plannerReportSchema> }
   | { role: 'reviewer'; source: 'agy-reported'; data: z.infer<typeof reviewerReportSchema>; citationsChecked: true };
 
-export function roleContract(role: TaskRole) {
+export function roleContract(role: BuiltinRole) {
   if (role === 'implementer') return;
   const schema = role === 'planner' ? plannerReportSchema : reviewerReportSchema;
   return { schema: z.toJSONSchema(schema), instruction: role === 'planner'
@@ -32,7 +56,7 @@ export function roleContract(role: TaskRole) {
     : 'Review the requested scope without editing files. Report actionable findings with severity P0-P3, project-relative file, one-based line, exact whole-line quote, impact and suggestion. List actually reviewed files and limitations in unverified. Do not invent findings or claim tests ran without evidence. A report with no findings is not proof of correctness.' };
 }
 
-export async function validateRoleReport(role: TaskRole, raw: unknown, copyDirectory: string): Promise<RoleReport | undefined> {
+export async function validateRoleReport(role: BuiltinRole, raw: unknown, copyDirectory: string): Promise<RoleReport | undefined> {
   if (role === 'implementer') return;
   if (role === 'planner') {
     const parsed = plannerReportSchema.safeParse(raw);

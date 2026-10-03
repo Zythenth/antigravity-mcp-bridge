@@ -37,6 +37,10 @@ O contador prévio exato está indisponível e `exactTokens` permanece `null`. U
 - Se houver `null`, `available: false`, `partial: true` ou avisos, explique a limitação. Não estime contadores ausentes, não atribua zero a uma execução sem dados e não confunda tokens com preço ou quota da conta.
 - Informe também consumo de tarefas falhas quando disponível. Não afirme execução de testes somente porque houve consumo do modelo; o recibo do terminal continua necessário.
 
+## Papéis configurados
+
+Chame `antigravity_roles` antes de selecionar um papel personalizado. Use somente nomes anunciados pelo servidor, confira a base e a descrição e escolha um papel pertinente ao pedido. Papéis personalizados vêm de `BRIDGE_CUSTOM_ROLES` e conservam os contratos da base: planejamento/revisão em leitura, implementação na cópia. Não peça escrita a um papel de leitura. A retomada usa a definição salva da tarefa, mesmo quando a configuração muda; use uma nova tarefa/handoff quando precisar mudar o papel. Não invente papéis, instruções de configuração ou permissões extras.
+
 ## Papéis de consulta
 
 - Use `role: "planner"` para preparar um plano com arquivos e verificações, ou `role: "reviewer"` para uma revisão com achados estruturados. Ambos usam consulta sem alterações. `role: "implementer"` mantém o fluxo de implementação.

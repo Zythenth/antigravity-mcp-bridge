@@ -7,6 +7,7 @@ import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import type { ProjectCopy } from './isolation.js';
 import type { BridgeEvent } from './types.js';
 import { usageCountersSchema } from './usage.js';
+import { roleDefinitionSchema } from './roles.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
 const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
@@ -17,6 +18,7 @@ const snapshotSchema = z.object({
     createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(), pid: z.number().int().positive().optional(),
     mode: z.enum(['write', 'read-only']).optional(), integratedAt: z.string().datetime().optional(), discardedAt: z.string().datetime().optional(),
     usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
+    roleDefinition: roleDefinitionSchema.optional(),
   }).passthrough(),
   options: z.object({ prompt: z.string(), workingDirectory: z.string() }).passthrough(),
   project: z.object({ sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),
