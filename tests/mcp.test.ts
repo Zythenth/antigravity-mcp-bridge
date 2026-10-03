@@ -32,7 +32,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
       args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
       env: { ...process.env as Record<string, string>, BRIDGE_STATE_DIRECTORY: path.join(dir, 'state') }, stderr: 'pipe' }));
     const tools = await next.listTools();
-    assert.equal(tools.tools.length, 23);
+    assert.equal(tools.tools.length, 24);
     for (const tool of tools.tools) {
       assert.equal(tool.outputSchema?.type, 'object', tool.name);
       assert.ok(Object.keys(tool.outputSchema?.properties || {}).length > 0, tool.name);

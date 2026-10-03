@@ -28556,7 +28556,8 @@ var queryTools = /* @__PURE__ */ new Set([
   "antigravity_result",
   "antigravity_read_result",
   "antigravity_cancel",
-  "antigravity_sessions"
+  "antigravity_sessions",
+  "antigravity_wait"
 ]);
 var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
 function toolEnabled(profile, name) {
@@ -37645,6 +37646,17 @@ var successOutputSchemas = {
     reportAvailable: external_exports.boolean().optional(),
     includedFileCount: count.optional()
   }).strict(),
+  antigravity_wait: external_exports.object({
+    taskId: id,
+    status,
+    ready: external_exports.boolean(),
+    timedOut: external_exports.boolean(),
+    tokenUsage: tokenUsage.optional(),
+    events: external_exports.array(external_exports.object({ taskId: id, sequence: external_exports.number().int().positive(), timestamp, type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() }).strict()),
+    nextCursor: count,
+    oldestAvailable: external_exports.number().int().positive(),
+    truncated: external_exports.boolean()
+  }).strict(),
   antigravity_cancel: task,
   antigravity_sessions: external_exports.object({ sessions: external_exports.array(external_exports.object({ sessionId: external_exports.string(), taskIds: external_exports.array(id) }).strict()), scope: external_exports.literal("local bridge state") }).strict()
 };
@@ -37887,6 +37899,20 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(1).max(1e3).optional() },
       annotations: readOnly
     }, async ({ taskId, after, limit }) => safe(() => tasks2.readEvents(taskId, after, limit))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_wait"))
+    server2.registerTool("antigravity_wait", {
+      outputSchema: outputSchemas.antigravity_wait,
+      title: "Wait for real task progress",
+      description: "Wait up to 60 seconds for completion while sending MCP progress notifications for observed events. Progress is an event sequence, not a percentage. A wait timeout or request cancellation leaves the task running. Return a bounded event page and continue from nextCursor; disclose truncated events.",
+      inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
+      annotations: readOnly
+    }, async ({ taskId, after, timeoutSeconds }, extra) => safe(() => tasks2.wait(taskId, after, timeoutSeconds, extra.signal, extra._meta?.progressToken === void 0 ? void 0 : async (event) => {
+      await extra.sendNotification({ method: "notifications/progress", params: {
+        progressToken: extra._meta.progressToken,
+        progress: event.sequence,
+        message: taskId + ": " + event.type
+      } });
+    }))());
   if (toolEnabled(tasks2.toolProfile, "antigravity_result"))
     server2.registerTool("antigravity_result", {
       outputSchema: outputSchemas.antigravity_result,
@@ -38212,6 +38238,7 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 }
 
 // dist/src/task-manager.js
+import { setTimeout as delay } from "node:timers/promises";
 var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
 var TaskManager = class {
   adapter;
@@ -38220,6 +38247,7 @@ var TaskManager = class {
   tasks = /* @__PURE__ */ new Map();
   queue = [];
   active = 0;
+  waiting = 0;
   stopped = false;
   busyProjects = /* @__PURE__ */ new Set();
   state;
@@ -38611,6 +38639,45 @@ var TaskManager = class {
   readEvents(taskId, after = 0, limit = 200) {
     this.status(taskId);
     return this.events.read(taskId, after, limit);
+  }
+  async wait(taskId, after = 0, timeoutSeconds = 30, signal, onEvent) {
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
+      throw new BridgeError("INVALID_TIMEOUT", "Wait timeout must be between 1 and 60 seconds");
+    }
+    if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks)
+      throw new BridgeError("WAIT_LIMIT_EXCEEDED", "Too many concurrent waits");
+    this.waiting++;
+    const deadline = Date.now() + timeoutSeconds * 1e3;
+    let cursor = after;
+    try {
+      while (true) {
+        if (signal?.aborted)
+          throw new BridgeError("WAIT_CANCELLED", "Waiting was cancelled; the task continues");
+        const task2 = this.status(taskId);
+        const page = this.events.read(taskId, cursor, 1e3);
+        for (const event of page.events) {
+          await onEvent?.(event);
+          cursor = event.sequence;
+        }
+        const ready = terminal.has(task2.status);
+        if (ready || Date.now() >= deadline)
+          return {
+            taskId,
+            status: task2.status,
+            ready,
+            timedOut: !ready,
+            ...this.events.read(taskId, after, 1e3),
+            tokenUsage: task2.tokenUsage
+          };
+        await delay(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
+      }
+    } catch (error62) {
+      if (signal?.aborted)
+        throw new BridgeError("WAIT_CANCELLED", "Waiting was cancelled; the task continues");
+      throw error62;
+    } finally {
+      this.waiting--;
+    }
   }
   sessions() {
     this.refresh();

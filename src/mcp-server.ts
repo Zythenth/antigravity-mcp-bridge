@@ -184,6 +184,18 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     annotations: readOnly,
   }, async ({ taskId, after, limit }) => safe(() => tasks.readEvents(taskId, after, limit))());
 
+  if (toolEnabled(tasks.toolProfile, 'antigravity_wait')) server.registerTool('antigravity_wait', {
+    outputSchema: outputSchemas.antigravity_wait,
+    title: 'Wait for real task progress', description: 'Wait up to 60 seconds for completion while sending MCP progress notifications for observed events. Progress is an event sequence, not a percentage. A wait timeout or request cancellation leaves the task running. Return a bounded event page and continue from nextCursor; disclose truncated events.',
+    inputSchema: { taskId: z.string().uuid(), after: z.number().int().min(0).optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() },
+    annotations: readOnly,
+  }, async ({ taskId, after, timeoutSeconds }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal,
+    extra._meta?.progressToken === undefined ? undefined : async event => {
+      await extra.sendNotification({ method: 'notifications/progress', params: {
+        progressToken: extra._meta!.progressToken!, progress: event.sequence, message: taskId + ': ' + event.type,
+      } });
+    }))());
+
   if (toolEnabled(tasks.toolProfile, 'antigravity_result')) server.registerTool('antigravity_result', {
     outputSchema: outputSchemas.antigravity_result,
     title: 'Get Antigravity result', description: 'Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.',

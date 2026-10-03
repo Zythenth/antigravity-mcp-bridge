@@ -88,6 +88,12 @@ Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a confirmação de integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
+## Espera com progresso
+
+Prefira `antigravity_wait` com `taskId`, `after` e `timeoutSeconds` (1–60, padrão 30). Clientes que enviam `_meta.progressToken` recebem notificações `notifications/progress` com a sequência e o tipo de eventos reais, incluindo ferramentas, recibos de testes e conclusão. O número é um cursor de eventos, sem total ou porcentagem. Nenhum texto de arquivo, prompt ou saída do terminal é enviado nessas notificações.
+
+A resposta inclui `ready`, `timedOut`, estado, uso de tokens e até 1.000 eventos. Continue com `nextCursor`; `truncated` informa eventos antigos perdidos. Timeout da espera e cancelamento da chamada MCP preservam a execução. Para parar a tarefa, use `antigravity_cancel`. Sem suporte a progresso, a resposta final continua disponível. A espera consulta também o estado persistido para observar tarefas de outro processo do bridge.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.
@@ -109,6 +115,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
+| `antigravity_wait` | Espera até 60 segundos com notificações MCP dos eventos observados; timeout não cancela a tarefa |
 | `antigravity_events` | Lê eventos após um cursor `after` |
 | `antigravity_result` | Consulta o resultado ou informa `ready: false` |
 | `antigravity_discard` | Remove a cópia e o baseline de uma tarefa finalizada |

@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Espera limitada com notificações MCP por evento real, cursores e cancelamento separado da execução.
+
 - Perfis de ferramentas por ambiente, com consulta e revisão limitadas a tarefas em leitura.
 
 ## 0.4.1

@@ -103,6 +103,11 @@ export const successOutputSchemas = {
   antigravity_result: z.object({
     task: taskRecordSchema, ready: z.boolean(), resultAvailable: z.boolean().optional(), reportAvailable: z.boolean().optional(), includedFileCount: count.optional(),
   }).strict(),
+  antigravity_wait: z.object({
+    taskId: id, status, ready: z.boolean(), timedOut: z.boolean(), tokenUsage: tokenUsage.optional(),
+    events: z.array(z.object({ taskId: id, sequence: z.number().int().positive(), timestamp, type: z.string(), data: z.unknown(), raw: z.unknown().optional() }).strict()),
+    nextCursor: count, oldestAvailable: z.number().int().positive(), truncated: z.boolean(),
+  }).strict(),
   antigravity_cancel: task,
   antigravity_sessions: z.object({ sessions: z.array(z.object({ sessionId: z.string(), taskIds: z.array(id) }).strict()), scope: z.literal('local bridge state') }).strict(),
 };

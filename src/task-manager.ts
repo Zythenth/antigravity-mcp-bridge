@@ -14,6 +14,8 @@ import { textChunk } from './chunks.js';
 import { roleSchema, validateRoleReport } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
 import { profileReadOnly } from './tool-profiles.js';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { BridgeEvent } from './types.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -23,6 +25,7 @@ export class TaskManager {
   private readonly tasks = new Map<string, InternalTask>();
   private readonly queue: string[] = [];
   private active = 0;
+  private waiting = 0;
   private stopped = false;
   private readonly busyProjects = new Set<ProjectCopy>();
   private readonly state: StateStore;
@@ -352,6 +355,33 @@ export class TaskManager {
   readEvents(taskId: string, after = 0, limit = 200) {
     this.status(taskId);
     return this.events.read(taskId, after, limit);
+  }
+
+  async wait(taskId: string, after = 0, timeoutSeconds = 30, signal?: AbortSignal, onEvent?: (event: BridgeEvent) => Promise<void>) {
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
+      throw new BridgeError('INVALID_TIMEOUT', 'Wait timeout must be between 1 and 60 seconds');
+    }
+    if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks) throw new BridgeError('WAIT_LIMIT_EXCEEDED', 'Too many concurrent waits');
+    this.waiting++;
+    const deadline = Date.now() + timeoutSeconds * 1000;
+    let cursor = after;
+    try {
+      while (true) {
+        if (signal?.aborted) throw new BridgeError('WAIT_CANCELLED', 'Waiting was cancelled; the task continues');
+        const task = this.status(taskId);
+        const page = this.events.read(taskId, cursor, 1000);
+        for (const event of page.events) { await onEvent?.(event); cursor = event.sequence; }
+        const ready = terminal.has(task.status);
+        if (ready || Date.now() >= deadline) return {
+          taskId, status: task.status, ready, timedOut: !ready,
+          ...this.events.read(taskId, after, 1000), tokenUsage: task.tokenUsage,
+        };
+        await delay(Math.min(250, Math.max(1, deadline - Date.now())), undefined, { signal });
+      }
+    } catch (error) {
+      if (signal?.aborted) throw new BridgeError('WAIT_CANCELLED', 'Waiting was cancelled; the task continues');
+      throw error;
+    } finally { this.waiting--; }
   }
 
   sessions(): Array<{ sessionId: string; taskIds: string[] }> {
