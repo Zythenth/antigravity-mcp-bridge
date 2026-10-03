@@ -26,6 +26,10 @@ const report = schema?.properties.reviewedFiles ? {
   summary: 'Fixture review', reviewedFiles: ['source.txt'], findings: [{ severity: 'P2', path: 'source.txt', line: 1,
     quote: scenario === 'fabricated-review' ? 'invented source' : 'source', message: 'Fixture finding', impact: 'Fixture impact', suggestion: 'Fixture suggestion' }], unverified: [],
 } : schema ? { summary: 'Fixture plan', steps: [{ description: 'Inspect source', files: ['source.txt'], verification: 'Check requested behavior' }], unverified: ['Runtime not tested'] } : undefined;
+if (scenario === 'comparison' && report?.findings && args[args.indexOf('--model') + 1] === 'mock-flash') {
+  report.findings[0].severity = 'P3';
+  report.findings[0].message = 'Flash interpretation';
+}
 const send = obj => process.stdout.write(JSON.stringify(obj) + '\n');
 const result = (status = 'SUCCESS') => send({ event: 'result', result: { conversation_id: conversationId, status,
   response: prompt, usage: { input_tokens: args.includes('--conversation') ? 2 : 1, output_tokens: args.includes('--conversation') ? 4 : 2,

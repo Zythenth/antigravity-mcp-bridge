@@ -3,6 +3,7 @@ import type { NativeTestRequest } from './native-tests.js';
 import type { RoleReport, TaskRole } from './roles.js';
 import type { UsageCounters, taskTokenUsage } from './usage.js';
 import type { HandoffContext } from './handoff.js';
+import type { Comparison } from './comparison.js';
 
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
@@ -44,6 +45,7 @@ export interface TaskRecord {
   usageBaseline?: UsageCounters;
   tokenUsage?: ReturnType<typeof taskTokenUsage>;
   handoff?: HandoffContext;
+  comparison?: Comparison;
 }
 
 export interface TestEvidence {
@@ -63,6 +65,7 @@ export interface TestEvidence {
 }
 
 export interface RunOptions {
+  comparison?: Comparison;
   contextTaskId?: string;
   expectedContextSha256?: string;
   decisions?: string[];

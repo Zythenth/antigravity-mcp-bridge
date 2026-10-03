@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Comparação de 2 a 4 modelos em leitura sobre cópias do mesmo contexto, com divergências, falhas, uso e verificação de conteúdo atual.
+
 - Transferência estruturada entre papéis com cópias independentes, histórico de relatórios, decisões e critérios, vinculados ao hash dos arquivos.
 
 - Espera limitada com notificações MCP por evento real, cursores e cancelamento separado da execução.

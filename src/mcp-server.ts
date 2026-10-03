@@ -10,6 +10,7 @@ import { roleSchema } from './roles.js';
 import { outputSchemas } from './output-schemas.js';
 import { toolEnabled } from './tool-profiles.js';
 import { decisionsSchema } from './handoff.js';
+import { comparisonModelsSchema } from './comparison.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -112,6 +113,21 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     const source = tasks.status(sourceTaskId);
     return { task: await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
   })());
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_compare')) server.registerTool('antigravity_compare', {
+    outputSchema: outputSchemas.antigravity_compare, title: 'Request independent model opinions',
+    description: 'Start read-only reviewer tasks with 2 to 4 distinct agy model IDs against independent copies of the same hashed context. Each model consumes quota. Returns task IDs and comparison ID; inspect start errors and wait for each task before synthesizing.',
+    inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      models: comparisonModelsSchema, prompt: z.string().min(1), timeoutSeconds: z.number().int().min(1).max(86400).optional() },
+    annotations: action,
+  }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) =>
+    safe(() => tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds))());
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_comparison')) server.registerTool('antigravity_comparison', {
+    outputSchema: outputSchemas.antigravity_comparison, title: 'Compare model review evidence',
+    description: 'Read retained comparison opinions, per-model failures, token usage and findings grouped by exact file/line/quote. Distinguish identical findings, different interpretations and findings not reported by every model. Missing or failed opinions are not agreement. Check contextStale, complete and unverified fields; Codex must inspect and synthesize the evidence. No integration is performed.',
+    inputSchema: { comparisonId: z.string().uuid() }, annotations: readOnly,
+  }, async ({ comparisonId }) => safe(() => tasks.comparison(comparisonId))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_preview')) server.registerTool('antigravity_preview', {
     outputSchema: outputSchemas.antigravity_preview,

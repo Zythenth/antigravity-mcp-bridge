@@ -4,6 +4,7 @@ import { plannerReportSchema, reviewerReportSchema, roleSchema } from './roles.j
 import { usageCountersSchema } from './usage.js';
 import { toolProfileSchema } from './tool-profiles.js';
 import { handoffSchema } from './handoff.js';
+import { comparisonSchema, comparisonFindingSchema } from './comparison.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().uuid();
@@ -42,6 +43,7 @@ export const taskRecordSchema = z.object({
   acceptanceCriteria: z.array(criterionSchema).optional(), verification: verification.optional(), role: roleSchema.optional(),
   report: report.optional(), usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(), tokenUsage: tokenUsage.optional(),
   handoff: handoffSchema.optional(),
+  comparison: comparisonSchema.optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -81,6 +83,14 @@ export const successOutputSchemas = {
   antigravity_handoff: task,
   antigravity_context: z.object({ taskId: id, treeSha256: hash, role: roleSchema, report: report.nullable(), handoff: handoffSchema.nullable(),
     acceptanceCriteria: z.array(criterionSchema), includedFiles: z.array(z.string()) }).strict(),
+  antigravity_compare: z.object({ comparisonId: id, taskIds: z.array(id), models: comparisonSchema.shape.models,
+    startErrors: comparisonSchema.shape.startErrors }).strict(),
+  antigravity_comparison: comparisonSchema.extend({
+    ready: z.boolean(), complete: z.boolean(), missingModels: z.array(z.string()), contextStale: z.boolean(),
+    opinions: z.array(z.object({ taskId: id, model: z.string(), status, contextMatches: z.boolean().nullable(), report: report.nullable(),
+      error: z.object({ code: z.string(), message: z.string() }).strict().nullable(), tokenUsage: tokenUsage.optional() }).strict()),
+    findings: z.array(comparisonFindingSchema), warnings: z.array(z.string()),
+  }).strict(),
   antigravity_preview: z.object({
     ...previewShape, patch: z.string().optional(), patchLength: count,
     tests: z.array(testEvidenceSchema.extend({ stale: z.boolean() })),

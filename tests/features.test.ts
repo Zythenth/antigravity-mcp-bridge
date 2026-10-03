@@ -12,7 +12,7 @@ import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy } from '../src/isolation.js';
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-async function fixture(profile = 'full', withApproval = false) {
+async function fixture(profile = 'full', withApproval = false, environment: Record<string, string> = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-feature-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
@@ -21,7 +21,7 @@ async function fixture(profile = 'full', withApproval = false) {
   if (withApproval) client.setRequestHandler(ElicitRequestSchema, async () => ({ action: 'accept', content: { confirm: true } }));
   await client.connect(new StdioClientTransport({ command: process.execPath,
     args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
-    env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: profile, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') },
+    env: { ...process.env as Record<string, string>, ...environment, BRIDGE_TOOL_PROFILE: profile, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') },
     stderr: 'pipe' }));
   const call = async (name: string, args: Record<string, unknown> = {}) => {
     const result = await client.callTool({ name, arguments: args });
@@ -30,7 +30,10 @@ async function fixture(profile = 'full', withApproval = false) {
   };
   return { client, source, call, async close() {
     for (const task of (await call('antigravity_tasks')).tasks) {
-      if (!(await call('antigravity_result', { taskId: task.taskId })).ready) await call('antigravity_cancel', { taskId: task.taskId });
+      if (!(await call('antigravity_result', { taskId: task.taskId })).ready) {
+        await call('antigravity_cancel', { taskId: task.taskId });
+        await call('antigravity_wait', { taskId: task.taskId, timeoutSeconds: 10 });
+      }
     }
     await client.close();
     for (const saved of new StateStore(path.join(directory, 'state')).load()) if (saved.project) await discardProjectCopy(saved.project);
@@ -42,7 +45,7 @@ async function fixture(profile = 'full', withApproval = false) {
 
 test('tool profiles reduce the MCP catalog and reject writes in query/review', async () => {
   assert.throws(() => loadConfig({ BRIDGE_TOOL_PROFILE: 'unknown' }));
-  for (const [profile, count] of [['full', 26], ['query', 17], ['review', 20], ['implementation', 26]] as const) {
+  for (const [profile, count] of [['full', 28], ['query', 19], ['review', 22], ['implementation', 28]] as const) {
     const f = await fixture(profile);
     try {
       const names = (await f.client.listTools()).tools.map(tool => tool.name);
@@ -100,10 +103,9 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     assert.equal((stale.structuredContent as any).error.code, 'CONTEXT_CHANGED');
     await writeFile(path.join(implementation.copyDirectory, '.gitignore'), 'source.txt\n');
     const changedSelection = await f.call('antigravity_context', { taskId: run.task.taskId });
-    const excluded = await f.call('antigravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: changedSelection.treeSha256,
-      role: 'reviewer', prompt: 'review:test' });
-    assert.equal((await f.call('antigravity_wait', { taskId: excluded.task.taskId, timeoutSeconds: 10 })).status, 'failed');
-    assert.equal((await f.call('antigravity_result', { taskId: excluded.task.taskId })).task.error.code, 'CONTEXT_CHANGED');
+    const excluded = await f.client.callTool({ name: 'antigravity_handoff', arguments: { sourceTaskId: run.task.taskId, expectedContextSha256: changedSelection.treeSha256,
+      role: 'reviewer', prompt: 'review:test' } });
+    assert.equal((excluded.structuredContent as any).error.code, 'CONTEXT_CHANGED');
     assert.equal(await readFile(path.join(implementation.copyDirectory, 'source.txt'), 'utf8'), 'changed');
     const reviewContext = await f.call('antigravity_context', { taskId: review.task.taskId });
     const fixed = await f.call('antigravity_handoff', { sourceTaskId: review.task.taskId, expectedContextSha256: reviewContext.treeSha256,
@@ -118,6 +120,42 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     assert.equal(verified.status, 'passed');
     await f.call('antigravity_integrate', { taskId: fixed.task.taskId, expectedSha256: preview.sha256 });
     assert.equal(await readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+  } finally { await f.close(); }
+});
+
+test('model comparison preserves distinct opinions, failures and stale evidence', async () => {
+  const f = await fixture('full', false, { MAX_CONCURRENT_TASKS: '2' });
+  try {
+    const source = await f.call('antigravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source });
+    await f.call('antigravity_wait', { taskId: source.task.taskId, timeoutSeconds: 10 });
+    const context = await f.call('antigravity_context', { taskId: source.task.taskId });
+    const args = { sourceTaskId: source.task.taskId, expectedContextSha256: context.treeSha256, models: ['mock-pro', 'mock-flash'], prompt: 'comparison:test' };
+    const unavailable = await f.client.callTool({ name: 'antigravity_compare', arguments: { ...args, models: ['mock-pro', 'unknown'] } });
+    assert.equal((unavailable.structuredContent as any).error.code, 'MODEL_NOT_AVAILABLE');
+    assert.equal((await f.call('antigravity_tasks')).tasks.length, 1);
+    const duplicate = await f.client.callTool({ name: 'antigravity_compare', arguments: { ...args, models: ['mock-pro', 'mock-pro'] } });
+    assert.equal(duplicate.isError, true);
+    const started = await f.call('antigravity_compare', args);
+    assert.equal(started.taskIds.length, 2);
+    for (const taskId of started.taskIds) await f.call('antigravity_wait', { taskId, timeoutSeconds: 10 });
+    const comparison = await f.call('antigravity_comparison', { comparisonId: started.comparisonId });
+    assert.equal(comparison.complete, true);
+    assert.equal(comparison.contextStale, false);
+    assert.equal(comparison.findings[0].agreement, 'different');
+    assert.deepEqual(comparison.opinions.map((opinion: any) => opinion.model), ['mock-pro', 'mock-flash']);
+    const member = (await f.call('antigravity_result', { taskId: started.taskIds[0] })).task;
+    await writeFile(path.join(member.copyDirectory, 'source.txt'), 'changed');
+    const stale = await f.call('antigravity_comparison', { comparisonId: started.comparisonId });
+    assert.equal(stale.complete, false);
+    assert.equal(stale.contextStale, true);
+    assert.equal(stale.findings[0].agreement, 'not-reported-by-all');
+    const failed = await f.call('antigravity_compare', { ...args, prompt: 'fabricated-review:test' });
+    for (const taskId of failed.taskIds) await f.call('antigravity_wait', { taskId, timeoutSeconds: 10 });
+    const failure = await f.call('antigravity_comparison', { comparisonId: failed.comparisonId });
+    assert.equal(failure.ready, true);
+    assert.equal(failure.complete, false);
+    assert.ok(failure.opinions.every((opinion: any) => opinion.error.code === 'ROLE_OUTPUT_INVALID'));
+    assert.deepEqual(failure.findings, []);
   } finally { await f.close(); }
 });
 

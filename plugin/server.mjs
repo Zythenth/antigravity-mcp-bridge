@@ -28559,7 +28559,9 @@ var queryTools = /* @__PURE__ */ new Set([
   "antigravity_sessions",
   "antigravity_wait",
   "antigravity_context",
-  "antigravity_handoff"
+  "antigravity_handoff",
+  "antigravity_compare",
+  "antigravity_comparison"
 ]);
 var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
 function toolEnabled(profile, name) {
@@ -37568,6 +37570,50 @@ var handoffSchema = external_exports.object({
   }).strict()).max(20)
 }).strict();
 
+// dist/src/comparison.js
+var comparisonModelsSchema = external_exports.array(external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/)).min(2).max(4).refine((models) => new Set(models).size === models.length, "Choose distinct model IDs");
+var comparisonSchema = external_exports.object({
+  comparisonId: external_exports.string().uuid(),
+  sourceTaskId: external_exports.string().uuid(),
+  treeSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  models: comparisonModelsSchema,
+  startErrors: external_exports.array(external_exports.object({ model: external_exports.string(), code: external_exports.string(), message: external_exports.string() }).strict())
+}).strict();
+var comparisonFindingSchema = external_exports.object({
+  path: external_exports.string(),
+  line: external_exports.number().int().positive(),
+  quote: external_exports.string(),
+  agreement: external_exports.enum(["identical", "different", "not-reported-by-all"]),
+  opinions: external_exports.array(external_exports.object({ model: external_exports.string(), finding: reviewerReportSchema.shape.findings.element }).strict()),
+  notReportedBy: external_exports.array(external_exports.string())
+}).strict();
+function compareFindings(tasks2, models) {
+  const groups = /* @__PURE__ */ new Map();
+  const valid = tasks2.filter((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
+  for (const task2 of valid) {
+    if (task2.report?.role !== "reviewer" || !task2.model)
+      continue;
+    for (const finding of task2.report.data.findings) {
+      const key = JSON.stringify([finding.path, finding.line, finding.quote]);
+      const group = groups.get(key) ?? [];
+      group.push({ model: task2.model, finding });
+      groups.set(key, group);
+    }
+  }
+  return [...groups.values()].map((opinions) => {
+    const { path: path7, line, quote } = opinions[0].finding;
+    const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
+    return {
+      path: path7,
+      line,
+      quote,
+      opinions,
+      notReportedBy,
+      agreement: notReportedBy.length ? "not-reported-by-all" : new Set(opinions.map((opinion) => JSON.stringify(opinion.finding))).size === 1 ? "identical" : "different"
+    };
+  });
+}
+
 // dist/src/output-schemas.js
 var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var id = external_exports.string().uuid();
@@ -37638,7 +37684,8 @@ var taskRecordSchema = external_exports.object({
   usageIsResume: external_exports.boolean().optional(),
   usageBaseline: usageCountersSchema.optional(),
   tokenUsage: tokenUsage.optional(),
-  handoff: handoffSchema.optional()
+  handoff: handoffSchema.optional(),
+  comparison: comparisonSchema.optional()
 }).strict();
 var task = external_exports.object({ task: taskRecordSchema }).strict();
 var file2 = external_exports.object({ status: external_exports.enum(["A", "M", "D"]), path: external_exports.string() }).strict();
@@ -37708,6 +37755,29 @@ var successOutputSchemas = {
     handoff: handoffSchema.nullable(),
     acceptanceCriteria: external_exports.array(criterionSchema),
     includedFiles: external_exports.array(external_exports.string())
+  }).strict(),
+  antigravity_compare: external_exports.object({
+    comparisonId: id,
+    taskIds: external_exports.array(id),
+    models: comparisonSchema.shape.models,
+    startErrors: comparisonSchema.shape.startErrors
+  }).strict(),
+  antigravity_comparison: comparisonSchema.extend({
+    ready: external_exports.boolean(),
+    complete: external_exports.boolean(),
+    missingModels: external_exports.array(external_exports.string()),
+    contextStale: external_exports.boolean(),
+    opinions: external_exports.array(external_exports.object({
+      taskId: id,
+      model: external_exports.string(),
+      status,
+      contextMatches: external_exports.boolean().nullable(),
+      report: report.nullable(),
+      error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().nullable(),
+      tokenUsage: tokenUsage.optional()
+    }).strict()),
+    findings: external_exports.array(comparisonFindingSchema),
+    warnings: external_exports.array(external_exports.string())
   }).strict(),
   antigravity_preview: external_exports.object({
     ...previewShape,
@@ -37904,6 +37974,28 @@ function createMcpServer(adapter2, tasks2) {
       const source = tasks2.status(sourceTaskId);
       return { task: await tasks2.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
     })());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_compare"))
+    server2.registerTool("antigravity_compare", {
+      outputSchema: outputSchemas.antigravity_compare,
+      title: "Request independent model opinions",
+      description: "Start read-only reviewer tasks with 2 to 4 distinct agy model IDs against independent copies of the same hashed context. Each model consumes quota. Returns task IDs and comparison ID; inspect start errors and wait for each task before synthesizing.",
+      inputSchema: {
+        sourceTaskId: external_exports.string().uuid(),
+        expectedContextSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+        models: comparisonModelsSchema,
+        prompt: external_exports.string().min(1),
+        timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
+      },
+      annotations: action
+    }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) => safe(() => tasks2.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_comparison"))
+    server2.registerTool("antigravity_comparison", {
+      outputSchema: outputSchemas.antigravity_comparison,
+      title: "Compare model review evidence",
+      description: "Read retained comparison opinions, per-model failures, token usage and findings grouped by exact file/line/quote. Distinguish identical findings, different interpretations and findings not reported by every model. Missing or failed opinions are not agreement. Check contextStale, complete and unverified fields; Codex must inspect and synthesize the evidence. No integration is performed.",
+      inputSchema: { comparisonId: external_exports.string().uuid() },
+      annotations: readOnly
+    }, async ({ comparisonId }) => safe(() => tasks2.comparison(comparisonId))());
   if (toolEnabled(tasks2.toolProfile, "antigravity_preview"))
     server2.registerTool("antigravity_preview", {
       outputSchema: outputSchemas.antigravity_preview,
@@ -38380,6 +38472,7 @@ var TaskManager = class {
   queue = [];
   active = 0;
   waiting = 0;
+  batching = 0;
   stopped = false;
   busyProjects = /* @__PURE__ */ new Set();
   state;
@@ -38474,6 +38567,8 @@ var TaskManager = class {
       throw new BridgeError("INVALID_SESSION", "Invalid conversation ID");
     const releaseRegistry = this.state.acquire("registry");
     let pendingProjectRelease;
+    let contextProject;
+    let accepted = false;
     try {
       this.refresh();
       const contextSource = options.contextTaskId ? this.tasks.get(options.contextTaskId) : void 0;
@@ -38532,9 +38627,20 @@ var TaskManager = class {
             }))
           });
         });
+        taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
+        contextProject = await this.withProject(contextSource.project, async () => {
+          if (await fingerprintProjectCopy(contextSource.project, this.config) !== options.handoff.treeSha256)
+            throw new BridgeError("CONTEXT_CHANGED", "Context changed before copying");
+          const fork = await forkProjectCopy(contextSource.project, this.config);
+          if (await fingerprintProjectCopy(fork, this.config) !== options.handoff.treeSha256 || (await previewProjectCopy(fork, this.config)).sha256 !== options.handoff.patchSha256) {
+            await discardProjectCopy(fork);
+            throw new BridgeError("CONTEXT_CHANGED", "Context changed while copying or contains newly ignored files");
+          }
+          return fork;
+        });
       }
       taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
-      pendingProjectRelease = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : void 0;
+      pendingProjectRelease = previous?.project || contextProject ? this.state.acquire(this.projectLock(previous?.project ?? contextProject)) : void 0;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find((task2) => terminal.has(task2.record.status) && task2 !== contextSource);
         if (!oldestFinished)
@@ -38555,6 +38661,7 @@ var TaskManager = class {
         prompt: options.prompt,
         acceptanceCriteria,
         handoff: options.handoff ?? previous?.record.handoff,
+        comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests,
         usageIsResume: Boolean(previous),
         usageBaseline: previous ? normalizeUsage(previous.record.result?.usage) : void 0,
@@ -38562,15 +38669,19 @@ var TaskManager = class {
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
+      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
+      accepted = true;
       pendingProjectRelease = void 0;
       this.queue.push(record2.taskId);
       this.events.append(record2.taskId, "task.queued", { workingDirectory, model });
-      this.pump();
+      if (!this.batching)
+        this.pump();
       return { ...record2 };
     } finally {
       pendingProjectRelease?.();
       releaseRegistry();
+      if (contextProject && !accepted)
+        await discardProjectCopy(contextProject);
     }
   }
   status(taskId) {
@@ -38652,6 +38763,99 @@ var TaskManager = class {
       acceptanceCriteria: task2.record.acceptanceCriteria ?? [],
       includedFiles: task2.project.includedFiles
     }));
+  }
+  async compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds) {
+    models = comparisonModelsSchema.parse(models);
+    const context = await this.context(sourceTaskId);
+    if (context.treeSha256 !== expectedContextSha256)
+      throw new BridgeError("CONTEXT_CHANGED", "Inspect the current context before comparison");
+    const available = await this.adapter.listModels();
+    for (const model of models)
+      if (!available.some((item) => item.id === model))
+        throw new BridgeError("MODEL_NOT_AVAILABLE", "Model is not listed by agy: " + model);
+    if (this.config.maxRetainedTasks < models.length + 1 || this.config.maxQueuedTasks < models.length)
+      throw new BridgeError("COMPARISON_LIMIT_EXCEEDED", "Retention and queue limits must accommodate all comparison members and the source");
+    const source = this.status(sourceTaskId);
+    const comparison = { comparisonId: randomUUID3(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
+    const taskIds = [];
+    this.batching++;
+    try {
+      for (const model of models) {
+        try {
+          const task2 = await this.run({
+            contextTaskId: sourceTaskId,
+            expectedContextSha256,
+            role: "reviewer",
+            mode: "read-only",
+            prompt,
+            model,
+            timeoutSeconds,
+            workingDirectory: source.workingDirectory,
+            comparison
+          });
+          taskIds.push(task2.taskId);
+        } catch (error62) {
+          if (!taskIds.length)
+            throw error62;
+          comparison.startErrors.push({
+            model,
+            code: error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED",
+            message: error62 instanceof Error ? error62.message : String(error62)
+          });
+        }
+      }
+      for (const taskId of taskIds)
+        this.events.append(taskId, "comparison.queued", { comparisonId: comparison.comparisonId });
+      return { comparisonId: comparison.comparisonId, taskIds, models, startErrors: comparison.startErrors };
+    } finally {
+      this.batching--;
+      if (!this.batching)
+        this.pump();
+    }
+  }
+  async comparison(comparisonId) {
+    const tasks2 = this.list().filter((task2) => task2.comparison?.comparisonId === comparisonId);
+    const comparison = tasks2[0]?.comparison;
+    if (!comparison)
+      throw new BridgeError("COMPARISON_NOT_FOUND", "No retained tasks for this comparison");
+    const missingModels = comparison.models.filter((model) => !tasks2.some((task2) => task2.model === model));
+    const ready = tasks2.every((task2) => terminal.has(task2.status));
+    const complete = ready && !missingModels.length && tasks2.every((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
+    const current = await this.context(comparison.sourceTaskId).catch((error62) => {
+      if (error62 instanceof BridgeError && ["INVALID_CONTEXT", "TASK_NOT_FOUND", "TASK_NOT_READY"].includes(error62.code))
+        return null;
+      throw error62;
+    });
+    const opinions = await Promise.all(tasks2.map(async (task2) => {
+      const project = this.tasks.get(task2.taskId)?.project;
+      const contextMatches = project && terminal.has(task2.status) ? await this.withProject(project, async () => await fingerprintProjectCopy(project, this.config) === comparison.treeSha256).catch((error62) => {
+        if (error62 instanceof BridgeError && error62.code === "TASK_NOT_READY")
+          return null;
+        throw error62;
+      }) : null;
+      return {
+        taskId: task2.taskId,
+        model: task2.model,
+        status: task2.status,
+        contextMatches,
+        report: task2.report?.role === "reviewer" ? task2.report : null,
+        error: task2.error ?? null,
+        tokenUsage: task2.tokenUsage
+      };
+    }));
+    return {
+      ...comparison,
+      ready,
+      complete: complete && opinions.every((opinion) => opinion.contextMatches === true),
+      missingModels,
+      contextStale: current === null || current.treeSha256 !== comparison.treeSha256 || opinions.some((opinion) => terminal.has(opinion.status) && opinion.contextMatches !== true),
+      opinions,
+      findings: compareFindings(tasks2.filter((task2) => opinions.some((opinion) => opinion.taskId === task2.taskId && opinion.contextMatches === true)), comparison.models),
+      warnings: [
+        "Findings are model-reported with checked citations, not verified conclusions. Identical means exact matching findings only.",
+        "Missing findings, failed opinions and unverified fields do not demonstrate agreement. Codex must inspect and synthesize the reports before making recommendations."
+      ]
+    };
   }
   async verify(taskId, expectedSha256, reviews = []) {
     this.refresh();
@@ -38904,7 +39108,7 @@ var TaskManager = class {
     await Promise.all(owned.map((task2) => task2.completion));
   }
   pump() {
-    while (!this.stopped && this.active < this.config.maxConcurrentTasks && this.queue.length) {
+    while (!this.stopped && !this.batching && this.active < this.config.maxConcurrentTasks && this.queue.length) {
       const task2 = this.tasks.get(this.queue.shift());
       if (!task2 || task2.record.status !== "queued")
         continue;
@@ -38926,23 +39130,6 @@ var TaskManager = class {
     let native;
     let readOnlyBaseline;
     try {
-      if (!task2.project && task2.options.contextTaskId) {
-        this.refresh();
-        const source = this.tasks.get(task2.options.contextTaskId);
-        if (!source?.project || source.record.status !== "completed" || source.record.integratedAt)
-          throw new BridgeError("INVALID_CONTEXT", "Context source is no longer available");
-        task2.project = await this.withProject(source.project, async () => {
-          if (await fingerprintProjectCopy(source.project, this.config) !== task2.options.handoff?.treeSha256)
-            throw new BridgeError("CONTEXT_CHANGED", "Context changed while the task was queued");
-          const fork = await forkProjectCopy(source.project, this.config);
-          if (await fingerprintProjectCopy(fork, this.config) !== task2.options.handoff.treeSha256 || (await previewProjectCopy(fork, this.config)).sha256 !== task2.options.handoff.patchSha256) {
-            await discardProjectCopy(fork);
-            throw new BridgeError("CONTEXT_CHANGED", "Context changed while copying or contains newly ignored files");
-          }
-          return fork;
-        });
-        this.events.append(record2.taskId, "context.copied", { sourceTaskId: task2.options.contextTaskId, treeSha256: task2.options.handoff?.treeSha256 });
-      }
       task2.project ??= await createProjectCopy(record2.workingDirectory, task2.options.includePaths, (project) => {
         task2.project = project;
         this.events.append(record2.taskId, "copy.created", { copyDirectory: project.copyDirectory });
@@ -38951,6 +39138,11 @@ var TaskManager = class {
       record2.copyDirectory = task2.project.copyDirectory;
       record2.includedFiles = task2.project.includedFiles;
       this.events.append(record2.taskId, "copy.ready", { copyDirectory: record2.copyDirectory });
+      if (record2.handoff && !task2.options.sessionId) {
+        if (await fingerprintProjectCopy(task2.project, this.config) !== record2.handoff.treeSha256 || (await previewProjectCopy(task2.project, this.config)).sha256 !== record2.handoff.patchSha256)
+          throw new BridgeError("CONTEXT_CHANGED", "Queued context copy changed before execution");
+        this.events.append(record2.taskId, "context.copied", { sourceTaskId: record2.handoff.sourceTaskId, treeSha256: record2.handoff.treeSha256 });
+      }
       if (record2.mode === "read-only" && record2.handoff)
         readOnlyBaseline = await snapshotCopyFiles(task2.project, this.config);
       if (task2.termination) {

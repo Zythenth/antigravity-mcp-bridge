@@ -7,6 +7,7 @@ const queryTools = new Set([
   'antigravity_list_project_files', 'antigravity_run', 'antigravity_resume', 'antigravity_status',
   'antigravity_tasks', 'antigravity_events', 'antigravity_result', 'antigravity_read_result',
   'antigravity_cancel', 'antigravity_sessions', 'antigravity_wait', 'antigravity_context', 'antigravity_handoff',
+  'antigravity_compare', 'antigravity_comparison',
 ]);
 const reviewTools = new Set([...queryTools, 'antigravity_preview', 'antigravity_read_patch', 'antigravity_verify']);
 

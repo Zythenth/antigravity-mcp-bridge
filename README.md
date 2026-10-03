@@ -104,6 +104,14 @@ Planejamento → implementação → revisão pode mudar de papel e modelo sem r
 
 A cópia continua respeitando os ignores do projeto e limites de arquivos/bytes. Se a seleção mudar por novas regras de ignore, o handoff falha; inspecione o contexto novamente. Não inclua segredos em decisões. `antigravity_resume` conserva papel e cópia; `antigravity_handoff` cria outro papel em outra cópia e sessão.
 
+## Comparação entre modelos
+
+Após `antigravity_context`, chame `antigravity_compare` com `sourceTaskId`, `expectedContextSha256`, `prompt` e `models` contendo 2 a 4 IDs distintos devolvidos por `agy models`. Cada modelo recebe uma cópia independente da mesma versão e executa uma revisão em leitura. A comparação consome a quota de cada tarefa; respeita `MAX_CONCURRENT_TASKS`, fila, retenção e limites de cópia. As cópias são preparadas antes de iniciar o grupo, evitando que revisores disputem a cópia de origem.
+
+Guarde `comparisonId` e acompanhe cada `taskId` com `antigravity_wait`. `antigravity_comparison` reúne pareceres, erros, uso de tokens, modelos ausentes e os achados por arquivo/linha/citação. `identical` significa achados literalmente iguais; `different`, interpretações diferentes no mesmo trecho; `not-reported-by-all`, um trecho não relatado por todos. Ausência de achados não prova concordância nem correção.
+
+`complete` exige todos os pareceres concluídos e suas cópias ainda correspondentes ao conteúdo comparado. `contextStale` sinaliza que a origem ou alguma cópia mudou, ficou indisponível ou não pôde ser conferida; confira `contextMatches` por parecer. Erros de início ficam em `startErrors`; falhas ou tarefas removidas não são ocultadas. O Codex deve conferir as fontes e sintetizar recomendações, divergências e limites de cada parecer. O agrupamento não faz votação semântica e não autoriza integração. As tarefas de comparação podem ser canceladas e descartadas individualmente.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.
@@ -114,6 +122,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_list_models` | Lista os IDs devolvidos por `agy models` |
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
 | `antigravity_context` / `antigravity_handoff` | Inspeciona e transfere plano, decisões, critérios e evidências para outro papel em cópia independente |
+| `antigravity_compare` / `antigravity_comparison` | Solicita pareceres de 2 a 4 modelos e reúne achados, divergências, falhas e uso observado |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
@@ -229,6 +238,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 
 | Variável | Padrão | Uso |
 | --- | --- | --- |
+| `BRIDGE_TOOL_PROFILE` | `full` | Catálogo: `full`, `query`, `review` ou `implementation` |
 | `AGY_PATH` | `agy` | Caminho do CLI oficial |
 | `MAX_CONCURRENT_TASKS` | `1` | Processos simultâneos |
 | `MAX_QUEUED_TASKS` | `20` | Tarefas aguardando |
