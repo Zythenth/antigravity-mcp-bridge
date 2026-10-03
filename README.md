@@ -83,12 +83,12 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Catálogo e execução |
-| --- | --- |
-| `full` (padrão) | Todas as ferramentas; preserva a configuração existente |
-| `query` | Consulta, modelos, sessões e acompanhamento; tarefas somente em leitura |
-| `review` | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| Valor | Ferramentas na 0.5.0 | Catálogo e execução |
+| --- | --- | --- |
+| `full` (padrão) | 29 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 20 | Consulta, modelos, sessões, handoff e comparação; tarefas somente em leitura |
+| `review` | 23 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 29 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a confirmação de integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -176,11 +176,15 @@ Para revisão, diagnóstico ou segunda opinião, passe `mode: "read-only"`. O br
 
 Fluxo típico:
 
-1. Consulte `antigravity_health` e `antigravity_list_models`.
-2. Inicie a tarefa com `antigravity_run` e guarde o `taskId`.
-3. Leia `antigravity_events` com `after: 0` e continue usando `nextCursor`.
-4. Consulte `antigravity_result` até `ready: true`.
-5. Use `antigravity_preview` para revisar o patch e executar os testes na cópia. Registre cada execução com `antigravity_record_test` (`command`, `exitCode`, `output` e `expectedSha256`). Chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia para solicitar a confirmação final pelo cliente MCP. O bridge recusa integração se a cópia ou os arquivos afetados no original mudaram após a revisão.
+1. Consulte `antigravity_health` para conferir CLI, perfil e confirmação disponível. Use `antigravity_list_models` e `antigravity_roles` para selecionar IDs e papéis anunciados pelo servidor.
+2. Liste os arquivos elegíveis com `antigravity_list_project_files`, selecione `includePaths` quando necessário e defina `acceptanceCriteria` cobrindo os requisitos antes de iniciar a implementação com `antigravity_run`. Guarde o `taskId`.
+3. Acompanhe com `antigravity_wait`, preservando `nextCursor` e repetindo a espera quando `ready` for falso. `timedOut` encerra apenas a espera. Use `antigravity_events` para consultar os eventos detalhados.
+4. Após o término, confira o status e os erros em `antigravity_result` com `includeResult: false`. Leia o resultado com `antigravity_read_result` e o patch com `antigravity_preview` (`includePatch: false`) e `antigravity_read_patch`. Se houver falha, confira a causa antes de retomar; `completed` não comprova os requisitos.
+5. Execute os testes pertinentes com `antigravity_test`, usando o hash da prévia. A ferramenta devolve outro `taskId`: acompanhe e revise esse ID, confira recibos, exit codes e evidências desatualizadas e obtenha a prévia atual novamente. `antigravity_record_test` registra testes executados pelo cliente, como relatos; não substitui os recibos observados do executor.
+6. Confira os arquivos reais contra cada critério e envie evidências de revisão a `antigravity_verify` com o hash atual. Com verificação aprovada e atual, confira também se os testes observados continuam válidos e chame `antigravity_integrate` na tarefa de implementação mais recente dessa cópia para solicitar a confirmação humana. Alterações no patch, nas evidências ou nos arquivos afetados do original exigem nova conferência.
+7. Informe o uso observado com `antigravity_usage` e, quando o trabalho puder ser removido, descarte a cópia com `antigravity_discard`.
+
+Esse fluxo de implementação requer `full` ou `implementation`. Para planejamento, revisão ou comparação, use os papéis de leitura e os fluxos específicos acima. Uma revisão por handoff recebe outra cópia; ela não altera qual é a tarefa mais recente da cópia de implementação.
 
 A integração exige suporte do cliente a **MCP form elicitation**. `antigravity_health` informa `integrationApproval.available`. O formulário mostra origem, tarefa, hash, arquivos e contagens de linhas; só `accept` com `confirm: true` permite aplicar. Recusa, cancelamento, timeout ou falta de suporte preservam o original. O hash identifica o patch e a confirmação vem de uma resposta separada do cliente; nenhum argumento `approved` é aceito como autorização. Após a resposta, o bridge confere novamente hash e origem. A confirmação depende de um cliente confiável que apresente a decisão ao usuário.
 
@@ -198,7 +202,7 @@ Esses números são relatos do CLI, sem cálculo de cobrança ou acesso à quota
 
 ### Papéis de trabalho
 
-`antigravity_run` aceita `role: "implementer"` (padrão), `"planner"` ou `"reviewer"`. Planejamento e revisão usam obrigatoriamente `mode: "read-only"` e `agy --mode plan`; selecionar escrita nesses papéis é recusado. A retomada mantém o papel original.
+`antigravity_run` aceita os papéis nativos `"implementer"` (padrão), `"planner"` e `"reviewer"`, além dos nomes personalizados anunciados por `antigravity_roles`. As bases de planejamento e revisão usam obrigatoriamente `mode: "read-only"` e `agy --mode plan`; selecionar escrita nesses papéis é recusado. A retomada mantém o papel e a definição originais.
 
 Os papéis de consulta exigem suporte a `agy --json-schema`. O planejamento devolve `summary`, `steps` com arquivos e verificações observáveis, e `unverified`. A revisão devolve `summary`, `reviewedFiles`, `findings` e `unverified`; cada achado contém gravidade P0–P3, caminho, linha, citação literal, mensagem, impacto e sugestão.
 
@@ -222,7 +226,7 @@ As verificações automáticas demonstram apenas as condições declaradas; a co
 
 ## Eventos, sessões e cancelamento
 
-O bridge usa os formatos `stream-json` anunciados pelo `agy` 1.2.11. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
+O bridge exige suporte aos formatos `stream-json` e a `--sandbox`, conferidos na descoberta do CLI. A versão verificada neste projeto é `agy` 1.2.14. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
 
 ### Modelo padrão
 
@@ -278,7 +282,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `MAX_COPY_BYTES` | `268435456` | Máximo de bytes copiados (256 MiB) |
 | `MAX_CHANGED_FILES` | `100` | Máximo de arquivos alterados para revisão e integração |
 | `COPY_RETENTION_HOURS` | `168` | Prazo de retenção das cópias finalizadas |
-| `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt enviado, incluindo critérios e instruções do bridge |
+| `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt enviado, incluindo critérios, contexto transferido e instruções do bridge e do papel |
 | `FORBIDDEN_DIRECTORIES` | vazio | Diretórios bloqueados, separados por `;` no Windows |
 
 Entradas e diretórios são validados. O processo é iniciado com `spawn` sem shell e exige `--sandbox`; não passa `--dangerously-skip-permissions`. Não inclua credenciais ou documentos privados nos prompts. O sandbox do CLI restringe comandos de terminal, mas não constitui garantia de isolamento completo do sistema de arquivos no Windows. Mantenha arquivos sensíveis fora da cópia por regras de ignore e selecione apenas os caminhos necessários com `includePaths`. Consulte a [documentação do sandbox](https://antigravity.google/docs/sandbox/) e [do modo headless](https://www.antigravity.google/docs/cli/headless/).
