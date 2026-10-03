@@ -41,7 +41,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_health,
     title: 'Check Antigravity CLI', description: 'Inspect installed agy version, authentication and supported capabilities.',
     inputSchema: {}, annotations: readOnly,
-  }, safe(async () => ({ ...await adapter.health(), toolProfile: tasks.toolProfile, integrationApproval: { available: toolEnabled(tasks.toolProfile, 'antigravity_integrate') && Boolean(server.server.getClientCapabilities()?.elicitation?.form), method: 'mcp-form-elicitation' } })));
+  }, safe(async () => ({ ...await adapter.health(), toolProfile: tasks.toolProfile,
+    bridgeLimitations: {
+      interactiveReplies: { available: false, reason: 'The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures.' },
+      preflightTokenCount: { available: false, exactTokens: null, reason: 'No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts.' },
+    },
+    integrationApproval: { available: toolEnabled(tasks.toolProfile, 'antigravity_integrate') && Boolean(server.server.getClientCapabilities()?.elicitation?.form), method: 'mcp-form-elicitation' } })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_list_models')) server.registerTool('antigravity_list_models', {
     outputSchema: outputSchemas.antigravity_list_models,

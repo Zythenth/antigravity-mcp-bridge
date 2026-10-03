@@ -37729,7 +37729,11 @@ var successOutputSchemas = {
       cancel: external_exports.boolean()
     }).strict(),
     error: external_exports.string().optional(),
-    integrationApproval: external_exports.object({ available: external_exports.boolean(), method: external_exports.literal("mcp-form-elicitation") }).strict()
+    integrationApproval: external_exports.object({ available: external_exports.boolean(), method: external_exports.literal("mcp-form-elicitation") }).strict(),
+    bridgeLimitations: external_exports.object({
+      interactiveReplies: external_exports.object({ available: external_exports.literal(false), reason: external_exports.string() }).strict(),
+      preflightTokenCount: external_exports.object({ available: external_exports.literal(false), exactTokens: external_exports.null(), reason: external_exports.string() }).strict()
+    }).strict().optional()
   }).strict(),
   antigravity_list_models: external_exports.object({ models: external_exports.array(external_exports.object({ id: external_exports.string(), name: external_exports.string() }).strict()) }).strict(),
   antigravity_get_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
@@ -37878,7 +37882,15 @@ function createMcpServer(adapter2, tasks2) {
       description: "Inspect installed agy version, authentication and supported capabilities.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(async () => ({ ...await adapter2.health(), toolProfile: tasks2.toolProfile, integrationApproval: { available: toolEnabled(tasks2.toolProfile, "antigravity_integrate") && Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" } })));
+    }, safe(async () => ({
+      ...await adapter2.health(),
+      toolProfile: tasks2.toolProfile,
+      bridgeLimitations: {
+        interactiveReplies: { available: false, reason: "The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures." },
+        preflightTokenCount: { available: false, exactTokens: null, reason: "No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts." }
+      },
+      integrationApproval: { available: toolEnabled(tasks2.toolProfile, "antigravity_integrate") && Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" }
+    })));
   if (toolEnabled(tasks2.toolProfile, "antigravity_list_models"))
     server2.registerTool("antigravity_list_models", {
       outputSchema: outputSchemas.antigravity_list_models,

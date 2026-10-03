@@ -112,6 +112,15 @@ Guarde `comparisonId` e acompanhe cada `taskId` com `antigravity_wait`. `antigra
 
 `complete` exige todos os pareceres concluídos e suas cópias ainda correspondentes ao conteúdo comparado. `contextStale` sinaliza que a origem ou alguma cópia mudou, ficou indisponível ou não pôde ser conferida; confira `contextMatches` por parecer. Erros de início ficam em `startErrors`; falhas ou tarefas removidas não são ocultadas. O Codex deve conferir as fontes e sintetizar recomendações, divergências e limites de cada parecer. O agrupamento não faz votação semântica e não autoriza integração. As tarefas de comparação podem ser canceladas e descartadas individualmente.
 
+## Limites de interação e contagem prévia
+
+`antigravity_health.bridgeLimitations` informa duas capacidades indisponíveis:
+
+- `interactiveReplies.available: false`: o [protocolo headless verificado](https://www.antigravity.google/docs/cli/headless/#unsupported-messages) recusa `control_request` e `control_response`. Mensagens de texto em novos turnos não respondem a solicitações pendentes de permissão. O bridge encerra o stdin após seu prompt; para continuar a conversa concluída, use `antigravity_resume`. Examine pedidos negados nos eventos e erros, sem contornar o sandbox. A confirmação MCP da integração continua sendo uma operação separada do bridge.
+- `preflightTokenCount.available: false`, `exactTokens: null`: não há comando do agy verificado para contar tokens antes do envio. O uso informado pelo CLI é observado após execução. Tamanho em caracteres não é uma contagem exata de tokens nem um orçamento de quota. O bridge permanece no CLI oficial, sem API adicional, novas credenciais ou estimador apresentado como contagem exata.
+
+Essas limitações não são resolvidas por manter o processo aberto ou inventar mensagens do protocolo. Um suporte futuro exige verificar a versão e o contrato oferecido pelo CLI antes de adicionar a operação.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.

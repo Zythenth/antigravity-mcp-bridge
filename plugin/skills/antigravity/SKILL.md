@@ -11,6 +11,12 @@ Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve pas
 
 Consulte `antigravity_health.toolProfile`. `query` e `review` executam somente em leitura; não peça ferramentas ausentes nem contorne o perfil. `full` e `implementation` oferecem o fluxo completo. Para mudar o catálogo, o usuário configura `BRIDGE_TOOL_PROFILE` e reinicia a conexão MCP.
 
+## Limites do CLI
+
+Confira `antigravity_health.bridgeLimitations`. Não existe resposta do bridge para solicitações pendentes de permissão do agy: o protocolo headless verificado recusa mensagens de controle. Não invente `antigravity_respond`, aprovações de terminal ou uma mensagem `control_response`; examine erros e mantenha as permissões do sandbox. Novos turnos de texto não equivalem a aprovar uma solicitação pendente. Para continuar uma conversa concluída, use a retomada disponível.
+
+O contador prévio exato está indisponível e `exactTokens` permanece `null`. Use os contadores observados após execução e indique quando faltarem. Não transforme caracteres, bytes ou uma estimativa em tokens exatos e não introduza APIs ou credenciais alternativas para contornar a limitação.
+
 ## Escolha da ação
 
 - Para disponibilidade ou autenticação, chame `antigravity_health`. Se receber `AGY_AUTH_REQUIRED`, oriente o usuário a abrir `agy` interativamente; não tente ler credenciais nem fazer login pelo bridge.

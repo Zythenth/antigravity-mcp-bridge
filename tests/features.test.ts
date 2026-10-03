@@ -50,7 +50,11 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
     try {
       const names = (await f.client.listTools()).tools.map(tool => tool.name);
       assert.equal(names.length, count, profile);
-      assert.equal((await f.call('antigravity_health')).toolProfile, profile);
+      const health = await f.call('antigravity_health');
+      assert.equal(health.toolProfile, profile);
+      assert.equal(health.bridgeLimitations.interactiveReplies.available, false);
+      assert.equal(health.bridgeLimitations.preflightTokenCount.available, false);
+      assert.equal(health.bridgeLimitations.preflightTokenCount.exactTokens, null);
       if (profile === 'query' || profile === 'review') {
         assert.ok(!names.includes('antigravity_integrate'));
         assert.ok(!names.includes('antigravity_test'));

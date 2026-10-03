@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Diagnóstico explícito das limitações de respostas de permissão e contagem prévia exata no protocolo headless verificado.
+
 - Comparação de 2 a 4 modelos em leitura sobre cópias do mesmo contexto, com divergências, falhas, uso e verificação de conteúdo atual.
 
 - Transferência estruturada entre papéis com cópias independentes, histórico de relatórios, decisões e critérios, vinculados ao hash dos arquivos.
