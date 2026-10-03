@@ -3,6 +3,7 @@ import { criterionSchema, reviewEvidenceSchema } from './verification.js';
 import { plannerReportSchema, reviewerReportSchema, roleSchema } from './roles.js';
 import { usageCountersSchema } from './usage.js';
 import { toolProfileSchema } from './tool-profiles.js';
+import { handoffSchema } from './handoff.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().uuid();
@@ -40,6 +41,7 @@ export const taskRecordSchema = z.object({
   mode: z.enum(['write', 'read-only']).optional(), tests: z.array(testEvidenceSchema).optional(),
   acceptanceCriteria: z.array(criterionSchema).optional(), verification: verification.optional(), role: roleSchema.optional(),
   report: report.optional(), usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(), tokenUsage: tokenUsage.optional(),
+  handoff: handoffSchema.optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -76,6 +78,9 @@ export const successOutputSchemas = {
   antigravity_list_project_files: z.object({ files: z.array(z.string()) }).strict(),
   antigravity_run: task,
   antigravity_resume: task,
+  antigravity_handoff: task,
+  antigravity_context: z.object({ taskId: id, treeSha256: hash, role: roleSchema, report: report.nullable(), handoff: handoffSchema.nullable(),
+    acceptanceCriteria: z.array(criterionSchema), includedFiles: z.array(z.string()) }).strict(),
   antigravity_preview: z.object({
     ...previewShape, patch: z.string().optional(), patchLength: count,
     tests: z.array(testEvidenceSchema.extend({ stale: z.boolean() })),

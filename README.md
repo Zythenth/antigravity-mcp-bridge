@@ -94,6 +94,16 @@ Prefira `antigravity_wait` com `taskId`, `after` e `timeoutSeconds` (1–60, pad
 
 A resposta inclui `ready`, `timedOut`, estado, uso de tokens e até 1.000 eventos. Continue com `nextCursor`; `truncated` informa eventos antigos perdidos. Timeout da espera e cancelamento da chamada MCP preservam a execução. Para parar a tarefa, use `antigravity_cancel`. Sem suporte a progresso, a resposta final continua disponível. A espera consulta também o estado persistido para observar tarefas de outro processo do bridge.
 
+## Transferência entre papéis
+
+Use `antigravity_context` após uma tarefa concluída para inspecionar critérios, relatórios e `treeSha256`. Em seguida, chame `antigravity_handoff` com `sourceTaskId`, esse hash, `role`, `prompt` e, opcionalmente, `model` e `decisions`.
+
+A nova tarefa recebe uma cópia independente dos arquivos atuais, incluindo alterações ainda não integradas. Mantém o baseline do projeto original, critérios, até oito relatórios de planejamento/revisão e a origem dos testes. Decisões são marcadas como relatos do cliente; relatórios e recibos mantêm sua origem e não autorizam integração. O pacote de contexto inteiro deve caber no limite do prompt; não há corte silencioso.
+
+Planejamento → implementação → revisão pode mudar de papel e modelo sem reusar a conversa do papel anterior. O contexto é dado a conferir, não uma instrução de prioridade superior. Hashes são conferidos ao aceitar a tarefa e ao copiar, também quando ela aguardou na fila. A revisão verifica que sua cópia permaneceu intacta, incluindo arquivos ignorados. A cópia da implementação permanece disponível para testes, verificação e integração confirmada. Uma implementação iniciada a partir da revisão preserva o patch acumulado contra o original.
+
+A cópia continua respeitando os ignores do projeto e limites de arquivos/bytes. Se a seleção mudar por novas regras de ignore, o handoff falha; inspecione o contexto novamente. Não inclua segredos em decisões. `antigravity_resume` conserva papel e cópia; `antigravity_handoff` cria outro papel em outra cópia e sessão.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.
@@ -103,6 +113,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_health` | Verifica executável, versão, autenticação aparente e capacidades |
 | `antigravity_list_models` | Lista os IDs devolvidos por `agy models` |
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
+| `antigravity_context` / `antigravity_handoff` | Inspeciona e transfere plano, decisões, critérios e evidências para outro papel em cópia independente |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |

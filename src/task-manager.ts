@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { CliAdapter } from './cli-adapter.js';
+import { CliAdapter, taskPrompt } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
@@ -16,6 +16,7 @@ import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
 import { profileReadOnly } from './tool-profiles.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { BridgeEvent } from './types.js';
+import { decisionsSchema, handoffSchema } from './handoff.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -114,6 +115,11 @@ export class TaskManager {
     let pendingProjectRelease: (() => void) | undefined;
     try {
       this.refresh();
+      const contextSource = options.contextTaskId ? this.tasks.get(options.contextTaskId) : undefined;
+      if (options.contextTaskId && (options.sessionId || !contextSource?.project || contextSource.record.status !== 'completed' ||
+        contextSource.record.integratedAt || contextSource.record.workingDirectory !== workingDirectory)) {
+        throw new BridgeError('INVALID_CONTEXT', 'Context requires a completed, retained, non-integrated task in the same project; use a new session');
+      }
       const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
         task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : undefined;
       if (options.sessionId && (!previous || (previous.record.status !== 'completed' && previous.record.error?.code !== 'TEST_FAILED') || previous.record.integratedAt)) {
@@ -122,7 +128,8 @@ export class TaskManager {
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
-      const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria;
+      options.handoff ??= previous?.record.handoff;
+      const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
       const role = roleSchema.parse(options.role ?? previous?.record.role ?? 'implementer');
       if (previous && role !== (previous.record.role ?? 'implementer')) throw new BridgeError('INVALID_ROLE', 'A resumed task retains its original role');
       const mode = options.mode ?? previous?.record.mode ?? (role === 'implementer' ? 'write' : 'read-only');
@@ -132,9 +139,28 @@ export class TaskManager {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError('QUEUE_FULL', 'Task queue is full');
       }
+      if (contextSource?.project) {
+        if (options.includePaths) throw new BridgeError('INVALID_CONTEXT', 'A context task uses the existing copy selection');
+        options.handoff = await this.withProject(contextSource.project, async () => {
+          const treeSha256 = await fingerprintProjectCopy(contextSource.project!, this.config);
+          const preview = await previewProjectCopy(contextSource.project!, this.config);
+          if (treeSha256 !== options.expectedContextSha256) throw new BridgeError('CONTEXT_CHANGED', 'Context files changed; inspect the context again');
+          return handoffSchema.parse({
+            sourceTaskId: contextSource.record.taskId, sourceRole: contextSource.record.role ?? 'implementer',
+            sourceModel: contextSource.record.model ?? null, treeSha256, patchSha256: preview.sha256,
+            decisions: { source: 'client-reported', items: decisionsSchema.parse(options.decisions ?? contextSource.record.handoff?.decisions.items ?? []) },
+            files: preview.files.map(file => file.path), acceptanceCriteria: contextSource.record.acceptanceCriteria ?? [],
+            reports: [...(contextSource.record.handoff?.reports ?? []), ...(contextSource.record.report ?
+              [{ taskId: contextSource.record.taskId, role: contextSource.record.report.role, data: contextSource.record.report.data }] : [])],
+            tests: (contextSource.record.tests ?? []).map(test => ({ command: test.command, exitCode: test.exitCode, source: test.source, sha256: test.sha256,
+              stale: test.sha256 !== preview.sha256 || (test.treeSha256 !== undefined && test.treeSha256 !== treeSha256) })),
+          });
+        });
+      }
+      taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
       pendingProjectRelease = previous?.project ? this.state.acquire(this.projectLock(previous.project)) : undefined;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
-        const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status));
+        const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status) && task !== contextSource);
         if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
         if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
           await this.discard(oldestFinished.record.taskId);
@@ -144,7 +170,7 @@ export class TaskManager {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, prompt: options.prompt,
-        acceptanceCriteria, tests: previous?.record.tests, usageIsResume: Boolean(previous),
+        acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? normalizeUsage((previous.record.result as { usage?: unknown } | undefined)?.usage) : undefined,
         workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
       this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project, releaseProject: pendingProjectRelease });
@@ -213,6 +239,17 @@ export class TaskManager {
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 ||
           JSON.stringify(current!.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null };
     });
+  }
+
+  async context(taskId: string) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task?.project || task.record.status !== 'completed' || task.record.integratedAt) throw new BridgeError('INVALID_CONTEXT', 'Context requires a completed, non-integrated task with a retained copy');
+    return this.withProject(task.project, async () => ({
+      taskId, treeSha256: await fingerprintProjectCopy(task.project!, this.config),
+      role: task.record.role ?? 'implementer', report: task.record.report ?? null, handoff: task.record.handoff ?? null,
+      acceptanceCriteria: task.record.acceptanceCriteria ?? [], includedFiles: task.project!.includedFiles,
+    }));
   }
 
   async verify(taskId: string, expectedSha256: string, reviews: ReviewEvidence[] = []) {
@@ -437,7 +474,24 @@ export class TaskManager {
     record.startedAt = new Date().toISOString();
     this.events.append(record.taskId, 'task.started', {});
     let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
+    let readOnlyBaseline: Map<string, string> | undefined;
     try {
+      if (!task.project && task.options.contextTaskId) {
+        this.refresh();
+        const source = this.tasks.get(task.options.contextTaskId);
+        if (!source?.project || source.record.status !== 'completed' || source.record.integratedAt) throw new BridgeError('INVALID_CONTEXT', 'Context source is no longer available');
+        task.project = await this.withProject(source.project, async () => {
+          if (await fingerprintProjectCopy(source.project!, this.config) !== task.options.handoff?.treeSha256) throw new BridgeError('CONTEXT_CHANGED', 'Context changed while the task was queued');
+          const fork = await forkProjectCopy(source.project!, this.config);
+          if (await fingerprintProjectCopy(fork, this.config) !== task.options.handoff.treeSha256 ||
+            (await previewProjectCopy(fork, this.config)).sha256 !== task.options.handoff.patchSha256) {
+            await discardProjectCopy(fork);
+            throw new BridgeError('CONTEXT_CHANGED', 'Context changed while copying or contains newly ignored files');
+          }
+          return fork;
+        });
+        this.events.append(record.taskId, 'context.copied', { sourceTaskId: task.options.contextTaskId, treeSha256: task.options.handoff?.treeSha256 });
+      }
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
         this.events.append(record.taskId, 'copy.created', { copyDirectory: project.copyDirectory });
@@ -446,6 +500,7 @@ export class TaskManager {
       record.copyDirectory = task.project.copyDirectory;
       record.includedFiles = task.project.includedFiles;
       this.events.append(record.taskId, 'copy.ready', { copyDirectory: record.copyDirectory });
+      if (record.mode === 'read-only' && record.handoff) readOnlyBaseline = await snapshotCopyFiles(task.project, this.config);
       if (task.termination) { this.finish(task, task.termination); return; }
       if (task.options.nativeTest) {
         const preview = await previewProjectCopy(task.project, this.config);
@@ -501,7 +556,7 @@ export class TaskManager {
           if (last.exitCode !== 0) { this.finish(task, 'failed', 'TEST_FAILED', 'Observed test command failed'); return; }
         }
       }
-      if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project);
+      if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project, readOnlyBaseline);
       if (task.termination) this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
       else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {

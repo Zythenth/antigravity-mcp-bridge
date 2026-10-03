@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { outputSchemas } from '../src/output-schemas.js';
 
 test('MCP subprocess restart recovers results, events, review baseline and discard', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-protocol-test-'));
@@ -30,9 +31,9 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     });
     await next.connect(new StdioClientTransport({ command: process.execPath,
       args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
-      env: { ...process.env as Record<string, string>, BRIDGE_STATE_DIRECTORY: path.join(dir, 'state') }, stderr: 'pipe' }));
+      env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(dir, 'state') }, stderr: 'pipe' }));
     const tools = await next.listTools();
-    assert.equal(tools.tools.length, 24);
+    assert.deepEqual(tools.tools.map(tool => tool.name).sort(), Object.keys(outputSchemas).sort());
     for (const tool of tools.tools) {
       assert.equal(tool.outputSchema?.type, 'object', tool.name);
       assert.ok(Object.keys(tool.outputSchema?.properties || {}).length > 0, tool.name);

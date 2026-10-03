@@ -216,7 +216,7 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
   };
 }
 
-export async function verifyReadOnlyCopy(project: ProjectCopy): Promise<void> {
+export async function verifyReadOnlyCopy(project: ProjectCopy, baseline = project.baseline): Promise<void> {
   const seen = new Set<string>();
   async function visit(directory: string, prefix = ''): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -224,14 +224,14 @@ export async function verifyReadOnlyCopy(project: ProjectCopy): Promise<void> {
       if (entry.isDirectory()) await visit(path.join(directory, entry.name), relative + '/');
       else {
         seen.add(relative);
-        if (!entry.isFile() || project.baseline.get(relative) !== await sha256File(path.join(directory, entry.name))) {
+        if (!entry.isFile() || baseline.get(relative) !== await sha256File(path.join(directory, entry.name))) {
           throw new BridgeError('READ_ONLY_VIOLATION', 'Read-only task changed the copy: ' + relative);
         }
       }
     }
   }
   await visit(project.copyDirectory);
-  for (const relative of project.baseline.keys()) if (!seen.has(relative)) {
+  for (const relative of baseline.keys()) if (!seen.has(relative)) {
     throw new BridgeError('READ_ONLY_VIOLATION', 'Read-only task deleted: ' + relative);
   }
 }
@@ -240,6 +240,56 @@ export async function readProjectPatch(project: ProjectCopy, relative: string): 
   const file = validRelative(relative);
   return (await git(project.copyDirectory, ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory,
     'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD', '--', file])).toString('utf8');
+}
+
+export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLimits): Promise<Map<string, string>> {
+  const hashes = new Map<string, string>();
+  let bytes = 0;
+  async function visit(directory: string, prefix = ''): Promise<void> {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const relative = prefix + entry.name;
+      if (entry.isDirectory()) await visit(path.join(directory, entry.name), relative + '/');
+      else {
+        const file = await checkedPath(project.copyDirectory, relative, true);
+        bytes += (await lstat(file)).size;
+        if (hashes.size >= limits.maxCopyFiles || bytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Copy snapshot exceeds configured limits');
+        hashes.set(relative, await sha256File(file));
+      }
+    }
+  }
+  await visit(project.copyDirectory);
+  return hashes;
+}
+
+export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimits): Promise<ProjectCopy> {
+  const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
+  const ignored = new Set<string>();
+  if (candidates.length) {
+    const input = Buffer.from(candidates.join('\0') + '\0');
+    for (const file of splitNull(await git(project.copyDirectory, [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
+    for (const file of splitNull(await git(project.sourceDirectory, ['check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
+  }
+  const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
+  const fork: ProjectCopy = { ...project, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
+  try {
+    let bytes = 0;
+    for (const relative of candidates.filter(file => !ignored.has(file))) {
+      let source: string;
+      try { source = await checkedPath(project.copyDirectory, relative, true); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
+      bytes += (await lstat(source)).size;
+      if (fork.includedFiles.length >= limits.maxCopyFiles || bytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Context copy exceeds configured limits');
+      const target = path.join(copyDirectory, ...validRelative(relative).split('/'));
+      await mkdir(path.dirname(target), { recursive: true });
+      await copyFile(source, target);
+      fork.includedFiles.push(relative);
+    }
+    await git(copyDirectory, ['-c', 'init.templateDir=', 'clone', '--bare', '--no-hardlinks', '--quiet', project.gitDirectory, gitDirectory]);
+    await fingerprintProjectCopy(fork, limits);
+    return fork;
+  } catch (error) { await discardProjectCopy(fork); throw error; }
 }
 
 export async function fingerprintProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<string> {

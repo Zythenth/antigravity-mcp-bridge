@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { outputSchemas } from '../dist/src/output-schemas.js';
 
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 const npmCli = process.env.npm_execpath;
@@ -27,7 +28,7 @@ async function check(command, args, label) {
     await client.connect(transport);
     assert.equal(client.getServerVersion().version, manifest.version);
     const tools = await client.listTools();
-    assert.equal(tools.tools.length, 23);
+    assert.deepEqual(tools.tools.map(tool => tool.name).sort(), Object.keys(outputSchemas).sort());
     assert.ok(tools.tools.every(tool => tool.outputSchema?.type === 'object'));
     const health = await client.callTool({ name: 'antigravity_health', arguments: {} });
     assert.equal(health.isError, undefined, JSON.stringify(health.structuredContent));
@@ -36,7 +37,7 @@ async function check(command, args, label) {
     const auto = await client.callTool({ name: 'antigravity_set_model', arguments: { model: null } });
     assert.equal(auto.isError, undefined, JSON.stringify(auto.structuredContent));
     assert.equal(auto.structuredContent.model, null);
-    console.log(`${label}: MCP startup, version, 23 contracts, health and Auto passed`);
+    console.log(`${label}: MCP startup, version, ${tools.tools.length} contracts, health and Auto passed`);
   } catch (error) {
     throw new Error(`${label}: ${String(error)}; stderr: ${diagnostics}`, { cause: error });
   } finally { await client.close(); }

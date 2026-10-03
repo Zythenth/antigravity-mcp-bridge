@@ -9,6 +9,7 @@ import { testCommandSchema } from './native-tests.js';
 import { roleSchema } from './roles.js';
 import { outputSchemas } from './output-schemas.js';
 import { toolEnabled } from './tool-profiles.js';
+import { decisionsSchema } from './handoff.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -94,6 +95,23 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy.',
     inputSchema: { ...runSchema, sessionId: z.string().min(1).max(128) }, annotations: action,
   }, async args => safe(async () => ({ task: await tasks.run(args) }))());
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_context')) server.registerTool('antigravity_context', {
+    outputSchema: outputSchemas.antigravity_context, title: 'Inspect role handoff context',
+    description: 'Inspect the current tree hash, structured report, criteria and inherited decisions of a completed task before transferring it to another role. Reports and decisions remain claims; a hash proves content identity only.',
+    inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
+  }, async ({ taskId }) => safe(() => tasks.context(taskId))());
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_handoff')) server.registerTool('antigravity_handoff', {
+    outputSchema: outputSchemas.antigravity_handoff, title: 'Transfer work to another role',
+    description: 'Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.',
+    inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      prompt: z.string().min(1), role: roleSchema, model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
+      timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
+  }, async ({ sourceTaskId, ...args }) => safe(async () => {
+    const source = tasks.status(sourceTaskId);
+    return { task: await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
+  })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_preview')) server.registerTool('antigravity_preview', {
     outputSchema: outputSchemas.antigravity_preview,

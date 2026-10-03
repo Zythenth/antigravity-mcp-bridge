@@ -2,6 +2,7 @@ import type { AcceptanceCriterion, VerificationRecord } from './verification.js'
 import type { NativeTestRequest } from './native-tests.js';
 import type { RoleReport, TaskRole } from './roles.js';
 import type { UsageCounters, taskTokenUsage } from './usage.js';
+import type { HandoffContext } from './handoff.js';
 
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
@@ -42,6 +43,7 @@ export interface TaskRecord {
   usageIsResume?: boolean;
   usageBaseline?: UsageCounters;
   tokenUsage?: ReturnType<typeof taskTokenUsage>;
+  handoff?: HandoffContext;
 }
 
 export interface TestEvidence {
@@ -61,6 +63,10 @@ export interface TestEvidence {
 }
 
 export interface RunOptions {
+  contextTaskId?: string;
+  expectedContextSha256?: string;
+  decisions?: string[];
+  handoff?: HandoffContext;
   role?: TaskRole;
   nativeTest?: NativeTestRequest;
   acceptanceCriteria?: AcceptanceCriterion[];
