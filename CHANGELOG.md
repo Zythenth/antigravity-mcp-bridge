@@ -1,18 +1,13 @@
 # Histórico de versões
 
-## Não publicado
-
-- Papéis personalizados por configuração, com contratos herdados, descoberta MCP e instruções preservadas nas retomadas.
-
-- Diagnóstico explícito das limitações de respostas de permissão e contagem prévia exata no protocolo headless verificado.
-
-- Comparação de 2 a 4 modelos em leitura sobre cópias do mesmo contexto, com divergências, falhas, uso e verificação de conteúdo atual.
-
-- Transferência estruturada entre papéis com cópias independentes, histórico de relatórios, decisões e critérios, vinculados ao hash dos arquivos.
-
-- Espera limitada com notificações MCP por evento real, cursores e cancelamento separado da execução.
+## 0.5.0 — ainda não publicada no npm
 
 - Perfis de ferramentas por ambiente, com consulta e revisão limitadas a tarefas em leitura.
+- Espera limitada com notificações MCP por evento real, cursores e cancelamento separado da execução.
+- Transferência estruturada entre papéis com cópias independentes, histórico de relatórios, decisões e critérios, vinculados ao hash dos arquivos.
+- Comparação de 2 a 4 modelos em leitura sobre cópias do mesmo contexto, com divergências, falhas, uso e verificação de conteúdo atual.
+- Diagnóstico explícito das limitações de respostas de permissão e contagem prévia exata no protocolo headless verificado.
+- Papéis personalizados por configuração, com contratos herdados, descoberta MCP e instruções preservadas nas retomadas.
 
 ## 0.4.1
 

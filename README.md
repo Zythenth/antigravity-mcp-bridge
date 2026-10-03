@@ -18,6 +18,10 @@ O bridge não acessa endpoints privados, cookies ou arquivos de autenticação. 
 
 O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele exige que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. Consulte abaixo a limitação observada na execução de testes no Windows.
 
+## Versões disponíveis
+
+O código deste checkout prepara a **0.5.0**, com perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Essas funções estão disponíveis pelo código-fonte e pelo plugin deste repositório. O pacote npm publicado continua na **0.4.1**; os exemplos npx abaixo usam essa versão e ainda não incluem as novas ferramentas. A 0.5.0 foi verificada com CLI simulado e clientes MCP locais; o teste de sandbox real citado adiante foi realizado na 0.4.1.
+
 ## Instalação
 
 ### Servidor MCP via npm/npx

@@ -1,6 +1,6 @@
 {
   "name": "antigravity-mcp-bridge",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Local MCP bridge for the official Antigravity CLI, with isolated project copies and reviewed integration.",
   "repository": { "type": "git", "url": "git+https://github.com/Zythenth/antigravity-mcp-bridge.git" },
   "homepage": "https://github.com/Zythenth/antigravity-mcp-bridge#readme",
