@@ -13,6 +13,7 @@ import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTes
 import { textChunk } from './chunks.js';
 import { roleSchema, validateRoleReport } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
+import { profileReadOnly } from './tool-profiles.js';
 
 interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
@@ -75,6 +76,8 @@ export class TaskManager {
     return selection === undefined ? this.config.defaultModel : selection.model ?? undefined;
   }
 
+  get toolProfile() { return this.config.toolProfile; }
+
   async setModel(model: string | null): Promise<string | null> {
     if (model !== null) {
       const models = await this.adapter.listModels();
@@ -85,6 +88,10 @@ export class TaskManager {
   }
 
   async run(options: RunOptions): Promise<TaskRecord> {
+    if (profileReadOnly(this.config.toolProfile)) {
+      if (options.mode === 'write') throw new BridgeError('PROFILE_READ_ONLY', 'This tool profile only permits read-only tasks');
+      options = { ...options, mode: 'read-only' };
+    }
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     validatePrompt(options.prompt, this.config.maxPromptChars);
     if (options.acceptanceCriteria !== undefined) criteriaSchema.parse(options.acceptanceCriteria);

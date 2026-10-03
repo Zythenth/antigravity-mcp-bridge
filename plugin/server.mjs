@@ -28539,6 +28539,36 @@ import path2 from "node:path";
 // dist/src/config.js
 import path from "node:path";
 import os from "node:os";
+
+// dist/src/tool-profiles.js
+var toolProfileSchema = external_exports.enum(["full", "query", "review", "implementation"]);
+var queryTools = /* @__PURE__ */ new Set([
+  "antigravity_health",
+  "antigravity_list_models",
+  "antigravity_get_model",
+  "antigravity_usage",
+  "antigravity_list_project_files",
+  "antigravity_run",
+  "antigravity_resume",
+  "antigravity_status",
+  "antigravity_tasks",
+  "antigravity_events",
+  "antigravity_result",
+  "antigravity_read_result",
+  "antigravity_cancel",
+  "antigravity_sessions"
+]);
+var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
+function toolEnabled(profile, name) {
+  if (profile === "full" || profile === "implementation")
+    return true;
+  return (profile === "query" ? queryTools : reviewTools).has(name);
+}
+function profileReadOnly(profile) {
+  return profile === "query" || profile === "review";
+}
+
+// dist/src/config.js
 function positiveInteger(value, fallback, max) {
   if (value === void 0)
     return fallback;
@@ -28554,6 +28584,7 @@ function loadConfig(env = process.env) {
     throw new Error("BRIDGE_DEFAULT_MODEL must be an exact model ID");
   }
   return {
+    toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
     agyPath: env.AGY_PATH || "agy",
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
@@ -37538,6 +37569,7 @@ var chunkShape = {
 var usageRow = external_exports.object({ taskId: id, sessionId: external_exports.string().nullable(), model: external_exports.string().nullable(), status, ...tokenUsage.shape }).strict();
 var successOutputSchemas = {
   antigravity_health: external_exports.object({
+    toolProfile: toolProfileSchema.optional(),
     installed: external_exports.boolean(),
     path: external_exports.string(),
     version: external_exports.string().optional(),
@@ -37652,48 +37684,54 @@ function createMcpServer(adapter2, tasks2) {
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
-  server2.registerTool("antigravity_health", {
-    outputSchema: outputSchemas.antigravity_health,
-    title: "Check Antigravity CLI",
-    description: "Inspect installed agy version, authentication and supported capabilities.",
-    inputSchema: {},
-    annotations: readOnly
-  }, safe(async () => ({ ...await adapter2.health(), integrationApproval: { available: Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" } })));
-  server2.registerTool("antigravity_list_models", {
-    outputSchema: outputSchemas.antigravity_list_models,
-    title: "List Antigravity models",
-    description: "List model IDs actually returned by agy models for this account.",
-    inputSchema: {},
-    annotations: readOnly
-  }, safe(async () => ({ models: await adapter2.listModels() })));
-  server2.registerTool("antigravity_get_model", {
-    outputSchema: outputSchemas.antigravity_get_model,
-    title: "Get selected model",
-    description: "Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.",
-    inputSchema: {},
-    annotations: readOnly
-  }, safe(() => ({ model: tasks2.getModel() ?? null })));
-  server2.registerTool("antigravity_usage", {
-    outputSchema: outputSchemas.antigravity_usage,
-    title: "Read observed token usage",
-    description: "Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.",
-    inputSchema: { taskId: external_exports.string().uuid().optional(), sessionId: external_exports.string().min(1).max(128).optional(), model: external_exports.string().min(1).max(128).optional() },
-    annotations: readOnly
-  }, async (filters) => safe(() => tasks2.usage(filters))());
-  server2.registerTool("antigravity_list_project_files", {
-    outputSchema: outputSchemas.antigravity_list_project_files,
-    title: "List files eligible for a project copy",
-    description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
-    inputSchema: { workingDirectory: external_exports.string().min(1) },
-    annotations: readOnly
-  }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
-  server2.registerTool("antigravity_set_model", {
-    outputSchema: outputSchemas.antigravity_set_model,
-    title: "Select Antigravity model",
-    description: "Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.",
-    inputSchema: { model: external_exports.string().min(1).max(128).nullable() },
-    annotations: { ...readOnly, readOnlyHint: false }
-  }, async ({ model }) => safe(async () => ({ model: await tasks2.setModel(model) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_health"))
+    server2.registerTool("antigravity_health", {
+      outputSchema: outputSchemas.antigravity_health,
+      title: "Check Antigravity CLI",
+      description: "Inspect installed agy version, authentication and supported capabilities.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(async () => ({ ...await adapter2.health(), toolProfile: tasks2.toolProfile, integrationApproval: { available: toolEnabled(tasks2.toolProfile, "antigravity_integrate") && Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" } })));
+  if (toolEnabled(tasks2.toolProfile, "antigravity_list_models"))
+    server2.registerTool("antigravity_list_models", {
+      outputSchema: outputSchemas.antigravity_list_models,
+      title: "List Antigravity models",
+      description: "List model IDs actually returned by agy models for this account.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(async () => ({ models: await adapter2.listModels() })));
+  if (toolEnabled(tasks2.toolProfile, "antigravity_get_model"))
+    server2.registerTool("antigravity_get_model", {
+      outputSchema: outputSchemas.antigravity_get_model,
+      title: "Get selected model",
+      description: "Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(() => ({ model: tasks2.getModel() ?? null })));
+  if (toolEnabled(tasks2.toolProfile, "antigravity_usage"))
+    server2.registerTool("antigravity_usage", {
+      outputSchema: outputSchemas.antigravity_usage,
+      title: "Read observed token usage",
+      description: "Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.",
+      inputSchema: { taskId: external_exports.string().uuid().optional(), sessionId: external_exports.string().min(1).max(128).optional(), model: external_exports.string().min(1).max(128).optional() },
+      annotations: readOnly
+    }, async (filters) => safe(() => tasks2.usage(filters))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_list_project_files"))
+    server2.registerTool("antigravity_list_project_files", {
+      outputSchema: outputSchemas.antigravity_list_project_files,
+      title: "List files eligible for a project copy",
+      description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
+      inputSchema: { workingDirectory: external_exports.string().min(1) },
+      annotations: readOnly
+    }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_set_model"))
+    server2.registerTool("antigravity_set_model", {
+      outputSchema: outputSchemas.antigravity_set_model,
+      title: "Select Antigravity model",
+      description: "Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.",
+      inputSchema: { model: external_exports.string().min(1).max(128).nullable() },
+      annotations: { ...readOnly, readOnlyHint: false }
+    }, async ({ model }) => safe(async () => ({ model: await tasks2.setModel(model) }))());
   const runSchema = {
     prompt: external_exports.string().min(1),
     model: external_exports.string().min(1).max(128).nullable().optional(),
@@ -37706,162 +37744,179 @@ function createMcpServer(adapter2, tasks2) {
     acceptanceCriteria: criteriaSchema.optional(),
     role: roleSchema.optional()
   };
-  server2.registerTool("antigravity_run", {
-    outputSchema: outputSchemas.antigravity_run,
-    title: "Run Antigravity task",
-    description: "Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.",
-    inputSchema: runSchema,
-    annotations: action
-  }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
-  server2.registerTool("antigravity_resume", {
-    outputSchema: outputSchemas.antigravity_resume,
-    title: "Resume Antigravity conversation",
-    description: "Continue a completed session in its existing isolated copy.",
-    inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
-    annotations: action
-  }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
-  server2.registerTool("antigravity_preview", {
-    outputSchema: outputSchemas.antigravity_preview,
-    title: "Preview isolated changes",
-    description: "Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.",
-    inputSchema: { taskId: external_exports.string().uuid(), includePatch: external_exports.boolean().optional() },
-    annotations: readOnly
-  }, async ({ taskId, includePatch }) => safe(() => tasks2.preview(taskId, includePatch))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_run"))
+    server2.registerTool("antigravity_run", {
+      outputSchema: outputSchemas.antigravity_run,
+      title: "Run Antigravity task",
+      description: "Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.",
+      inputSchema: runSchema,
+      annotations: action
+    }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_resume"))
+    server2.registerTool("antigravity_resume", {
+      outputSchema: outputSchemas.antigravity_resume,
+      title: "Resume Antigravity conversation",
+      description: "Continue a completed session in its existing isolated copy.",
+      inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
+      annotations: action
+    }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_preview"))
+    server2.registerTool("antigravity_preview", {
+      outputSchema: outputSchemas.antigravity_preview,
+      title: "Preview isolated changes",
+      description: "Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.",
+      inputSchema: { taskId: external_exports.string().uuid(), includePatch: external_exports.boolean().optional() },
+      annotations: readOnly
+    }, async ({ taskId, includePatch }) => safe(() => tasks2.preview(taskId, includePatch))());
   const chunkInput = { offset: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(2).max(5e4).optional() };
-  server2.registerTool("antigravity_read_patch", {
-    outputSchema: outputSchemas.antigravity_read_patch,
-    title: "Read patch by file or chunk",
-    description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
-    inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
-    annotations: readOnly
-  }, async ({ taskId, expectedSha256, path: path7, offset, limit }) => safe(() => tasks2.readPatch(taskId, expectedSha256, path7, offset, limit))());
-  server2.registerTool("antigravity_read_result", {
-    outputSchema: outputSchemas.antigravity_read_result,
-    title: "Read result in chunks",
-    description: "Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.",
-    inputSchema: { taskId: external_exports.string().uuid(), expectedContentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
-    annotations: readOnly
-  }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks2.readResult(taskId, offset, limit, expectedContentSha256))());
-  server2.registerTool("antigravity_verify", {
-    outputSchema: outputSchemas.antigravity_verify,
-    title: "Verify task acceptance criteria",
-    description: "Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.",
-    inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
-    annotations: { ...readOnly, readOnlyHint: false }
-  }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks2.verify(taskId, expectedSha256, reviews))());
-  server2.registerTool("antigravity_test", {
-    outputSchema: outputSchemas.antigravity_test,
-    title: "Run tests in the native agy sandbox",
-    description: "Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.",
-    inputSchema: {
-      taskId: external_exports.string().uuid(),
-      expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
-      command: testCommandSchema,
-      retries: external_exports.number().int().min(0).max(3).optional(),
-      timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
-    },
-    annotations: action
-  }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks2.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
-  server2.registerTool("antigravity_record_test", {
-    outputSchema: outputSchemas.antigravity_record_test,
-    title: "Record review test evidence",
-    description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
-    inputSchema: {
-      taskId: external_exports.string().uuid(),
-      expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
-      command: external_exports.string().min(1).max(1e3),
-      exitCode: external_exports.number().int().min(0).max(255),
-      output: external_exports.string().max(4e3).optional()
-    },
-    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-  }, async ({ taskId, expectedSha256, command, exitCode, output: output2 }) => safe(() => tasks2.recordTest(taskId, expectedSha256, command, exitCode, output2))());
-  server2.registerTool("antigravity_integrate", {
-    outputSchema: outputSchemas.antigravity_integrate,
-    title: "Integrate reviewed changes",
-    description: "Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.",
-    inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
-    annotations: action
-  }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256, async (preview) => {
-    if (!server2.server.getClientCapabilities()?.elicitation?.form) {
-      throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
-    }
-    const files = preview.fileSummaries.map((file3) => `${file3.status} ${JSON.stringify(file3.path)} (${file3.binary ? "bin\xE1rio" : "+" + file3.insertions + " -" + file3.deletions})`).join("\n");
-    const answer = await server2.server.elicitInput({
-      mode: "form",
-      message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?
+  if (toolEnabled(tasks2.toolProfile, "antigravity_read_patch"))
+    server2.registerTool("antigravity_read_patch", {
+      outputSchema: outputSchemas.antigravity_read_patch,
+      title: "Read patch by file or chunk",
+      description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
+      inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
+      annotations: readOnly
+    }, async ({ taskId, expectedSha256, path: path7, offset, limit }) => safe(() => tasks2.readPatch(taskId, expectedSha256, path7, offset, limit))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_read_result"))
+    server2.registerTool("antigravity_read_result", {
+      outputSchema: outputSchemas.antigravity_read_result,
+      title: "Read result in chunks",
+      description: "Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.",
+      inputSchema: { taskId: external_exports.string().uuid(), expectedContentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
+      annotations: readOnly
+    }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks2.readResult(taskId, offset, limit, expectedContentSha256))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_verify"))
+    server2.registerTool("antigravity_verify", {
+      outputSchema: outputSchemas.antigravity_verify,
+      title: "Verify task acceptance criteria",
+      description: "Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.",
+      inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
+      annotations: { ...readOnly, readOnlyHint: false }
+    }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks2.verify(taskId, expectedSha256, reviews))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_test"))
+    server2.registerTool("antigravity_test", {
+      outputSchema: outputSchemas.antigravity_test,
+      title: "Run tests in the native agy sandbox",
+      description: "Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.",
+      inputSchema: {
+        taskId: external_exports.string().uuid(),
+        expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+        command: testCommandSchema,
+        retries: external_exports.number().int().min(0).max(3).optional(),
+        timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
+      },
+      annotations: action
+    }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks2.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_record_test"))
+    server2.registerTool("antigravity_record_test", {
+      outputSchema: outputSchemas.antigravity_record_test,
+      title: "Record review test evidence",
+      description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
+      inputSchema: {
+        taskId: external_exports.string().uuid(),
+        expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+        command: external_exports.string().min(1).max(1e3),
+        exitCode: external_exports.number().int().min(0).max(255),
+        output: external_exports.string().max(4e3).optional()
+      },
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
+    }, async ({ taskId, expectedSha256, command, exitCode, output: output2 }) => safe(() => tasks2.recordTest(taskId, expectedSha256, command, exitCode, output2))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_integrate"))
+    server2.registerTool("antigravity_integrate", {
+      outputSchema: outputSchemas.antigravity_integrate,
+      title: "Integrate reviewed changes",
+      description: "Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.",
+      inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
+      annotations: action
+    }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256, async (preview) => {
+      if (!server2.server.getClientCapabilities()?.elicitation?.form) {
+        throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
+      }
+      const files = preview.fileSummaries.map((file3) => `${file3.status} ${JSON.stringify(file3.path)} (${file3.binary ? "bin\xE1rio" : "+" + file3.insertions + " -" + file3.deletions})`).join("\n");
+      const answer = await server2.server.elicitInput({
+        mode: "form",
+        message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?
 Origem: ${JSON.stringify(preview.sourceDirectory)}
 Tarefa: ${taskId}
 SHA-256 revisado: ${preview.sha256}
 ${files}
 A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch e os testes.`,
-      requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "Confirmo a integra\xE7\xE3o deste patch", default: false } }, required: ["confirm"] }
-    }, { timeout: 3e5 }).catch(() => {
-      throw new BridgeError("APPROVAL_FAILED", "Client confirmation failed or timed out; no changes were applied");
-    });
-    return answer.action === "accept" && answer.content?.confirm === true;
-  }))());
-  server2.registerTool("antigravity_discard", {
-    outputSchema: outputSchemas.antigravity_discard,
-    title: "Discard an isolated copy",
-    description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
-    inputSchema: { taskId: external_exports.string().uuid() },
-    annotations: { ...action, openWorldHint: false }
-  }, async ({ taskId }) => safe(async () => ({ task: await tasks2.discard(taskId) }))());
-  server2.registerTool("antigravity_cleanup", {
-    outputSchema: outputSchemas.antigravity_cleanup,
-    title: "Clean expired isolated copies",
-    description: "Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.",
-    inputSchema: {},
-    annotations: { ...action, openWorldHint: false }
-  }, safe(() => tasks2.cleanup()));
-  server2.registerTool("antigravity_status", {
-    outputSchema: outputSchemas.antigravity_status,
-    title: "Get Antigravity task status",
-    description: "Return task metadata, status, process ID and isolated copy path when available.",
-    inputSchema: { taskId: external_exports.string().uuid() },
-    annotations: readOnly
-  }, async ({ taskId }) => safe(() => ({ task: tasks2.status(taskId) }))());
-  server2.registerTool("antigravity_tasks", {
-    outputSchema: outputSchemas.antigravity_tasks,
-    title: "List persisted tasks",
-    description: "Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.",
-    inputSchema: {},
-    annotations: readOnly
-  }, safe(() => ({ tasks: tasks2.list().map(({ prompt: _prompt, ...task2 }) => task2) })));
-  server2.registerTool("antigravity_events", {
-    outputSchema: outputSchemas.antigravity_events,
-    title: "Read Antigravity events",
-    description: "Read live normalized agy events after a sequence cursor. Includes original agy event payloads.",
-    inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(1).max(1e3).optional() },
-    annotations: readOnly
-  }, async ({ taskId, after, limit }) => safe(() => tasks2.readEvents(taskId, after, limit))());
-  server2.registerTool("antigravity_result", {
-    outputSchema: outputSchemas.antigravity_result,
-    title: "Get Antigravity result",
-    description: "Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.",
-    inputSchema: { taskId: external_exports.string().uuid(), includeResult: external_exports.boolean().optional() },
-    annotations: readOnly
-  }, async ({ taskId, includeResult }) => safe(() => {
-    const result = tasks2.result(taskId);
-    if (includeResult !== false)
-      return result;
-    const { prompt, result: output2, includedFiles, report: report2, ...metadata } = result.task;
-    return { ...result, task: metadata, resultAvailable: output2 !== void 0, reportAvailable: report2 !== void 0, includedFileCount: includedFiles?.length ?? 0 };
-  })());
-  server2.registerTool("antigravity_cancel", {
-    outputSchema: outputSchemas.antigravity_cancel,
-    title: "Cancel Antigravity task",
-    description: "Cancel a queued task or terminate its local agy process.",
-    inputSchema: { taskId: external_exports.string().uuid() },
-    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-  }, async ({ taskId }) => safe(async () => ({ task: await tasks2.cancel(taskId) }))());
-  server2.registerTool("antigravity_sessions", {
-    outputSchema: outputSchemas.antigravity_sessions,
-    title: "List known Antigravity sessions",
-    description: "List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.",
-    inputSchema: {},
-    annotations: readOnly
-  }, safe(() => ({ sessions: tasks2.sessions(), scope: "local bridge state" })));
+        requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "Confirmo a integra\xE7\xE3o deste patch", default: false } }, required: ["confirm"] }
+      }, { timeout: 3e5 }).catch(() => {
+        throw new BridgeError("APPROVAL_FAILED", "Client confirmation failed or timed out; no changes were applied");
+      });
+      return answer.action === "accept" && answer.content?.confirm === true;
+    }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_discard"))
+    server2.registerTool("antigravity_discard", {
+      outputSchema: outputSchemas.antigravity_discard,
+      title: "Discard an isolated copy",
+      description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
+      inputSchema: { taskId: external_exports.string().uuid() },
+      annotations: { ...action, openWorldHint: false }
+    }, async ({ taskId }) => safe(async () => ({ task: await tasks2.discard(taskId) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_cleanup"))
+    server2.registerTool("antigravity_cleanup", {
+      outputSchema: outputSchemas.antigravity_cleanup,
+      title: "Clean expired isolated copies",
+      description: "Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.",
+      inputSchema: {},
+      annotations: { ...action, openWorldHint: false }
+    }, safe(() => tasks2.cleanup()));
+  if (toolEnabled(tasks2.toolProfile, "antigravity_status"))
+    server2.registerTool("antigravity_status", {
+      outputSchema: outputSchemas.antigravity_status,
+      title: "Get Antigravity task status",
+      description: "Return task metadata, status, process ID and isolated copy path when available.",
+      inputSchema: { taskId: external_exports.string().uuid() },
+      annotations: readOnly
+    }, async ({ taskId }) => safe(() => ({ task: tasks2.status(taskId) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_tasks"))
+    server2.registerTool("antigravity_tasks", {
+      outputSchema: outputSchemas.antigravity_tasks,
+      title: "List persisted tasks",
+      description: "Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(() => ({ tasks: tasks2.list().map(({ prompt: _prompt, ...task2 }) => task2) })));
+  if (toolEnabled(tasks2.toolProfile, "antigravity_events"))
+    server2.registerTool("antigravity_events", {
+      outputSchema: outputSchemas.antigravity_events,
+      title: "Read Antigravity events",
+      description: "Read live normalized agy events after a sequence cursor. Includes original agy event payloads.",
+      inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(1).max(1e3).optional() },
+      annotations: readOnly
+    }, async ({ taskId, after, limit }) => safe(() => tasks2.readEvents(taskId, after, limit))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_result"))
+    server2.registerTool("antigravity_result", {
+      outputSchema: outputSchemas.antigravity_result,
+      title: "Get Antigravity result",
+      description: "Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.",
+      inputSchema: { taskId: external_exports.string().uuid(), includeResult: external_exports.boolean().optional() },
+      annotations: readOnly
+    }, async ({ taskId, includeResult }) => safe(() => {
+      const result = tasks2.result(taskId);
+      if (includeResult !== false)
+        return result;
+      const { prompt, result: output2, includedFiles, report: report2, ...metadata } = result.task;
+      return { ...result, task: metadata, resultAvailable: output2 !== void 0, reportAvailable: report2 !== void 0, includedFileCount: includedFiles?.length ?? 0 };
+    })());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_cancel"))
+    server2.registerTool("antigravity_cancel", {
+      outputSchema: outputSchemas.antigravity_cancel,
+      title: "Cancel Antigravity task",
+      description: "Cancel a queued task or terminate its local agy process.",
+      inputSchema: { taskId: external_exports.string().uuid() },
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
+    }, async ({ taskId }) => safe(async () => ({ task: await tasks2.cancel(taskId) }))());
+  if (toolEnabled(tasks2.toolProfile, "antigravity_sessions"))
+    server2.registerTool("antigravity_sessions", {
+      outputSchema: outputSchemas.antigravity_sessions,
+      title: "List known Antigravity sessions",
+      description: "List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(() => ({ sessions: tasks2.sessions(), scope: "local bridge state" })));
   return server2;
 }
 
@@ -38219,6 +38274,9 @@ var TaskManager = class {
     const selection = this.state.loadModel();
     return selection === void 0 ? this.config.defaultModel : selection.model ?? void 0;
   }
+  get toolProfile() {
+    return this.config.toolProfile;
+  }
   async setModel(model) {
     if (model !== null) {
       const models = await this.adapter.listModels();
@@ -38229,6 +38287,11 @@ var TaskManager = class {
     return model;
   }
   async run(options) {
+    if (profileReadOnly(this.config.toolProfile)) {
+      if (options.mode === "write")
+        throw new BridgeError("PROFILE_READ_ONLY", "This tool profile only permits read-only tasks");
+      options = { ...options, mode: "read-only" };
+    }
     if (this.stopped)
       throw new BridgeError("AGY_PROCESS_FAILED", "Server is shutting down");
     validatePrompt(options.prompt, this.config.maxPromptChars);

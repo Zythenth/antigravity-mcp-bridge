@@ -1,5 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
+import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
@@ -12,6 +13,7 @@ export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; max
 export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
 
 export interface Config extends ProjectLimits {
+  toolProfile: ToolProfile;
   agyPath: string;
   defaultModel?: string;
   maxConcurrentTasks: number;
@@ -31,6 +33,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error('BRIDGE_DEFAULT_MODEL must be an exact model ID');
   }
   return {
+    toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     agyPath: env.AGY_PATH || 'agy',
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),

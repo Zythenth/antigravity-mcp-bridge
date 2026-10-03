@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## Não publicado
+
+- Perfis de ferramentas por ambiente, com consulta e revisão limitadas a tarefas em leitura.
+
 ## 0.4.1
 
 - Snapshot Git temporário dentro da cópia do projeto para compatibilidade com o AppContainer Windows, com exclusão do fingerprint e limpeza validada.

@@ -75,6 +75,19 @@ codex mcp add antigravity -- node $server
 
 Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **uma** forma de registro por vez para evitar ferramentas duplicadas.
 
+## Perfis de ferramentas
+
+Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
+
+| Valor | Catálogo e execução |
+| --- | --- |
+| `full` (padrão) | Todas as ferramentas; preserva a configuração existente |
+| `query` | Consulta, modelos, sessões e acompanhamento; tarefas somente em leitura |
+| `review` | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | Fluxo completo, incluindo testes, integração confirmada e descarte |
+
+O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a confirmação de integração continuam necessários. Valores desconhecidos impedem a inicialização.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.

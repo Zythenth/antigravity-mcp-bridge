@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
 import { plannerReportSchema, reviewerReportSchema, roleSchema } from './roles.js';
 import { usageCountersSchema } from './usage.js';
+import { toolProfileSchema } from './tool-profiles.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().uuid();
@@ -56,6 +57,7 @@ const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model:
 
 export const successOutputSchemas = {
   antigravity_health: z.object({
+    toolProfile: toolProfileSchema.optional(),
     installed: z.boolean(), path: z.string(), version: z.string().optional(), authenticated: z.boolean().nullable(),
     capabilities: z.object({
       structuredOutput: z.boolean(), streaming: z.boolean(), sandbox: z.boolean(), readOnlyMode: z.boolean(),

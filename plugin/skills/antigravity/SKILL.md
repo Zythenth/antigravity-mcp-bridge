@@ -7,6 +7,10 @@ description: Use quando o usuário pedir ao Codex para delegar programação ao 
 
 Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve passar pelo CLI oficial `agy` executado pelo bridge. O Codex planeja, acompanha e revisa; o Antigravity implementa quando o usuário pede essa delegação.
 
+## Perfil disponível
+
+Consulte `antigravity_health.toolProfile`. `query` e `review` executam somente em leitura; não peça ferramentas ausentes nem contorne o perfil. `full` e `implementation` oferecem o fluxo completo. Para mudar o catálogo, o usuário configura `BRIDGE_TOOL_PROFILE` e reinicia a conexão MCP.
+
 ## Escolha da ação
 
 - Para disponibilidade ou autenticação, chame `antigravity_health`. Se receber `AGY_AUTH_REQUIRED`, oriente o usuário a abrir `agy` interativamente; não tente ler credenciais nem fazer login pelo bridge.
