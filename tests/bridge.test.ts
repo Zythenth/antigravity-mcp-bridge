@@ -510,7 +510,8 @@ function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> 
   return { adapter, tasks, config };
 }
 
-async function until(tasks: TaskManager, taskId: string, predicate: (record: TaskRecord) => boolean, timeout = 5000): Promise<TaskRecord> {
+// Git copies on hosted runners need a wider observation window; execution timeouts are checked separately.
+async function until(tasks: TaskManager, taskId: string, predicate: (record: TaskRecord) => boolean, timeout = 30000): Promise<TaskRecord> {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const task = tasks.status(taskId);

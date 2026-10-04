@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.5.1
+
+- Margem de observação das tarefas nos testes ampliada de 5 para 30 segundos para a preparação de cópias em runners Windows, preservando as asserções de concorrência, retenção, aprovação e timeouts de execução.
+
 ## 0.5.0
 
 - Perfis de ferramentas por ambiente, com consulta e revisão limitadas a tarefas em leitura.

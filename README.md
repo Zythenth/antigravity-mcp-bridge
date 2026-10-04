@@ -20,20 +20,22 @@ O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele 
 
 ## Versões disponíveis
 
-A **0.5.0** inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Essas funções compõem o código-fonte, o plugin deste repositório e o pacote npm desta versão. Os exemplos npx abaixo usam a **0.5.0**. Ela foi verificada com CLI simulado e clientes MCP locais; o teste de sandbox real citado adiante foi realizado na 0.4.1.
+A **0.5.1** inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Essas funções compõem o código-fonte, o plugin deste repositório e o pacote npm desta versão. Os exemplos npx abaixo usam a **0.5.1**. Ela foi verificada com CLI simulado e clientes MCP locais; o teste de sandbox real citado adiante foi realizado na 0.4.1.
+
+A 0.5.1 amplia a margem de observação dos testes para suportar a preparação de cópias em runners mais lentos, preservando as verificações dos timeouts de execução.
 
 ## Instalação
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.5.0, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.5.1, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.5.0"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.5.1"]
     }
   }
 }
@@ -83,7 +85,7 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Ferramentas na 0.5.0 | Catálogo e execução |
+| Valor | Ferramentas na 0.5.1 | Catálogo e execução |
 | --- | --- | --- |
 | `full` (padrão) | 29 | Todas as ferramentas; preserva a configuração existente |
 | `query` | 20 | Consulta, modelos, sessões, handoff e comparação; tarefas somente em leitura |
