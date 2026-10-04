@@ -263,7 +263,7 @@ Quando não há recibo válido e a causa não foi identificada, o resultado é `
 | Código | Evidência e ação |
 | --- | --- |
 | `AGY_SANDBOX_ACCESS_DENIED` | O runtime relatou falha ao conceder acesso ao alvo. Confira o caminho e as ACLs; esse erro sozinho não demonstra que o setup inicial está ausente. |
-| `AGY_SANDBOX_SETUP_REQUIRED` | A solicitação administrativa de setup não foi concluída. Confira o pedido no CLI oficial interativo. |
+| `AGY_SANDBOX_SETUP_REQUIRED` | A solicitação administrativa de setup não foi concluída, inclusive quando `denied_actions` informa `escalate_admin`. Confira a disponibilidade do broker do runtime atual. |
 | `AGY_SANDBOX_BYPASS_DENIED` | O runtime relatou uma recusa de execução fora do sandbox. Preserve essa recusa. |
 | `AGY_SANDBOX_BYPASS_REQUESTED` | A chamada declarou bypass ou um valor incompatível para essa opção. Seu recibo não verifica execução isolada. |
 
@@ -274,6 +274,8 @@ No Windows, use executáveis nativos como `node.exe` e `python.exe`; para npm, u
 Na configuração inicial do sandbox Windows, o CLI pode pedir uma elevação UAC. Quando o runtime indicar setup administrativo pendente, abra `agy --sandbox` em uma pasta descartável e, no prompt do próprio Antigravity, peça `Execute node.exe --version`. O cartão de configuração apresenta `Yes, elevate`; confira o aplicativo solicitante e confirme o diálogo do Windows. Uma tela de sandbox bypass é uma solicitação distinta. Depois, verifique o executor pelo recibo de `antigravity_test`. Um comando executado no PowerShell após sair do agy e `antigravity_health.capabilities.sandbox: true` não comprovam a preparação do sandbox. Falhas de ACL precisam de diagnóstico do alvo; repetir o setup para cada projeto não é uma correção demonstrada.
 
 A versão 0.4.1 foi validada com execução real no Windows após essa configuração: o recibo capturou exit code 0, a origem permaneceu intacta e um marcador artificial fora da cópia teve leitura e escrita negadas. O snapshot Git do runner fica temporariamente dentro da cópia montada no sandbox, excluído do fingerprint e removido ao terminar. Esse teste comprova os cenários observados; não atesta todas as ferramentas do agente nem todas as fronteiras do sistema de arquivos. A suíte padrão continua usando um CLI simulado.
+
+No `agy` 1.2.16, os testes reais passaram enquanto o broker administrativo da sessão de configuração estava ativo. Depois de encerrar essa sessão e seu filho, uma nova execução headless pediu `escalate_admin` e terminou sem recibo. Portanto, a confirmação anterior de setup não comprova disponibilidade após o encerramento do processo que mantinha o broker. O bridge ainda não gerencia esse ciclo de vida; esse limite precisa ser resolvido antes de afirmar funcionamento independente no Windows.
 
 Para testar com a conta real em um projeto descartável, execute `npm run build` e `node tests/native-integration.mjs`. Esse teste usa a conta do agy e verifica a captura de uma execução real; a suíte padrão usa o CLI simulado e não consome quota.
 

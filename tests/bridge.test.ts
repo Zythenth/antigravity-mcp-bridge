@@ -230,6 +230,23 @@ test('native sandbox ACL failures preserve their cause when the CLI reports narr
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('a denied administrative broker is identified from the CLI result without a terminal output receipt', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup([mockPath, 'denied-admin-result']);
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+    await until(tasks, task.taskId, done);
+    const preview = await tasks.preview(task.taskId);
+    const tested = await tasks.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'console.log("test output")'] }, 0, 20);
+    const final = await until(tasks, tested.taskId, done);
+    assert.equal(final.status, 'failed');
+    assert.equal(final.error?.code, 'AGY_SANDBOX_SETUP_REQUIRED');
+    assert.equal(final.tests?.length || 0, 0);
+    await assert.rejects(tasks.integrate(tested.taskId, preview.sha256, async () => true), { code: 'TASK_NOT_READY' });
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('a bypass request cannot be erased by another sandbox error or a subsequent receipt', async () => {
   const dir = await repository();
   const { adapter, tasks } = setup([mockPath, 'bypass-then-acl']);

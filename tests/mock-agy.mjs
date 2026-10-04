@@ -31,10 +31,10 @@ if (scenario === 'comparison' && report?.findings && args[args.indexOf('--model'
   report.findings[0].message = 'Flash interpretation';
 }
 const send = obj => process.stdout.write(JSON.stringify(obj) + '\n');
-const result = (status = 'SUCCESS') => send({ event: 'result', result: { conversation_id: conversationId, status,
+const result = (status = 'SUCCESS', extra = {}) => send({ event: 'result', result: { conversation_id: conversationId, status,
   response: prompt, usage: { input_tokens: args.includes('--conversation') ? 2 : 1, output_tokens: args.includes('--conversation') ? 4 : 2,
     total_tokens: args.includes('--conversation') ? 6 : 3, thinking_tokens: 0, cache_read_tokens: 0 },
-  ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}) } });
+  ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}), ...extra } });
 send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
 if (scenario === 'resolve-command') {
   const script = "$ErrorActionPreference='Stop'; try { (Get-Command -Name 'bridge-environment-fixture' -CommandType Application -ErrorAction Stop).Source } catch { [Console]::Write($_.Exception.Message); exit 42 }";
@@ -46,6 +46,13 @@ if (scenario === 'resolve-command') {
   process.exit(resolved.status === 0 ? 0 : 1);
 }
 const nativeTest = prompt.match(/<bridge-test-command>(.*?)<\/bridge-test-command>/s);
+if (nativeTest && args.includes('denied-admin-result')) {
+  const request = JSON.parse(nativeTest[1]);
+  send({ event: 'step_update', step_update: { step_index: 0, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+    tool_info: { parameters: { CommandLine: request.commandLine }, error: { type: 'TOOL_ERROR', message: 'context canceled' } } } });
+  result('SUCCESS', { response: '', denied_actions: [{ action: 'escalate_admin', display_name: 'Bash' }] });
+  process.exit(0);
+}
 if (nativeTest && args.includes('sandbox-acl')) {
   const request = JSON.parse(nativeTest[1]);
   send({ event: 'step_update', step_update: { step_index: 0, state: 'DONE', step_type: 'tool', tool_name: 'run_command',

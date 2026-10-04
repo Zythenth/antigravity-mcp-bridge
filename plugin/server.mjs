@@ -39328,8 +39328,13 @@ ${error62.message}`;
           if (task2.nativeTest.failure)
             throw task2.nativeTest.failure;
           const last = attempts.at(-1)?.receipt;
-          if (!last || last.exitCode === null || last.error)
+          if (!last || last.exitCode === null || last.error) {
+            const denied = record2.result?.denied_actions;
+            if (Array.isArray(denied) && denied.some((action) => action && typeof action === "object" && action.action === "escalate_admin")) {
+              throw new BridgeError("AGY_SANDBOX_SETUP_REQUIRED", "The CLI denied administrative sandbox setup for this process. A setup performed in an exited CLI session does not prove that its administrative broker is still available.");
+            }
             throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "No valid execution receipt from the exact run_command call; check native sandbox permissions");
+          }
           if (last.beforeSha256 !== last.afterSha256 || last.afterSha256 !== tree)
             throw new BridgeError("TEST_CHANGED_PATCH", "Project files changed during or after the test; run tests again");
           if (last.exitCode !== 0) {
