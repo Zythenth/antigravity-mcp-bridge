@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## 0.5.0 — ainda não publicada no npm
+## 0.5.0
 
 - Perfis de ferramentas por ambiente, com consulta e revisão limitadas a tarefas em leitura.
 - Espera limitada com notificações MCP por evento real, cursores e cancelamento separado da execução.

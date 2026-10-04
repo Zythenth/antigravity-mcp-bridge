@@ -20,20 +20,20 @@ O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele 
 
 ## Versões disponíveis
 
-O código deste checkout prepara a **0.5.0**, com perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Essas funções estão disponíveis pelo código-fonte e pelo plugin deste repositório. O pacote npm publicado continua na **0.4.1**; os exemplos npx abaixo usam essa versão e ainda não incluem as novas ferramentas. A 0.5.0 foi verificada com CLI simulado e clientes MCP locais; o teste de sandbox real citado adiante foi realizado na 0.4.1.
+A **0.5.0** inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Essas funções compõem o código-fonte, o plugin deste repositório e o pacote npm desta versão. Os exemplos npx abaixo usam a **0.5.0**. Ela foi verificada com CLI simulado e clientes MCP locais; o teste de sandbox real citado adiante foi realizado na 0.4.1.
 
 ## Instalação
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.4.1, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.5.0, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.4.1"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.5.0"]
     }
   }
 }
