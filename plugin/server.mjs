@@ -29152,9 +29152,15 @@ var CliAdapter = class {
     this.config = config3;
     this.prefixArgs = prefixArgs;
   }
+  environment() {
+    const env = { ...process.env };
+    if (process.platform === "win32" && process.env.PATHEXT === void 0)
+      env.PATHEXT = ".COM;.EXE;.BAT;.CMD";
+    return env;
+  }
   probe(args, timeoutMs = 1e4) {
     return new Promise((resolve, reject) => {
-      const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "", stderr = "";
       const timer = setTimeout(() => child.kill(), timeoutMs);
       child.stdout.on("data", (chunk) => {
@@ -29270,7 +29276,7 @@ var CliAdapter = class {
       args.push("--json-schema", JSON.stringify(contract.schema));
     }
     const content = taskPrompt(options, this.config.maxPromptChars);
-    const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     child.stdin.end(JSON.stringify({ event: "user", message: { content } }) + "\n");
     return child;
   }
@@ -37474,6 +37480,8 @@ function readNativeReceipt(step, expected) {
   const info = step.tool_info;
   if (info?.parameters?.CommandLine !== expected.commandLine || typeof info.output !== "string")
     return;
+  if (info.parameters.BypassSandbox !== void 0 && info.parameters.BypassSandbox !== false)
+    return;
   const prefix = "AGY_BRIDGE_TEST:" + expected.nonce + ":";
   const lines = info.output.split(/\r?\n/).filter((line) => line.startsWith(prefix));
   if (lines.length !== 1)
@@ -37485,6 +37493,28 @@ function readNativeReceipt(step, expected) {
     return { receipt, output: info.output.slice(0, info.output.indexOf(prefix)).trim().slice(-4e3) };
   } catch {
     return;
+  }
+}
+function readNativeSandboxError(step, expected) {
+  if (step.state !== "DONE" || step.step_type !== "tool" || step.tool_name !== "run_command")
+    return;
+  const info = step.tool_info;
+  if (info?.parameters?.CommandLine !== expected.commandLine)
+    return;
+  if (info.parameters.BypassSandbox !== void 0 && info.parameters.BypassSandbox !== false) {
+    return new BridgeError("AGY_SANDBOX_BYPASS_REQUESTED", "The test command requested sandbox bypass; its receipt cannot verify isolated execution.");
+  }
+  if (typeof info.output !== "string" || readNativeReceipt(step, expected))
+    return;
+  const cause = info.output.trim().slice(-2e3);
+  if (/granting access to [^\r\n]+:\s*(?:access is denied|permission denied|access denied)/i.test(cause)) {
+    return new BridgeError("AGY_SANDBOX_ACCESS_DENIED", "Native sandbox access preparation failed. Inspect the reported target and Windows ACLs; this error alone does not prove that initial setup is missing. Reported error: " + cause);
+  }
+  if (/failed to prompt user for admin escalation|permission check failed for escalate_admin/i.test(cause)) {
+    return new BridgeError("AGY_SANDBOX_SETUP_REQUIRED", "The native runtime requested administrative sandbox setup and it was not completed. Inspect the official interactive CLI setup request; do not approve command bypass. Reported error: " + cause);
+  }
+  if (/permission check failed for unsandboxed\b/i.test(cause)) {
+    return new BridgeError("AGY_SANDBOX_BYPASS_DENIED", "The runtime reported a denied sandbox bypass. Preserve that denial; do not retry the command through another host execution path. Reported error: " + cause);
   }
 }
 
@@ -37912,7 +37942,7 @@ function safe(operation) {
   };
 }
 function createMcpServer(adapter2, tasks2) {
-  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.5.1" }, {
+  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.5.2" }, {
     instructions: "Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
@@ -39295,6 +39325,8 @@ ${error62.message}`;
         }
         this.events.append(record2.taskId, "test.results", { attempts: attempts.length, sha256: preview.sha256 });
         if (!task2.termination) {
+          if (task2.nativeTest.failure)
+            throw task2.nativeTest.failure;
           const last = attempts.at(-1)?.receipt;
           if (!last || last.exitCode === null || last.error)
             throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "No valid execution receipt from the exact run_command call; check native sandbox permissions");
@@ -39349,8 +39381,16 @@ ${error62.message}`;
     } else if (sourceType === "step_update" && raw.step_update && typeof raw.step_update === "object") {
       const step = raw.step_update;
       if (task2.nativeTest && typeof step.step_index === "number" && !task2.nativeTest.steps.has(step.step_index)) {
+        const failure3 = readNativeSandboxError(step, task2.nativeTest);
+        if (failure3) {
+          if (task2.nativeTest.failure?.code !== "AGY_SANDBOX_BYPASS_REQUESTED")
+            task2.nativeTest.failure = failure3;
+          this.events.append(record2.taskId, "test.blocked", { code: failure3.code, message: failure3.message });
+        }
         const attempt = readNativeReceipt(step, task2.nativeTest);
         if (attempt) {
+          if (task2.nativeTest.failure?.code !== "AGY_SANDBOX_BYPASS_REQUESTED")
+            task2.nativeTest.failure = void 0;
           task2.nativeTest.steps.add(step.step_index);
           task2.nativeTest.attempts.push(attempt);
           this.events.append(record2.taskId, "test.executed", { attempt: task2.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });

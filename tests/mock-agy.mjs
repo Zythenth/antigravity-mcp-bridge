@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
@@ -36,13 +36,36 @@ const result = (status = 'SUCCESS') => send({ event: 'result', result: { convers
     total_tokens: args.includes('--conversation') ? 6 : 3, thinking_tokens: 0, cache_read_tokens: 0 },
   ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}) } });
 send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
+if (scenario === 'resolve-command') {
+  const script = "$ErrorActionPreference='Stop'; try { (Get-Command -Name 'bridge-environment-fixture' -CommandType Application -ErrorAction Stop).Source } catch { [Console]::Write($_.Exception.Message); exit 42 }";
+  const resolved = spawnSync(path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true });
+  send({ event: 'step_update', step_update: { step_type: 'tool', state: 'DONE', tool_name: 'run_command',
+    tool_info: { parameters: { CommandLine: script }, output: JSON.stringify({ exitCode: resolved.status, source: resolved.stdout.trim(), pathExt: process.env.PATHEXT }) } } });
+  result(resolved.status === 0 ? 'SUCCESS' : 'ERROR');
+  process.exit(resolved.status === 0 ? 0 : 1);
+}
 const nativeTest = prompt.match(/<bridge-test-command>(.*?)<\/bridge-test-command>/s);
+if (nativeTest && args.includes('sandbox-acl')) {
+  const request = JSON.parse(nativeTest[1]);
+  send({ event: 'step_update', step_update: { step_index: 0, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+    tool_info: { parameters: { CommandLine: request.commandLine }, output: 'Error: granting access to C:: Access is denied.' } } });
+  result();
+  process.exit(0);
+}
+if (nativeTest && args.includes('bypass-then-acl')) {
+  const request = JSON.parse(nativeTest[1]);
+  send({ event: 'step_update', step_update: { step_index: 0, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+    tool_info: { parameters: { CommandLine: request.commandLine, BypassSandbox: true }, output: '' } } });
+  send({ event: 'step_update', step_update: { step_index: 1, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+    tool_info: { parameters: { CommandLine: request.commandLine }, output: 'Error: granting access to C:: Access is denied.' } } });
+}
 if (nativeTest && !args.includes('no-test-events')) {
   const request = JSON.parse(nativeTest[1]);
   for (let index = 0; index < request.maxAttempts; index++) {
     const output = execSync(request.commandLine, { cwd: process.cwd(), encoding: 'utf8', windowsHide: true,
       shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/sh' });
-    send({ event: 'step_update', step_update: { step_index: index, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+    send({ event: 'step_update', step_update: { step_index: index + (args.includes('bypass-then-acl') ? 2 : 0), state: 'DONE', step_type: 'tool', tool_name: 'run_command',
       tool_info: { name: 'run_command', parameters: { CommandLine: request.commandLine }, output } } });
     const encoded = output.trim().split('\n').at(-1).split(':').at(-1);
     if (JSON.parse(Buffer.from(encoded, 'base64').toString()).exitCode === 0) break;

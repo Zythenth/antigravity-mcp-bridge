@@ -51,9 +51,16 @@ export class CliAdapter {
   private installed = false;
   constructor(private readonly config: Config, private readonly prefixArgs: string[] = []) {}
 
+  private environment(): NodeJS.ProcessEnv {
+    const env = { ...process.env };
+    // MCP clients can omit PATHEXT, preventing PowerShell from finding installed executables.
+    if (process.platform === 'win32' && process.env.PATHEXT === undefined) env.PATHEXT = '.COM;.EXE;.BAT;.CMD';
+    return env;
+  }
+
   private probe(args: string[], timeoutMs = 10000): Promise<ProbeResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '', stderr = '';
       const timer = setTimeout(() => child.kill(), timeoutMs);
       child.stdout.on('data', chunk => { stdout = (stdout + String(chunk)).slice(-2_000_000); });
@@ -136,7 +143,7 @@ export class CliAdapter {
       args.push('--json-schema', JSON.stringify(contract.schema));
     }
     const content = taskPrompt(options, this.config.maxPromptChars);
-    const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stdin.end(JSON.stringify({ event: 'user', message: { content } }) + '\n');
     return child;
   }

@@ -13,7 +13,7 @@ import { LineParser } from '../src/stream-parser.js';
 import { TaskManager } from '../src/task-manager.js';
 import type { TaskRecord } from '../src/types.js';
 import type { AcceptanceCriterion } from '../src/verification.js';
-import { readNativeReceipt } from '../src/native-tests.js';
+import { readNativeReceipt, readNativeSandboxError } from '../src/native-tests.js';
 import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjectFiles, previewProjectCopy } from '../src/isolation.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
@@ -211,12 +211,49 @@ test('native test failure is preserved and narrative success never counts as exe
   } finally { await tasks.shutdown(); await unchecked.tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('native sandbox ACL failures preserve their cause when the CLI reports narrative success', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup([mockPath, 'sandbox-acl']);
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+    await until(tasks, task.taskId, done);
+    const preview = await tasks.preview(task.taskId);
+    const tested = await tasks.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'console.log("test output")'] }, 0, 20);
+    const final = await until(tasks, tested.taskId, done);
+    assert.equal(final.status, 'failed');
+    assert.equal(final.error?.code, 'AGY_SANDBOX_ACCESS_DENIED');
+    assert.match(final.error.message, /granting access to C:: Access is denied/);
+    assert.equal(final.tests?.length || 0, 0);
+    await assert.rejects(tasks.integrate(tested.taskId, preview.sha256, async () => true), { code: 'TASK_NOT_READY' });
+    assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'source');
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('a bypass request cannot be erased by another sandbox error or a subsequent receipt', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup([mockPath, 'bypass-then-acl']);
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+    await until(tasks, task.taskId, done);
+    const preview = await tasks.preview(task.taskId);
+    const tested = await tasks.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'console.log("observed test")'] }, 0, 20);
+    const final = await until(tasks, tested.taskId, done);
+    assert.equal(final.tests?.at(-1)?.exitCode, 0);
+    assert.equal(final.status, 'failed');
+    assert.equal(final.error?.code, 'AGY_SANDBOX_BYPASS_REQUESTED');
+    await assert.rejects(tasks.integrate(tested.taskId, preview.sha256, async () => true), { code: 'TASK_NOT_READY' });
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
 test('native test receipts require the exact tool command and reject malformed or duplicate receipts', () => {
   const nonce = 'd16a1fe6-5488-4c44-89a3-2972d0e4d9b1';
   const receipt = Buffer.from(JSON.stringify({ nonce, exitCode: 0, beforeSha256: 'a'.repeat(64), afterSha256: 'a'.repeat(64), truncated: false })).toString('base64');
   const output = 'observed output\nAGY_BRIDGE_TEST:' + nonce + ':' + receipt;
   const step = { step_index: 1, state: 'DONE', step_type: 'tool', tool_name: 'run_command', tool_info: { parameters: { CommandLine: 'exact command' }, output } };
   assert.equal(readNativeReceipt(step, { nonce, commandLine: 'exact command' })?.receipt.exitCode, 0);
+  assert.equal(readNativeReceipt({ ...step, tool_info: { ...step.tool_info, parameters: { CommandLine: 'exact command', BypassSandbox: true } } }, { nonce, commandLine: 'exact command' }), undefined);
   assert.equal(readNativeReceipt(step, { nonce, commandLine: 'different command' }), undefined);
   assert.equal(readNativeReceipt({ ...step, step_type: 'agent_response' }, { nonce, commandLine: 'exact command' }), undefined);
   assert.equal(readNativeReceipt({ ...step, tool_info: { parameters: { CommandLine: 'exact command' }, output: output + '\n' + output } }, { nonce, commandLine: 'exact command' }), undefined);
@@ -252,6 +289,26 @@ test('patch readers bind pages to the full hash and select changed files without
     await writeFile(path.join(final.copyDirectory!, 'source.txt'), 'changed again');
     await assert.rejects(tasks.readPatch(task.taskId, preview.sha256, 'source.txt', selected.nextOffset), { code: 'REVIEW_CHANGED' });
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('sandbox diagnostics distinguish access failures, setup and denied bypass without trusting narrative or unrelated tools', () => {
+  const expected = { nonce: 'd16a1fe6-5488-4c44-89a3-2972d0e4d9b1', commandLine: 'exact command' };
+  const step = { state: 'DONE', step_type: 'tool', tool_name: 'run_command', tool_info: { parameters: { CommandLine: expected.commandLine }, output: '' } };
+  for (const [output, code] of [
+    ['Error: granting access to D:\\runtime parent: Access is denied.', 'AGY_SANDBOX_ACCESS_DENIED'],
+    ['failed to prompt user for admin escalation: permission check failed for escalate_admin', 'AGY_SANDBOX_SETUP_REQUIRED'],
+    ['permission check failed for unsandboxed "exact command": user denied permission', 'AGY_SANDBOX_BYPASS_DENIED'],
+  ]) {
+    const observed = { ...step, tool_info: { ...step.tool_info, output } };
+    assert.equal(readNativeSandboxError(observed, expected)?.code, code);
+    assert.equal(readNativeSandboxError({ ...observed, step_type: 'agent_response' }, expected), undefined);
+    assert.equal(readNativeSandboxError(observed, { ...expected, commandLine: 'another command' }), undefined);
+  }
+  assert.equal(readNativeSandboxError({ ...step, tool_info: { ...step.tool_info, parameters: { CommandLine: expected.commandLine, BypassSandbox: true } } }, expected)?.code, 'AGY_SANDBOX_BYPASS_REQUESTED');
+  assert.equal(readNativeSandboxError({ ...step, tool_info: { ...step.tool_info, output: 'ordinary command error' } }, expected), undefined);
+  const receipt = Buffer.from(JSON.stringify({ nonce: expected.nonce, exitCode: 0, truncated: false })).toString('base64');
+  const loggedText = 'granting access to C:: Access is denied.\nAGY_BRIDGE_TEST:' + expected.nonce + ':' + receipt;
+  assert.equal(readNativeSandboxError({ ...step, tool_info: { ...step.tool_info, output: loggedText } }, expected), undefined);
 });
 
 test('planner and reviewer roles preserve read-only mode and reject fabricated citations', async () => {

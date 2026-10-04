@@ -9,7 +9,7 @@ import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import { validatePrompt, validateWorkingDirectory } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
-import { prepareNativeTest, readNativeReceipt, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
+import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
 import { textChunk } from './chunks.js';
 import { roleSchema, validateRoleReport, resolveRole, listRoles } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
@@ -19,7 +19,7 @@ import type { BridgeEvent } from './types.js';
 import { decisionsSchema, handoffSchema } from './handoff.js';
 import { comparisonModelsSchema, compareFindings, type Comparison } from './comparison.js';
 
-interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number> } }
+interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 export class TaskManager {
@@ -619,6 +619,7 @@ export class TaskManager {
         }
         this.events.append(record.taskId, 'test.results', { attempts: attempts.length, sha256: preview.sha256 });
         if (!task.termination) {
+          if (task.nativeTest!.failure) throw task.nativeTest!.failure;
           const last = attempts.at(-1)?.receipt;
           if (!last || last.exitCode === null || last.error) throw new BridgeError('TEST_EXECUTION_UNVERIFIED', 'No valid execution receipt from the exact run_command call; check native sandbox permissions');
           if (last.beforeSha256 !== last.afterSha256 || last.afterSha256 !== tree) throw new BridgeError('TEST_CHANGED_PATCH', 'Project files changed during or after the test; run tests again');
@@ -662,8 +663,14 @@ export class TaskManager {
     } else if (sourceType === 'step_update' && raw.step_update && typeof raw.step_update === 'object') {
       const step = raw.step_update as Record<string, unknown>;
       if (task.nativeTest && typeof step.step_index === 'number' && !task.nativeTest.steps.has(step.step_index)) {
+        const failure = readNativeSandboxError(step, task.nativeTest);
+        if (failure) {
+          if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = failure;
+          this.events.append(record.taskId, 'test.blocked', { code: failure.code, message: failure.message });
+        }
         const attempt = readNativeReceipt(step, task.nativeTest);
         if (attempt) {
+          if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = undefined;
           task.nativeTest.steps.add(step.step_index);
           task.nativeTest.attempts.push(attempt);
           this.events.append(record.taskId, 'test.executed', { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });

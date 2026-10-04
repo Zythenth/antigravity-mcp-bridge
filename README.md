@@ -16,11 +16,13 @@ O bridge não acessa endpoints privados, cookies ou arquivos de autenticação. 
 - [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/overview/) instalado e disponível no `PATH`. Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
 - Autenticação concluída no `agy` interativo. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
-O bridge foi testado com `agy` 1.2.14 e `@modelcontextprotocol/sdk` 1.30.1. Ele exige que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. Consulte abaixo a limitação observada na execução de testes no Windows.
+O bridge foi testado com `agy` 1.2.16 e `@modelcontextprotocol/sdk` 1.30.1. Ele exige que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. Consulte abaixo a limitação observada na execução de testes no Windows.
 
 ## Versões disponíveis
 
-A **0.5.1** inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Essas funções compõem o código-fonte, o plugin deste repositório e o pacote npm desta versão. Os exemplos npx abaixo usam a **0.5.1**. Ela foi verificada com CLI simulado e clientes MCP locais; o teste de sandbox real citado adiante foi realizado na 0.4.1.
+A **0.5.1** está publicada no npm e inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Os exemplos npx abaixo usam essa versão.
+
+O código-fonte e o plugin deste repositório preparam a **0.5.2**, com correção do ambiente de execução Windows, diagnósticos específicos do sandbox e recusa de recibos com bypass. A publicação dessa versão no npm está pendente.
 
 A 0.5.1 amplia a margem de observação dos testes para suportar a preparação de cópias em runners mais lentos, preservando as verificações dos timeouts de execução.
 
@@ -228,7 +230,7 @@ As verificações automáticas demonstram apenas as condições declaradas; a co
 
 ## Eventos, sessões e cancelamento
 
-O bridge exige suporte aos formatos `stream-json` e a `--sandbox`, conferidos na descoberta do CLI. A versão verificada neste projeto é `agy` 1.2.14. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
+O bridge exige suporte aos formatos `stream-json` e a `--sandbox`, conferidos na descoberta do CLI. A versão verificada neste projeto é `agy` 1.2.16. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
 
 ### Modelo padrão
 
@@ -256,11 +258,20 @@ Chame `antigravity_test` com `taskId`, `expectedSha256` e `command: { executable
 
 O executor usa `agy --sandbox` e a ferramenta nativa `run_command`. Não exige Docker nem executa o comando diretamente no host como alternativa. Um runner temporário, conferido por SHA-256 antes da execução, captura saída, exit code e fingerprints dos arquivos elegíveis antes/depois do teste. O bridge aceita o recibo apenas no evento da chamada exata do terminal; uma mensagem do Gemini dizendo que o teste passou não conta. Os registros têm `source: "agy-tool"` e `sandbox: "agy-native-requested"`. A saída é limitada a 4.000 caracteres, com indicação de truncamento.
 
-Se o CLI negar a ferramenta ou omitir o recibo, o resultado é `TEST_EXECUTION_UNVERIFIED`. Um comando não zero produz `TEST_FAILED`; mudanças nos arquivos durante/depois do comando produzem `TEST_CHANGED_PATCH`. Testes observados precisam continuar atuais para a integração; um relato manual não substitui um teste observado falho. Após `TEST_FAILED`, é possível retomar a conversa para corrigir ou executar os testes novamente. A orientação de correção mantém o comando original e proíbe enfraquecer os testes; tentativas observadas além do limite encerram a tarefa.
+Quando não há recibo válido e a causa não foi identificada, o resultado é `TEST_EXECUTION_UNVERIFIED`. Os diagnósticos específicos abaixo preservam falhas conhecidas do runtime. Um comando não zero produz `TEST_FAILED`; mudanças nos arquivos durante/depois do comando produzem `TEST_CHANGED_PATCH`. Testes observados precisam continuar atuais para a integração; um relato manual não substitui um teste observado falho. Após `TEST_FAILED`, é possível retomar a conversa para corrigir ou executar os testes novamente. A orientação de correção mantém o comando original e proíbe enfraquecer os testes; tentativas observadas além do limite encerram a tarefa.
+
+| Código | Evidência e ação |
+| --- | --- |
+| `AGY_SANDBOX_ACCESS_DENIED` | O runtime relatou falha ao conceder acesso ao alvo. Confira o caminho e as ACLs; esse erro sozinho não demonstra que o setup inicial está ausente. |
+| `AGY_SANDBOX_SETUP_REQUIRED` | A solicitação administrativa de setup não foi concluída. Confira o pedido no CLI oficial interativo. |
+| `AGY_SANDBOX_BYPASS_DENIED` | O runtime relatou uma recusa de execução fora do sandbox. Preserve essa recusa. |
+| `AGY_SANDBOX_BYPASS_REQUESTED` | A chamada declarou bypass ou um valor incompatível para essa opção. Seu recibo não verifica execução isolada. |
+
+No Windows, o bridge preenche `PATHEXT` ausente no subprocesso com `.COM;.EXE;.BAT;.CMD`, para que o PowerShell encontre os executáveis instalados. Valores definidos pelo cliente, inclusive um valor vazio, são preservados. O SDK pode omitir essa variável no ambiente herdado, fazendo `node` parecer ausente mesmo quando o arquivo está instalado. A correção vale para as sondagens e para todas as tarefas, sem configuração por projeto.
 
 No Windows, use executáveis nativos como `node.exe` e `python.exe`; para npm, use `npm.cmd`. Arquivos `.cmd`/`.bat` aceitam argumentos comuns, mas metacaracteres de shell são recusados. A execução depende das permissões do sandbox nativo do CLI. Uma restrição de terminal não demonstra isolamento de todas as ferramentas do agente nem permite afirmar proteção completa do sistema de arquivos. Consulte a [configuração oficial do sandbox](https://www.antigravity.google/docs/sandbox/) e os [eventos de ferramentas no modo headless](https://www.antigravity.google/docs/cli/headless/#tool-calls-in-the-stream).
 
-Na configuração inicial do sandbox Windows, o `agy` 1.2.14 pode pedir uma elevação UAC. Abra o CLI interativo com `agy --sandbox` em uma pasta descartável e peça `node --version`. O cartão de configuração do sandbox apresenta `Yes, elevate`; confirme também o diálogo do Windows após conferir o aplicativo solicitante. Em headless, essa aprovação pendente aparece como `escalate_admin`/`Bash` e é negada. O bridge mantém `TEST_EXECUTION_UNVERIFIED` quando não há recibo válido. A configuração inicial precisa ser concluída antes de usar o executor; uma regra genérica de aprovação não substitui esse passo.
+Na configuração inicial do sandbox Windows, o CLI pode pedir uma elevação UAC. Quando o runtime indicar setup administrativo pendente, abra `agy --sandbox` em uma pasta descartável e, no prompt do próprio Antigravity, peça `Execute node.exe --version`. O cartão de configuração apresenta `Yes, elevate`; confira o aplicativo solicitante e confirme o diálogo do Windows. Uma tela de sandbox bypass é uma solicitação distinta. Depois, verifique o executor pelo recibo de `antigravity_test`. Um comando executado no PowerShell após sair do agy e `antigravity_health.capabilities.sandbox: true` não comprovam a preparação do sandbox. Falhas de ACL precisam de diagnóstico do alvo; repetir o setup para cada projeto não é uma correção demonstrada.
 
 A versão 0.4.1 foi validada com execução real no Windows após essa configuração: o recibo capturou exit code 0, a origem permaneceu intacta e um marcador artificial fora da cópia teve leitura e escrita negadas. O snapshot Git do runner fica temporariamente dentro da cópia montada no sandbox, excluído do fingerprint e removido ao terminar. Esse teste comprova os cenários observados; não atesta todas as ferramentas do agente nem todas as fronteiras do sistema de arquivos. A suíte padrão continua usando um CLI simulado.
 

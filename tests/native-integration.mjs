@@ -33,14 +33,22 @@ async function wait(taskId) {
 }
 try {
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('dist/src/index.js')],
-    env: { ...process.env, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') }, stderr: 'pipe' }));
+    env: { BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TOOL_PROFILE: 'full',
+      ...(process.env.AGY_PATH ? { AGY_PATH: process.env.AGY_PATH } : {}),
+      ...(process.env.BRIDGE_DEFAULT_MODEL ? { BRIDGE_DEFAULT_MODEL: process.env.BRIDGE_DEFAULT_MODEL } : {}) }, stderr: 'pipe' }));
   const first = await call('antigravity_run', { prompt: 'Do not change files. Reply ready for a test command.', workingDirectory: source, timeoutSeconds: 60,
     acceptanceCriteria: [{ id: 'source', description: 'Keep the source file', check: { kind: 'file-contains', path: 'source.txt', text: 'original' } }] });
   firstId = first.task.taskId;
   const finished = await wait(firstId);
   if (finished.status !== 'completed') throw Error(JSON.stringify(finished.error));
   const preview = await call('antigravity_preview', { taskId: firstId });
+  const runtimeLookup = process.platform === 'win32' ?
+    'const cp=require("node:child_process");const lookup=cp.spawnSync(' +
+    JSON.stringify(path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')) +
+    ',["-NoProfile","-NonInteractive","-Command","$ErrorActionPreference=\'Stop\';(Get-Command -Name node -CommandType Application -ErrorAction Stop).Source"],{encoding:"utf8"});' +
+    'if(lookup.status!==0){console.error(lookup.stderr);process.exit(11)}console.log("sandbox resolves installed node command");' : '';
   const testScript = "const fs=require('node:fs'); if(fs.readFileSync('source.txt','utf8')!=='original')process.exit(8);" +
+    runtimeLookup +
     'const marker=' + JSON.stringify(markerPath) + ";const denied=new Set(['EACCES','EPERM','ENOENT']);" +
     "try{fs.readFileSync(marker);process.exit(9)}catch(error){if(!denied.has(error.code))throw error}" +
     "try{fs.writeFileSync(marker,'changed');process.exit(10)}catch(error){if(!denied.has(error.code))throw error}" +
