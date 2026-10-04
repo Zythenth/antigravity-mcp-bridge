@@ -67,7 +67,7 @@ test('Windows executor captures actual exit codes and bounded output, ignoring f
 test('Windows executor kills descendant processes and recreates isolation in a fresh invocation', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async (copy, outside) => {
     const marker = path.join(outside, 'private.txt');
-    const first = await executeWindowsTest(command(`const cp=require('node:child_process');const child=cp.spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});console.log(child.pid);child.unref();`), copy, settings);
+    const first = await executeWindowsTest(command(`const cp=require('node:child_process');const child=cp.spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'inherit'});console.log(child.pid);child.unref();`), copy, settings);
     assert.equal(first.exitCode, 0, JSON.stringify(first));
     const pid = Number(first.output.trim()); assert.ok(Number.isInteger(pid) && pid > 0);
     let alive = true;
