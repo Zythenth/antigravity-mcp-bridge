@@ -20,7 +20,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-windows-helper.mjs",
     "build:plugin": "npm run build && node scripts/build-plugin.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json",
