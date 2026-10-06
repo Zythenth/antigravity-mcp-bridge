@@ -8,8 +8,10 @@ import type { ProjectCopy } from './isolation.js';
 import type { BridgeEvent } from './types.js';
 import { usageCountersSchema } from './usage.js';
 import { roleDefinitionSchema } from './roles.js';
+import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
+const maxSandboxPolicyFileBytes = 2 * 20 * 1000 * 6 + 4096;
 const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
 const snapshotSchema = z.object({
   version: z.literal(1), ownerPid: z.number().int().positive(),
@@ -64,6 +66,35 @@ export class StateStore {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
       throw new BridgeError('INVALID_STATE', 'Invalid persisted model selection');
     }
+  }
+
+  loadSandboxPolicy(): SandboxPolicySnapshot {
+    const file = path.join(this.directory, 'sandbox-policy.json');
+    try {
+      const stat = lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > maxSandboxPolicyFileBytes) throw new Error('Unsafe sandbox policy');
+      return parseSandboxPolicySnapshot(JSON.parse(readFileSync(file, 'utf8')));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        const policy = sandboxPolicySchema.parse({});
+        return { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
+      }
+      throw new BridgeError('INVALID_STATE', 'Invalid persisted sandbox policy');
+    }
+  }
+
+  saveSandboxPolicy(snapshot: SandboxPolicySnapshot): void {
+    let validated: SandboxPolicySnapshot;
+    try { validated = parseSandboxPolicySnapshot(snapshot); }
+    catch { throw new BridgeError('INVALID_STATE', 'Invalid sandbox policy snapshot'); }
+    const target = path.join(this.directory, 'sandbox-policy.json');
+    const temporary = target + '.' + randomUUID() + '.tmp';
+    try {
+      // Callers hold acquire('sandbox-policy') across reload, digest comparison, and this write; do not nest that lock here.
+      this.loadSandboxPolicy();
+      writeFileSync(temporary, JSON.stringify(validated), { flag: 'wx', mode: 0o600, flush: true });
+      renameSync(temporary, target);
+    } finally { rmSync(temporary, { force: true }); }
   }
 
   saveModel(model: string | null): void {
