@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -17,7 +17,7 @@ interface Fixture {
 }
 
 async function fixture<T>(run: (paths: Fixture) => Promise<T>): Promise<T> {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'sandbox-policy-test-'));
+  const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'sandbox-policy-test-')));
   const paths = {
     root,
     readRoot: path.join(root, 'read'),
