@@ -69,7 +69,10 @@ function New-OwnedDirectory {
 
 function Get-Sha256 {
   param([Parameter(Mandatory)][string]$Path)
-  return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  Write-Host "Iniciando SHA-256: $Path"
+  $hash = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  Write-Host "SHA-256 concluído: $hash"
+  return $hash
 }
 
 function Require-Command {
@@ -85,12 +88,46 @@ function Invoke-Native {
   param(
     [Parameter(Mandatory)][string]$FilePath,
     [Parameter(Mandatory)][string[]]$Arguments,
-    [Parameter(Mandatory)][string]$Description
+    [Parameter(Mandatory)][string]$Description,
+    [ValidateRange(0, 86400)][int]$TimeoutSeconds = 1200,
+    [switch]$CaptureOutput
   )
 
-  & $FilePath @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "$Description falhou com código $LASTEXITCODE."
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = $FilePath
+  $startInfo.WorkingDirectory = (Get-Location).Path
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardOutput = $CaptureOutput
+  foreach ($argument in $Arguments) {
+    [void]$startInfo.ArgumentList.Add($argument)
+  }
+  $process = [System.Diagnostics.Process]::new()
+  $started = $false
+  $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+  Write-Host "Iniciando: $Description"
+  try {
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $started = $true
+    if ($CaptureOutput) { $outputTask = $process.StandardOutput.ReadToEndAsync() }
+    if ($TimeoutSeconds -eq 0) {
+      $process.WaitForExit()
+    }
+    elseif (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+      throw "$Description excedeu o limite de $TimeoutSeconds segundos."
+    }
+    if ($process.ExitCode -ne 0) {
+      throw "$Description falhou com código $($process.ExitCode)."
+    }
+    Write-Host ("Concluído: {0} ({1:N1}s)" -f $Description, $elapsed.Elapsed.TotalSeconds)
+    if ($CaptureOutput) { return $outputTask.GetAwaiter().GetResult().TrimEnd("`r", "`n") -split '\r?\n' }
+  }
+  finally {
+    if ($started -and -not $process.HasExited) {
+      $process.Kill($true)
+      [void]$process.WaitForExit(5000)
+    }
+    $process.Dispose()
   }
 }
 
@@ -116,15 +153,26 @@ function Invoke-GitWithoutRepository {
   }
 
   $process = [System.Diagnostics.Process]::new()
+  $started = $false
+  $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+  Write-Host "Iniciando: $Description"
   try {
     $process.StartInfo = $startInfo
     [void]$process.Start()
-    $process.WaitForExit()
+    $started = $true
+    if (-not $process.WaitForExit(120000)) {
+      throw "$Description excedeu o limite de 120 segundos."
+    }
     if ($process.ExitCode -ne 0) {
       throw "$Description falhou com código $($process.ExitCode)."
     }
+    Write-Host ("Concluído: {0} ({1:N1}s)" -f $Description, $elapsed.Elapsed.TotalSeconds)
   }
   finally {
+    if ($started -and -not $process.HasExited) {
+      $process.Kill($true)
+      [void]$process.WaitForExit(5000)
+    }
     $process.Dispose()
   }
 }
@@ -133,51 +181,80 @@ function Invoke-BoundedDownload {
   param(
     [Parameter(Mandatory)][string]$Url,
     [Parameter(Mandatory)][string]$Destination,
-    [Parameter(Mandatory)][Int64]$MaximumBytes
+    [Parameter(Mandatory)][ValidateRange(1, [Int64]::MaxValue)][Int64]$MaximumBytes
   )
 
-  $handler = [System.Net.Http.HttpClientHandler]::new()
-  $handler.AllowAutoRedirect = $false
-  $client = [System.Net.Http.HttpClient]::new($handler)
-  $client.Timeout = [System.Threading.Timeout]::InfiniteTimeSpan
-  $deadline = [System.Threading.CancellationTokenSource]::new([TimeSpan]::FromMinutes(20))
-  $response = $null
-  $input = $null
-  $output = $null
-
+  if ($Url -cne $expectedSourceUrl -and $Url -cne $expectedNasmUrl) {
+    throw "URL fora dos inputs oficiais fixados: $Url"
+  }
+  if (Test-Path -LiteralPath $Destination) {
+    throw "O destino do download já existe e não será sobrescrito: $Destination"
+  }
+  $curlPath = Require-Command -Name 'curl.exe'
+  $curlVersion = @(Invoke-Native -FilePath $curlPath -Arguments @('--disable', '--version') -Description 'A verificação do curl' -TimeoutSeconds 30 -CaptureOutput)[0]
+  if ($curlVersion -notmatch '^curl (\d+\.\d+\.\d+)' -or [version]$Matches[1] -lt [version]'8.4.0') {
+    throw "curl >= 8.4.0 é necessário para limitar transferências sem Content-Length: $curlVersion"
+  }
+  Write-Host "Ferramenta de transferência: $curlVersion"
+  $partialPath = "$Destination.$([guid]::NewGuid().ToString('N')).download"
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+  $startInfo.FileName = $curlPath
+  $startInfo.UseShellExecute = $false
+  $startInfo.RedirectStandardOutput = $true
+  foreach ($argument in @(
+    '--disable', '--silent', '--show-error', '--fail', '--proto', '=https',
+    '--connect-timeout', '30', '--max-time', '1200',
+    '--max-filesize', $MaximumBytes.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+    '--no-clobber', '--output', $partialPath, '--write-out', '%{http_code}', '--url', $Url
+  )) {
+    [void]$startInfo.ArgumentList.Add($argument)
+  }
+  $process = [System.Diagnostics.Process]::new()
+  $started = $false
+  $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
+  $nextProgressSeconds = 15
+  Write-Host "Iniciando transferência: $Url; 0 bytes; conexão 30s; transferência 1200s; limite $MaximumBytes bytes."
   try {
-    $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url)
-    $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead, $deadline.Token).GetAwaiter().GetResult()
-    if (-not $response.IsSuccessStatusCode) {
-      throw "Download oficial retornou HTTP $([int]$response.StatusCode): $Url"
-    }
-    if ($null -ne $response.Content.Headers.ContentLength -and $response.Content.Headers.ContentLength -gt $MaximumBytes) {
-      throw "O arquivo oficial excede o limite de $MaximumBytes bytes: $($response.Content.Headers.ContentLength) bytes."
-    }
-
-    $input = $response.Content.ReadAsStreamAsync($deadline.Token).GetAwaiter().GetResult()
-    $output = [System.IO.FileStream]::new(
-      $Destination,
-      [System.IO.FileMode]::CreateNew,
-      [System.IO.FileAccess]::Write,
-      [System.IO.FileShare]::None)
-    $buffer = [byte[]]::new(131072)
-    [Int64]$total = 0
-    while (($read = $input.ReadAsync($buffer, 0, $buffer.Length, $deadline.Token).GetAwaiter().GetResult()) -gt 0) {
-      $total += $read
-      if ($total -gt $MaximumBytes) {
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $started = $true
+    $statusTask = $process.StandardOutput.ReadToEndAsync()
+    while (-not $process.WaitForExit(1000)) {
+      if ($elapsed.Elapsed.TotalSeconds -ge 1220) {
+        throw 'A transferência excedeu o watchdog externo de 1220 segundos.'
+      }
+      [Int64]$receivedBytes = if (Test-Path -LiteralPath $partialPath -PathType Leaf) { (Get-Item -LiteralPath $partialPath).Length } else { 0 }
+      if ($receivedBytes -gt $MaximumBytes) {
         throw "O download excedeu o limite de $MaximumBytes bytes."
       }
-      $output.Write($buffer, 0, $read)
+      if ($elapsed.Elapsed.TotalSeconds -ge $nextProgressSeconds) {
+        Write-Host ("Transferência em andamento: {0} bytes; {1:N1}s; {2}" -f $receivedBytes, $elapsed.Elapsed.TotalSeconds, $Url)
+        $nextProgressSeconds += 15
+      }
     }
+    if ($process.ExitCode -ne 0) {
+      throw "O download oficial falhou com código curl $($process.ExitCode): $Url"
+    }
+    $httpStatus = $statusTask.GetAwaiter().GetResult()
+    if ($httpStatus -notmatch '^2\d\d$') {
+      throw "Download oficial retornou HTTP $httpStatus; redirecionamentos não são permitidos: $Url"
+    }
+    $receivedBytes = (Get-Item -LiteralPath $partialPath).Length
+    if ($receivedBytes -le 0 -or $receivedBytes -gt $MaximumBytes) {
+      throw "O download possui tamanho inválido: $receivedBytes bytes; limite $MaximumBytes."
+    }
+    [System.IO.File]::Move($partialPath, $Destination)
+    Write-Host ("Transferência concluída: {0} bytes; HTTP {1}; {2:N1}s; {3}" -f $receivedBytes, $httpStatus, $elapsed.Elapsed.TotalSeconds, $Destination)
   }
   finally {
-    if ($null -ne $output) { $output.Dispose() }
-    if ($null -ne $input) { $input.Dispose() }
-    if ($null -ne $response) { $response.Dispose() }
-    $deadline.Dispose()
-    $client.Dispose()
-    $handler.Dispose()
+    if ($started -and -not $process.HasExited) {
+      $process.Kill($true)
+      [void]$process.WaitForExit(5000)
+    }
+    $process.Dispose()
+    if (Test-Path -LiteralPath $partialPath -PathType Leaf) {
+      Remove-Item -LiteralPath $partialPath
+    }
   }
 }
 
@@ -188,8 +265,8 @@ function Test-SourceArchive {
     [Parameter(Mandatory)][string]$ExpectedRoot
   )
 
-  $entries = & $TarExecutable -tf $TarPath
-  if ($LASTEXITCODE -ne 0 -or $entries.Count -eq 0) {
+  $entries = @(Invoke-Native -FilePath $TarExecutable -Arguments @('-tf', $TarPath) -Description 'A listagem do tarball oficial do Node' -CaptureOutput)
+  if ($entries.Count -eq 0) {
     throw 'Não foi possível listar o tarball oficial do Node.'
   }
   foreach ($entry in $entries) {
@@ -207,8 +284,8 @@ function Test-NasmArchive {
     [Parameter(Mandatory)][string]$ExpectedExecutable
   )
 
-  $entries = & $TarExecutable -tf $ArchivePath
-  if ($LASTEXITCODE -ne 0 -or $entries.Count -eq 0) {
+  $entries = @(Invoke-Native -FilePath $TarExecutable -Arguments @('-tf', $ArchivePath) -Description 'A listagem do arquivo oficial do NASM' -CaptureOutput)
+  if ($entries.Count -eq 0) {
     throw 'Não foi possível listar o arquivo oficial do NASM.'
   }
   foreach ($entry in $entries) {
@@ -251,7 +328,7 @@ function Get-VisualStudioInstallation {
   if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
     throw 'Visual Studio 2022 não encontrado: vswhere.exe está ausente.'
   }
-  $installation = (& $vswhere -latest -products * -version '[17.0,18.0)' -property installationPath).Trim()
+  $installation = (Invoke-Native -FilePath $vswhere -Arguments @('-latest', '-products', '*', '-version', '[17.0,18.0)', '-property', 'installationPath') -Description 'A localização do Visual Studio 2022' -TimeoutSeconds 30 -CaptureOutput | Out-String).Trim()
   if ([string]::IsNullOrWhiteSpace($installation) -or -not (Test-Path -LiteralPath $installation -PathType Container)) {
     throw 'Visual Studio 2022 não encontrado. Use o runner windows-2022 com ferramentas C++.'
   }
@@ -301,8 +378,8 @@ function Prepare-Nasm {
   if (-not (Test-Path -LiteralPath $nasmPath -PathType Leaf)) {
     throw "O executável NASM esperado está ausente: $nasmPath"
   }
-  $nasmVersion = (& $nasmPath --version | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0 -or $nasmVersion -notmatch "^NASM version $([regex]::Escape($NasmManifest.version))(\s|$)") {
+  $nasmVersion = (Invoke-Native -FilePath $nasmPath -Arguments @('--version') -Description 'A verificação do NASM preparado' -TimeoutSeconds 30 -CaptureOutput | Out-String).Trim()
+  if ($nasmVersion -notmatch "^NASM version $([regex]::Escape($NasmManifest.version))(\s|$)") {
     throw "A execução de verificação do NASM retornou versão inválida: $nasmVersion"
   }
   return [ordered]@{
@@ -324,6 +401,7 @@ function Add-WorkflowPath {
 function Test-Toolchain {
   param([Parameter(Mandatory)][string]$ExpectedNasmVersion)
 
+  Write-Host 'Iniciando verificação das ferramentas de compilação.'
   $visualStudioPath = Get-VisualStudioInstallation
   $clangPath = Join-Path $visualStudioPath 'VC\Tools\Llvm\x64\bin\clang.exe'
   if (-not (Test-Path -LiteralPath $clangPath -PathType Leaf)) {
@@ -334,16 +412,18 @@ function Test-Toolchain {
     throw 'Os alvos C++ do Visual Studio 2022 estão ausentes.'
   }
   $nasmPath = Require-Command -Name 'nasm.exe'
-  $nasmVersion = (& $nasmPath --version | Out-String).Trim()
-  if ($LASTEXITCODE -ne 0 -or $nasmVersion -notmatch "^NASM version $([regex]::Escape($ExpectedNasmVersion))(\s|$)") {
+  $nasmVersion = (Invoke-Native -FilePath $nasmPath -Arguments @('--version') -Description 'A verificação do NASM no PATH' -TimeoutSeconds 30 -CaptureOutput | Out-String).Trim()
+  if ($nasmVersion -notmatch "^NASM version $([regex]::Escape($ExpectedNasmVersion))(\s|$)") {
     throw "A execução de verificação do NASM retornou versão inválida: $nasmVersion"
   }
-  return [ordered]@{
+  $toolchain = [ordered]@{
     visualStudioPath = $visualStudioPath
     clangPath = $clangPath
     dumpbinPath = Get-DumpbinPath -VisualStudioPath $visualStudioPath
     nasmVersion = $nasmVersion
   }
+  Write-Host "Verificação das ferramentas concluída: $visualStudioPath; $nasmVersion"
+  return $toolchain
 }
 
 function Get-PeDependencies {
@@ -409,8 +489,8 @@ if ((@($manifest.build.vcbuildArguments) -join '|') -ne ($expectedVcbuildArgumen
 if ($manifest.source.sha256 -notmatch '^[a-f0-9]{64}$' -or $manifest.patch.sha256 -notmatch '^[a-f0-9]{64}$' -or $manifest.patch.targetBeforeSha256 -notmatch '^[a-f0-9]{64}$' -or $manifest.patch.targetAfterSha256 -notmatch '^[a-f0-9]{64}$' -or $manifest.tools.nasm.sha256 -notmatch '^[a-f0-9]{64}$') {
   throw 'O manifesto contém um SHA-256 inválido.'
 }
-if ([Int64]$manifest.tools.nasm.maximumArchiveBytes -le 0) {
-  throw 'O manifesto contém um limite de tamanho inválido para o NASM.'
+if ([Int64]$manifest.tools.nasm.maximumArchiveBytes -le 0 -or [Int64]$manifest.source.maximumArchiveBytes -le 0) {
+  throw 'O manifesto contém um limite de tamanho inválido para download.'
 }
 if ($manifest.patch.targetBeforeSha256 -eq $manifest.patch.targetAfterSha256) {
   throw 'O manifesto deve fixar imagens pré e pós-patch distintas para o alvo.'
@@ -511,7 +591,7 @@ $toolchain = Test-Toolchain -ExpectedNasmVersion $manifest.tools.nasm.version
 Write-Host 'Compilando Node 24.21.0 com ClangCL e os recursos padrão habilitados.'
 Push-Location $sourceDirectory
 try {
-  Invoke-Native -FilePath $env:ComSpec -Arguments @('/d', '/s', '/c', 'call vcbuild.bat x64 vs2022 clang-cl nonpm nocorepack no-cctest') -Description 'A compilação do Node'
+  Invoke-Native -FilePath $env:ComSpec -Arguments @('/d', '/s', '/c', 'call vcbuild.bat x64 vs2022 clang-cl nonpm nocorepack no-cctest') -Description 'A compilação do Node' -TimeoutSeconds 0
 }
 finally {
   Pop-Location
