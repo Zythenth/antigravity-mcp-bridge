@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "buildId": "node-v24.21.0-lpac1-win-x64",
+  "source": {
+    "version": "v24.21.0",
+    "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0.tar.xz",
+    "sha256": "a6f54defb6fd7c84f41dba13d61e78e9b4e0961712cf61f29715c05f5ced94fc",
+    "gitCommit": "955266bfdd854cd280dffd47548673914484e4c0",
+    "directory": "node-v24.21.0",
+    "maximumArchiveBytes": 157286400
+  },
+  "patch": {
+    "file": "node24-lpac.patch",
+    "sha256": "0cef6d15e66af7bb9062894c87a40dd19d2396771381477c86b58245a05d9a3e",
+    "upstreamCommit": "f46e4246b5277fe1c5888b88b24d8b78020dd4f8",
+    "upstreamPullRequest": "https://github.com/libuv/libuv/pull/5181",
+    "target": "deps/uv/src/win/pipe.c",
+    "targetBeforeSha256": "a712502b4bc71ad994e1c639fcba386ac1748ab8dcb693038d0203dbdbfe107a",
+    "targetAfterSha256": "652022fb6d0a01745301610a015f14cc3220fcce1edb130db2499f21e61f7ca1"
+  },
+  "tools": {
+    "nasm": {
+      "version": "3.02",
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/3.02/win64/nasm-3.02-win64.zip",
+      "sha256": "161d0bfaff53c2f9e9f3e69fd0672323ebabafd1268976a5cec11be92a19aee7",
+      "directory": "nasm-3.02",
+      "executable": "nasm.exe",
+      "maximumArchiveBytes": 2097152
+    }
+  },
+  "build": {
+    "platform": "win32",
+    "architecture": "x64",
+    "expectedModuleAbi": "137",
+    "libuvBaseVersion": "1.52.1",
+    "vcbuildArguments": [
+      "x64",
+      "vs2022",
+      "clang-cl",
+      "nonpm",
+      "nocorepack",
+      "no-cctest"
+    ]
+  }
+}

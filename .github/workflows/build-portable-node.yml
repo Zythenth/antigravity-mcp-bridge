@@ -1,0 +1,71 @@
+name: Build Node portátil com correção LPAC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 180
+    steps:
+      - name: Obter a fonte do bridge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Preparar NASM fixado
+        id: nasm
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildWorkspace = Join-Path $env:RUNNER_TEMP "portable-node-workspace-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          New-Item -ItemType Directory -Path $buildWorkspace | Out-Null
+          & .\scripts\build-portable-node.ps1 -WorkspaceDirectory $buildWorkspace -PrepareNasmOnly
+          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "workspace=$buildWorkspace`n", [System.Text.UTF8Encoding]::new($false))
+
+      - name: Verificar componentes do runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path -LiteralPath $vswhere)) {
+            throw 'O runner não fornece vswhere para localizar o Visual Studio 2022.'
+          }
+          $vsPath = (& $vswhere -latest -products * -version '[17.0,18.0)' -property installationPath).Trim()
+          if ([string]::IsNullOrWhiteSpace($vsPath)) {
+            throw 'O runner não fornece o Visual Studio 2022.'
+          }
+          $clang = Join-Path $vsPath 'VC\Tools\Llvm\x64\bin\clang.exe'
+          if (-not (Test-Path -LiteralPath $clang)) {
+            throw 'O runner não fornece o componente ClangCL exigido pelo Node 24.'
+          }
+          $vcTargets = Join-Path $vsPath 'MSBuild\Microsoft\VC\v170\Microsoft.Cpp.Default.props'
+          if (-not (Test-Path -LiteralPath $vcTargets)) {
+            throw 'O runner não fornece os alvos C++ v170 do Visual Studio 2022.'
+          }
+          if (-not (Get-Command nasm.exe -ErrorAction SilentlyContinue)) {
+            throw 'O runner não fornece NASM; ele é necessário para o OpenSSL com assembly.'
+          }
+
+      - name: Compilar o Node portátil
+        id: build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildWorkspace = '${{ steps.nasm.outputs.workspace }}'
+          $buildOutput = Join-Path $env:RUNNER_TEMP "portable-node-output-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          & .\scripts\build-portable-node.ps1 -WorkspaceDirectory $buildWorkspace -OutputDirectory $buildOutput
+
+      - name: Publicar artefato de compilação
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: portable-node-v24.21.0-lpac1-win-x64
+          path: |
+            ${{ steps.build.outputs.node-exe-path }}
+            ${{ steps.build.outputs.license-path }}
+            ${{ steps.build.outputs.build-json-path }}
+            ${{ steps.build.outputs.sha256sums-path }}
+          if-no-files-found: error
+          retention-days: 7

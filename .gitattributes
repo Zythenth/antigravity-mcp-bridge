@@ -1,1 +1,4 @@
 bin/*.mjs text eol=lf
+runtime/node24-source.json text eol=lf
+runtime/node24-lpac.patch text eol=lf whitespace=-blank-at-eol
+scripts/build-portable-node.ps1 text eol=lf
