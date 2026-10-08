@@ -5,6 +5,7 @@
 - Preservação exata da DACL existente ao conceder e remover permissões temporárias do executor Windows LPAC.
 - Recusa de links simbólicos e junctions no componente final do caminho de executáveis Windows.
 - Diagnósticos sanitizados de inspeção do cache portátil, com detalhes limitados da execução e sem saída bruta.
+- Inspeção do cache portátil sem carregamento automático de módulos do PowerShell, com prazo máximo de 15 segundos.
 - Fixture de testes ajustada para instalações do npm sem `npmrc` distribuído.
 - Versão do pacote, plugin e servidor MCP atualizada para permitir a instalação em um novo diretório de cache do Codex.
 

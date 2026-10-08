@@ -40037,7 +40037,20 @@ var nodeVersion = "24.21.0";
 var libuvVersion = "1.52.1";
 var libuvPatch = "f46e4246b5277fe1c5888b88b24d8b78020dd4f8";
 var cacheRepair = " Remove the affected portable Node build cache manually, then run --prepare-windows-runtime.";
-var reparsePointScript = `$ErrorActionPreference='Stop';$request=[Console]::In.ReadToEnd()|ConvertFrom-Json;foreach($target in @($request.paths)){$root=[IO.Path]::GetPathRoot([string]$target);if([string]::IsNullOrEmpty($root)){throw 'Path must be absolute'};$relative=([string]$target).Substring($root.Length);$current=$root;try{$attributes=[IO.File]::GetAttributes($current)}catch{throw 'Could not inspect root'};if(($attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'};foreach($part in ($relative -split '[\\\\/]+')){if([string]::IsNullOrWhiteSpace($part)){continue};$current=Join-Path -Path $current -ChildPath $part;try{$attributes=[IO.File]::GetAttributes($current)}catch [IO.FileNotFoundException]{break}catch [IO.DirectoryNotFoundException]{break};if(($attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'}}};[Console]::Out.Write('{"safe":true}')`;
+var reparsePointScript = [
+  "$ErrorActionPreference='Stop';$PSModuleAutoLoadingPreference='None';",
+  "$decoder=[Text.UnicodeEncoding]::new($false,$false,$true);$count=0;",
+  "while(($line=[Console]::In.ReadLine())-ne $null){",
+  "if($line.Length-eq 0-or $line.Length%4-ne 0-or $line-notmatch '^[A-Za-z0-9+/]+={0,2}$'){throw 'Invalid path record'};",
+  "$target=$decoder.GetString([Convert]::FromBase64String($line));if($target.Length-eq 0){throw 'Empty path'};$count++;",
+  "$root=[IO.Path]::GetPathRoot($target);if([string]::IsNullOrEmpty($root)){throw 'Path must be absolute'};",
+  "$relative=$target.Substring($root.Length);$current=$root;try{$attributes=[IO.File]::GetAttributes($current)}catch{throw 'Could not inspect root'};",
+  "if(($attributes-band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'};",
+  "foreach($part in ($relative-split '[\\\\/]+')){if($part.Length-eq 0){continue};$current=[IO.Path]::Combine($current,$part);",
+  "try{$attributes=[IO.File]::GetAttributes($current)}catch [IO.FileNotFoundException]{break}catch [IO.DirectoryNotFoundException]{break};",
+  "if(($attributes-band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'}}};",
+  `if($count-eq 0){throw 'Missing paths'};[Console]::Out.Write('{"safe":true}')`
+].join("");
 var reparsePointCommand = Buffer.from(reparsePointScript, "utf16le").toString("base64");
 function fail(code, message) {
   throw new BridgeError(code, message);
@@ -40109,7 +40122,7 @@ async function inspectReparsePoints(paths2) {
         child.kill();
       }
     };
-    const timer = setTimeout(() => stop("timeout"), 5e3);
+    const timer = setTimeout(() => stop("timeout"), 15e3);
     child.stdout.on("data", (chunk) => {
       const text = String(chunk);
       stdoutChars += text.length;
@@ -40130,7 +40143,7 @@ async function inspectReparsePoints(paths2) {
       clearTimeout(timer);
       resolve({ code, signal, spawnError });
     });
-    child.stdin.end(JSON.stringify({ paths: paths2 }));
+    child.stdin.end(paths2.map((value) => Buffer.from(value, "utf16le").toString("base64")).join("\n") + "\n");
   }).catch(() => ({ code: null, signal: null, spawnError: true }));
   if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
     const reason = result.spawnError ? "spawn-error" : stopReason ?? (result.code !== 0 ? "exit-nonzero" : "invalid-safe-output");

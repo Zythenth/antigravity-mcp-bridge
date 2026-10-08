@@ -196,7 +196,7 @@ test('portable preparation rejects a descriptor for a non-x64 runtime before dow
 test('portable inspection reports bounded failure details without exposing process output', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
   const sentinel = 'inspection-output-must-stay-private';
   const cases = [
-    { reason: 'timeout', prefix: '[Threading.Thread]::Sleep(6000);' },
+    { reason: 'timeout', prefix: '[Threading.Thread]::Sleep(16000);' },
     { reason: 'stdout-limit', prefix: `[Console]::Out.Write('${sentinel}'+('x'*2048));[Threading.Thread]::Sleep(6000);` },
     { reason: 'stderr-limit', prefix: `[Console]::Error.Write('${sentinel}'+('x'*2048));[Threading.Thread]::Sleep(6000);` },
     { reason: 'exit-nonzero', suffix: ';exit 7' },
@@ -240,6 +240,109 @@ test('portable inspection reports bounded failure details without exposing proce
       }
     });
   }
+});
+
+
+test('portable inspection accepts real cache paths without PowerShell modules and tolerates bounded cold startup', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
+  for (const scenario of [
+    { name: 'module-free', directory: 'module-free', firstDelay: 0 },
+    { name: 'cold-first-inspection', directory: 'cold', firstDelay: 7000 },
+    { name: 'literal-unicode-path', directory: "é 中 ' 😀", firstDelay: 0 },
+  ]) {
+    await t.test(scenario.name, async subtest => {
+      await cacheFixture(async root => {
+        const cache = path.join(root, scenario.directory);
+        const { descriptor, files } = fixtureDescriptor();
+        const originalSpawn = childProcess.spawn;
+        let inspections = 0;
+        const mocked = subtest.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
+          const encodedIndex = args.indexOf('-EncodedCommand') + 1;
+          assert.ok(encodedIndex > 0);
+          const script = Buffer.from(args[encodedIndex]!, 'base64').toString('utf16le');
+          const changedArgs = [...args];
+          const delay = inspections++ === 0 && scenario.firstDelay ? '[Threading.Thread]::Sleep(7000);' : '';
+          changedArgs[encodedIndex] = Buffer.from(delay + "$PSModuleAutoLoadingPreference='None';" + script, 'utf16le').toString('base64');
+          return originalSpawn(command, changedArgs, { ...options, env: { ...process.env, PSModulePath: path.join(root, 'missing-modules') } });
+        });
+        syncBuiltinESMExports();
+        let requests = 0;
+        const started = performance.now();
+        try {
+          const runtime = await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files, () => { requests++; }) });
+          assert.equal(requests, 3);
+          assert.equal(runtime.nodePath, path.join(cache, cacheLeafName(descriptor), 'node.exe'));
+          assert.deepEqual(await readFile(runtime.nodePath), files.get('node.exe'));
+          assert.equal((await portableNodeStatus('portable', cache, descriptor)).ready, true);
+          assert.ok(inspections > 1);
+          if (scenario.firstDelay) assert.ok(performance.now() - started >= scenario.firstDelay);
+        } finally {
+          mocked.mock.restore();
+          syncBuiltinESMExports();
+        }
+      });
+    });
+  }
+});
+
+test('portable inspection rejects unpaired UTF-16 surrogates before cache creation or download', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
+  await cacheFixture(async root => {
+    const { descriptor, files } = fixtureDescriptor();
+    for (const name of ['high-\ud800', 'low-\udc00']) {
+      const cache = path.join(root, name);
+      let requests = 0;
+      await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files, () => { requests++; }) }), 'UNSAFE_PORTABLE_NODE_CACHE');
+      assert.equal(requests, 0);
+      await assert.rejects(lstat(cache), { code: 'ENOENT' });
+    }
+  });
+});
+
+
+test('portable inspection rejects empty or malformed path records before cache creation or download', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
+  for (const input of ['', '\n', '====\n', 'AA==\n']) {
+    await t.test(JSON.stringify(input), async subtest => {
+      await cacheFixture(async root => {
+        const cache = path.join(root, 'invalid-record');
+        const { descriptor, files } = fixtureDescriptor();
+        const originalSpawn = childProcess.spawn;
+        const mocked = subtest.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
+          const child = originalSpawn(command, args, options);
+          const originalEnd = child.stdin!.end.bind(child.stdin!);
+          subtest.mock.method(child.stdin!, 'end', () => originalEnd(input));
+          return child;
+        });
+        syncBuiltinESMExports();
+        let requests = 0;
+        try {
+          await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files, () => { requests++; }) }), 'UNSAFE_PORTABLE_NODE_CACHE');
+          assert.equal(requests, 0);
+          await assert.rejects(lstat(cache), { code: 'ENOENT' });
+        } finally {
+          mocked.mock.restore();
+          syncBuiltinESMExports();
+        }
+      });
+    });
+  }
+});
+
+test('portable inspection rejects cache-root and build-directory junctions before use', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
+  await cacheFixture(async root => {
+    const { descriptor, files } = fixtureDescriptor();
+    const outside = path.join(root, 'outside');
+    const cache = path.join(root, 'cache');
+    await mkdir(outside);
+    await symlink(outside, cache, 'junction');
+    let requests = 0;
+    await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files, () => { requests++; }) }), 'UNSAFE_PORTABLE_NODE_CACHE');
+    assert.equal(requests, 0);
+    assert.deepEqual(await (await import('node:fs/promises')).readdir(outside), []);
+    await unlink(cache);
+    await mkdir(cache);
+    await symlink(outside, path.join(cache, cacheLeafName(descriptor)), 'junction');
+    await rejectsCode(resolvePortableNodeRuntime(cache, descriptor), 'UNSAFE_PORTABLE_NODE_CACHE');
+    assert.deepEqual(await (await import('node:fs/promises')).readdir(outside), []);
+  });
 });
 
 test('portable runtime preparation accepts only pinned assets and status only reports a verified cache as ready', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
