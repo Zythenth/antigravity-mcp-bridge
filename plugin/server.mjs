@@ -38826,6 +38826,20 @@ function processAlive(pid) {
     return error62.code !== "ESRCH";
   }
 }
+function replaceStateFile(temporary, target) {
+  const delays = [10, 20, 40, 80, 160];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      renameSync(temporary, target);
+      return;
+    } catch (error62) {
+      const code = error62.code;
+      if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(code ?? "") || attempt >= delays.length)
+        throw error62;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
+    }
+  }
+}
 var StateStore = class {
   directory;
   constructor(directory) {
@@ -38881,7 +38895,7 @@ var StateStore = class {
     try {
       this.loadSandboxPolicy();
       writeFileSync(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
-      renameSync(temporary, target);
+      replaceStateFile(temporary, target);
     } finally {
       rmSync(temporary, { force: true });
     }
@@ -38894,7 +38908,7 @@ var StateStore = class {
     try {
       this.loadModel();
       writeFileSync(temporary, JSON.stringify(selection), { flag: "wx", mode: 384, flush: true });
-      renameSync(temporary, target);
+      replaceStateFile(temporary, target);
     } finally {
       rmSync(temporary, { force: true });
       release();
@@ -38906,7 +38920,7 @@ var StateStore = class {
     const snapshot = { ...task2, version: 1, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
-      renameSync(temporary, target);
+      replaceStateFile(temporary, target);
     } finally {
       rmSync(temporary, { force: true });
     }

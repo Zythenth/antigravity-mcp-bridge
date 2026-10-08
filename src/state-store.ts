@@ -45,6 +45,20 @@ export function processAlive(pid: number): boolean {
   catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
 }
 
+// Windows can transiently deny replacement while another process holds the file.
+// Keep the existing atomic rename and never unlink the last valid state as a fallback.
+function replaceStateFile(temporary: string, target: string): void {
+  const delays = [10, 20, 40, 80, 160];
+  for (let attempt = 0; ; attempt++) {
+    try { renameSync(temporary, target); return; }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '') || attempt >= delays.length) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
+    }
+  }
+}
+
 export class StateStore {
   constructor(private readonly directory: string) {
     if (!path.isAbsolute(directory)) throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY must be absolute');
@@ -94,7 +108,7 @@ export class StateStore {
       // Callers hold acquire('sandbox-policy') across reload, digest comparison, and this write; do not nest that lock here.
       this.loadSandboxPolicy();
       writeFileSync(temporary, JSON.stringify(validated), { flag: 'wx', mode: 0o600, flush: true });
-      renameSync(temporary, target);
+      replaceStateFile(temporary, target);
     } finally { rmSync(temporary, { force: true }); }
   }
 
@@ -107,7 +121,7 @@ export class StateStore {
       // Validate an existing record before replacing it, including links and malformed data.
       this.loadModel();
       writeFileSync(temporary, JSON.stringify(selection), { flag: 'wx', mode: 0o600, flush: true });
-      renameSync(temporary, target);
+      replaceStateFile(temporary, target);
     } finally { rmSync(temporary, { force: true }); release(); }
   }
 
@@ -117,7 +131,7 @@ export class StateStore {
     const snapshot = { ...task, version: 1, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600, flush: true });
-      renameSync(temporary, target);
+      replaceStateFile(temporary, target);
     } finally { rmSync(temporary, { force: true }); }
   }
 
