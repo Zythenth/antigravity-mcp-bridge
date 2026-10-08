@@ -3,8 +3,8 @@
   "buildId": "node-v24.21.0-lpac1-win-x64",
   "source": {
     "version": "v24.21.0",
-    "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0.tar.xz",
-    "sha256": "a6f54defb6fd7c84f41dba13d61e78e9b4e0961712cf61f29715c05f5ced94fc",
+    "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0.tar.gz",
+    "sha256": "622424efb5dc0c26c93fbb619ff10737ee289c605b837c88778e186925d82777",
     "gitCommit": "955266bfdd854cd280dffd47548673914484e4c0",
     "directory": "node-v24.21.0",
     "maximumArchiveBytes": 157286400

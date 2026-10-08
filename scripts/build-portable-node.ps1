@@ -494,7 +494,7 @@ function Write-WorkflowOutput {
 }
 
 $buildId = 'node-v24.21.0-lpac1-win-x64'
-$expectedSourceUrl = 'https://nodejs.org/dist/v24.21.0/node-v24.21.0.tar.xz'
+$expectedSourceUrl = 'https://nodejs.org/dist/v24.21.0/node-v24.21.0.tar.gz'
 $expectedSourceCommit = '955266bfdd854cd280dffd47548673914484e4c0'
 $expectedPatchCommit = 'f46e4246b5277fe1c5888b88b24d8b78020dd4f8'
 $expectedPatchTarget = 'deps/uv/src/win/pipe.c'
@@ -554,7 +554,7 @@ if ($PrepareNasmOnly) {
 
 $workName = "portable-node-source-$([guid]::NewGuid().ToString('N'))"
 $workDirectory = New-OwnedDirectory -Root $workspaceRoot -Name $workName
-$archivePath = Join-Path $workDirectory 'node-v24.21.0.tar.xz'
+$archivePath = Join-Path $workDirectory 'node-v24.21.0.tar.gz'
 Assert-ChildPath -Root $workspaceRoot -Candidate $archivePath -Description 'Arquivo fonte'
 Write-Host 'Baixando a fonte oficial do Node fixada por SHA-256.'
 Invoke-BoundedDownload -Url $manifest.source.url -Destination $archivePath -MaximumBytes ([Int64]$manifest.source.maximumArchiveBytes)
