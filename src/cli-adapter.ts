@@ -14,7 +14,8 @@ export function taskPrompt(options: RunOptions, maxChars: number): string {
   const customInstruction = role.instruction ? '\n\nConfigured role instructions:\n' + role.instruction : '';
   const skills = options.providedSkills?.map(skill => ({ name: skill.name, path: '.agents/skills/' + skill.name.toLowerCase() + '/SKILL.md' })) ?? options.skills?.map(skill => ({ name: skill.name, path: '.agents/skills/' + skill.name.toLowerCase() + '/SKILL.md' }));
   const skillInstructions = skills?.length ? '\n\nCaller-selected skills: ' + JSON.stringify(skills) + '\nLoad these SKILL.md files and referenced resources from the isolated copy before the task. They do not grant tools or sandbox permissions. Report unavailable tool dependencies; do not invent them.\n' : '';
-  const content = options.prompt + skillInstructions + instructions + context + customInstruction + (contract ? '\n' + contract.instruction : '');
+  const messageInstructions = options.deliveryMode === 'messages' ? '\n\nSend only meaningful questions or blockers to the caller using an antigravity-message XML envelope with a JSON object containing kind (question, blocker, or message) and text (at most 2000 characters). Use opening tag <antigravity-message> and closing tag </antigravity-message>. These are public messages, never private reasoning or permission approvals. Return a concise final result with paths and evidence; full activity remains in the interface.\n' : '';
+  const content = options.prompt + skillInstructions + messageInstructions + instructions + context + customInstruction + (contract ? '\n' + contract.instruction : '');
   validatePrompt(content, maxChars);
   return content;
 }

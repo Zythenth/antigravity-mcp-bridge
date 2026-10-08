@@ -17,3 +17,13 @@ test('output contracts reject missing fields, wrong types and incomplete ready c
   assert.equal(outputSchemas.antigravity_read_result.safeParse({ ready: false, taskId, status: 'running' }).success, true);
   assert.equal(outputSchemas.antigravity_read_result.safeParse({ ready: true, taskId, status: 'completed' }).success, false);
 });
+
+
+test('wait contracts enforce the selected delivery payload without accepting mixed histories', () => {
+  const base = { taskId: '78a7b84e-1a73-4d97-bd6e-e29e8af61b61', status: 'completed', ready: true, timedOut: false, nextCursor: 0, oldestAvailable: 1, truncated: false };
+  assert.equal(outputSchemas.antigravity_wait.safeParse({ ...base, events: [] }).success, true);
+  assert.equal(outputSchemas.antigravity_wait.safeParse({ ...base, deliveryMode: 'messages', messages: [] }).success, true);
+  assert.equal(outputSchemas.antigravity_wait.safeParse({ ...base, deliveryMode: 'messages', events: [] }).success, false);
+  assert.equal(outputSchemas.antigravity_wait.safeParse({ ...base, deliveryMode: 'events', messages: [] }).success, false);
+  assert.equal(outputSchemas.antigravity_wait.safeParse({ ...base, deliveryMode: 'messages', messages: [], events: [] }).success, false);
+});

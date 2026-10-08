@@ -157,6 +157,14 @@ Guarde `comparisonId` e acompanhe cada `taskId` com `antigravity_wait`. `antigra
 
 Essas limitações não são resolvidas por manter o processo aberto ou inventar mensagens do protocolo. Um suporte futuro exige verificar a versão e o contrato oferecido pelo CLI antes de adicionar a operação.
 
+## Entrega ao agente principal
+
+Use `deliveryMode: "messages"` em `antigravity_run` para receber perguntas públicas estruturadas, bloqueios e um trecho do resultado final. `antigravity_wait` devolve `messages` e cursores de mensagens, sem os eventos e notificações de progresso detalhados. Uma pergunta observada pode encerrar a espera antes do fim da tarefa. O principal lê resultados e diffs completos somente quando necessários, pelas ferramentas de leitura em partes.
+
+Cada mensagem inclui origem, modelo informado, ID, sequência e data; cada texto tem no máximo 2.000 caracteres. Até 100 mensagens são retidas por tarefa e as páginas indicam perdas de mensagens antigas. O resultado final aponta para `antigravity_read_result`, com o hash correspondente. As mensagens do modelo continuam sendo relatos, sem comprovar testes nem autorizar integração.
+
+Omitir a opção conserva `events`, com o histórico de eventos existente. `antigravity_events` continua disponível para uma consulta detalhada explícita. `antigravity_set_delivery_mode` muda a entrega de uma tarefa; reinicie o cursor em `after: 0` após trocar de modo. Passe também `cursorMode` com o modo do cursor anterior: se a interface trocar a entrega, a espera reinicia em zero e informa `cursorReset: true`. A retomada herda a escolha, que não altera permissões ou papéis.
+
 ## Skills fornecidas pelo cliente
 
 O Codex ou outro cliente pode enviar skills selecionadas em `antigravity_run.skills`. Cada pacote contém o texto de `SKILL.md` e, opcionalmente, recursos de texto com caminhos relativos à skill:

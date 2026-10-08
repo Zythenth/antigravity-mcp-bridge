@@ -28569,7 +28569,8 @@ var queryTools = /* @__PURE__ */ new Set([
   "antigravity_compare",
   "antigravity_comparison",
   "antigravity_roles",
-  "antigravity_get_sandbox_policy"
+  "antigravity_get_sandbox_policy",
+  "antigravity_set_delivery_mode"
 ]);
 var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
 function toolEnabled(profile, name) {
@@ -29726,7 +29727,8 @@ function taskPrompt(options, maxChars) {
   const customInstruction = role.instruction ? "\n\nConfigured role instructions:\n" + role.instruction : "";
   const skills = options.providedSkills?.map((skill) => ({ name: skill.name, path: ".agents/skills/" + skill.name.toLowerCase() + "/SKILL.md" })) ?? options.skills?.map((skill) => ({ name: skill.name, path: ".agents/skills/" + skill.name.toLowerCase() + "/SKILL.md" }));
   const skillInstructions = skills?.length ? "\n\nCaller-selected skills: " + JSON.stringify(skills) + "\nLoad these SKILL.md files and referenced resources from the isolated copy before the task. They do not grant tools or sandbox permissions. Report unavailable tool dependencies; do not invent them.\n" : "";
-  const content = options.prompt + skillInstructions + instructions + context + customInstruction + (contract ? "\n" + contract.instruction : "");
+  const messageInstructions = options.deliveryMode === "messages" ? "\n\nSend only meaningful questions or blockers to the caller using an antigravity-message XML envelope with a JSON object containing kind (question, blocker, or message) and text (at most 2000 characters). Use opening tag <antigravity-message> and closing tag </antigravity-message>. These are public messages, never private reasoning or permission approvals. Return a concise final result with paths and evidence; full activity remains in the interface.\n" : "";
+  const content = options.prompt + skillInstructions + messageInstructions + instructions + context + customInstruction + (contract ? "\n" + contract.instruction : "");
   validatePrompt(content, maxChars);
   return content;
 }
@@ -37866,8 +37868,106 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
+// dist/src/messages.js
+import { createHash as createHash3, randomUUID } from "node:crypto";
+var deliveryModeSchema = external_exports.enum(["messages", "events"]);
+var MAX_MESSAGE_CHARS = 2e3;
+var MAX_TASK_MESSAGES = 100;
+var agentMessageInputSchema = external_exports.object({
+  kind: external_exports.enum(["message", "question", "blocker"]),
+  text: external_exports.string().min(1).max(MAX_MESSAGE_CHARS)
+}).strict();
+var bridgeMessageSchema = external_exports.object({
+  messageId: external_exports.string().uuid(),
+  taskId: external_exports.string().uuid(),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  timestamp: external_exports.string().datetime(),
+  source: external_exports.enum(["agy-reported", "bridge"]),
+  kind: external_exports.enum(["message", "question", "blocker", "final", "error"]),
+  text: external_exports.string().min(1).max(MAX_MESSAGE_CHARS),
+  model: external_exports.string().nullable(),
+  reference: external_exports.object({ tool: external_exports.literal("antigravity_read_result"), taskId: external_exports.string().uuid(), contentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) }).strict().optional()
+}).strict();
+function appendMessage(record2, kind, source, text, reference) {
+  const sequence = (record2.messageCursor ?? 0) + 1;
+  const message = bridgeMessageSchema.parse({
+    messageId: randomUUID(),
+    taskId: record2.taskId,
+    sequence,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    kind,
+    source,
+    text: text.slice(0, MAX_MESSAGE_CHARS),
+    model: record2.model ?? null,
+    ...reference ? { reference } : {}
+  });
+  record2.messageCursor = sequence;
+  record2.messages = [...record2.messages ?? [], message].slice(-MAX_TASK_MESSAGES);
+  return message;
+}
+function readMessages(record2, after = 0, limit = 25) {
+  if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > 50)
+    throw new Error("Invalid message cursor or page size");
+  const retained = record2.messages ?? [];
+  const oldestAvailable = retained[0]?.sequence ?? (record2.messageCursor ?? 0) + 1;
+  const messages = retained.filter((message) => message.sequence > after).slice(0, limit);
+  return { messages, nextCursor: messages.at(-1)?.sequence ?? after, oldestAvailable, truncated: after < oldestAvailable - 1 };
+}
+function extractAgentMessages(text) {
+  const messages = [];
+  const bounded = text.slice(0, 1024 * 1024);
+  for (const match of bounded.matchAll(/<antigravity-message>([\s\S]*?)<\/antigravity-message>/g)) {
+    if (messages.length >= 1001)
+      break;
+    if (match[1].length > 4096)
+      continue;
+    try {
+      const parsed = agentMessageInputSchema.safeParse(JSON.parse(match[1]));
+      if (parsed.success)
+        messages.push(parsed.data);
+    } catch {
+    }
+  }
+  return messages;
+}
+function clientTask(task2) {
+  if (task2.deliveryMode === "messages")
+    return compactTask(task2);
+  const { messages, messageCursor, ...metadata } = task2;
+  void messages;
+  void messageCursor;
+  return metadata;
+}
+function resultReference(record2) {
+  return {
+    tool: "antigravity_read_result",
+    taskId: record2.taskId,
+    contentSha256: createHash3("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
+  };
+}
+function compactTask(task2) {
+  return {
+    taskId: task2.taskId,
+    workingDirectory: task2.workingDirectory,
+    status: task2.status,
+    createdAt: task2.createdAt,
+    sessionId: task2.sessionId,
+    model: task2.model,
+    mode: task2.mode,
+    role: task2.role,
+    startedAt: task2.startedAt,
+    completedAt: task2.completedAt,
+    exitCode: task2.exitCode,
+    error: task2.error,
+    tokenUsage: task2.tokenUsage,
+    integratedAt: task2.integratedAt,
+    discardedAt: task2.discardedAt,
+    deliveryMode: task2.deliveryMode
+  };
+}
+
 // dist/src/verification.js
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 import { createReadStream as createReadStream3 } from "node:fs";
 var criterionSchema = external_exports.object({
   id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
@@ -37910,7 +38010,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
         chunks.push(chunk);
       }
       const buffer = Buffer.concat(chunks);
-      fileHashes[relative] = createHash3("sha256").update(buffer).digest("hex");
+      fileHashes[relative] = createHash4("sha256").update(buffer).digest("hex");
       contents.set(relative, buffer);
       return buffer;
     } catch (error62) {
@@ -37952,7 +38052,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
 }
 
 // dist/src/native-tests.js
-import { createHash as createHash4, randomUUID } from "node:crypto";
+import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
 import { appendFile, mkdir as mkdir3, readFile as readFile2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
 import path6 from "node:path";
 var testCommandSchema = external_exports.object({
@@ -38052,11 +38152,11 @@ async function nativeRunner(settings) {
 }
 async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
-  const nonce = randomUUID();
+  const nonce = randomUUID2();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
   const absolute = path6.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash3 = createHash4("sha256").update(script).digest("hex");
+  const hash3 = createHash5("sha256").update(script).digest("hex");
   const exclude = path6.join(project.gitDirectory, "info", "exclude");
   await mkdir3(path6.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
@@ -38296,7 +38396,7 @@ function compareFindings(tasks, models) {
 }
 
 // dist/src/sandbox-policy.js
-import { createHash as createHash5 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 import { lstat as lstat4, readdir as readdir3, realpath as realpath3 } from "node:fs/promises";
 import os3 from "node:os";
 import path7 from "node:path";
@@ -38387,7 +38487,7 @@ function requireNormalizedPolicy(value) {
 }
 function sandboxPolicyDigest(policy) {
   const normalized = requireNormalizedPolicy(policy);
-  return createHash5("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
+  return createHash6("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
 }
 function parseSandboxPolicySnapshot(value) {
   const snapshot = external_exports.object({
@@ -38612,6 +38712,7 @@ var report = external_exports.discriminatedUnion("role", [
   external_exports.object({ role: external_exports.literal("reviewer"), source: external_exports.literal("agy-reported"), data: reviewerReportSchema, citationsChecked: external_exports.literal(true) }).strict()
 ]);
 var taskRecordSchema = external_exports.object({
+  deliveryMode: deliveryModeSchema.optional(),
   providedSkills: stagedSkillsSchema.optional(),
   taskId: id,
   workingDirectory: external_exports.string(),
@@ -38812,11 +38913,18 @@ var successOutputSchemas = {
     ready: external_exports.boolean(),
     timedOut: external_exports.boolean(),
     tokenUsage: tokenUsage.optional(),
-    events: external_exports.array(external_exports.object({ taskId: id, sequence: external_exports.number().int().positive(), timestamp, type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() }).strict()),
+    deliveryMode: deliveryModeSchema.optional(),
+    cursorReset: external_exports.boolean().optional(),
+    messages: external_exports.array(bridgeMessageSchema).max(50).optional(),
+    events: external_exports.array(external_exports.object({ taskId: id, sequence: external_exports.number().int().positive(), timestamp, type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() }).strict()).optional(),
     nextCursor: count,
     oldestAvailable: external_exports.number().int().positive(),
     truncated: external_exports.boolean()
-  }).strict(),
+  }).strict().refine((value) => value.deliveryMode === "messages" ? Array.isArray(value.messages) && value.events === void 0 : Array.isArray(value.events) && value.messages === void 0, "Delivery mode must match its payload").meta({ anyOf: [
+    { properties: { deliveryMode: { const: "messages" } }, required: ["deliveryMode", "messages"], not: { required: ["events"] } },
+    { properties: { deliveryMode: { const: "events" } }, required: ["events"], not: { required: ["messages"] } }
+  ] }),
+  antigravity_set_delivery_mode: external_exports.object({ taskId: id, deliveryMode: deliveryModeSchema }).strict(),
   antigravity_cancel: task,
   antigravity_sessions: external_exports.object({ sessions: external_exports.array(external_exports.object({ sessionId: external_exports.string(), taskIds: external_exports.array(id) }).strict()), scope: external_exports.literal("local bridge state") }).strict()
 };
@@ -38864,7 +38972,7 @@ function sandboxPolicyConfirmation(previous, proposed) {
 }
 function createMcpServer(adapter, tasks) {
   const server = new McpServer({ name: "antigravity-mcp-bridge", version: "0.6.1" }, {
-    instructions: "Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
+    instructions: "For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a UI mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -38971,6 +39079,7 @@ function createMcpServer(adapter, tasks) {
     isolateWorktree: external_exports.boolean().optional(),
     includePaths: external_exports.array(external_exports.string().min(1)).min(1).optional(),
     skills: providedSkillsSchema.optional(),
+    deliveryMode: deliveryModeSchema.optional(),
     mode: external_exports.enum(["write", "read-only"]).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional()
@@ -38982,7 +39091,7 @@ function createMcpServer(adapter, tasks) {
       description: "Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.",
       inputSchema: runSchema,
       annotations: action
-    }, async (args) => safe(async () => ({ task: await tasks.run(args) }))());
+    }, async (args) => safe(async () => ({ task: clientTask(await tasks.run(args)) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_resume"))
     server.registerTool("antigravity_resume", {
       outputSchema: outputSchemas.antigravity_resume,
@@ -38990,7 +39099,7 @@ function createMcpServer(adapter, tasks) {
       description: "Continue a completed session in its existing isolated copy.",
       inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
       annotations: action
-    }, async (args) => safe(async () => ({ task: await tasks.run(args) }))());
+    }, async (args) => safe(async () => ({ task: clientTask(await tasks.run(args)) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_context"))
     server.registerTool("antigravity_context", {
       outputSchema: outputSchemas.antigravity_context,
@@ -39016,7 +39125,7 @@ function createMcpServer(adapter, tasks) {
       annotations: action
     }, async ({ sourceTaskId, ...args }) => safe(async () => {
       const source = tasks.status(sourceTaskId);
-      return { task: await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
+      return { task: clientTask(await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory })) };
     })());
   if (toolEnabled(tasks.toolProfile, "antigravity_compare"))
     server.registerTool("antigravity_compare", {
@@ -39087,7 +39196,7 @@ function createMcpServer(adapter, tasks) {
         sandbox: sandboxSelectionInputSchema.optional()
       },
       annotations: action
-    }, async ({ taskId, expectedSha256, command: command2, retries, timeoutSeconds, sandbox }) => safe(async () => ({ task: await tasks.startTests(taskId, expectedSha256, command2, retries, timeoutSeconds, sandbox) }))());
+    }, async ({ taskId, expectedSha256, command: command2, retries, timeoutSeconds, sandbox }) => safe(async () => ({ task: clientTask(await tasks.startTests(taskId, expectedSha256, command2, retries, timeoutSeconds, sandbox)) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_record_test"))
     server.registerTool("antigravity_record_test", {
       outputSchema: outputSchemas.antigravity_record_test,
@@ -39135,7 +39244,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: { ...action, openWorldHint: false }
-    }, async ({ taskId }) => safe(async () => ({ task: await tasks.discard(taskId) }))());
+    }, async ({ taskId }) => safe(async () => ({ task: clientTask(await tasks.discard(taskId)) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_cleanup"))
     server.registerTool("antigravity_cleanup", {
       outputSchema: outputSchemas.antigravity_cleanup,
@@ -39144,6 +39253,14 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       inputSchema: {},
       annotations: { ...action, openWorldHint: false }
     }, safe(() => tasks.cleanup()));
+  if (toolEnabled(tasks.toolProfile, "antigravity_set_delivery_mode"))
+    server.registerTool("antigravity_set_delivery_mode", {
+      outputSchema: outputSchemas.antigravity_set_delivery_mode,
+      title: "Choose delivery to the caller",
+      description: "Select compact public messages or legacy full events. This changes local task metadata, not agy permissions. Cursors belong to their delivery mode; restart after zero when switching.",
+      inputSchema: { taskId: external_exports.string().uuid(), deliveryMode: deliveryModeSchema },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
+    }, async ({ taskId, deliveryMode }) => safe(() => tasks.setDeliveryMode(taskId, deliveryMode))());
   if (toolEnabled(tasks.toolProfile, "antigravity_status"))
     server.registerTool("antigravity_status", {
       outputSchema: outputSchemas.antigravity_status,
@@ -39151,7 +39268,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       description: "Return task metadata, status, process ID and isolated copy path when available.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: readOnly
-    }, async ({ taskId }) => safe(() => ({ task: tasks.status(taskId) }))());
+    }, async ({ taskId }) => safe(() => ({ task: clientTask(tasks.status(taskId)) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_tasks"))
     server.registerTool("antigravity_tasks", {
       outputSchema: outputSchemas.antigravity_tasks,
@@ -39159,7 +39276,14 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       description: "Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(() => ({ tasks: tasks.list().map(({ prompt: _prompt, ...task2 }) => task2) })));
+    }, safe(() => ({ tasks: tasks.list().map((task2) => {
+      const delivered = clientTask(task2);
+      if ("prompt" in delivered) {
+        const { prompt: _prompt, ...metadata } = delivered;
+        return metadata;
+      }
+      return delivered;
+    }) })));
   if (toolEnabled(tasks.toolProfile, "antigravity_events"))
     server.registerTool("antigravity_events", {
       outputSchema: outputSchemas.antigravity_events,
@@ -39172,16 +39296,16 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
     server.registerTool("antigravity_wait", {
       outputSchema: outputSchemas.antigravity_wait,
       title: "Wait for real task progress",
-      description: "Wait up to 60 seconds for completion while sending MCP progress notifications for observed events. Progress is an event sequence, not a percentage. A wait timeout or request cancellation leaves the task running. Return a bounded event page and continue from nextCursor; disclose truncated events.",
-      inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
+      description: "Wait up to 60 seconds. In messages mode, return early on a compact public question/blocker and exclude raw events/progress notifications. In legacy events mode, retain observed event progress and bounded history. Carry cursorMode from the previous response to reset safely after a delivery change. A wait timeout/cancellation leaves the task running; disclose truncated history.",
+      inputSchema: { taskId: external_exports.string().uuid(), cursorMode: deliveryModeSchema.optional(), after: external_exports.number().int().min(0).optional(), timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
       annotations: readOnly
-    }, async ({ taskId, after, timeoutSeconds }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal, extra._meta?.progressToken === void 0 ? void 0 : async (event) => {
+    }, async ({ taskId, after, timeoutSeconds, cursorMode }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal, extra._meta?.progressToken === void 0 ? void 0 : async (event) => {
       await extra.sendNotification({ method: "notifications/progress", params: {
         progressToken: extra._meta.progressToken,
         progress: event.sequence,
         message: taskId + ": " + event.type
       } });
-    }))());
+    }, cursorMode))());
   if (toolEnabled(tasks.toolProfile, "antigravity_result"))
     server.registerTool("antigravity_result", {
       outputSchema: outputSchemas.antigravity_result,
@@ -39191,12 +39315,14 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       annotations: readOnly
     }, async ({ taskId, includeResult }) => safe(() => {
       const result = tasks.result(taskId);
-      if (includeResult !== false)
-        return result;
-      const { prompt, result: output2, includedFiles, report: report2, handoff: handoff2, roleDefinition, ...metadata } = result.task;
+      if (includeResult !== false && result.task.deliveryMode !== "messages")
+        return { ...result, task: clientTask(result.task) };
+      const { prompt, result: output2, includedFiles, report: report2, handoff: handoff2, roleDefinition, messages, messageCursor, ...metadata } = result.task;
+      void messages;
+      void messageCursor;
       return {
         ...result,
-        task: metadata,
+        task: result.task.deliveryMode === "messages" ? compactTask(result.task) : metadata,
         resultAvailable: output2 !== void 0,
         reportAvailable: report2 !== void 0,
         handoffAvailable: handoff2 !== void 0,
@@ -39211,7 +39337,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       description: "Cancel a queued task or terminate its local agy process.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-    }, async ({ taskId }) => safe(async () => ({ task: await tasks.cancel(taskId) }))());
+    }, async ({ taskId }) => safe(async () => ({ task: clientTask(await tasks.cancel(taskId)) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_sessions"))
     server.registerTool("antigravity_sessions", {
       outputSchema: outputSchemas.antigravity_sessions,
@@ -39224,7 +39350,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash9, randomUUID as randomUUID5 } from "node:crypto";
+import { createHash as createHash10, randomUUID as randomUUID6 } from "node:crypto";
 import { spawn as spawn5 } from "node:child_process";
 
 // dist/src/logger.js
@@ -39331,7 +39457,7 @@ var LineParser = class {
 };
 
 // dist/src/state-store.js
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path8 from "node:path";
 import os4 from "node:os";
@@ -39356,6 +39482,9 @@ var snapshotSchema = external_exports.object({
     usageBaseline: usageCountersSchema.optional(),
     lastObservedCliUsage: usageCountersSchema.optional(),
     usageProvenance: external_exports.literal("local-executor").optional(),
+    deliveryMode: deliveryModeSchema.optional(),
+    messages: external_exports.array(bridgeMessageSchema).max(100).optional(),
+    messageCursor: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     roleDefinition: roleDefinitionSchema.optional(),
     providedSkills: stagedSkillsSchema.optional()
   }).passthrough(),
@@ -39444,7 +39573,7 @@ var StateStore = class {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
     const target = path8.join(this.directory, "sandbox-policy.json");
-    const temporary = target + "." + randomUUID2() + ".tmp";
+    const temporary = target + "." + randomUUID3() + ".tmp";
     try {
       this.loadSandboxPolicy();
       writeFileSync(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
@@ -39457,7 +39586,7 @@ var StateStore = class {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
     const target = path8.join(this.directory, "model-selection.json");
-    const temporary = target + "." + randomUUID2() + ".tmp";
+    const temporary = target + "." + randomUUID3() + ".tmp";
     try {
       this.loadModel();
       writeFileSync(temporary, JSON.stringify(selection), { flag: "wx", mode: 384, flush: true });
@@ -39469,7 +39598,7 @@ var StateStore = class {
   }
   save(task2) {
     const target = this.file(task2.record.taskId);
-    const temporary = target + "." + randomUUID2() + ".tmp";
+    const temporary = target + "." + randomUUID3() + ".tmp";
     const snapshot = { ...task2, version: 1, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
@@ -39492,6 +39621,9 @@ var StateStore = class {
       if (data.record.taskId + ".json" !== name || !path8.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
+      const messages = data.record.messages ?? [];
+      if (messages.some((message, index) => message.taskId !== data.record.taskId || message.sequence > (data.record.messageCursor ?? 0) || index > 0 && messages[index - 1].sequence >= message.sequence))
+        throw new BridgeError("INVALID_STATE", "Persisted messages do not match task identity or cursor");
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
           if (!path8.isAbsolute(directory) || path8.relative(os4.tmpdir(), path8.dirname(directory)) !== "" || !path8.basename(directory).startsWith(prefix)) {
@@ -39539,9 +39671,9 @@ var StateStore = class {
 };
 
 // dist/src/chunks.js
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash6("sha256").update(text).digest("hex");
+  const sha256 = createHash7("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -39572,7 +39704,7 @@ import { setTimeout as delay2 } from "node:timers/promises";
 // dist/src/windows-executor.js
 import { spawn as spawn4 } from "node:child_process";
 import { lstat as lstat7, mkdir as mkdir6, mkdtemp as mkdtemp2, realpath as realpath4, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
-import { randomUUID as randomUUID4 } from "node:crypto";
+import { randomUUID as randomUUID5 } from "node:crypto";
 import path11 from "node:path";
 import os5 from "node:os";
 
@@ -40540,12 +40672,12 @@ internal static class WindowsTestRunner
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
-import { createHash as createHash8 } from "node:crypto";
+import { createHash as createHash9 } from "node:crypto";
 import { chmod, lstat as lstat6, mkdir as mkdir5, open as open3, readdir as readdir5, unlink as unlink2 } from "node:fs/promises";
 import path10 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash7, randomUUID as randomUUID3 } from "node:crypto";
+import { createHash as createHash8, randomUUID as randomUUID4 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
 import { lstat as lstat5, mkdir as mkdir4, open as open2, readFile as readFile3, readdir as readdir4, rename, rm as rm3, unlink } from "node:fs/promises";
@@ -40754,7 +40886,7 @@ async function sha256File3(file3, expectedSize) {
     const opened = await handle.stat();
     if (!sameFile(opened, before))
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
-    const hash3 = createHash7("sha256");
+    const hash3 = createHash8("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
     while (offset < size) {
@@ -40843,7 +40975,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
     const file3 = await open2(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
     try {
       const reader = response2.body.getReader();
-      const hash3 = createHash7("sha256");
+      const hash3 = createHash8("sha256");
       let bytes = 0;
       for (; ; ) {
         const item = await reader.read();
@@ -40975,7 +41107,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path9.join(root, ".portable-node-" + randomUUID3());
+  const temporary = path9.join(root, ".portable-node-" + randomUUID4());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -41229,7 +41361,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
     targetHandle = await open3(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
     created = true;
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
-    const hash3 = expectedSha256 ? createHash8("sha256") : void 0;
+    const hash3 = expectedSha256 ? createHash9("sha256") : void 0;
     let offset = 0;
     while (offset < expected.size) {
       const length = Math.min(buffer.length, expected.size - offset);
@@ -41274,7 +41406,7 @@ async function hashStagedFile(file3) {
     const opened = await handle.stat();
     if (!isSameFile(opened, expected))
       fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
-    const hash3 = createHash8("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = createHash9("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
     let offset = 0;
     while (offset < expected.size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
@@ -41544,7 +41676,7 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path11.join(directory, "request-" + randomUUID4() + ".json");
+  const file3 = path11.join(directory, "request-" + randomUUID5() + ".json");
   await writeFile3(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
@@ -41648,7 +41780,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
-    const nonce = randomUUID4(), systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const nonce = randomUUID5(), systemRoot = process.env.SystemRoot || "C:\\Windows";
     const request = {
       action: mode,
       nonce,
@@ -41730,7 +41862,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash9("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash10("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -41823,6 +41955,8 @@ var TaskManager = class {
     if (this.stopped)
       throw new BridgeError("AGY_PROCESS_FAILED", "Server is shutting down");
     validatePrompt(options.prompt, this.config.maxPromptChars);
+    if (options.deliveryMode !== void 0)
+      deliveryModeSchema.parse(options.deliveryMode);
     if (options.skills !== void 0) {
       const parsed = providedSkillsSchema.safeParse(options.skills);
       if (!parsed.success)
@@ -41890,6 +42024,7 @@ var TaskManager = class {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError("QUEUE_FULL", "Task queue is full");
       }
+      options.deliveryMode ??= previous?.record.deliveryMode ?? contextSource?.record.deliveryMode ?? "events";
       options.roleDefinition = roleDefinition;
       if (contextSource?.project) {
         if (options.includePaths)
@@ -41945,8 +42080,9 @@ var TaskManager = class {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record2 = {
+        deliveryMode: options.deliveryMode,
         providedSkills: options.providedSkills,
-        taskId: randomUUID5(),
+        taskId: randomUUID6(),
         sessionId: options.sessionId,
         model,
         mode,
@@ -42076,7 +42212,7 @@ var TaskManager = class {
     if (this.config.maxRetainedTasks < models.length + 1 || this.config.maxQueuedTasks < models.length)
       throw new BridgeError("COMPARISON_LIMIT_EXCEEDED", "Retention and queue limits must accommodate all comparison members and the source");
     const source = this.status(sourceTaskId);
-    const comparison = { comparisonId: randomUUID5(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
+    const comparison = { comparisonId: randomUUID6(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
     const taskIds = [];
     this.batching++;
     try {
@@ -42259,8 +42395,9 @@ var TaskManager = class {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record2 = {
+        deliveryMode: current.record.deliveryMode,
         providedSkills: current.project.providedSkills,
-        taskId: randomUUID5(),
+        taskId: randomUUID6(),
         sessionId: current.record.sessionId,
         model: current.record.model,
         mode: "write",
@@ -42279,6 +42416,7 @@ var TaskManager = class {
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
       };
       const options = {
+        deliveryMode: record2.deliveryMode,
         providedSkills: record2.providedSkills,
         prompt: record2.prompt,
         workingDirectory: record2.workingDirectory,
@@ -42397,7 +42535,7 @@ var TaskManager = class {
       await this.requireVerification(task2, expectedSha256);
       if (!await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash9("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash10("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -42415,11 +42553,29 @@ var TaskManager = class {
       }
     });
   }
+  setDeliveryMode(taskId, mode) {
+    const deliveryMode = deliveryModeSchema.parse(mode);
+    const release = this.state.acquire("registry");
+    try {
+      this.refresh();
+      const task2 = this.tasks.get(taskId);
+      if (!task2)
+        throw new BridgeError("TASK_NOT_FOUND", "Unknown task: " + taskId);
+      if (!task2.owned && !terminal.has(task2.record.status))
+        throw new BridgeError("TASK_OWNED_BY_OTHER_SERVER", "Change delivery in the bridge that owns the running task");
+      task2.record.deliveryMode = deliveryMode;
+      task2.options.deliveryMode = deliveryMode;
+      this.events.append(taskId, "delivery.updated", { deliveryMode });
+      return { taskId, deliveryMode };
+    } finally {
+      release();
+    }
+  }
   readEvents(taskId, after = 0, limit = 200) {
     this.status(taskId);
     return this.events.read(taskId, after, limit);
   }
-  async wait(taskId, after = 0, timeoutSeconds = 30, signal, onEvent) {
+  async wait(taskId, after = 0, timeoutSeconds = 30, signal, onEvent, cursorMode) {
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
       throw new BridgeError("INVALID_TIMEOUT", "Wait timeout must be between 1 and 60 seconds");
     }
@@ -42427,12 +42583,33 @@ var TaskManager = class {
       throw new BridgeError("WAIT_LIMIT_EXCEEDED", "Too many concurrent waits");
     this.waiting++;
     const deadline = Date.now() + timeoutSeconds * 1e3;
+    const deliveryMode = this.status(taskId).deliveryMode ?? "events";
+    const cursorReset = cursorMode !== void 0 && cursorMode !== deliveryMode;
+    if (cursorReset)
+      after = 0;
     let cursor = after;
     try {
       while (true) {
         if (signal?.aborted)
           throw new BridgeError("WAIT_CANCELLED", "Waiting was cancelled; the task continues");
         const task2 = this.status(taskId);
+        if (deliveryMode === "messages") {
+          const messages = readMessages(task2, after);
+          const ready2 = terminal.has(task2.status);
+          if (messages.messages.length || ready2 || Date.now() >= deadline)
+            return {
+              taskId,
+              status: task2.status,
+              ready: ready2,
+              timedOut: !ready2 && !messages.messages.length,
+              deliveryMode,
+              cursorReset,
+              ...messages,
+              tokenUsage: task2.tokenUsage
+            };
+          await delay2(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
+          continue;
+        }
         const page = this.events.read(taskId, cursor, 1e3);
         for (const event of page.events) {
           await onEvent?.(event);
@@ -42445,6 +42622,8 @@ var TaskManager = class {
             status: task2.status,
             ready,
             timedOut: !ready,
+            deliveryMode,
+            cursorReset,
             ...this.events.read(taskId, after, 1e3),
             tokenUsage: task2.tokenUsage
           };
@@ -42483,6 +42662,7 @@ var TaskManager = class {
       task2.record.status = "cancelled";
       task2.record.error = { code: "TASK_CANCELLED", message: "Task cancelled before execution" };
       task2.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+      appendMessage(task2.record, "error", "bridge", "Task cancelled before execution");
       this.events.append(taskId, "task.cancelled", {});
       task2.owned = false;
       task2.releaseProject?.();
@@ -42922,6 +43102,23 @@ ${error62.message}`;
         type = step.state === "DONE" ? "tool.completed" : "tool.started";
       else if (step.step_type === "agent_response" && typeof step.text_delta === "string")
         type = "response.chunk";
+      if (step.step_type === "agent_response" && typeof step.text_delta === "string" && Number.isSafeInteger(step.step_index)) {
+        const index = step.step_index;
+        task2.publicResponses ??= /* @__PURE__ */ new Map();
+        if (task2.publicResponses.size < 200 || task2.publicResponses.has(index)) {
+          const room = Math.max(0, 1024 * 1024 - (task2.responseChars ?? 0));
+          const delta = step.text_delta.slice(0, room);
+          if (delta.length < step.text_delta.length && !task2.messageBufferLimited) {
+            task2.messageBufferLimited = true;
+            appendMessage(record2, "blocker", "bridge", "The public message buffer reached its limit; inspect retained history and the full result for omitted details.");
+            this.events.append(record2.taskId, "message.truncated", { limitChars: 1024 * 1024 });
+          }
+          task2.responseChars = (task2.responseChars ?? 0) + delta.length;
+          const text = (task2.publicResponses.get(index) ?? "") + delta;
+          task2.publicResponses.set(index, text);
+          this.captureMessages(task2, text, String(index));
+        }
+      }
       this.events.append(record2.taskId, type, step, raw);
       if (step.usage !== void 0)
         record2.usage = step.usage;
@@ -42936,9 +43133,31 @@ ${error62.message}`;
         record2.usage = result.usage;
         record2.lastObservedCliUsage = normalizeUsage(result.usage);
       }
+      if (typeof result.response === "string")
+        this.captureMessages(task2, result.response, "final", true);
       this.events.append(record2.taskId, "agy.result", result, raw);
     } else
       this.events.append(record2.taskId, "agy.event", raw, raw);
+  }
+  captureMessages(task2, text, step, final = false) {
+    task2.messageKeys ??= /* @__PURE__ */ new Set();
+    for (const input2 of extractAgentMessages(text)) {
+      const payload = JSON.stringify(input2);
+      const key = step + ":" + createHash10("sha256").update(payload).digest("hex");
+      if (task2.messageKeys.has(key) || final && task2.record.messages?.some((message2) => message2.source === "agy-reported" && message2.kind === input2.kind && message2.text === input2.text))
+        continue;
+      if (task2.messageKeys.size >= 1e3) {
+        if (!task2.messageLimitReported) {
+          task2.messageLimitReported = true;
+          appendMessage(task2.record, "blocker", "bridge", "The message forwarding limit was reached; inspect retained history and the full result after execution for omitted public messages.");
+          this.events.append(task2.record.taskId, "message.truncated", { maxForwardedMessages: 1e3 });
+        }
+        continue;
+      }
+      task2.messageKeys.add(key);
+      const message = appendMessage(task2.record, input2.kind, "agy-reported", input2.text);
+      this.events.append(task2.record.taskId, "message.reported", { messageId: message.messageId, sequence: message.sequence, kind: message.kind });
+    }
   }
   finish(task2, status2, code, message) {
     if (terminal.has(task2.record.status))
@@ -42951,6 +43170,11 @@ ${error62.message}`;
       code = "TASK_CANCELLED";
     if (code)
       task2.record.error = { code, message: message || code };
+    const output2 = task2.record.result;
+    const reported = typeof output2?.response === "string" && output2.response.trim() ? output2.response : task2.record.report?.data.summary;
+    const text = typeof reported === "string" && reported.trim() ? reported.replace(/<antigravity-message>[\s\S]*?<\/antigravity-message>/g, "").trim() || "Execution ended; inspect the referenced result." : "Execution ended with status " + status2 + "; inspect the current verification and tests.";
+    const source = status2 === "completed" && typeof reported === "string" && task2.record.usageProvenance !== "local-executor" ? "agy-reported" : "bridge";
+    appendMessage(task2.record, status2 === "completed" ? "final" : "error", source, status2 === "completed" ? text : (task2.record.error?.code ?? status2) + ": " + (task2.record.error?.message ?? text), resultReference(task2.record));
     this.events.append(task2.record.taskId, `task.${status2}`, task2.record.error || { exitCode: task2.record.exitCode });
   }
   terminate(child) {

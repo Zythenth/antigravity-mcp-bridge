@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
 import { plannerReportSchema, reviewerReportSchema, roleSchema, builtinRoleSchema, roleDefinitionSchema } from './roles.js';
@@ -38,6 +39,7 @@ const report = z.discriminatedUnion('role', [
   z.object({ role: z.literal('reviewer'), source: z.literal('agy-reported'), data: reviewerReportSchema, citationsChecked: z.literal(true) }).strict(),
 ]);
 export const taskRecordSchema = z.object({
+  deliveryMode: deliveryModeSchema.optional(),
   providedSkills: stagedSkillsSchema.optional(),
   taskId: id, workingDirectory: z.string(), status, createdAt: timestamp,
   prompt: z.string().optional(), sessionId: z.string().optional(), pid: z.number().int().positive().optional(),
@@ -140,9 +142,13 @@ export const successOutputSchemas = {
   }).strict(),
   antigravity_wait: z.object({
     taskId: id, status, ready: z.boolean(), timedOut: z.boolean(), tokenUsage: tokenUsage.optional(),
-    events: z.array(z.object({ taskId: id, sequence: z.number().int().positive(), timestamp, type: z.string(), data: z.unknown(), raw: z.unknown().optional() }).strict()),
+    deliveryMode: deliveryModeSchema.optional(), cursorReset: z.boolean().optional(), messages: z.array(bridgeMessageSchema).max(50).optional(),
+    events: z.array(z.object({ taskId: id, sequence: z.number().int().positive(), timestamp, type: z.string(), data: z.unknown(), raw: z.unknown().optional() }).strict()).optional(),
     nextCursor: count, oldestAvailable: z.number().int().positive(), truncated: z.boolean(),
-  }).strict(),
+  }).strict().refine(value => value.deliveryMode === 'messages' ? Array.isArray(value.messages) && value.events === undefined : Array.isArray(value.events) && value.messages === undefined, 'Delivery mode must match its payload')
+    .meta({ anyOf: [{ properties: { deliveryMode: { const: 'messages' } }, required: ['deliveryMode', 'messages'], not: { required: ['events'] } },
+      { properties: { deliveryMode: { const: 'events' } }, required: ['events'], not: { required: ['messages'] } }] }),
+  antigravity_set_delivery_mode: z.object({ taskId: id, deliveryMode: deliveryModeSchema }).strict(),
   antigravity_cancel: task,
   antigravity_sessions: z.object({ sessions: z.array(z.object({ sessionId: z.string(), taskIds: z.array(id) }).strict()), scope: z.literal('local bridge state') }).strict(),
 };

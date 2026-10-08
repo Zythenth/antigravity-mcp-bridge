@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { clientTask, compactTask, deliveryModeSchema } from './messages.js';
 import { providedSkillsSchema } from './skills.js';
 import { CliAdapter } from './cli-adapter.js';
 import { TaskManager } from './task-manager.js';
@@ -45,7 +46,7 @@ function sandboxPolicyConfirmation(previous: SandboxPolicySnapshot, proposed: Sa
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
   const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.6.1' }, {
-    instructions: 'Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration.',
+    instructions: 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a UI mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -129,6 +130,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     isolateWorktree: z.boolean().optional(),
     includePaths: z.array(z.string().min(1)).min(1).optional(),
     skills: providedSkillsSchema.optional(),
+    deliveryMode: deliveryModeSchema.optional(),
     mode: z.enum(['write', 'read-only']).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional(),
@@ -137,13 +139,13 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_run,
     title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
     inputSchema: runSchema, annotations: action,
-  }, async args => safe(async () => ({ task: await tasks.run(args) }))());
+  }, async args => safe(async () => ({ task: clientTask(await tasks.run(args)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_resume')) server.registerTool('antigravity_resume', {
     outputSchema: outputSchemas.antigravity_resume,
     title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy.',
     inputSchema: { ...runSchema, sessionId: z.string().min(1).max(128) }, annotations: action,
-  }, async args => safe(async () => ({ task: await tasks.run(args) }))());
+  }, async args => safe(async () => ({ task: clientTask(await tasks.run(args)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_context')) server.registerTool('antigravity_context', {
     outputSchema: outputSchemas.antigravity_context, title: 'Inspect role handoff context',
@@ -159,7 +161,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
       timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
     const source = tasks.status(sourceTaskId);
-    return { task: await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
+    return { task: clientTask(await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory })) };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_compare')) server.registerTool('antigravity_compare', {
@@ -209,7 +211,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
       retries: z.number().int().min(0).max(3).optional(), timeoutSeconds: z.number().int().min(1).max(86400).optional(),
       sandbox: sandboxSelectionInputSchema.optional() }, annotations: action,
   }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds, sandbox }) => safe(async () =>
-    ({ task: await tasks.startTests(taskId, expectedSha256, command, retries, timeoutSeconds, sandbox) }))());
+    ({ task: clientTask(await tasks.startTests(taskId, expectedSha256, command, retries, timeoutSeconds, sandbox)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_record_test')) server.registerTool('antigravity_record_test', {
     outputSchema: outputSchemas.antigravity_record_test,
@@ -241,7 +243,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_discard,
     title: 'Discard an isolated copy', description: 'Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.',
     inputSchema: { taskId: z.string().uuid() }, annotations: { ...action, openWorldHint: false },
-  }, async ({ taskId }) => safe(async () => ({ task: await tasks.discard(taskId) }))());
+  }, async ({ taskId }) => safe(async () => ({ task: clientTask(await tasks.discard(taskId)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_cleanup')) server.registerTool('antigravity_cleanup', {
     outputSchema: outputSchemas.antigravity_cleanup,
@@ -249,17 +251,24 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: {}, annotations: { ...action, openWorldHint: false },
   }, safe(() => tasks.cleanup()));
 
+  if (toolEnabled(tasks.toolProfile, 'antigravity_set_delivery_mode')) server.registerTool('antigravity_set_delivery_mode', {
+    outputSchema: outputSchemas.antigravity_set_delivery_mode,
+    title: 'Choose delivery to the caller', description: 'Select compact public messages or legacy full events. This changes local task metadata, not agy permissions. Cursors belong to their delivery mode; restart after zero when switching.',
+    inputSchema: { taskId: z.string().uuid(), deliveryMode: deliveryModeSchema },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  }, async ({ taskId, deliveryMode }) => safe(() => tasks.setDeliveryMode(taskId, deliveryMode))());
+
   if (toolEnabled(tasks.toolProfile, 'antigravity_status')) server.registerTool('antigravity_status', {
     outputSchema: outputSchemas.antigravity_status,
     title: 'Get Antigravity task status', description: 'Return task metadata, status, process ID and isolated copy path when available.',
     inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
-  }, async ({ taskId }) => safe(() => ({ task: tasks.status(taskId) }))());
+  }, async ({ taskId }) => safe(() => ({ task: clientTask(tasks.status(taskId)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_tasks')) server.registerTool('antigravity_tasks', {
     outputSchema: outputSchemas.antigravity_tasks,
     title: 'List persisted tasks', description: 'Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.',
     inputSchema: {}, annotations: readOnly,
-  }, safe(() => ({ tasks: tasks.list().map(({ prompt: _prompt, ...task }) => task) })));
+  }, safe(() => ({ tasks: tasks.list().map(task => { const delivered = clientTask(task); if ('prompt' in delivered) { const { prompt: _prompt, ...metadata } = delivered; return metadata; } return delivered; }) })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_events')) server.registerTool('antigravity_events', {
     outputSchema: outputSchemas.antigravity_events,
@@ -270,15 +279,15 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_wait')) server.registerTool('antigravity_wait', {
     outputSchema: outputSchemas.antigravity_wait,
-    title: 'Wait for real task progress', description: 'Wait up to 60 seconds for completion while sending MCP progress notifications for observed events. Progress is an event sequence, not a percentage. A wait timeout or request cancellation leaves the task running. Return a bounded event page and continue from nextCursor; disclose truncated events.',
-    inputSchema: { taskId: z.string().uuid(), after: z.number().int().min(0).optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() },
+    title: 'Wait for real task progress', description: 'Wait up to 60 seconds. In messages mode, return early on a compact public question/blocker and exclude raw events/progress notifications. In legacy events mode, retain observed event progress and bounded history. Carry cursorMode from the previous response to reset safely after a delivery change. A wait timeout/cancellation leaves the task running; disclose truncated history.',
+    inputSchema: { taskId: z.string().uuid(), cursorMode: deliveryModeSchema.optional(), after: z.number().int().min(0).optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() },
     annotations: readOnly,
-  }, async ({ taskId, after, timeoutSeconds }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal,
+  }, async ({ taskId, after, timeoutSeconds, cursorMode }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal,
     extra._meta?.progressToken === undefined ? undefined : async event => {
       await extra.sendNotification({ method: 'notifications/progress', params: {
         progressToken: extra._meta!.progressToken!, progress: event.sequence, message: taskId + ': ' + event.type,
       } });
-    }))());
+    }, cursorMode))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_result')) server.registerTool('antigravity_result', {
     outputSchema: outputSchemas.antigravity_result,
@@ -286,9 +295,10 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: { taskId: z.string().uuid(), includeResult: z.boolean().optional() }, annotations: readOnly,
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
-    if (includeResult !== false) return result;
-    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, ...metadata } = result.task;
-    return { ...result, task: metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined,
+    if (includeResult !== false && result.task.deliveryMode !== 'messages') return { ...result, task: clientTask(result.task) };
+    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, ...metadata } = result.task;
+    void messages; void messageCursor;
+    return { ...result, task: result.task.deliveryMode === 'messages' ? compactTask(result.task) : metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined,
       handoffAvailable: handoff !== undefined, roleDefinitionAvailable: roleDefinition !== undefined, includedFileCount: includedFiles?.length ?? 0 };
   })());
 
@@ -296,7 +306,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_cancel,
     title: 'Cancel Antigravity task', description: 'Cancel a queued task or terminate its local agy process.',
     inputSchema: { taskId: z.string().uuid() }, annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
-  }, async ({ taskId }) => safe(async () => ({ task: await tasks.cancel(taskId) }))());
+  }, async ({ taskId }) => safe(async () => ({ task: clientTask(await tasks.cancel(taskId)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_sessions')) server.registerTool('antigravity_sessions', {
     outputSchema: outputSchemas.antigravity_sessions,

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } from './skills.js';
 import { CliAdapter, taskPrompt } from './cli-adapter.js';
 import type { Config } from './config.js';
@@ -23,7 +24,7 @@ import { normalizeSandboxPolicy, resolveSandboxSelection, sandboxPolicyDigest, t
 import { executeWindowsTest, recoverWindowsExecutions } from './windows-executor.js';
 import { portableNodeStatus, type PortableNodeStatus } from './portable-node.js';
 
-interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
+interface InternalTask { publicResponses?: Map<number, string>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 export class TaskManager {
@@ -133,6 +134,7 @@ export class TaskManager {
     }
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     validatePrompt(options.prompt, this.config.maxPromptChars);
+    if (options.deliveryMode !== undefined) deliveryModeSchema.parse(options.deliveryMode);
     if (options.skills !== undefined) {
       const parsed = providedSkillsSchema.safeParse(options.skills);
       if (!parsed.success) throw new BridgeError('INVALID_SKILL_INPUT', 'Invalid supplied skill bundles');
@@ -187,6 +189,7 @@ export class TaskManager {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError('QUEUE_FULL', 'Task queue is full');
       }
+      options.deliveryMode ??= previous?.record.deliveryMode ?? contextSource?.record.deliveryMode ?? 'events';
       options.roleDefinition = roleDefinition;
       if (contextSource?.project) {
         if (options.includePaths) throw new BridgeError('INVALID_CONTEXT', 'A context task uses the existing copy selection');
@@ -230,7 +233,7 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
+      const record: TaskRecord = { deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
@@ -463,13 +466,13 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model,
+      const record: TaskRecord = { deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model,
         mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
         status: 'queued', createdAt: new Date().toISOString() };
-      const options: RunOptions = { providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
+      const options: RunOptions = { deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
         model: record.model, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
@@ -575,28 +578,56 @@ export class TaskManager {
     });
   }
 
+  setDeliveryMode(taskId: string, mode: DeliveryMode) {
+    const deliveryMode = deliveryModeSchema.parse(mode);
+    const release = this.state.acquire('registry');
+    try {
+      this.refresh();
+      const task = this.tasks.get(taskId);
+      if (!task) throw new BridgeError('TASK_NOT_FOUND', 'Unknown task: ' + taskId);
+      if (!task.owned && !terminal.has(task.record.status)) throw new BridgeError('TASK_OWNED_BY_OTHER_SERVER', 'Change delivery in the bridge that owns the running task');
+      task.record.deliveryMode = deliveryMode;
+      task.options.deliveryMode = deliveryMode;
+      this.events.append(taskId, 'delivery.updated', { deliveryMode });
+      return { taskId, deliveryMode };
+    } finally { release(); }
+  }
+
   readEvents(taskId: string, after = 0, limit = 200) {
     this.status(taskId);
     return this.events.read(taskId, after, limit);
   }
 
-  async wait(taskId: string, after = 0, timeoutSeconds = 30, signal?: AbortSignal, onEvent?: (event: BridgeEvent) => Promise<void>) {
+  async wait(taskId: string, after = 0, timeoutSeconds = 30, signal?: AbortSignal, onEvent?: (event: BridgeEvent) => Promise<void>, cursorMode?: DeliveryMode) {
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
       throw new BridgeError('INVALID_TIMEOUT', 'Wait timeout must be between 1 and 60 seconds');
     }
     if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks) throw new BridgeError('WAIT_LIMIT_EXCEEDED', 'Too many concurrent waits');
     this.waiting++;
     const deadline = Date.now() + timeoutSeconds * 1000;
+    const deliveryMode = this.status(taskId).deliveryMode ?? 'events';
+    const cursorReset = cursorMode !== undefined && cursorMode !== deliveryMode;
+    if (cursorReset) after = 0;
     let cursor = after;
     try {
       while (true) {
         if (signal?.aborted) throw new BridgeError('WAIT_CANCELLED', 'Waiting was cancelled; the task continues');
         const task = this.status(taskId);
+        if (deliveryMode === 'messages') {
+          const messages = readMessages(task, after);
+          const ready = terminal.has(task.status);
+          if (messages.messages.length || ready || Date.now() >= deadline) return {
+            taskId, status: task.status, ready, timedOut: !ready && !messages.messages.length,
+            deliveryMode, cursorReset, ...messages, tokenUsage: task.tokenUsage,
+          };
+          await delay(Math.min(250, Math.max(1, deadline - Date.now())), undefined, { signal });
+          continue;
+        }
         const page = this.events.read(taskId, cursor, 1000);
         for (const event of page.events) { await onEvent?.(event); cursor = event.sequence; }
         const ready = terminal.has(task.status);
         if (ready || Date.now() >= deadline) return {
-          taskId, status: task.status, ready, timedOut: !ready,
+          taskId, status: task.status, ready, timedOut: !ready, deliveryMode, cursorReset,
           ...this.events.read(taskId, after, 1000), tokenUsage: task.tokenUsage,
         };
         await delay(Math.min(250, Math.max(1, deadline - Date.now())), undefined, { signal });
@@ -628,6 +659,7 @@ export class TaskManager {
       task.record.status = 'cancelled';
       task.record.error = { code: 'TASK_CANCELLED', message: 'Task cancelled before execution' };
       task.record.completedAt = new Date().toISOString();
+      appendMessage(task.record, 'error', 'bridge', 'Task cancelled before execution');
       this.events.append(taskId, 'task.cancelled', {});
       task.owned = false;
       task.releaseProject?.(); task.releaseProject = undefined;
@@ -977,6 +1009,23 @@ export class TaskManager {
       let type = 'step.update';
       if (step.step_type === 'tool') type = step.state === 'DONE' ? 'tool.completed' : 'tool.started';
       else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') type = 'response.chunk';
+      if (step.step_type === 'agent_response' && typeof step.text_delta === 'string' && Number.isSafeInteger(step.step_index)) {
+        const index = step.step_index as number;
+        task.publicResponses ??= new Map();
+        if (task.publicResponses.size < 200 || task.publicResponses.has(index)) {
+          const room = Math.max(0, 1024 * 1024 - (task.responseChars ?? 0));
+          const delta = step.text_delta.slice(0, room);
+          if (delta.length < step.text_delta.length && !task.messageBufferLimited) {
+            task.messageBufferLimited = true;
+            appendMessage(record, 'blocker', 'bridge', 'The public message buffer reached its limit; inspect retained history and the full result for omitted details.');
+            this.events.append(record.taskId, 'message.truncated', { limitChars: 1024 * 1024 });
+          }
+          task.responseChars = (task.responseChars ?? 0) + delta.length;
+          const text = (task.publicResponses.get(index) ?? '') + delta;
+          task.publicResponses.set(index, text);
+          this.captureMessages(task, text, String(index));
+        }
+      }
       this.events.append(record.taskId, type, step, raw);
       if (step.usage !== undefined) record.usage = step.usage;
       if (record.status === 'running') record.status = 'streaming';
@@ -988,8 +1037,29 @@ export class TaskManager {
         record.usage = result.usage;
         record.lastObservedCliUsage = normalizeUsage(result.usage);
       }
+      if (typeof result.response === 'string') this.captureMessages(task, result.response, 'final', true);
       this.events.append(record.taskId, 'agy.result', result, raw);
     } else this.events.append(record.taskId, 'agy.event', raw, raw);
+  }
+
+  private captureMessages(task: InternalTask, text: string, step: string, final = false): void {
+    task.messageKeys ??= new Set();
+    for (const input of extractAgentMessages(text)) {
+      const payload = JSON.stringify(input);
+      const key = step + ':' + createHash('sha256').update(payload).digest('hex');
+      if (task.messageKeys.has(key) || (final && task.record.messages?.some(message => message.source === 'agy-reported' && message.kind === input.kind && message.text === input.text))) continue;
+      if (task.messageKeys.size >= 1000) {
+        if (!task.messageLimitReported) {
+          task.messageLimitReported = true;
+          appendMessage(task.record, 'blocker', 'bridge', 'The message forwarding limit was reached; inspect retained history and the full result after execution for omitted public messages.');
+          this.events.append(task.record.taskId, 'message.truncated', { maxForwardedMessages: 1000 });
+        }
+        continue;
+      }
+      task.messageKeys.add(key);
+      const message = appendMessage(task.record, input.kind, 'agy-reported', input.text);
+      this.events.append(task.record.taskId, 'message.reported', { messageId: message.messageId, sequence: message.sequence, kind: message.kind });
+    }
   }
 
   private finish(task: InternalTask, status: 'completed' | 'failed' | 'cancelled' | 'timeout', code?: string, message?: string): void {
@@ -999,6 +1069,12 @@ export class TaskManager {
     if (status === 'timeout') code = 'TASK_TIMEOUT';
     if (status === 'cancelled') code = 'TASK_CANCELLED';
     if (code) task.record.error = { code, message: message || code };
+    const output = task.record.result as { response?: unknown } | undefined;
+    const reported = typeof output?.response === 'string' && output.response.trim() ? output.response : task.record.report?.data.summary;
+    const text = typeof reported === 'string' && reported.trim() ? reported.replace(/<antigravity-message>[\s\S]*?<\/antigravity-message>/g, '').trim() || 'Execution ended; inspect the referenced result.' : 'Execution ended with status ' + status + '; inspect the current verification and tests.';
+    const source = status === 'completed' && typeof reported === 'string' && task.record.usageProvenance !== 'local-executor' ? 'agy-reported' : 'bridge';
+    appendMessage(task.record, status === 'completed' ? 'final' : 'error', source,
+      status === 'completed' ? text : (task.record.error?.code ?? status) + ': ' + (task.record.error?.message ?? text), resultReference(task.record));
     this.events.append(task.record.taskId, `task.${status}`, task.record.error || { exitCode: task.record.exitCode });
   }
 

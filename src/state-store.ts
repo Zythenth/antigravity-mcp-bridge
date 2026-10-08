@@ -3,6 +3,7 @@ import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, wr
 import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
+import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import type { ProjectCopy } from './isolation.js';
@@ -22,6 +23,7 @@ const snapshotSchema = z.object({
     mode: z.enum(['write', 'read-only']).optional(), integratedAt: z.string().datetime().optional(), discardedAt: z.string().datetime().optional(),
     usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
     lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
+    deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
   }).passthrough(),
   options: z.object({ prompt: z.string(), workingDirectory: z.string() }).passthrough(),
@@ -148,6 +150,9 @@ export class StateStore {
           data.events.some(event => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError('INVALID_STATE', 'Persisted task does not match its identity');
       }
+      const messages = data.record.messages ?? [];
+      if (messages.some((message, index) => message.taskId !== data.record.taskId || message.sequence > (data.record.messageCursor ?? 0) ||
+        (index > 0 && messages[index - 1]!.sequence >= message.sequence))) throw new BridgeError('INVALID_STATE', 'Persisted messages do not match task identity or cursor');
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, 'agy-mcp-copy-'], [data.project.gitDirectory, 'agy-mcp-baseline-']]) {
           if (!path.isAbsolute(directory!) || path.relative(os.tmpdir(), path.dirname(directory!)) !== '' || !path.basename(directory!).startsWith(prefix!)) {
