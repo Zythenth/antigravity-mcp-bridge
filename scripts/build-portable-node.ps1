@@ -104,23 +104,52 @@ function Invoke-Native {
   $process = [System.Diagnostics.Process]::new()
   $started = $false
   $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
-  Write-Host "Iniciando: $Description"
+  $nextProgressSeconds = 15
+  Write-Host "Iniciando: $Description; executável: $FilePath"
   try {
     $process.StartInfo = $startInfo
     [void]$process.Start()
     $started = $true
-    if ($CaptureOutput) { $outputTask = $process.StandardOutput.ReadToEndAsync() }
+    Write-Host "Processo iniciado: $Description; PID $($process.Id)"
+    if ($CaptureOutput) {
+      $outputTask = $process.StandardOutput.ReadToEndAsync()
+      Write-Host "Captura de stdout iniciada: $Description; estado $($outputTask.Status)"
+    }
     if ($TimeoutSeconds -eq 0) {
       $process.WaitForExit()
     }
-    elseif (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-      throw "$Description excedeu o limite de $TimeoutSeconds segundos."
+    else {
+      while (-not $process.WaitForExit([int][Math]::Min(1000, [Math]::Max(1, $TimeoutSeconds * 1000 - $elapsed.ElapsedMilliseconds)))) {
+        if ($elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+          throw "$Description excedeu o limite de $TimeoutSeconds segundos."
+        }
+        if ($elapsed.Elapsed.TotalSeconds -ge $nextProgressSeconds) {
+          $cpuSeconds = 'indisponível'
+          try { $cpuSeconds = $process.TotalProcessorTime.TotalSeconds.ToString('F1', [System.Globalization.CultureInfo]::InvariantCulture) }
+          catch [System.InvalidOperationException] { $cpuSeconds = 'indisponível' }
+          catch [System.ComponentModel.Win32Exception] { $cpuSeconds = 'indisponível' }
+          $captureStatus = if ($CaptureOutput) { $outputTask.Status } else { 'não redirecionado' }
+          Write-Host ("Processo em andamento: {0}; PID {1}; {2:N1}s; CPU {3}s; encerrado {4}; stdout {5}" -f $Description, $process.Id, $elapsed.Elapsed.TotalSeconds, $cpuSeconds, $process.HasExited, $captureStatus)
+          $nextProgressSeconds += 15
+        }
+      }
     }
     if ($process.ExitCode -ne 0) {
       throw "$Description falhou com código $($process.ExitCode)."
     }
+    if ($CaptureOutput) {
+      $captureWaitMilliseconds = 30000
+      if ($TimeoutSeconds -gt 0) {
+        $captureWaitMilliseconds = [int][Math]::Min($captureWaitMilliseconds, [Math]::Max(0, $TimeoutSeconds * 1000 - $elapsed.ElapsedMilliseconds))
+      }
+      Write-Host "Processo encerrado: $Description; aguardando stdout por até $captureWaitMilliseconds ms; estado $($outputTask.Status)"
+      if (-not $outputTask.Wait($captureWaitMilliseconds)) {
+        throw "$Description encerrou, mas a captura de stdout excedeu o limite de $captureWaitMilliseconds ms."
+      }
+      $capturedOutput = $outputTask.GetAwaiter().GetResult()
+    }
     Write-Host ("Concluído: {0} ({1:N1}s)" -f $Description, $elapsed.Elapsed.TotalSeconds)
-    if ($CaptureOutput) { return $outputTask.GetAwaiter().GetResult().TrimEnd("`r", "`n") -split '\r?\n' }
+    if ($CaptureOutput) { return $capturedOutput.TrimEnd("`r", "`n") -split '\r?\n' }
   }
   finally {
     if ($started -and -not $process.HasExited) {
@@ -370,6 +399,8 @@ function Prepare-Nasm {
   }
 
   $tarPath = Require-Command -Name 'tar.exe'
+  $tarVersion = (Invoke-Native -FilePath $tarPath -Arguments @('--version') -Description 'A verificação do tar' -TimeoutSeconds 30 -CaptureOutput | Out-String).Trim()
+  Write-Host "Ferramenta de arquivo: $tarPath; $tarVersion"
   Test-NasmArchive -ArchivePath $archivePath -TarExecutable $tarPath -ExpectedRoot $NasmManifest.directory -ExpectedExecutable $NasmManifest.executable
   Invoke-Native -FilePath $tarPath -Arguments @('-xf', $archivePath, '-C', $toolDirectory) -Description 'A extração do arquivo do NASM'
   $nasmDirectory = Join-Path $toolDirectory $NasmManifest.directory
@@ -532,6 +563,8 @@ if ((Get-Sha256 -Path $archivePath) -ne $manifest.source.sha256) {
 }
 
 $tarPath = Require-Command -Name 'tar.exe'
+$tarVersion = (Invoke-Native -FilePath $tarPath -Arguments @('--version') -Description 'A verificação do tar' -TimeoutSeconds 30 -CaptureOutput | Out-String).Trim()
+Write-Host "Ferramenta de arquivo: $tarPath; $tarVersion"
 Test-SourceArchive -TarPath $archivePath -TarExecutable $tarPath -ExpectedRoot $manifest.source.directory
 Invoke-Native -FilePath $tarPath -Arguments @('-xf', $archivePath, '-C', $workDirectory) -Description 'A extração do tarball oficial'
 $sourceDirectory = Join-Path $workDirectory $manifest.source.directory
