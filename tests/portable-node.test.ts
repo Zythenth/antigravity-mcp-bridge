@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import childProcess, { execFileSync, type SpawnOptions } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { link, lstat, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { loadConfig } from '../src/config.js';
@@ -190,6 +191,55 @@ test('portable preparation rejects a descriptor for a non-x64 runtime before dow
   const wrongArchitecture = { ...descriptor, arch: 'arm64' } as unknown as PortableNodeDescriptor;
   await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: path.join(process.cwd(), '.unused-cache'), descriptor: wrongArchitecture, fetch: assetFetch(files) }),
     'PORTABLE_NODE_DESCRIPTOR_UNAVAILABLE');
+});
+
+test('portable inspection reports bounded failure details without exposing process output', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
+  const sentinel = 'inspection-output-must-stay-private';
+  const cases = [
+    { reason: 'timeout', prefix: '[Threading.Thread]::Sleep(6000);' },
+    { reason: 'stdout-limit', prefix: `[Console]::Out.Write('${sentinel}'+('x'*2048));[Threading.Thread]::Sleep(6000);` },
+    { reason: 'stderr-limit', prefix: `[Console]::Error.Write('${sentinel}'+('x'*2048));[Threading.Thread]::Sleep(6000);` },
+    { reason: 'exit-nonzero', suffix: ';exit 7' },
+    { reason: 'invalid-safe-output', prefix: `[Console]::Out.Write('${sentinel}');` },
+    { reason: 'spawn-error', missingExecutable: true },
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.reason, async subtest => {
+      const { descriptor, files } = fixtureDescriptor();
+      const cache = path.join(shortTemporaryRoot, 'inspection-diagnostics');
+      const originalSpawn = childProcess.spawn;
+      const mocked = subtest.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
+        assert.ok(Array.isArray(args));
+        const encodedIndex = args.indexOf('-EncodedCommand') + 1;
+        assert.ok(encodedIndex > 0 && typeof args[encodedIndex] === 'string');
+        const script = Buffer.from(args[encodedIndex]!, 'base64').toString('utf16le');
+        const changedArgs = [...args];
+        changedArgs[encodedIndex] = Buffer.from((scenario.prefix ?? '') + script + (scenario.suffix ?? ''), 'utf16le').toString('base64');
+        return originalSpawn(scenario.missingExecutable ? path.join(cache, 'missing-inspector.exe') : command, changedArgs, options);
+      });
+      syncBuiltinESMExports();
+      let requests = 0;
+      try {
+        await assert.rejects(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files, () => { requests++; }) }), error => {
+          assert.ok(error instanceof Error && 'code' in error);
+          assert.equal(error.code, 'UNSAFE_PORTABLE_NODE_CACHE');
+          assert.ok(error.message.includes(`reason=${scenario.reason};`), error.message);
+          assert.match(error.message, /elapsedMs=\d+; exitCode=(?:null|-?\d+); signal=(?:null|SIG[A-Z]+); stdoutChars=\d+; stderrChars=\d+; stdoutTruncated=(?:true|false); stderrTruncated=(?:true|false)/u);
+          assert.ok(!error.message.includes(sentinel));
+          assert.ok(!error.message.includes(cache));
+          if (scenario.reason === 'exit-nonzero') assert.ok(error.message.includes('exitCode=7;'));
+          if (scenario.reason === 'stdout-limit') assert.ok(error.message.includes('stdoutTruncated=true;'));
+          if (scenario.reason === 'stderr-limit') assert.ok(error.message.includes('stderrTruncated=true'));
+          return true;
+        });
+        assert.equal(requests, 0);
+        await assert.rejects(lstat(cache), { code: 'ENOENT' });
+      } finally {
+        mocked.mock.restore();
+        syncBuiltinESMExports();
+      }
+    });
+  }
 });
 
 test('portable runtime preparation accepts only pinned assets and status only reports a verified cache as ready', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {

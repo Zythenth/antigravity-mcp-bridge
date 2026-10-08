@@ -115,19 +115,29 @@ function absoluteCacheDirectory(value: string): string {
 
 async function inspectReparsePoints(paths: string[]): Promise<void> {
   if (process.platform !== 'win32' || paths.length === 0) return;
-  const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+  const started = performance.now();
+  let stdout = '', stdoutChars = 0, stderrChars = 0;
+  let stopReason: 'timeout' | 'stdout-limit' | 'stderr-limit' | undefined;
+  const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; spawnError: boolean }>(resolve => {
     const child = spawn(windowsPowerShell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', reparsePointCommand], { windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = '', stderr = '', stopped = false;
-    const stop = () => { if (!stopped) { stopped = true; child.kill(); } };
-    const timer = setTimeout(stop, 5000);
-    child.stdout.on('data', chunk => { stdout += String(chunk); if (stdout.length > 1024) stop(); });
-    child.stderr.on('data', chunk => { stderr += String(chunk); if (stderr.length > 1024) stop(); });
-    child.once('error', reject);
-    child.once('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+    let spawnError = false;
+    const stop = (reason: NonNullable<typeof stopReason>) => { if (!stopReason) { stopReason = reason; child.kill(); } };
+    const timer = setTimeout(() => stop('timeout'), 5000);
+    child.stdout.on('data', chunk => {
+      const text = String(chunk);
+      stdoutChars += text.length;
+      stdout = (stdout + text).slice(0, 1024);
+      if (stdoutChars > 1024) stop('stdout-limit');
+    });
+    child.stderr.on('data', chunk => { stderrChars += String(chunk).length; if (stderrChars > 1024) stop('stderr-limit'); });
+    child.once('error', () => { clearTimeout(timer); spawnError = true; });
+    child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, spawnError }); });
     child.stdin.end(JSON.stringify({ paths }));
-  }).catch(error => { throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Could not inspect portable runtime cache reparse points: ' + (error instanceof Error ? error.message : String(error))); });
-  if (result.code !== 0 || result.stdout !== '{"safe":true}') {
-    throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected');
+  }).catch(() => ({ code: null, signal: null, spawnError: true }));
+  if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
+    const reason = result.spawnError ? 'spawn-error' : stopReason ?? (result.code !== 0 ? 'exit-nonzero' : 'invalid-safe-output');
+    const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${result.code}; signal=${result.signal}; stdoutChars=${stdoutChars}; stderrChars=${stderrChars}; stdoutTruncated=${stdoutChars > 1024}; stderrTruncated=${stderrChars > 1024}`;
+    throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
   }
 }
 

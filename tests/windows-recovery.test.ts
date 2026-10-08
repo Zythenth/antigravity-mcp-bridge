@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,6 +40,22 @@ async function removeOwned(directory: string | undefined, prefix: string): Promi
   if (!directory) return;
   const canonical = await ownedTemporaryDirectory(directory, prefix);
   await rm(canonical, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+function storedAcls(targets: { path: string; mode?: 'explicit' | 'foreign' }[]): string[] {
+  const source = `using System;using System.IO;using System.ComponentModel;using System.Runtime.InteropServices;using System.Security.AccessControl;
+public static class AclFixture {
+[DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool GetFileSecurity(string p,uint i,byte[] b,uint n,out uint needed);
+[DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool SetFileSecurity(string p,uint i,byte[] b);
+public static string Apply(string p,string mode){uint n;GetFileSecurity(p,4,null,0,out n);byte[] b=new byte[n];if(!GetFileSecurity(p,4,b,n,out n))throw new Win32Exception();var sd=new RawSecurityDescriptor(b,0);
+if(!String.IsNullOrEmpty(mode)){if(mode=="foreign")sd.DiscretionaryAcl.InsertAce(0,new CommonAce(AceFlags.None,AceQualifier.AccessAllowed,0x120089,new System.Security.Principal.SecurityIdentifier("S-1-5-21-1-2-3-4567"),false,null));
+else {var flags=sd.ControlFlags&~(ControlFlags.DiscretionaryAclProtected|ControlFlags.DiscretionaryAclAutoInherited|ControlFlags.DiscretionaryAclAutoInheritRequired);sd.SetFlags(flags);foreach(GenericAce ace in sd.DiscretionaryAcl){ace.AceFlags&=~AceFlags.Inherited;}}
+b=new byte[sd.BinaryLength];sd.GetBinaryForm(b,0);if(!SetFileSecurity(p,4,b))throw new Win32Exception();GetFileSecurity(p,4,null,0,out n);b=new byte[n];if(!GetFileSecurity(p,4,b,n,out n))throw new Win32Exception();sd=new RawSecurityDescriptor(b,0);}
+return sd.GetSddlForm(AccessControlSections.Access);}}`;
+  const script = "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:BRIDGE_ACL_FIXTURE_SOURCE; $targets = ConvertFrom-Json $env:BRIDGE_ACL_FIXTURE_TARGETS; $values = @($targets | ForEach-Object { [AclFixture]::Apply($_.path, $_.mode) }); ConvertTo-Json -InputObject $values -Compress";
+  return JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    windowsHide: true, encoding: 'utf8', env: { ...process.env, BRIDGE_ACL_FIXTURE_SOURCE: source, BRIDGE_ACL_FIXTURE_TARGETS: JSON.stringify(targets) },
+  })) as string[];
 }
 
 async function readAcl(target: string): Promise<string> {
@@ -133,7 +149,9 @@ async function crashFixture<T>(run: (resources: { copy: string; state: string; g
   const copy = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-copy-')));
   const state = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-recovery-state-')));
   const grant = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-recovery-grant-')));
-  try { return await run({ copy, state, grant, ready: path.join(copy, 'ready.txt'), heartbeat: path.join(copy, 'heartbeat.txt') }); }
+  try {
+    storedAcls([{ path: grant, mode: 'explicit' }]);
+    return await run({ copy, state, grant, ready: path.join(copy, 'ready.txt'), heartbeat: path.join(copy, 'heartbeat.txt') }); }
   finally {
     for (const [directory, prefix] of [[copy, 'agy-mcp-copy-'], [state, 'agy-mcp-recovery-state-'], [grant, 'agy-mcp-recovery-grant-']] as const) await removeOwned(directory, prefix);
   }
@@ -145,6 +163,7 @@ test('Windows recovery preserves a live controller, rejects a reused PID as stal
     let controllerDirectory: string | undefined;
     try {
       const beforeAcl = await readAcl(grant);
+      const beforeDacl = storedAcls([{ path: grant }])[0]!;
       const launched = await launchCrashWorker(copy, state, grant, ready, heartbeat);
       worker = launched.worker; controllerDirectory = path.dirname(launched.announcement.requestPath);
       await verifyControllerAnnouncement(launched.announcement, state);
@@ -152,6 +171,11 @@ test('Windows recovery preserves a live controller, rejects a reused PID as stal
       const active = await readLease(state);
       assert.equal(active.value.controllerPid, launched.announcement.controllerPid);
       assert.equal(await profileExists(active.value.sid), true, 'active lease profile must remain available');
+      const created = path.join(grant, 'created-during-execution.txt');
+      await writeFile(created, 'created');
+      storedAcls([{ path: created, mode: 'foreign' }]);
+      const childAcl = storedAcls([{ path: created }])[0]!;
+      assert.ok(childAcl.includes(active.value.sid), 'a new child must inherit the active profile grant');
       const activeAcl = await readAcl(grant);
       assert.notEqual(activeAcl, beforeAcl); assert.match(activeAcl, new RegExp(active.value.sid));
       const firstHeartbeat = Number(await eventually('LPAC heartbeat was not written', async () => {
@@ -170,6 +194,10 @@ test('Windows recovery preserves a live controller, rejects a reused PID as stal
       await assert.rejects(readFile(active.file));
       assert.equal(await profileExists(active.value.sid), false, 'stale profile must be removed');
       assert.equal(await readAcl(grant), beforeAcl, 'owned grant ACL must be restored');
+      assert.equal(storedAcls([{ path: grant }])[0], beforeDacl, 'stored grant DACL must be restored exactly');
+      const recoveredChildAcl = storedAcls([{ path: created }])[0]!;
+      assert.equal(recoveredChildAcl, childAcl.replace(new RegExp('\\(A;[^)]*;' + active.value.sid + '\\)'), ''), 'recovery removes only the owned child rule and preserves the foreign update');
+      assert.ok(recoveredChildAcl.includes('(A;;FR;;;S-1-5-21-1-2-3-4567)'));
       const childPid = Number(await readFile(path.join(copy, 'child-pid.txt'), 'utf8').catch(() => '0'));
       if (childPid > 0) await eventually('LPAC descendant survived recovery', async () => { try { process.kill(childPid, 0); return undefined; } catch { return true; } });
       const fresh = await executeWindowsTest({ executable: process.execPath, args: ['-e', "process.stdout.write('fresh execution')"] }, copy, { ...settings, stateDirectory: state });
@@ -188,6 +216,7 @@ test('Windows recovery leaves an existing scratch replacement untouched but skip
     let staleLease: string | undefined;
     try {
       const beforeGrantAcl = await readAcl(grant);
+      const beforeGrantDacl = storedAcls([{ path: grant }])[0]!;
       const launched = await launchCrashWorker(copy, state, grant, ready, heartbeat);
       worker = launched.worker; controllerDirectory = path.dirname(launched.announcement.requestPath);
       await verifyControllerAnnouncement(launched.announcement, state);
@@ -207,6 +236,7 @@ test('Windows recovery leaves an existing scratch replacement untouched but skip
       assert.equal(await profileExists(active.value.sid), false, 'identity mismatch does not stop independent profile cleanup');
       assert.equal(await readAcl(scratch), replacementAcl, 'recovery must not change a replacement ACL');
       assert.equal(await readAcl(grant), beforeGrantAcl, 'independent cleanup still restores other owned grants');
+      assert.equal(storedAcls([{ path: grant }])[0], beforeGrantDacl, 'independent cleanup must preserve the stored grant DACL');
       await rm(scratch, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       await rm(runtime, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       await freshRecovery(state);

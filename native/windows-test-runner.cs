@@ -113,6 +113,7 @@ internal static class WindowsTestRunner
     sealed class PinnedTarget : IDisposable
     {
         public Grant grant;
+        public int maxFiles;
         readonly List<IntPtr> handles = new List<IntPtr>();
         public void Add(IntPtr value) { handles.Add(value); }
         public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }
@@ -140,6 +141,8 @@ internal static class WindowsTestRunner
     [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string path, uint information, byte[] descriptor, uint length, out uint needed);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string path, uint information, byte[] descriptor);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
@@ -516,7 +519,7 @@ internal static class WindowsTestRunner
     static PinnedTarget PinGrant(Grant supplied, int maxFiles)
     {
         if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
-        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights } };
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };
         try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }
         catch { target.Dispose(); throw; }
     }
@@ -528,20 +531,83 @@ internal static class WindowsTestRunner
 
     static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }
 
+    static RawSecurityDescriptor ReadDacl(string path)
+    {
+        uint needed;
+        if (!GetFileSecurity(path, 4, null, 0, out needed) && Marshal.GetLastWin32Error() != 122) Check(false, "Measure target DACL");
+        if (needed == 0 || needed > 1024 * 1024) throw new Exception("Invalid target DACL size");
+        var data = new byte[needed];
+        Check(GetFileSecurity(path, 4, data, needed, out needed), "Read target DACL");
+        return new RawSecurityDescriptor(data, 0);
+    }
+
+    static bool SameDacl(RawSecurityDescriptor expected, RawSecurityDescriptor actual)
+    {
+        if (expected.ControlFlags != actual.ControlFlags || expected.DiscretionaryAcl == null || actual.DiscretionaryAcl == null || expected.DiscretionaryAcl.BinaryLength != actual.DiscretionaryAcl.BinaryLength) return false;
+        var left = new byte[expected.DiscretionaryAcl.BinaryLength]; var right = new byte[actual.DiscretionaryAcl.BinaryLength];
+        expected.DiscretionaryAcl.GetBinaryForm(left, 0); actual.DiscretionaryAcl.GetBinaryForm(right, 0);
+        for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;
+        return true;
+    }
+
     static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)
     {
-        var rule = new FileSystemAccessRule(identity, RightsFor(target.grant), target.grant.directory ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit : InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow);
-        if (target.grant.directory)
+        AccessTree(target, identity, grant, true, target.maxFiles, new int[] { 0 });
+    }
+
+    static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)
+    {
+        // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.
+        RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);
+        if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;
+        RawAcl acl = descriptor.DiscretionaryAcl;
+        bool changed = false;
+        if (acl == null && grant) throw new Exception("Permission target has no DACL");
+        if (acl != null)
         {
-            var acl = Directory.GetAccessControl(target.grant.path);
-            if (grant) acl.AddAccessRule(rule); else acl.RemoveAccessRuleSpecific(rule);
-            Directory.SetAccessControl(target.grant.path, acl);
+            int rights = (int)RightsFor(target.grant); CommonAce existing = null;
+            for (int index = acl.Count - 1; index >= 0; index--)
+            {
+                KnownAce ace = acl[index] as KnownAce;
+                if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;
+                if (!grant) { acl.RemoveAce(index); changed = true; }
+                else
+                {
+                    CommonAce allow = ace as CommonAce;
+                    if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");
+                    existing = allow;
+                    if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }
+                }
+            }
+            if (grant && existing == null)
+            {
+                AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;
+                if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;
+                int insert = acl.Count;
+                if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }
+                acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;
+            }
+            if (changed)
+            {
+                ControlFlags storedFlags = descriptor.ControlFlags;
+                // AR preserves AI in this non-propagating write; Windows consumes AR.
+                if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);
+                var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);
+                Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");
+                descriptor.SetFlags(storedFlags);
+                if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");
+            }
         }
-        else
+        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.
+        if (!target.grant.directory) return;
+        foreach (string child in Directory.GetFileSystemEntries(target.grant.path))
         {
-            var acl = File.GetAccessControl(target.grant.path);
-            if (grant) acl.AddAccessRule(rule); else acl.RemoveAccessRuleSpecific(rule);
-            File.SetAccessControl(target.grant.path, acl);
+            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
+            using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })
+            {
+                ValidatePathComponents(child, pin, false, maxFiles);
+                AccessTree(pin, identity, grant, false, maxFiles, count);
+            }
         }
     }
 

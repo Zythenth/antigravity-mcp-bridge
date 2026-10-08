@@ -28,6 +28,21 @@ async function fixture<T>(run: (copy: string, outside: string) => Promise<T>): P
 }
 const command = (script: string) => ({ executable: process.execPath, args: ['-e', script] });
 
+function storedAcls(targets: { path: string; mode?: 'explicit' | 'inherited' | 'protected' | 'protected-inherited' | 'foreign' }[]): string[] {
+  const source = `using System;using System.IO;using System.ComponentModel;using System.Runtime.InteropServices;using System.Security.AccessControl;
+public static class AclFixture {
+[DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool GetFileSecurity(string p,uint i,byte[] b,uint n,out uint needed);
+[DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool SetFileSecurity(string p,uint i,byte[] b);
+public static string Apply(string p,string mode){uint n;GetFileSecurity(p,4,null,0,out n);byte[] b=new byte[n];if(!GetFileSecurity(p,4,b,n,out n))throw new Win32Exception();var sd=new RawSecurityDescriptor(b,0);
+if(!String.IsNullOrEmpty(mode)){if(mode=="foreign")sd.DiscretionaryAcl.InsertAce(0,new CommonAce(AceFlags.None,AceQualifier.AccessAllowed,0x120089,new System.Security.Principal.SecurityIdentifier("S-1-5-21-1-2-3-4567"),false,null));
+else {var flags=sd.ControlFlags&~(ControlFlags.DiscretionaryAclProtected|ControlFlags.DiscretionaryAclAutoInherited|ControlFlags.DiscretionaryAclAutoInheritRequired);if(mode.StartsWith("protected"))flags|=ControlFlags.DiscretionaryAclProtected;if(mode.Contains("inherited"))flags|=ControlFlags.DiscretionaryAclAutoInherited|ControlFlags.DiscretionaryAclAutoInheritRequired;sd.SetFlags(flags);foreach(GenericAce ace in sd.DiscretionaryAcl){ace.AceFlags&=~AceFlags.Inherited;if(mode.Contains("inherited"))ace.AceFlags|=AceFlags.Inherited;}}
+b=new byte[sd.BinaryLength];sd.GetBinaryForm(b,0);if(!SetFileSecurity(p,4,b))throw new Win32Exception();GetFileSecurity(p,4,null,0,out n);b=new byte[n];if(!GetFileSecurity(p,4,b,n,out n))throw new Win32Exception();sd=new RawSecurityDescriptor(b,0);}
+return sd.GetSddlForm(AccessControlSections.Access);}}`;
+  const script = "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:BRIDGE_ACL_FIXTURE_SOURCE; $targets = ConvertFrom-Json $env:BRIDGE_ACL_FIXTURE_TARGETS; $values = @($targets | ForEach-Object { [AclFixture]::Apply($_.path, $_.mode) }); ConvertTo-Json -InputObject $values -Compress";
+  return JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    windowsHide: true, encoding: 'utf8', env: { ...process.env, BRIDGE_ACL_FIXTURE_SOURCE: source, BRIDGE_ACL_FIXTURE_TARGETS: JSON.stringify(targets) },
+  })) as string[];
+}
 test('Windows executor protects the captured default runtime cache when options omit its path', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async (copy, outside) => {
     const cache = path.join(outside, 'runtime-cache');
@@ -90,6 +105,52 @@ test('Windows executor freezes selected external read and write grants and resto
     assert.equal(await readFile(path.join(writable, 'created.txt'), 'utf8'), 'permitted write');
     assert.equal(await readFile(readable, 'utf8'), 'permitted read');
     assert.equal(execFileSync('icacls.exe', [readable], { windowsHide: true, encoding: 'utf8' }), before, 'read ACL must be restored exactly');
+  });
+});
+
+test('Windows executor preserves stored file and directory DACLs and concurrent foreign rules', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async (copy, outside) => {
+    const modes = ['explicit', 'inherited', 'protected', 'protected-inherited'] as const;
+    const readable: string[] = [], writable: string[] = [], existing: string[] = [], protectedChildren: string[] = [], protectedDescendants: string[] = [];
+    for (const mode of modes) {
+      const file = path.join(outside, mode + '.txt'), directory = path.join(outside, mode);
+      await writeFile(file, 'permitted'); await mkdir(directory);
+      const child = path.join(directory, 'existing.txt'), protectedChild = path.join(directory, 'protected');
+      await mkdir(protectedChild);
+      const protectedDescendant = path.join(protectedChild, 'nested.txt');
+      await writeFile(child, 'existing'); await writeFile(protectedDescendant, 'protected');
+      readable.push(file); writable.push(directory); existing.push(child); protectedChildren.push(protectedChild); protectedDescendants.push(protectedDescendant);
+    }
+    storedAcls(modes.flatMap((mode, index) => [{ path: readable[index]!, mode }, { path: writable[index]!, mode }, { path: existing[index]!, mode: mode.startsWith('protected') ? 'explicit' as const : mode }, { path: protectedChildren[index]!, mode: mode === 'protected-inherited' ? mode : 'protected' as const }]));
+    const targets = [...readable, ...writable, ...existing, ...protectedChildren, ...protectedDescendants];
+    const before = storedAcls(targets.map(target => ({ path: target })));
+    assert.ok(before[0]!.startsWith('D:('), 'explicit baseline must be unprotected without AI');
+    assert.doesNotMatch(before[0]!, /;[^;]*ID;/, 'explicit baseline must contain stored explicit ACEs');
+    assert.match(before[1]!, /^D:AI/); assert.match(before[2]!, /^D:P/); assert.match(before[3]!, /^D:PAI/); assert.match(before[3]!, /;[^;]*ID;/);
+    const script = "const fs=require('node:fs'),p=require('node:path');" +
+      "for(const f of " + JSON.stringify(readable) + "){if(fs.readFileSync(f,'utf8')!=='permitted')process.exit(90);let denied=false;try{fs.writeFileSync(f,'bad')}catch(e){denied=['EACCES','EPERM'].includes(e.code)}if(!denied)process.exit(91)}" +
+      "for(const d of " + JSON.stringify(writable) + "){if(fs.readFileSync(p.join(d,'existing.txt'),'utf8')!=='existing')process.exit(92);fs.writeFileSync(p.join(d,'created.txt'),'created');let denied=false;try{fs.readFileSync(p.join(d,'protected','nested.txt'))}catch(e){denied=['EACCES','EPERM'].includes(e.code)}if(!denied)process.exit(93)}" +
+      "fs.writeFileSync('acl-ready.txt','ready');const timer=setInterval(()=>{if(fs.existsSync('acl-release.txt'))clearInterval(timer)},25);";
+    const pending = executeWindowsTest(command(script), copy, { ...settings, sandbox: { readPaths: readable, writePaths: writable, network: false, childProcesses: true, maxOutputChars: 4000 } });
+    let completed = false;
+    void pending.then(() => { completed = true; }, () => { completed = true; });
+    const ready = path.join(copy, 'acl-ready.txt');
+    try {
+      const deadline = Date.now() + 30000;
+      while (!completed && Date.now() < deadline && await readFile(ready, 'utf8').catch(() => undefined) !== 'ready') await new Promise(resolve => setTimeout(resolve, 25));
+      if (completed) assert.fail('Execution ended before readiness: ' + JSON.stringify(await pending));
+      assert.equal(await readFile(ready, 'utf8'), 'ready');
+      storedAcls([{ path: writable[0]!, mode: 'foreign' }, { path: path.join(writable[0]!, 'created.txt'), mode: 'foreign' }]);
+    } finally { await writeFile(path.join(copy, 'acl-release.txt'), 'release'); await pending; }
+    const result = await pending;
+    assert.equal(result.error, undefined, JSON.stringify(result)); assert.equal(result.exitCode, 0, JSON.stringify(result));
+    const after = storedAcls(targets.map(target => ({ path: target })));
+    const foreignAce = '(A;;FR;;;S-1-5-21-1-2-3-4567)';
+    const expected = before.map((acl, index) => index === readable.length ? acl.replace('(', foreignAce + '(') : acl);
+    assert.deepEqual(after, expected, 'cleanup must preserve exact stored DACLs and a foreign rule added during execution');
+    const createdAcls = storedAcls(writable.map(directory => ({ path: path.join(directory, 'created.txt') })));
+    for (const acl of createdAcls) assert.doesNotMatch(acl, /S-1-15-2-/, 'new children must lose the owned profile grant');
+    assert.ok(createdAcls[0]!.includes(foreignAce), 'foreign child rule must survive cleanup');
   });
 });
 

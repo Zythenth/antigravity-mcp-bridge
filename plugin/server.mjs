@@ -39125,6 +39125,7 @@ internal static class WindowsTestRunner
     sealed class PinnedTarget : IDisposable
     {
         public Grant grant;
+        public int maxFiles;
         readonly List<IntPtr> handles = new List<IntPtr>();
         public void Add(IntPtr value) { handles.Add(value); }
         public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }
@@ -39152,6 +39153,8 @@ internal static class WindowsTestRunner
     [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string path, uint information, byte[] descriptor, uint length, out uint needed);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string path, uint information, byte[] descriptor);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
@@ -39528,7 +39531,7 @@ internal static class WindowsTestRunner
     static PinnedTarget PinGrant(Grant supplied, int maxFiles)
     {
         if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
-        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights } };
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };
         try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }
         catch { target.Dispose(); throw; }
     }
@@ -39540,20 +39543,83 @@ internal static class WindowsTestRunner
 
     static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }
 
+    static RawSecurityDescriptor ReadDacl(string path)
+    {
+        uint needed;
+        if (!GetFileSecurity(path, 4, null, 0, out needed) && Marshal.GetLastWin32Error() != 122) Check(false, "Measure target DACL");
+        if (needed == 0 || needed > 1024 * 1024) throw new Exception("Invalid target DACL size");
+        var data = new byte[needed];
+        Check(GetFileSecurity(path, 4, data, needed, out needed), "Read target DACL");
+        return new RawSecurityDescriptor(data, 0);
+    }
+
+    static bool SameDacl(RawSecurityDescriptor expected, RawSecurityDescriptor actual)
+    {
+        if (expected.ControlFlags != actual.ControlFlags || expected.DiscretionaryAcl == null || actual.DiscretionaryAcl == null || expected.DiscretionaryAcl.BinaryLength != actual.DiscretionaryAcl.BinaryLength) return false;
+        var left = new byte[expected.DiscretionaryAcl.BinaryLength]; var right = new byte[actual.DiscretionaryAcl.BinaryLength];
+        expected.DiscretionaryAcl.GetBinaryForm(left, 0); actual.DiscretionaryAcl.GetBinaryForm(right, 0);
+        for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;
+        return true;
+    }
+
     static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)
     {
-        var rule = new FileSystemAccessRule(identity, RightsFor(target.grant), target.grant.directory ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit : InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow);
-        if (target.grant.directory)
+        AccessTree(target, identity, grant, true, target.maxFiles, new int[] { 0 });
+    }
+
+    static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)
+    {
+        // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.
+        RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);
+        if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;
+        RawAcl acl = descriptor.DiscretionaryAcl;
+        bool changed = false;
+        if (acl == null && grant) throw new Exception("Permission target has no DACL");
+        if (acl != null)
         {
-            var acl = Directory.GetAccessControl(target.grant.path);
-            if (grant) acl.AddAccessRule(rule); else acl.RemoveAccessRuleSpecific(rule);
-            Directory.SetAccessControl(target.grant.path, acl);
+            int rights = (int)RightsFor(target.grant); CommonAce existing = null;
+            for (int index = acl.Count - 1; index >= 0; index--)
+            {
+                KnownAce ace = acl[index] as KnownAce;
+                if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;
+                if (!grant) { acl.RemoveAce(index); changed = true; }
+                else
+                {
+                    CommonAce allow = ace as CommonAce;
+                    if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");
+                    existing = allow;
+                    if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }
+                }
+            }
+            if (grant && existing == null)
+            {
+                AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;
+                if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;
+                int insert = acl.Count;
+                if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }
+                acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;
+            }
+            if (changed)
+            {
+                ControlFlags storedFlags = descriptor.ControlFlags;
+                // AR preserves AI in this non-propagating write; Windows consumes AR.
+                if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);
+                var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);
+                Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");
+                descriptor.SetFlags(storedFlags);
+                if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");
+            }
         }
-        else
+        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.
+        if (!target.grant.directory) return;
+        foreach (string child in Directory.GetFileSystemEntries(target.grant.path))
         {
-            var acl = File.GetAccessControl(target.grant.path);
-            if (grant) acl.AddAccessRule(rule); else acl.RemoveAccessRuleSpecific(rule);
-            File.SetAccessControl(target.grant.path, acl);
+            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
+            using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })
+            {
+                ValidatePathComponents(child, pin, false, maxFiles);
+                AccessTree(pin, identity, grant, false, maxFiles, count);
+            }
         }
     }
 
@@ -40031,37 +40097,45 @@ function absoluteCacheDirectory(value) {
 async function inspectReparsePoints(paths2) {
   if (process.platform !== "win32" || paths2.length === 0)
     return;
-  const result = await new Promise((resolve, reject) => {
+  const started = performance.now();
+  let stdout = "", stdoutChars = 0, stderrChars = 0;
+  let stopReason;
+  const result = await new Promise((resolve) => {
     const child = spawn3(windowsPowerShell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", reparsePointCommand], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
-    let stdout = "", stderr = "", stopped = false;
-    const stop = () => {
-      if (!stopped) {
-        stopped = true;
+    let spawnError = false;
+    const stop = (reason) => {
+      if (!stopReason) {
+        stopReason = reason;
         child.kill();
       }
     };
-    const timer = setTimeout(stop, 5e3);
+    const timer = setTimeout(() => stop("timeout"), 5e3);
     child.stdout.on("data", (chunk) => {
-      stdout += String(chunk);
-      if (stdout.length > 1024)
-        stop();
+      const text = String(chunk);
+      stdoutChars += text.length;
+      stdout = (stdout + text).slice(0, 1024);
+      if (stdoutChars > 1024)
+        stop("stdout-limit");
     });
     child.stderr.on("data", (chunk) => {
-      stderr += String(chunk);
-      if (stderr.length > 1024)
-        stop();
+      stderrChars += String(chunk).length;
+      if (stderrChars > 1024)
+        stop("stderr-limit");
     });
-    child.once("error", reject);
-    child.once("close", (code) => {
+    child.once("error", () => {
       clearTimeout(timer);
-      resolve({ code, stdout, stderr });
+      spawnError = true;
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal, spawnError });
     });
     child.stdin.end(JSON.stringify({ paths: paths2 }));
-  }).catch((error62) => {
-    throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Could not inspect portable runtime cache reparse points: " + (error62 instanceof Error ? error62.message : String(error62)));
-  });
-  if (result.code !== 0 || result.stdout !== '{"safe":true}') {
-    throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected");
+  }).catch(() => ({ code: null, signal: null, spawnError: true }));
+  if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
+    const reason = result.spawnError ? "spawn-error" : stopReason ?? (result.code !== 0 ? "exit-nonzero" : "invalid-safe-output");
+    const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${result.code}; signal=${result.signal}; stdoutChars=${stdoutChars}; stderrChars=${stderrChars}; stdoutTruncated=${stdoutChars > 1024}; stderrTruncated=${stderrChars > 1024}`;
+    throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
   }
 }
 async function inspectCachePath(value, create = false) {
@@ -40487,7 +40561,10 @@ async function resolveCommand(executable) {
     for (const name of requested.names) {
       const candidate = path9.isAbsolute(name) ? path9.resolve(name) : path9.resolve(directory, name);
       try {
-        if (!(await lstat5(candidate)).isFile())
+        const info = await lstat5(candidate);
+        if (info.isSymbolicLink())
+          fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + candidate);
+        if (!info.isFile())
           continue;
         await regularFile(candidate);
         return { file: candidate, kind: requested.kind };

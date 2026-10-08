@@ -141,7 +141,9 @@ async function resolveCommand(executable: string): Promise<{ file: string; kind:
     for (const name of requested.names) {
       const candidate = path.isAbsolute(name) ? path.resolve(name) : path.resolve(directory, name);
       try {
-        if (!(await lstat(candidate)).isFile()) continue;
+        const info = await lstat(candidate);
+        if (info.isSymbolicLink()) fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + candidate);
+        if (!info.isFile()) continue;
         await regularFile(candidate);
         return { file: candidate, kind: requested.kind };
       } catch (error) {
