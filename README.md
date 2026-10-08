@@ -157,6 +157,29 @@ Guarde `comparisonId` e acompanhe cada `taskId` com `antigravity_wait`. `antigra
 
 Essas limitações não são resolvidas por manter o processo aberto ou inventar mensagens do protocolo. Um suporte futuro exige verificar a versão e o contrato oferecido pelo CLI antes de adicionar a operação.
 
+## Skills fornecidas pelo cliente
+
+O Codex ou outro cliente pode enviar skills selecionadas em `antigravity_run.skills`. Cada pacote contém o texto de `SKILL.md` e, opcionalmente, recursos de texto com caminhos relativos à skill:
+
+```json
+{
+  "workingDirectory": "/caminho/absoluto/do/projeto",
+  "prompt": "Use a skill review-style para revisar o projeto.",
+  "mode": "read-only",
+  "skills": [{
+    "name": "review-style",
+    "content": "---\nname: review-style\ndescription: Regras de revisão\n---\nLeia references/check.md antes de revisar.",
+    "resources": [{ "path": "references/check.md", "content": "Confira os requisitos contra os arquivos reais." }]
+  }]
+}
+```
+
+O bridge prepara apenas os pacotes enviados em `.agents/skills/<nome-em-minúsculas>/` dentro da cópia. Preserva o nome declarado e os bytes UTF-8, incluindo nomes como `Presentations`. Os metadados retornados contêm nomes, caminhos relativos e hashes; não repetem os textos das skills. Skills globais não são descobertas nem importadas automaticamente. O cliente deve selecionar e fornecer também os recursos necessários, mantendo arquivos privados e credenciais fora do envio.
+
+Limites: 8 skills, 100 recursos por skill e 1 MiB de texto no total. Esses arquivos também contam nos limites de arquivos e bytes da cópia. Caminhos absolutos, travessia, nomes de dispositivos, aliases de caixa, links e colisões com pastas existentes na cópia são recusados. O preparo não executa os scripts fornecidos. Dependências de ferramentas precisam existir no agy; uma skill não concede novas permissões.
+
+A retomada e o handoff conservam os pacotes originais e seus hashes. Não é possível fornecer `skills` novamente numa retomada, mesmo como lista vazia; use uma nova tarefa para outra seleção. Alterar, remover ou acrescentar recursos numa skill fornecida invalida a verificação. Os arquivos auxiliares não entram no patch do projeto original. Omitir `skills` preserva o uso de skills que já pertençam aos arquivos elegíveis do projeto.
+
 ## Papéis personalizados
 
 Defina `BRIDGE_CUSTOM_ROLES` como um array JSON no ambiente do servidor e reinicie a conexão. Exemplo PowerShell:

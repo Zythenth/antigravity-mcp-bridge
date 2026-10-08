@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { providedSkillsSchema } from './skills.js';
 import { CliAdapter } from './cli-adapter.js';
 import { TaskManager } from './task-manager.js';
 import { BridgeError } from './types.js';
@@ -127,6 +128,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
     isolateWorktree: z.boolean().optional(),
     includePaths: z.array(z.string().min(1)).min(1).optional(),
+    skills: providedSkillsSchema.optional(),
     mode: z.enum(['write', 'read-only']).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional(),

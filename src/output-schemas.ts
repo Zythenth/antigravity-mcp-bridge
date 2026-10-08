@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { stagedSkillsSchema } from './skills.js';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
 import { plannerReportSchema, reviewerReportSchema, roleSchema, builtinRoleSchema, roleDefinitionSchema } from './roles.js';
 import { usageCountersSchema } from './usage.js';
@@ -37,6 +38,7 @@ const report = z.discriminatedUnion('role', [
   z.object({ role: z.literal('reviewer'), source: z.literal('agy-reported'), data: reviewerReportSchema, citationsChecked: z.literal(true) }).strict(),
 ]);
 export const taskRecordSchema = z.object({
+  providedSkills: stagedSkillsSchema.optional(),
   taskId: id, workingDirectory: z.string(), status, createdAt: timestamp,
   prompt: z.string().optional(), sessionId: z.string().optional(), pid: z.number().int().positive().optional(),
   model: z.string().optional(), startedAt: timestamp.optional(), completedAt: timestamp.optional(),

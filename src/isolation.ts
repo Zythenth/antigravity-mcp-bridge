@@ -4,12 +4,14 @@ import { createReadStream } from 'node:fs';
 import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
 import { BridgeError } from './types.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
 
 const maxGitOutput = 10_000_000;
 
 export interface ProjectCopy {
+  providedSkills?: readonly StagedSkill[];
   sourceDirectory: string;
   copyDirectory: string;
   gitDirectory: string;
@@ -123,7 +125,7 @@ export async function listProjectFiles(sourceDirectory: string): Promise<string[
   return candidates.filter(file => !ignored.has(file) && !file.split('/').includes('.git')).sort();
 }
 
-export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ProjectCopy> {
+export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, skills: readonly ProvidedSkill[] = []): Promise<ProjectCopy> {
   const candidates = await listProjectFiles(sourceDirectory);
   let selected = candidates;
   if (includePaths !== undefined) {
@@ -148,7 +150,7 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
   const baseline = new Map<string, string>();
   try {
-    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    const project: ProjectCopy = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
     onCreated?.(project);
     totalBytes = 0;
     for (const relative of selected) {
@@ -160,6 +162,9 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
       if (totalBytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Source grew beyond the copy byte limit during copying');
       baseline.set(relative, await sha256File(target));
     }
+    const staged = await stageProvidedSkills(copyDirectory, skills, { ...limits, maxCopyFiles: limits.maxCopyFiles - selected.length, maxCopyBytes: limits.maxCopyBytes - totalBytes });
+    if (staged.length) project.providedSkills = staged;
+    await verifyProvidedSkills(copyDirectory, staged);
     await git(copyDirectory, ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
     const scope = ['--git-dir=' + gitDirectory, '--work-tree=' + copyDirectory];
     await git(copyDirectory, [...scope, 'add', '-A', '-f', '--', '.']);
@@ -182,6 +187,7 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
 }
 
 export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
+  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   await git(project.copyDirectory, [...scope, 'add', '-A', '--', '.']);
   const names = splitNull(await git(project.copyDirectory,
@@ -216,7 +222,8 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
   };
 }
 
-export async function verifyReadOnlyCopy(project: ProjectCopy, baseline = project.baseline): Promise<void> {
+export async function verifyReadOnlyCopy(project: ProjectCopy, baseline = new Map([...project.baseline, ...(project.providedSkills ?? []).flatMap(skill => skill.files.map(file => [file.path, file.sha256] as [string, string]))])): Promise<void> {
+  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
   const seen = new Set<string>();
   async function visit(directory: string, prefix = ''): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -243,6 +250,7 @@ export async function readProjectPatch(project: ProjectCopy, relative: string): 
 }
 
 export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLimits): Promise<Map<string, string>> {
+  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
   const hashes = new Map<string, string>();
   let bytes = 0;
   async function visit(directory: string, prefix = ''): Promise<void> {
@@ -262,6 +270,8 @@ export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLim
 }
 
 export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimits): Promise<ProjectCopy> {
+  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  const managed = new Set((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)));
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
   const ignored = new Set<string>();
@@ -275,7 +285,7 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
   const fork: ProjectCopy = { ...project, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
   try {
     let bytes = 0;
-    for (const relative of candidates.filter(file => !ignored.has(file))) {
+    for (const relative of candidates.filter(file => !ignored.has(file) || managed.has(file))) {
       let source: string;
       try { source = await checkedPath(project.copyDirectory, relative, true); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
@@ -287,19 +297,22 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
       fork.includedFiles.push(relative);
     }
     await git(copyDirectory, ['-c', 'init.templateDir=', 'clone', '--bare', '--no-hardlinks', '--quiet', project.gitDirectory, gitDirectory]);
+    await git(copyDirectory, ['--git-dir=' + gitDirectory, '--work-tree=' + copyDirectory, 'read-tree', 'HEAD']);
     await fingerprintProjectCopy(fork, limits);
     return fork;
   } catch (error) { await discardProjectCopy(fork); throw error; }
 }
 
 export async function fingerprintProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<string> {
+  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  const managed = new Set((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)));
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))].sort();
   const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory,
     [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], Buffer.from(candidates.join('\0') + '\0'), [0, 1])) : []);
   const digest = createHash('sha256');
   let count = 0, bytes = 0;
-  for (const relative of candidates.filter(file => !ignored.has(file))) {
+  for (const relative of candidates.filter(file => !ignored.has(file) || managed.has(file))) {
     let file;
     try { file = await checkedPath(project.copyDirectory, relative, true); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }

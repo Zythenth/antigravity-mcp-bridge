@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { execSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -95,6 +95,8 @@ if (scenario === 'split') {
   send({ event: 'step_update', step_update: { step_type: 'tool', state: 'ACTIVE', tool_name: 'write_to_file' } });
   send({ event: 'step_update', step_update: { step_type: 'tool', state: 'DONE', tool_name: 'write_to_file' } });
 }
+if (scenario === 'skills-read') { result('SUCCESS', { response: JSON.stringify({ skill: readFileSync('.agents/skills/presentations/SKILL.md', 'utf8'), reference: readFileSync('.agents/skills/presentations/references/guide.md', 'utf8') }) }); process.exit(0); }
+if (scenario === 'skills-tamper') writeFileSync('.agents/skills/presentations/SKILL.md', 'changed by fixture');
 if (scenario === 'write') writeFileSync(path.join(process.cwd(), 'AGY_BRIDGE_TEST.md'), 'Antigravity MCP bridge test successful.');
 if (scenario === 'write-many') {
   writeFileSync(path.join(process.cwd(), 'one.txt'), 'one');

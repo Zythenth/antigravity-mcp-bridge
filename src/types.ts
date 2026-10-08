@@ -1,3 +1,4 @@
+import type { ProvidedSkill, StagedSkill } from './skills.js';
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
 import type { BridgeNativeTestRequest } from './native-tests.js';
 import type { RoleReport, TaskRole, RoleDefinition } from './roles.js';
@@ -19,6 +20,7 @@ export interface BridgeEvent {
 }
 
 export interface TaskRecord {
+  providedSkills?: readonly StagedSkill[];
   taskId: string;
   sessionId?: string;
   pid?: number;
@@ -74,6 +76,8 @@ export interface TestEvidence {
 }
 
 export interface RunOptions {
+  skills?: readonly ProvidedSkill[];
+  providedSkills?: readonly StagedSkill[];
   roleDefinition?: RoleDefinition;
   comparison?: Comparison;
   contextTaskId?: string;

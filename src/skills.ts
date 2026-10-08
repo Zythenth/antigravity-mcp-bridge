@@ -13,12 +13,12 @@ export const MAX_TOTAL_BUNDLES_BYTES = 1024 * 1024; // 1 MiB
 export const MAX_SKILL_NAME_LENGTH = 64;
 
 export const providedSkillResourceSchema = z.object({
-  path: z.string().min(1),
+  path: z.string().min(1).max(1024),
   content: z.string(),
 }).strict();
 
 export const providedSkillSchema = z.object({
-  name: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/i).max(MAX_SKILL_NAME_LENGTH),
+  name: z.string().regex(/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/).max(MAX_SKILL_NAME_LENGTH),
   content: z.string().min(1),
   resources: z.array(providedSkillResourceSchema).max(MAX_RESOURCES_PER_SKILL).optional(),
 }).strict();
@@ -46,6 +46,13 @@ export interface StagedSkill {
   readonly sha256: string;
   readonly files: readonly StagedSkillFile[];
 }
+
+export const stagedSkillSchema = z.object({
+  name: providedSkillSchema.shape.name,
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  files: z.array(z.object({ path: z.string().min(1).max(1024), sha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict()).min(1).max(MAX_RESOURCES_PER_SKILL + 1),
+}).strict();
+export const stagedSkillsSchema = z.array(stagedSkillSchema).max(MAX_PROVIDED_SKILLS);
 
 const WINDOWS_DEVICE_NAMES = new Set([
   'CON', 'PRN', 'AUX', 'NUL',

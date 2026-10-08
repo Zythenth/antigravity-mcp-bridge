@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } from './skills.js';
 import { CliAdapter, taskPrompt } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
@@ -132,6 +133,13 @@ export class TaskManager {
     }
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     validatePrompt(options.prompt, this.config.maxPromptChars);
+    if (options.skills !== undefined) {
+      const parsed = providedSkillsSchema.safeParse(options.skills);
+      if (!parsed.success) throw new BridgeError('INVALID_SKILL_INPUT', 'Invalid supplied skill bundles');
+      const bytes = parsed.data.reduce((sum, skill) => sum + Buffer.byteLength(skill.content, 'utf8') + (skill.resources ?? []).reduce((n, file) => n + Buffer.byteLength(file.content, 'utf8'), 0), 0);
+      if (bytes > MAX_TOTAL_BUNDLES_BYTES) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Supplied skills exceed the 1 MiB text budget');
+      options = { ...options, skills: parsed.data };
+    }
     if (options.acceptanceCriteria !== undefined) criteriaSchema.parse(options.acceptanceCriteria);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
@@ -165,6 +173,8 @@ export class TaskManager {
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
+      if ((previous || contextSource) && options.skills !== undefined) throw new BridgeError('INVALID_SKILLS', 'Resume and handoff retain supplied skills; new bundles require a new task');
+      if (previous?.project) await verifyProvidedSkills(previous.project.copyDirectory, previous.project.providedSkills ?? []);
       options.handoff ??= previous?.record.handoff;
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
       const role = roleSchema.parse(options.role ?? previous?.record.role ?? 'implementer');
@@ -207,6 +217,7 @@ export class TaskManager {
           return fork;
         });
       }
+      options.providedSkills = (previous?.project ?? contextProject)?.providedSkills;
       taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
       pendingProjectRelease = previous?.project || contextProject ? this.state.acquire(this.projectLock((previous?.project ?? contextProject)!)) : undefined;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
@@ -219,7 +230,7 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
+      const record: TaskRecord = { providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
@@ -452,13 +463,13 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model,
+      const record: TaskRecord = { providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model,
         mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
         status: 'queued', createdAt: new Date().toISOString() };
-      const options: RunOptions = { prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
+      const options: RunOptions = { providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
         model: record.model, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
@@ -664,7 +675,11 @@ export class TaskManager {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
         this.events.append(record.taskId, 'copy.created', { copyDirectory: project.copyDirectory });
-      }, this.config);
+      }, this.config, task.options.skills);
+      await verifyProvidedSkills(task.project.copyDirectory, task.project.providedSkills ?? []);
+      record.providedSkills = task.project.providedSkills;
+      task.options.providedSkills = task.project.providedSkills;
+      delete task.options.skills;
       task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
       record.copyDirectory = task.project.copyDirectory;
       record.includedFiles = task.project.includedFiles;

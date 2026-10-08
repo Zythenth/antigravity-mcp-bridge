@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## Em desenvolvimento
+
+- Pacotes de skills selecionadas fornecidos pelo cliente, preparados na cópia com recursos UTF-8, limites combinados, hashes imutáveis e preservação nas retomadas e transferências.
+- Tentativas limitadas para bloqueios transitórios do Windows em gravações atômicas de estado, sem remover o último estado válido como alternativa.
+
 ## 0.6.1
 
 - Preservação exata da DACL existente ao conceder e remover permissões temporárias do executor Windows LPAC.

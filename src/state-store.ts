@@ -3,6 +3,7 @@ import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, wr
 import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
+import { stagedSkillsSchema } from './skills.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import type { ProjectCopy } from './isolation.js';
 import type { BridgeEvent } from './types.js';
@@ -21,11 +22,11 @@ const snapshotSchema = z.object({
     mode: z.enum(['write', 'read-only']).optional(), integratedAt: z.string().datetime().optional(), discardedAt: z.string().datetime().optional(),
     usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
     lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
-    roleDefinition: roleDefinitionSchema.optional(),
+    roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
   }).passthrough(),
   options: z.object({ prompt: z.string(), workingDirectory: z.string() }).passthrough(),
   project: z.object({ sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),
-    baseline: z.array(z.tuple([z.string(), z.string().regex(/^[a-f0-9]{64}$/)])), includedFiles: z.array(z.string()),
+    baseline: z.array(z.tuple([z.string(), z.string().regex(/^[a-f0-9]{64}$/)])), includedFiles: z.array(z.string()), providedSkills: stagedSkillsSchema.optional(),
   }).optional(),
   events: z.array(z.object({ taskId: z.string().uuid(), sequence: z.number().int().positive(), timestamp: z.string(), type: z.string(), data: z.unknown(), raw: z.unknown().optional() })),
   cursor: z.number().int().nonnegative(),
