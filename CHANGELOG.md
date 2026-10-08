@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 0.6.1
+
+- Preservação exata da DACL existente ao conceder e remover permissões temporárias do executor Windows LPAC.
+- Recusa de links simbólicos e junctions no componente final do caminho de executáveis Windows.
+- Diagnósticos sanitizados de inspeção do cache portátil, com detalhes limitados da execução e sem saída bruta.
+- Fixture de testes ajustada para instalações do npm sem `npmrc` distribuído.
+- Versão do pacote, plugin e servidor MCP atualizada para permitir a instalação em um novo diretório de cache do Codex.
+
 ## 0.6.0
 
 - Executor de testes próprio do bridge no Windows, isolado em AppContainer/LPAC e selecionado por padrão; `BRIDGE_TEST_EXECUTOR=agy` mantém o caminho legado explícito e não há alternativa de execução no host.
