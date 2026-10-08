@@ -84,13 +84,59 @@ function Require-Command {
   return $command.Path
 }
 
+function Write-CompilerProcessProgress {
+  param([Parameter(Mandatory)][System.Diagnostics.Process]$RootProcess)
+
+  try {
+    $sampleTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $seen = [System.Collections.Generic.HashSet[int]]::new()
+    [void]$seen.Add($RootProcess.Id)
+    $pendingParents = @($RootProcess.Id)
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $rootStart = $RootProcess.StartTime
+    while ($pendingParents.Count -gt 0 -and $seen.Count -lt 128 -and $sampleTimer.Elapsed.TotalSeconds -lt 5) {
+      $filter = ($pendingParents | ForEach-Object { "ParentProcessId = $_" }) -join ' OR '
+      $querySeconds = [int][Math]::Max(1, [Math]::Ceiling(5 - $sampleTimer.Elapsed.TotalSeconds))
+      $children = @(Get-CimInstance -Query "SELECT ProcessId,ParentProcessId,CreationDate FROM Win32_Process WHERE $filter" -OperationTimeoutSec $querySeconds -ErrorAction Stop)
+      $pendingParents = @()
+      foreach ($child in $children) {
+        if ($seen.Count -ge 128) { break }
+        if ($seen.Contains([int]$child.ProcessId)) { continue }
+        $member = Get-Process -Id ([int]$child.ProcessId) -ErrorAction SilentlyContinue
+        if ($null -eq $member) { continue }
+        try {
+          if ($member.StartTime -lt $rootStart -or [Math]::Abs(($member.StartTime - $child.CreationDate).TotalMilliseconds) -gt 1) { continue }
+          [void]$seen.Add($member.Id)
+          $pendingParents += $member.Id
+          $rows.Add([pscustomobject]@{ id = $member.Id; name = $member.ProcessName; cpu = $member.TotalProcessorTime.TotalSeconds; memory = $member.WorkingSet64 })
+        }
+        catch [System.InvalidOperationException] { continue }
+        finally { $member.Dispose() }
+      }
+    }
+    $RootProcess.Refresh()
+    $rows.Add([pscustomobject]@{ id = $RootProcess.Id; name = $RootProcess.ProcessName; cpu = $RootProcess.TotalProcessorTime.TotalSeconds; memory = $RootProcess.WorkingSet64 })
+    $cpuTotal = ($rows | Measure-Object -Property cpu -Sum).Sum
+    $memoryTotal = ($rows | Measure-Object -Property memory -Sum).Sum / 1MB
+    $sampleStatus = if ($pendingParents.Count -gt 0 -or $seen.Count -ge 128) { 'parcial' } else { 'completa' }
+    Write-Host ("Árvore da compilação: raiz PID {0}; {1} processos vivos amostrados; CPU acumulada dos processos vivos {2:N1}s; soma dos working sets {3:N1} MiB; amostra {4}" -f $RootProcess.Id, $rows.Count, $cpuTotal, $memoryTotal, $sampleStatus)
+    foreach ($row in ($rows | Sort-Object -Property cpu -Descending | Select-Object -First 8)) {
+      Write-Host ("Processo da compilação: PID {0}; {1}; CPU {2:N1}s; memória {3:N1} MiB" -f $row.id, $row.name, $row.cpu, ($row.memory / 1MB))
+    }
+  }
+  catch {
+    Write-Host "Telemetria da compilação indisponível: $($_.Exception.GetType().Name)"
+  }
+}
+
 function Invoke-Native {
   param(
     [Parameter(Mandatory)][string]$FilePath,
     [Parameter(Mandatory)][string[]]$Arguments,
     [Parameter(Mandatory)][string]$Description,
     [ValidateRange(0, 86400)][int]$TimeoutSeconds = 1200,
-    [switch]$CaptureOutput
+    [switch]$CaptureOutput,
+    [switch]$MonitorCompilerProcesses
   )
 
   $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
@@ -105,6 +151,7 @@ function Invoke-Native {
   $started = $false
   $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
   $nextProgressSeconds = 15
+  $nextProcessSampleSeconds = 30
   Write-Host "Iniciando: $Description; executável: $FilePath"
   try {
     $process.StartInfo = $startInfo
@@ -115,23 +162,24 @@ function Invoke-Native {
       $outputTask = $process.StandardOutput.ReadToEndAsync()
       Write-Host "Captura de stdout iniciada: $Description; estado $($outputTask.Status)"
     }
-    if ($TimeoutSeconds -eq 0) {
-      $process.WaitForExit()
-    }
-    else {
-      while (-not $process.WaitForExit([int][Math]::Min(1000, [Math]::Max(1, $TimeoutSeconds * 1000 - $elapsed.ElapsedMilliseconds)))) {
-        if ($elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
-          throw "$Description excedeu o limite de $TimeoutSeconds segundos."
-        }
-        if ($elapsed.Elapsed.TotalSeconds -ge $nextProgressSeconds) {
-          $cpuSeconds = 'indisponível'
-          try { $cpuSeconds = $process.TotalProcessorTime.TotalSeconds.ToString('F1', [System.Globalization.CultureInfo]::InvariantCulture) }
-          catch [System.InvalidOperationException] { $cpuSeconds = 'indisponível' }
-          catch [System.ComponentModel.Win32Exception] { $cpuSeconds = 'indisponível' }
-          $captureStatus = if ($CaptureOutput) { $outputTask.Status } else { 'não redirecionado' }
-          Write-Host ("Processo em andamento: {0}; PID {1}; {2:N1}s; CPU {3}s; encerrado {4}; stdout {5}" -f $Description, $process.Id, $elapsed.Elapsed.TotalSeconds, $cpuSeconds, $process.HasExited, $captureStatus)
-          $nextProgressSeconds += 15
-        }
+    while ($true) {
+      $waitMilliseconds = if ($TimeoutSeconds -eq 0) { 1000 } else { [int][Math]::Min(1000, [Math]::Max(1, $TimeoutSeconds * 1000 - $elapsed.ElapsedMilliseconds)) }
+      if ($process.WaitForExit($waitMilliseconds)) { break }
+      if ($TimeoutSeconds -gt 0 -and $elapsed.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+        throw "$Description excedeu o limite de $TimeoutSeconds segundos."
+      }
+      if ($elapsed.Elapsed.TotalSeconds -ge $nextProgressSeconds) {
+        $cpuSeconds = 'indisponível'
+        try { $cpuSeconds = $process.TotalProcessorTime.TotalSeconds.ToString('F1', [System.Globalization.CultureInfo]::InvariantCulture) }
+        catch [System.InvalidOperationException] { $cpuSeconds = 'indisponível' }
+        catch [System.ComponentModel.Win32Exception] { $cpuSeconds = 'indisponível' }
+        $captureStatus = if ($CaptureOutput) { $outputTask.Status } else { 'não redirecionado' }
+        Write-Host ("Processo em andamento: {0}; PID {1}; {2:N1}s; CPU {3}s; encerrado {4}; stdout {5}" -f $Description, $process.Id, $elapsed.Elapsed.TotalSeconds, $cpuSeconds, $process.HasExited, $captureStatus)
+        $nextProgressSeconds += 15
+      }
+      if ($MonitorCompilerProcesses -and $elapsed.Elapsed.TotalSeconds -ge $nextProcessSampleSeconds) {
+        Write-CompilerProcessProgress -RootProcess $process
+        $nextProcessSampleSeconds += 30
       }
     }
     if ($process.ExitCode -ne 0) {
@@ -629,7 +677,7 @@ $toolchain = Test-Toolchain -ExpectedNasmVersion $manifest.tools.nasm.version
 Write-Host 'Compilando Node 24.21.0 com ClangCL e os recursos padrão habilitados.'
 Push-Location $sourceDirectory
 try {
-  Invoke-Native -FilePath $env:ComSpec -Arguments @('/d', '/s', '/c', 'call vcbuild.bat x64 vs2022 clang-cl nonpm nocorepack no-cctest') -Description 'A compilação do Node' -TimeoutSeconds 0
+  Invoke-Native -FilePath $env:ComSpec -Arguments @('/d', '/s', '/c', 'call vcbuild.bat x64 vs2022 clang-cl nonpm nocorepack no-cctest') -Description 'A compilação do Node' -TimeoutSeconds 0 -MonitorCompilerProcesses
 }
 finally {
   Pop-Location
