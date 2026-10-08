@@ -11,33 +11,33 @@ O bridge não acessa endpoints privados, cookies ou arquivos de autenticação. 
 
 ## Requisitos
 
-- Node.js 24 ou mais recente e npm.
+- Node.js 24 ou mais recente e npm. Esse requisito inicia o servidor; no Windows LPAC, ele não garante a compatibilidade de todos os subprocessos Node.
 - Git instalado e disponível no `PATH`.
 - [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/overview/) instalado e disponível no `PATH`. Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
 - Autenticação concluída no `agy` interativo. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
-O bridge foi testado com `agy` 1.2.16 e `@modelcontextprotocol/sdk` 1.30.1. Ele exige que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. Consulte abaixo a limitação observada na execução de testes no Windows.
+O bridge foi testado com `agy` 1.2.16 e `@modelcontextprotocol/sdk` 1.30.1. As tarefas delegadas exigem que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. No Windows, `antigravity_test` usa por padrão o executor local do bridge em AppContainer/LPAC; nos demais sistemas, usa o sandbox oficial do `agy`.
 
 ## Versões disponíveis
 
-A **0.5.1** está publicada no npm e inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Os exemplos npx abaixo usam essa versão.
+Este código corresponde à **0.6.0**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída. Os exemplos npx abaixo selecionam a 0.6.0.
 
-O código-fonte e o plugin deste repositório preparam a **0.5.2**, com correção do ambiente de execução Windows, diagnósticos específicos do sandbox e recusa de recibos com bypass. A publicação dessa versão no npm está pendente.
+A 0.6.0 inclui executor Windows do bridge, permissões de sandbox controladas por ferramentas MCP e um runtime Node portátil opcional para LPAC. O runtime está publicado em um Release imutável; prepare-o explicitamente antes de usar o modo portátil.
 
-A 0.5.1 amplia a margem de observação dos testes para suportar a preparação de cópias em runners mais lentos, preservando as verificações dos timeouts de execução.
+A 0.5.1 inclui perfis, espera com progresso, transferência entre papéis, comparação de modelos e papéis personalizados. Ela amplia a margem de observação dos testes para suportar a preparação de cópias em runners mais lentos, preservando as verificações dos timeouts de execução.
 
 ## Instalação
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.5.1, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.6.0, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.5.1"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.6.0"]
     }
   }
 }
@@ -58,6 +58,34 @@ npm.cmd test
 ```
 
 `npm run build:plugin` compila o servidor e gera `plugin/server.mjs`. Esse arquivo também acompanha o repositório para que o plugin possa ser instalado sem executar o build. `npm start` inicia o servidor MCP em stdio; a saída padrão fica reservada para JSON-RPC.
+
+### Runtime Node portátil no Windows LPAC
+
+O servidor iniciado diretamente por npm usa o Node do sistema por padrão. O descritor distribuído com o plugin pede o modo `portable`, para que os testes Windows LPAC usem o runtime preparado no cache. Os modos são escolhidos somente na inicialização confiável do servidor com `BRIDGE_WINDOWS_NODE_RUNTIME=system` ou `portable`; entradas de ferramentas MCP não aceitam URL, hash nem caminho de cache.
+
+Consulte o estado sem iniciar MCP, descobrir `agy` ou baixar arquivos:
+
+```powershell
+node plugin/server.mjs --windows-runtime-status
+```
+
+No Windows x64, prepare explicitamente o runtime antes de usar o modo portátil:
+
+```powershell
+node plugin/server.mjs --prepare-windows-runtime
+```
+
+Para preparar o runtime pelo pacote npm 0.6.0:
+
+```powershell
+npx --yes antigravity-mcp-bridge@0.6.0 --prepare-windows-runtime
+```
+
+O status retorna JSON com `requestedMode`, `supported`, `ready`, `buildId`, `nodeVersion`, `libuvVersion`, `sha256` e, quando necessário, `error`. Uma consulta sem suporte, sem cache ou com cache inválido continua sendo uma consulta bem-sucedida; uma falha de preparação retorna exit code 1. Preparação baixa somente os arquivos declarados do GitHub Release, confere tamanho e SHA-256 e instala o cache privado de forma atômica. Inicialização, saúde e testes não baixam arquivos. Cache ausente no modo portátil exige `--prepare-windows-runtime`, sem voltar silenciosamente ao Node do sistema. Cache corrompido, alterado ou inseguro é recusado também pela preparação, que não o repara nem remove automaticamente. Antes de preparar novamente, uma pessoa deve inspecionar o caminho e remover manualmente somente o cache do build afetado; depois, executar `--prepare-windows-runtime`.
+
+Mantenha o cache fora dos projetos. O bridge resolve os caminhos reais e recusa sobreposição em ambas as direções entre o projeto e `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY`, antes de consultar modelos, enfileirar a tarefa ou copiar arquivos. Essa regra também vale com `includePaths` e no modo `system`.
+
+O runtime [Node 24.21.0 LPAC1 para Windows x64](https://github.com/Zythenth/antigravity-mcp-bridge/releases/tag/runtime-node-v24.21.0-lpac1-win-x64) está publicado em um Release imutável, com ABI 137, libuv base 1.52.1 e apenas o PR 5181 aplicado. Ele não declara suporte geral a outras versões, arquiteturas ou plataformas. O cache instala somente `node.exe`, a `LICENSE` upstream e `build.json`; este último registra a fonte fixada, o patch, a ferramenta de compilação e a proveniência da execução. A seleção substitui somente o `process.execPath` conhecido desse runtime e o `npm` adjacente validado; executáveis Node ou npm personalizados permanecem selecionados como foram informados. A substituição portátil inicial de `process.execPath` e do `npm` adjacente exige Node 24 no host do servidor. O requisito geral Node >=24 permite iniciar o servidor, mas hosts Node 25/26 falham em testes elegíveis com `PORTABLE_NODE_HOST_UNSUPPORTED`. O cache persiste entre reinicializações normais do processo e do servidor, mas a persistência através de uma reinicialização física ainda não foi verificada.
 
 ### Instalar como plugin do Codex
 
@@ -87,12 +115,12 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Ferramentas na 0.5.1 | Catálogo e execução |
+| Valor | Ferramentas no código-fonte 0.6.0 | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 29 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 20 | Consulta, modelos, sessões, handoff e comparação; tarefas somente em leitura |
-| `review` | 23 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 29 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 31 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 21 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 24 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 31 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a confirmação de integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -153,11 +181,13 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_context` / `antigravity_handoff` | Inspeciona e transfere plano, decisões, critérios e evidências para outro papel em cópia independente |
 | `antigravity_compare` / `antigravity_comparison` | Solicita pareceres de 2 a 4 modelos e reúne achados, divergências, falhas e uso observado |
 | `antigravity_roles` | Lista os papéis nativos e personalizados configurados |
+| `antigravity_get_sandbox_policy` | Lê a política global normalizada, seus limites e o hash atual |
+| `antigravity_set_sandbox_policy` | Solicita ao cliente MCP a confirmação humana para substituir a política global com comparação do hash anterior |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |
 | `antigravity_record_test` | Registra comando, saída e exit code relatados pelo cliente, vinculados ao hash |
-| `antigravity_test` | Executa testes pelo terminal do agy com sandbox nativo e captura recibos reais |
+| `antigravity_test` | Executa o comando exato com a seleção de sandbox do chamador e captura evidência do executor escolhido |
 | `antigravity_verify` | Confere critérios da tarefa e evidências de revisão contra arquivos reais |
 | `antigravity_read_patch` | Lê o patch por arquivo ou em trechos vinculados ao hash completo |
 | `antigravity_read_result` | Lê o JSON final do CLI em trechos com hash de conteúdo |
@@ -176,6 +206,16 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 
 `antigravity_run` recebe `prompt`, `workingDirectory` absoluto na raiz de um repositório Git e, opcionalmente, `model`, `timeoutSeconds`, `mode` e `includePaths` (arquivos ou pastas relativos à raiz). Sem `includePaths`, copia todos os arquivos rastreados e não rastreados que **não** correspondam a `.gitignore`, `.git/info/exclude` ou às outras regras de ignore do Git. O filtro também exclui arquivos rastreados que passaram a ser ignorados. `includePaths` apenas reduz essa seleção; não permite incluir arquivos ignorados. Links simbólicos e caminhos fora da raiz são recusados. Consulte `antigravity_list_models` antes de selecionar um modelo.
 
+### Política de sandbox dos testes
+
+`antigravity_get_sandbox_policy` devolve a política global normalizada e seu `sha256` para os testes Windows LPAC. Ela é o limite máximo para `readRoots`, `writeRoots`, `network`, `childProcesses` e `maxOutputChars`. A configuração inicial não concede raízes externas, desativa rede, permite processos filhos e limita a saída a 4.000 caracteres.
+
+O agente que chama o MCP, seja o Codex ou outro cliente, escolhe em cada `antigravity_test` Windows `sandbox: { readPaths, writePaths, network, childProcesses, maxOutputChars }` dentro desse limite. O bridge recusa caminhos que ultrapassem as raízes aprovadas ou que coincidam com a origem, credenciais, armazenamento do bridge, temporários controlados, links, aliases ou outros caminhos protegidos. A seleção fica vinculada à evidência do teste e ao hash da política usado. No caminho legado `agy`, uma seleção explícita não é aceita; sem seleção, ele conserva o comportamento anterior.
+
+Para ampliar ou reduzir o limite global, leia antes a política e chame `antigravity_set_sandbox_policy` com seu hash atual e a proposta. O cliente deve apresentar o formulário que mostra os limites anteriores e propostos; só uma confirmação humana permite a mudança. A comparação e gravação evitam substituir uma política que mudou enquanto o formulário estava aberto. A pessoa usuária autoriza os limites globais; o agente que chama o MCP escolhe apenas concessões menores por teste dentro deles; o Gemini delegado via `agy` não pode escolher, autorizar nem alterar concessões. Alterações confirmadas afetam testes novos e os que ainda estiverem na fila; elas não revogam promessas de permissões de trabalhos ativos.
+
+Por exemplo, um pedido de leitura e escrita deve usar raízes específicas que uma pessoa já tenha conferido, como `"<raiz-de-leitura-aprovada>"` e `"<raiz-de-escrita-aprovada>"`; não use um disco inteiro nem presuma caminhos do computador de outra pessoa. Primeiro confirme os limites no formulário e só então selecione subconjuntos deles para o teste.
+
 Para revisão, diagnóstico ou segunda opinião, passe `mode: "read-only"`. O bridge exige suporte a `agy --mode plan`, confere ao final que nenhum arquivo foi criado, modificado ou removido (inclusive arquivos novos ignorados pelo Git) e recusa integração dessas tarefas. Esse modo é uma restrição do CLI com verificação posterior, sem garantia de bloqueio físico de escrita. O padrão `mode: "write"` preserva o fluxo de implementação na cópia. Uma sessão retomada mantém seu modo original.
 
 Fluxo típico:
@@ -184,7 +224,7 @@ Fluxo típico:
 2. Liste os arquivos elegíveis com `antigravity_list_project_files`, selecione `includePaths` quando necessário e defina `acceptanceCriteria` cobrindo os requisitos antes de iniciar a implementação com `antigravity_run`. Guarde o `taskId`.
 3. Acompanhe com `antigravity_wait`, preservando `nextCursor` e repetindo a espera quando `ready` for falso. `timedOut` encerra apenas a espera. Use `antigravity_events` para consultar os eventos detalhados.
 4. Após o término, confira o status e os erros em `antigravity_result` com `includeResult: false`. Leia o resultado com `antigravity_read_result` e o patch com `antigravity_preview` (`includePatch: false`) e `antigravity_read_patch`. Se houver falha, confira a causa antes de retomar; `completed` não comprova os requisitos.
-5. Execute os testes pertinentes com `antigravity_test`, usando o hash da prévia. A ferramenta devolve outro `taskId`: acompanhe e revise esse ID, confira recibos, exit codes e evidências desatualizadas e obtenha a prévia atual novamente. `antigravity_record_test` registra testes executados pelo cliente, como relatos; não substitui os recibos observados do executor.
+5. No Windows com o executor LPAC, consulte a política de sandbox e execute os testes pertinentes com `antigravity_test`, usando o hash da prévia e somente uma seleção já aprovada. Nos demais sistemas, ou com `BRIDGE_TEST_EXECUTOR=agy`, execute o teste sem seletor `sandbox`, pois a seleção explícita é recusada no caminho legado. A ferramenta devolve outro `taskId`: acompanhe e revise esse ID, confira a origem da evidência, exit codes e evidências desatualizadas e obtenha a prévia atual novamente. `antigravity_record_test` registra testes executados pelo cliente, como relatos; não substitui a evidência observada do executor.
 6. Confira os arquivos reais contra cada critério e envie evidências de revisão a `antigravity_verify` com o hash atual. Com verificação aprovada e atual, confira também se os testes observados continuam válidos e chame `antigravity_integrate` na tarefa de implementação mais recente dessa cópia para solicitar a confirmação humana. Alterações no patch, nas evidências ou nos arquivos afetados do original exigem nova conferência.
 7. Informe o uso observado com `antigravity_usage` e, quando o trabalho puder ser removido, descarte a cópia com `antigravity_discard`.
 
@@ -248,7 +288,7 @@ Quando o CLI anuncia `--add-dir` e `--new-project`, o bridge declara a cópia co
 
 O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias permanecem para revisão por 7 dias após a última tarefa finalizada. O servidor limpa cópias expiradas na inicialização e a cada minuto; `antigravity_cleanup` permite antecipar a verificação. Use `antigravity_discard` para remover imediatamente uma cópia pelo MCP. Tarefas retomadas compartilham a mesma cópia; todas perdem acesso após descarte. Cópias em uso são preservadas. A expulsão do último registro pelo limite de retenção também remove sua cópia. `isolateWorktree: true` é aceito apenas por compatibilidade e usa o mesmo fluxo de cópia; `false` é recusado.
 
-`antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Registros de `antigravity_record_test` têm `source: "client-reported"`: são relatos cujo comando o bridge não executou. Registros capturados por `antigravity_test` têm `source: "agy-tool"` e incluem o recibo observado do terminal. Cada registro leva hash, data, exit code e até 4.000 caracteres de saída. Resultados antigos recebem `stale: true` quando a evidência já não corresponde aos arquivos atuais. Falhas são preservadas e devem ser apresentadas na revisão.
+`antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Registros de `antigravity_record_test` têm `source: "client-reported"`: são relatos cujo comando o bridge não executou. Registros capturados por `antigravity_test` indicam o executor que os observou. Cada registro leva hash, data, exit code e saída limitada pela seleção do teste; o padrão é 4.000 caracteres. Resultados antigos recebem `stale: true` quando a evidência já não corresponde aos arquivos atuais. Falhas são preservadas e devem ser apresentadas na revisão.
 
 A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
 
@@ -256,26 +296,31 @@ A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medid
 
 Chame `antigravity_test` com `taskId`, `expectedSha256` e `command: { executable, args }`. A ferramenta inicia uma continuação na mesma cópia e devolve outro `taskId`. Acompanhe esse ID pelos eventos e pelo resultado; revise e integre a tarefa mais recente. `retries` vale 0 por padrão e aceita até 3 tentativas de correção adicionais, solicitadas explicitamente. `timeoutSeconds` vale 600 por padrão.
 
-O executor usa `agy --sandbox` e a ferramenta nativa `run_command`. Não exige Docker nem executa o comando diretamente no host como alternativa. Um runner temporário, conferido por SHA-256 antes da execução, captura saída, exit code e fingerprints dos arquivos elegíveis antes/depois do teste. O bridge aceita o recibo apenas no evento da chamada exata do terminal; uma mensagem do Gemini dizendo que o teste passou não conta. Os registros têm `source: "agy-tool"` e `sandbox: "agy-native-requested"`. A saída é limitada a 4.000 caracteres, com indicação de truncamento.
+No Windows, o bridge cria um processo AppContainer/LPAC por execução e executa o comando diretamente nessa fronteira. O perfil, o SID e as ACLs de acesso são exclusivos da execução; as concessões exatas são removidas ao final. A limpeza e a recuperação de uma execução interrompida são verificadas em processos novos. Uma queda de energia não remove essas ACLs instantaneamente: a recuperação seguinte precisa concluí-la, e uma falha de limpeza impede que o teste seja considerado verificado e bloqueia novo uso daquela concessão.
 
-Quando não há recibo válido e a causa não foi identificada, o resultado é `TEST_EXECUTION_UNVERIFIED`. Os diagnósticos específicos abaixo preservam falhas conhecidas do runtime. Um comando não zero produz `TEST_FAILED`; mudanças nos arquivos durante/depois do comando produzem `TEST_CHANGED_PATCH`. Testes observados precisam continuar atuais para a integração; um relato manual não substitui um teste observado falho. Após `TEST_FAILED`, é possível retomar a conversa para corrigir ou executar os testes novamente. A orientação de correção mantém o comando original e proíbe enfraquecer os testes; tentativas observadas além do limite encerram a tarefa.
+O executor Windows não instala Docker nem pede elevação UAC. Ele exige o compilador .NET Framework já existente no Windows para criar o controlador. Cada execução é isolada em um perfil novo; a cobertura atual inclui recuperação de processo e nova execução, mas não afirma uma reinicialização física do computador.
 
-| Código | Evidência e ação |
-| --- | --- |
-| `AGY_SANDBOX_ACCESS_DENIED` | O runtime relatou falha ao conceder acesso ao alvo. Confira o caminho e as ACLs; esse erro sozinho não demonstra que o setup inicial está ausente. |
-| `AGY_SANDBOX_SETUP_REQUIRED` | A solicitação administrativa de setup não foi concluída, inclusive quando `denied_actions` informa `escalate_admin`. Confira a disponibilidade do broker do runtime atual. |
-| `AGY_SANDBOX_BYPASS_DENIED` | O runtime relatou uma recusa de execução fora do sandbox. Preserve essa recusa. |
-| `AGY_SANDBOX_BYPASS_REQUESTED` | A chamada declarou bypass ou um valor incompatível para essa opção. Seu recibo não verifica execução isolada. |
+Para expor os diretórios próprios da execução, o controlador cria aliases temporários em dois níveis para a cópia, o runtime preparado e o scratch: um nome DOS e uma letra entre `D:` e `Z:` para cada diretório. São necessárias três letras livres. O controlador confere a identidade e o destino de cada mapeamento antes, durante e depois do comando e os remove na limpeza, inclusive ao recuperar uma execução interrompida. Esses nomes DOS ficam visíveis apenas no contexto de logon atual; a reserva por letra é coordenada por logon e letra. Eles não concedem acesso à raiz do volume, não criam um mount persistente e não pedem UAC.
+
+Fora do Windows, ou com `BRIDGE_TEST_EXECUTOR=agy`, o bridge mantém o caminho legado: `agy --sandbox` e `run_command`, com recibo vinculado à chamada exata. Não há fallback para executar diretamente no host. Em todos os casos, um comando não zero produz `TEST_FAILED`, mudanças nos arquivos durante/depois do comando produzem `TEST_CHANGED_PATCH`, e a evidência precisa continuar atual para integração.
+
+No Windows, a evidência tem `source: "windows-executor"` e `sandbox: "windows-lpac"`; fora dele, tem `source: "agy-tool"` e `sandbox: "agy-native-requested"`. A evidência inclui seleção de sandbox, hash da política, saída limitada e fingerprints antes/depois. A execução local conhecida registra zero tokens de modelo. Se uma correção pelo `agy` for solicitada após uma falha, seus contadores continuam sendo somente os devolvidos pelo CLI; campos ausentes permanecem `null`.
+
+Saída ou texto do modelo, inclusive uma afirmação de que o comando passou, não é recibo de teste. Use somente a evidência observada pelo executor escolhido, com seu exit code e os campos de sandbox correspondentes.
 
 No Windows, o bridge preenche `PATHEXT` ausente no subprocesso com `.COM;.EXE;.BAT;.CMD`, para que o PowerShell encontre os executáveis instalados. Valores definidos pelo cliente, inclusive um valor vazio, são preservados. O SDK pode omitir essa variável no ambiente herdado, fazendo `node` parecer ausente mesmo quando o arquivo está instalado. A correção vale para as sondagens e para todas as tarefas, sem configuração por projeto.
 
-No Windows, use executáveis nativos como `node.exe` e `python.exe`; para npm, use `npm.cmd`. Arquivos `.cmd`/`.bat` aceitam argumentos comuns, mas metacaracteres de shell são recusados. A execução depende das permissões do sandbox nativo do CLI. Uma restrição de terminal não demonstra isolamento de todas as ferramentas do agente nem permite afirmar proteção completa do sistema de arquivos. Consulte a [configuração oficial do sandbox](https://www.antigravity.google/docs/sandbox/) e os [eventos de ferramentas no modo headless](https://www.antigravity.google/docs/cli/headless/#tool-calls-in-the-stream).
+No Windows, use um `.exe` nativo ou `npm`/`npm.cmd`. Para npm, o bridge valida o launcher instalado, seu pacote e `npm-cli.js`, e chama o `node.exe` preparado com os argumentos literais. Lotes `.cmd`/`.bat` arbitrários e outros interpretadores não são suportados pelo executor. O staging rejeita caminhos remotos, dispositivos, streams alternativos e NUL; só o runtime validado é copiado sob limites de tamanho. Arquivos preparados pelo usuário não podem usar links; o `cmd.exe` interno deriva de um caminho fixo do Windows.
 
-Na configuração inicial do sandbox Windows, o CLI pode pedir uma elevação UAC. Quando o runtime indicar setup administrativo pendente, abra `agy --sandbox` em uma pasta descartável e, no prompt do próprio Antigravity, peça `Execute node.exe --version`. O cartão de configuração apresenta `Yes, elevate`; confira o aplicativo solicitante e confirme o diálogo do Windows. Uma tela de sandbox bypass é uma solicitação distinta. Depois, verifique o executor pelo recibo de `antigravity_test`. Um comando executado no PowerShell após sair do agy e `antigravity_health.capabilities.sandbox: true` não comprovam a preparação do sandbox. Falhas de ACL precisam de diagnóstico do alvo; repetir o setup para cada projeto não é uma correção demonstrada.
+#### Compatibilidade de subprocessos Node no Windows LPAC
 
-A versão 0.4.1 foi validada com execução real no Windows após essa configuração: o recibo capturou exit code 0, a origem permaneceu intacta e um marcador artificial fora da cópia teve leitura e escrita negadas. O snapshot Git do runner fica temporariamente dentro da cópia montada no sandbox, excluído do fingerprint e removido ao terminar. Esse teste comprova os cenários observados; não atesta todas as ferramentas do agente nem todas as fronteiras do sistema de arquivos. A suíte padrão continua usando um CLI simulado.
+No Node 24.14.1 com libuv 1.51, `child_process.spawnSync` com pipes padrão de stdin/stdout/stderr cria endpoints globais `\\?\pipe\uv\...`. O LPAC recusa o `CreateNamedPipe` global com erro 5, enquanto endpoints equivalentes `LOCAL\...` abrem. A captura de stdout/stderr do processo pai está corrigida; no Node 24.14.1 do sistema, esse caso com pipes padrão ainda expira com exit code 124.
 
-No `agy` 1.2.16, os testes reais passaram enquanto o broker administrativo da sessão de configuração estava ativo. Depois de encerrar essa sessão e seu filho, uma nova execução headless pediu `escalate_admin` e terminou sem recibo. Portanto, a confirmação anterior de setup não comprova disponibilidade após o encerramento do processo que mantinha o broker. O bridge ainda não gerencia esse ciclo de vida; esse limite precisa ser resolvido antes de afirmar funcionamento independente no Windows.
+Testes de filhos com `stdio: "inherit"` e do ciclo real do npm passaram, mas não demonstram compatibilidade geral de subprocessos porque não exercitam os pipes capturados por padrão. Não substitua os pipes por stdio herdado para apresentar essa falha como resolvida.
+
+O [PR 5181 do libuv](https://github.com/libuv/libuv/pull/5181/files) corrige os nomes de pipe para AppContainer e a correção entrou no [libuv 1.53](https://github.com/libuv/libuv/releases/tag/v1.53.0). O runtime portátil Node 24.21.0 LPAC1 para Windows x64, com libuv base 1.52.1 e somente esse PR aplicado, já está publicado em Release imutável e disponível para preparação explícita. Esse build passou pela regressão LPAC de `spawnSync` com pipes padrão capturados (1 teste) e pelos testes de isolamento e ciclo de vida (22 testes, sem falhas nem skips). A validação se aplica a esse build fixado.
+
+`network: true` concede somente as capacidades Windows `internetClient` e `privateNetworkClientServer`, que permitem tráfego de Internet e LAN privada bidirecional. Não há capacidades arbitrárias, exceção para localhost, alteração de firewall nem acesso de rede quando a seleção não o permite. `childProcesses` e `maxOutputChars` também ficam limitados pela política aprovada.
 
 Para testar com a conta real em um projeto descartável, execute `npm run build` e `node tests/native-integration.mjs`. Esse teste usa a conta do agy e verifica a captura de uma execução real; a suíte padrão usa o CLI simulado e não consome quota.
 
@@ -285,6 +330,9 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | --- | --- | --- |
 | `BRIDGE_CUSTOM_ROLES` | `[]` | Até 20 papéis em JSON com nome, base e instruções |
 | `BRIDGE_TOOL_PROFILE` | `full` | Catálogo: `full`, `query`, `review` ou `implementation` |
+| `BRIDGE_TEST_EXECUTOR` | `windows-lpac` no Windows; `agy` nos demais sistemas | Executor de `antigravity_test`; `agy` força o caminho legado no Windows |
+| `BRIDGE_WINDOWS_NODE_RUNTIME` | `system` | No Windows, usa `system` ou o runtime portátil previamente preparado; o plugin distribuído define `portable` |
+| `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` | `~/.antigravity-mcp-bridge/windows-runtimes` | Diretório confiável opcional, fora dos projetos, para compartilhar o cache portátil entre diretórios de estado; não é entrada MCP |
 | `AGY_PATH` | `agy` | Caminho do CLI oficial |
 | `MAX_CONCURRENT_TASKS` | `1` | Processos simultâneos |
 | `MAX_QUEUED_TASKS` | `20` | Tarefas aguardando |
@@ -300,7 +348,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `MAX_PROMPT_CHARS` | `50000` | Tamanho máximo do prompt enviado, incluindo critérios, contexto transferido e instruções do bridge e do papel |
 | `FORBIDDEN_DIRECTORIES` | vazio | Diretórios bloqueados, separados por `;` no Windows |
 
-Entradas e diretórios são validados. O processo é iniciado com `spawn` sem shell e exige `--sandbox`; não passa `--dangerously-skip-permissions`. Não inclua credenciais ou documentos privados nos prompts. O sandbox do CLI restringe comandos de terminal, mas não constitui garantia de isolamento completo do sistema de arquivos no Windows. Mantenha arquivos sensíveis fora da cópia por regras de ignore e selecione apenas os caminhos necessários com `includePaths`. Consulte a [documentação do sandbox](https://antigravity.google/docs/sandbox/) e [do modo headless](https://www.antigravity.google/docs/cli/headless/).
+Entradas e diretórios são validados. Tarefas delegadas usam `spawn` sem shell e exigem `--sandbox`; não passam `--dangerously-skip-permissions`. Testes Windows usam o executor LPAC do bridge por padrão. Não inclua credenciais ou documentos privados nos prompts. Mantenha arquivos sensíveis fora da cópia por regras de ignore e selecione apenas os caminhos necessários com `includePaths`. Consulte a [documentação do sandbox](https://antigravity.google/docs/sandbox/) e [do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
 Erros comuns incluem `AGY_NOT_FOUND`, `AGY_AUTH_REQUIRED`, `MODEL_NOT_AVAILABLE`, `INVALID_WORKING_DIRECTORY`, `QUEUE_FULL` e `AGY_PROCESS_FAILED`. Se houver `AGY_AUTH_REQUIRED`, faça login no `agy` interativo. Se as ferramentas não aparecerem no Codex, confirme a instalação com `codex plugin list --json` e abra uma conversa nova.
 
@@ -314,7 +362,7 @@ npm.cmd run build:plugin
 npm.cmd run test:package
 ```
 
-`npm test` usa um mock do `agy` e não consome quota. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
+`npm test` usa um mock do `agy` e não consome quota. `npm run test:package` também consulta o status do runtime pelo pacote empacotado; em plataformas fora do Windows ele deve informar `supported: false` sem preparar nada. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
 
 ## Licença e políticas
 

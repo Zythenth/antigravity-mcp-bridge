@@ -5,7 +5,21 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy } from '../src/isolation.js';
-import { prepareNativeTest, readNativeReceipt } from '../src/native-tests.js';
+import { prepareNativeTest, readNativeReceipt, type NativeTestRequest, type WindowsNativeTestRequest } from '../src/native-tests.js';
+
+const legacyNativeRequest: NativeTestRequest = {
+  executable: process.execPath, args: ['-e', 'process.exit(0)'], maxAttempts: 1, expectedSha256: 'a'.repeat(64),
+};
+const windowsNativeRequest: WindowsNativeTestRequest = {
+  ...legacyNativeRequest, backend: 'windows-lpac', policySha256: 'b'.repeat(64),
+  sandbox: { readPaths: [], writePaths: [], network: false, childProcesses: false, maxOutputChars: 256 },
+};
+
+test('legacy agy requests remain distinct from frozen Windows requests', () => {
+  assert.equal('backend' in legacyNativeRequest, false);
+  assert.equal(windowsNativeRequest.backend, 'windows-lpac');
+  assert.equal(windowsNativeRequest.sandbox.maxOutputChars, 256);
+});
 
 test('native runner works when the ambient temp directory is unavailable and keeps snapshot files out of the fingerprint', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-native-temp-test-'));

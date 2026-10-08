@@ -19,6 +19,18 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
       - run: npm run build:plugin
+      - if: runner.os == 'Windows'
+        run: node plugin/server.mjs --prepare-windows-runtime
+        env:
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+      - if: runner.os == 'Windows'
+        run: npm test
+        env:
+          BRIDGE_WINDOWS_NODE_RUNTIME: portable
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+      - if: runner.os != 'Windows'
+        run: npm test
       - run: npm run test:package
+        env:
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache

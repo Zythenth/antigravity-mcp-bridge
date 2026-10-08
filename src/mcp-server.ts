@@ -10,6 +10,7 @@ import { outputSchemas } from './output-schemas.js';
 import { toolEnabled } from './tool-profiles.js';
 import { decisionsSchema } from './handoff.js';
 import { comparisonModelsSchema } from './comparison.js';
+import { sandboxPolicySchema, sandboxSelectionInputSchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -29,9 +30,21 @@ function safe<T>(operation: () => Promise<T> | T) {
   };
 }
 
+function sandboxPolicyConfirmation(previous: SandboxPolicySnapshot, proposed: SandboxPolicySnapshot): string {
+  const describe = (snapshot: SandboxPolicySnapshot) => JSON.stringify({ version: snapshot.version, sha256: snapshot.sha256,
+    readRoots: snapshot.policy.readRoots, writeRoots: snapshot.policy.writeRoots, network: snapshot.policy.network,
+    childProcesses: snapshot.policy.childProcesses, maxOutputChars: snapshot.policy.maxOutputChars });
+  return 'Atualizar o teto global do sandbox para testes Windows LPAC?\n' +
+    'Política anterior (versão e digest): ' + describe(previous) + '\n' +
+    'Proposta normalizada (versão e digest): ' + describe(proposed) + '\n' +
+    'A confirmação humana autoriza apenas este teto global; o agente que chama o MCP seleciona concessões menores por teste e o Gemini delegado não pode autorizá-las nem alterá-las.\n' +
+    'Rede habilitada concede internet e conexões de LAN de entrada e saída ao processo LPAC. localhost continua sujeito às restrições do sistema operacional. ' +
+    'Processos-filho e o limite de saída acima serão aplicados como teto. Confirme apenas os caminhos canônicos, capacidades e limite de saída revisados.';
+}
+
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
-  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.5.2' }, {
-    instructions: 'Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration.',
+  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.6.0' }, {
+    instructions: 'Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -41,7 +54,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_health,
     title: 'Check Antigravity CLI', description: 'Inspect installed agy version, authentication and supported capabilities.',
     inputSchema: {}, annotations: readOnly,
-  }, safe(async () => ({ ...await adapter.health(), toolProfile: tasks.toolProfile,
+  }, safe(async () => ({ ...await adapter.health(), toolProfile: tasks.toolProfile, windowsRuntime: await tasks.windowsRuntimeStatus(),
     bridgeLimitations: {
       interactiveReplies: { available: false, reason: 'The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures.' },
       preflightTokenCount: { available: false, exactTokens: null, reason: 'No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts.' },
@@ -60,6 +73,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: {}, annotations: readOnly,
   }, safe(() => ({ model: tasks.getModel() ?? null })));
 
+  if (toolEnabled(tasks.toolProfile, 'antigravity_get_sandbox_policy')) server.registerTool('antigravity_get_sandbox_policy', {
+    outputSchema: outputSchemas.antigravity_get_sandbox_policy,
+    title: 'Get Windows test sandbox policy', description: 'Read the normalized global ceiling for bridge-owned Windows LPAC test selections.',
+    inputSchema: {}, annotations: readOnly,
+  }, safe(() => tasks.getSandboxPolicy()));
+
   if (toolEnabled(tasks.toolProfile, 'antigravity_usage')) server.registerTool('antigravity_usage', {
     outputSchema: outputSchemas.antigravity_usage,
     title: 'Read observed token usage', description: 'Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.',
@@ -77,6 +96,22 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     title: 'Select Antigravity model', description: 'Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.',
     inputSchema: { model: z.string().min(1).max(128).nullable() }, annotations: { ...readOnly, readOnlyHint: false },
   }, async ({ model }) => safe(async () => ({ model: await tasks.setModel(model) }))());
+
+  if (tasks.toolProfile === 'full' || tasks.toolProfile === 'implementation') server.registerTool('antigravity_set_sandbox_policy', {
+    outputSchema: outputSchemas.antigravity_set_sandbox_policy,
+    title: 'Set Windows test sandbox policy', description: 'Propose a normalized global ceiling for bridge-owned Windows LPAC tests. A human must confirm the exact prior and proposed digests through an MCP form.',
+    inputSchema: { policy: sandboxPolicySchema, expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
+  }, async ({ policy, expectedSha256 }) => safe(() => tasks.setSandboxPolicy(policy, expectedSha256, async (previous, proposed) => {
+    if (!server.server.getClientCapabilities()?.elicitation?.form) {
+      throw new BridgeError('APPROVAL_UNAVAILABLE', 'The MCP client must support form elicitation to update the sandbox policy');
+    }
+    const answer = await server.server.elicitInput({ mode: 'form', message: sandboxPolicyConfirmation(previous, proposed),
+      requestedSchema: { type: 'object', properties: { confirm: { type: 'boolean', title: 'Confirmo esta política de sandbox', default: false } }, required: ['confirm'] },
+    }, { timeout: 300000 }).catch(() => {
+      throw new BridgeError('APPROVAL_FAILED', 'Sandbox policy confirmation failed or timed out; no changes were applied');
+    });
+    return answer.action === 'accept' && answer.content?.confirm === true;
+  }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_roles')) server.registerTool('antigravity_roles', {
     outputSchema: outputSchemas.antigravity_roles, title: 'List configured task roles',
@@ -167,10 +202,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_test')) server.registerTool('antigravity_test', {
     outputSchema: outputSchemas.antigravity_test,
-    title: 'Run tests in the native agy sandbox', description: 'Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.',
+    title: 'Run tests in the bridge sandbox', description: 'Start an asynchronous exact-command test. Windows defaults to the bridge-owned LPAC executor; an explicit legacy agy backend keeps its existing native sandbox flow. Within a human-authorized global ceiling, the MCP caller chooses the narrower test selection; delegated Gemini cannot authorize or change it. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. Use the returned taskId for events, result, review and integration.',
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), command: testCommandSchema,
-      retries: z.number().int().min(0).max(3).optional(), timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
-  }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
+      retries: z.number().int().min(0).max(3).optional(), timeoutSeconds: z.number().int().min(1).max(86400).optional(),
+      sandbox: sandboxSelectionInputSchema.optional() }, annotations: action,
+  }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds, sandbox }) => safe(async () =>
+    ({ task: await tasks.startTests(taskId, expectedSha256, command, retries, timeoutSeconds, sandbox) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_record_test')) server.registerTool('antigravity_record_test', {
     outputSchema: outputSchemas.antigravity_record_test,

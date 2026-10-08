@@ -1,6 +1,6 @@
 {
   "name": "antigravity-mcp-bridge",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Local MCP bridge for the official Antigravity CLI, with isolated project copies and reviewed integration.",
   "repository": { "type": "git", "url": "git+https://github.com/Zythenth/antigravity-mcp-bridge.git" },
   "homepage": "https://github.com/Zythenth/antigravity-mcp-bridge#readme",
@@ -24,7 +24,7 @@
     "build:plugin": "npm run build && node scripts/build-plugin.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json",
-    "test": "npm run build && node --test dist/tests/*.test.js",
+    "test": "npm run build && node --test --test-concurrency=1 dist/tests/*.test.js",
     "test:integration": "node tests/real-integration.mjs",
     "test:package": "node tests/package-integration.mjs",
     "prepack": "npm run build:plugin",

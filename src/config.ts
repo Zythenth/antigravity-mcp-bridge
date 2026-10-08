@@ -2,6 +2,9 @@ import path from 'node:path';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
 import { customRolesSchema, type RoleDefinition } from './roles.js';
+import type { WindowsNodeRuntime } from './portable-node.js';
+
+export type TestExecutor = 'agy' | 'windows-lpac';
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
@@ -27,6 +30,38 @@ export interface Config extends ProjectLimits {
   copyRetentionHours: number;
   stateDirectory: string;
   forbiddenDirectories: string[];
+  testExecutor: TestExecutor;
+  windowsNodeRuntime: WindowsNodeRuntime;
+  windowsNodeCacheDirectory: string;
+}
+
+function testExecutor(value: string | undefined): TestExecutor {
+  if (value === undefined) return process.platform === 'win32' ? 'windows-lpac' : 'agy';
+  if (value === 'agy' || value === 'windows-lpac') return value;
+  throw new Error('BRIDGE_TEST_EXECUTOR must be agy or windows-lpac');
+}
+
+function windowsNodeRuntime(value: string | undefined): WindowsNodeRuntime {
+  if (value === undefined) return 'system';
+  if (value === 'system' || value === 'portable') return value;
+  throw new Error('BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable');
+}
+
+function windowsNodeCacheDirectory(value: string | undefined): string {
+  const directory = value ?? path.join(os.homedir(), '.antigravity-mcp-bridge', 'windows-runtimes');
+  if (value !== undefined) {
+    if (process.platform === 'win32') {
+      if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(':') ||
+          value.slice(2).split(/[\\/]+/).filter(Boolean).some(part => part === '.' || part === '..')) {
+        throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path');
+      }
+    } else if (!path.isAbsolute(value)) {
+      throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute');
+    }
+  }
+  const resolved = path.resolve(directory);
+  if (resolved === path.parse(resolved).root) throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root');
+  return resolved;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -51,5 +86,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1000000),
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || '').split(path.delimiter).filter(Boolean).map(p => path.resolve(p)),
+    testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
+    windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
+    windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
   };
 }

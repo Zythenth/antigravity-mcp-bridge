@@ -415,11 +415,11 @@ var require_codegen = __commonJS({
         const rhs = this.rhs === void 0 ? "" : ` = ${this.rhs}`;
         return `${varKind} ${this.name}${rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants4) {
         if (!names[this.name.str])
           return;
         if (this.rhs)
-          this.rhs = optimizeExpr(this.rhs, names, constants2);
+          this.rhs = optimizeExpr(this.rhs, names, constants4);
         return this;
       }
       get names() {
@@ -436,10 +436,10 @@ var require_codegen = __commonJS({
       render({ _n }) {
         return `${this.lhs} = ${this.rhs};` + _n;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants4) {
         if (this.lhs instanceof code_1.Name && !names[this.lhs.str] && !this.sideEffects)
           return;
-        this.rhs = optimizeExpr(this.rhs, names, constants2);
+        this.rhs = optimizeExpr(this.rhs, names, constants4);
         return this;
       }
       get names() {
@@ -500,8 +500,8 @@ var require_codegen = __commonJS({
       optimizeNodes() {
         return `${this.code}` ? this : void 0;
       }
-      optimizeNames(names, constants2) {
-        this.code = optimizeExpr(this.code, names, constants2);
+      optimizeNames(names, constants4) {
+        this.code = optimizeExpr(this.code, names, constants4);
         return this;
       }
       get names() {
@@ -530,12 +530,12 @@ var require_codegen = __commonJS({
         }
         return nodes.length > 0 ? this : void 0;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants4) {
         const { nodes } = this;
         let i = nodes.length;
         while (i--) {
           const n = nodes[i];
-          if (n.optimizeNames(names, constants2))
+          if (n.optimizeNames(names, constants4))
             continue;
           subtractNames(names, n.names);
           nodes.splice(i, 1);
@@ -588,12 +588,12 @@ var require_codegen = __commonJS({
           return void 0;
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants4) {
         var _a3;
-        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-        if (!(super.optimizeNames(names, constants2) || this.else))
+        this.else = (_a3 = this.else) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants4);
+        if (!(super.optimizeNames(names, constants4) || this.else))
           return;
-        this.condition = optimizeExpr(this.condition, names, constants2);
+        this.condition = optimizeExpr(this.condition, names, constants4);
         return this;
       }
       get names() {
@@ -616,10 +616,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.iteration})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants4) {
+        if (!super.optimizeNames(names, constants4))
           return;
-        this.iteration = optimizeExpr(this.iteration, names, constants2);
+        this.iteration = optimizeExpr(this.iteration, names, constants4);
         return this;
       }
       get names() {
@@ -655,10 +655,10 @@ var require_codegen = __commonJS({
       render(opts) {
         return `for(${this.varKind} ${this.name} ${this.loop} ${this.iterable})` + super.render(opts);
       }
-      optimizeNames(names, constants2) {
-        if (!super.optimizeNames(names, constants2))
+      optimizeNames(names, constants4) {
+        if (!super.optimizeNames(names, constants4))
           return;
-        this.iterable = optimizeExpr(this.iterable, names, constants2);
+        this.iterable = optimizeExpr(this.iterable, names, constants4);
         return this;
       }
       get names() {
@@ -700,11 +700,11 @@ var require_codegen = __commonJS({
         (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNodes();
         return this;
       }
-      optimizeNames(names, constants2) {
+      optimizeNames(names, constants4) {
         var _a3, _b;
-        super.optimizeNames(names, constants2);
-        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants2);
-        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants2);
+        super.optimizeNames(names, constants4);
+        (_a3 = this.catch) === null || _a3 === void 0 ? void 0 : _a3.optimizeNames(names, constants4);
+        (_b = this.finally) === null || _b === void 0 ? void 0 : _b.optimizeNames(names, constants4);
         return this;
       }
       get names() {
@@ -1005,7 +1005,7 @@ var require_codegen = __commonJS({
     function addExprNames(names, from) {
       return from instanceof code_1._CodeOrName ? addNames(names, from.names) : names;
     }
-    function optimizeExpr(expr, names, constants2) {
+    function optimizeExpr(expr, names, constants4) {
       if (expr instanceof code_1.Name)
         return replaceName(expr);
       if (!canOptimize(expr))
@@ -1020,14 +1020,14 @@ var require_codegen = __commonJS({
         return items;
       }, []));
       function replaceName(n) {
-        const c = constants2[n.str];
+        const c = constants4[n.str];
         if (c === void 0 || names[n.str] !== 1)
           return n;
         delete names[n.str];
         return c;
       }
       function canOptimize(e) {
-        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants2[c.str] !== void 0);
+        return e instanceof code_1._Code && e._items.some((c) => c instanceof code_1.Name && names[c.str] === 1 && constants4[c.str] !== void 0);
       }
     }
     function subtractNames(names, from) {
@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path7) {
-      let input2 = path7;
+    function removeDotSegments(path11) {
+      let input2 = path11;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path7 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
+        const path11 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path11 && path11 !== "/" ? path11 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path7) {
-  if (!path7)
+function getElementAtPath(obj, path11) {
+  if (!path11)
     return obj;
-  return path7.reduce((acc, key) => acc?.[key], obj);
+  return path11.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path7, issues) {
+function prefixIssues(path11, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path7);
+    iss.path.unshift(path11);
     return iss;
   });
 }
@@ -8383,7 +8383,7 @@ function attachSchema(issues, start, inst) {
     (_a3 = issues[i]).schema ?? (_a3.schema = inst);
   }
 }
-function finalizeIssue(iss, ctx, config3) {
+function finalizeIssue(iss, ctx, config2) {
   var _a3;
   const traits = iss.inst?._zod?.traits;
   if (traits?.has("$ZodType")) {
@@ -8393,7 +8393,7 @@ function finalizeIssue(iss, ctx, config3) {
       iss.schema = iss.inst;
   }
   const schemaError = iss.schema !== iss.inst ? iss.schema?._zod.def?.error : void 0;
-  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config3.customError?.(iss)) ?? unwrapMessage(config3.localeError?.(iss)) ?? "Invalid input";
+  const message = iss.message ? iss.message : unwrapMessage(iss.inst?._zod.def?.error?.(iss)) ?? unwrapMessage(schemaError?.(iss)) ?? unwrapMessage(ctx?.error?.(iss)) ?? unwrapMessage(config2.customError?.(iss)) ?? unwrapMessage(config2.localeError?.(iss)) ?? "Invalid input";
   const full = {};
   for (const k of Object.keys(iss)) {
     if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__")
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path7 = []) => {
+  const processError = (error63, path11 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else {
-        const fullpath = [...path7, ...issue2.path];
+        const fullpath = [...path11, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8868,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path7 = []) => {
+  const processError = (error63, path11 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path7, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path7, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else {
-        const fullpath = [...path7, ...issue2.path];
+        const fullpath = [...path11, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8917,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path7 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path7) {
+  const path11 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path11) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path7 = ref.slice(1).split("/").filter(Boolean);
-  if (path7.length === 0) {
+  const path11 = ref.slice(1).split("/").filter(Boolean);
+  if (path11.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path7[0] === defsKey) {
-    const key = path7[1] === void 0 ? void 0 : decodeJSONPointerSegment(path7[1]);
+  if (path11[0] === defsKey) {
+    const key = path11[1] === void 0 ? void 0 : decodeJSONPointerSegment(path11[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28562,7 +28562,8 @@ var queryTools = /* @__PURE__ */ new Set([
   "antigravity_handoff",
   "antigravity_compare",
   "antigravity_comparison",
-  "antigravity_roles"
+  "antigravity_roles",
+  "antigravity_get_sandbox_policy"
 ]);
 var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
 function toolEnabled(profile, name) {
@@ -28584,6 +28585,36 @@ function positiveInteger(value, fallback, max) {
   return n;
 }
 var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
+function testExecutor(value) {
+  if (value === void 0)
+    return process.platform === "win32" ? "windows-lpac" : "agy";
+  if (value === "agy" || value === "windows-lpac")
+    return value;
+  throw new Error("BRIDGE_TEST_EXECUTOR must be agy or windows-lpac");
+}
+function windowsNodeRuntime(value) {
+  if (value === void 0)
+    return "system";
+  if (value === "system" || value === "portable")
+    return value;
+  throw new Error("BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable");
+}
+function windowsNodeCacheDirectory(value) {
+  const directory = value ?? path.join(os.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
+  if (value !== void 0) {
+    if (process.platform === "win32") {
+      if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
+        throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path");
+      }
+    } else if (!path.isAbsolute(value)) {
+      throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute");
+    }
+  }
+  const resolved = path.resolve(directory);
+  if (resolved === path.parse(resolved).root)
+    throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
+  return resolved;
+}
 function loadConfig(env = process.env) {
   const defaultModel = env.BRIDGE_DEFAULT_MODEL;
   if (defaultModel !== void 0 && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
@@ -28605,7 +28636,10 @@ function loadConfig(env = process.env) {
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path.delimiter).filter(Boolean).map((p) => path.resolve(p))
+    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path.delimiter).filter(Boolean).map((p) => path.resolve(p)),
+    testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
+    windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
+    windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY)
   };
 }
 
@@ -29078,7 +29112,7 @@ async function validateRoleReport(role, raw, copyDirectory) {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access, realpath as realpath2, stat as stat2 } from "node:fs/promises";
+import { access, lstat as lstat2, realpath as realpath2, stat as stat2 } from "node:fs/promises";
 import path3 from "node:path";
 function within(root, candidate) {
   const relative = path3.relative(root, candidate);
@@ -29104,6 +29138,32 @@ async function validateWorkingDirectory(input2, forbidden) {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", `workingDirectory is unavailable: ${input2}`);
   }
 }
+async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
+  let existing = path3.resolve(cacheDirectory);
+  const missing = [];
+  try {
+    for (; ; ) {
+      try {
+        await lstat2(existing);
+        break;
+      } catch (error62) {
+        const parent = path3.dirname(existing);
+        if (error62.code !== "ENOENT" || parent === existing)
+          throw error62;
+        missing.unshift(path3.basename(existing));
+        existing = parent;
+      }
+    }
+    const cache = path3.join(await realpath2(existing), ...missing);
+    if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
+      throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
+    }
+  } catch (error62) {
+    if (error62 instanceof BridgeError)
+      throw error62;
+    throw new BridgeError("INVALID_WORKING_DIRECTORY", "Could not resolve BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY before copying the project");
+  }
+}
 function validatePrompt(prompt, maxChars) {
   if (!prompt.trim() || prompt.length > maxChars || prompt.includes("\0")) {
     throw new BridgeError("INVALID_PROMPT", `prompt must contain 1 to ${maxChars} characters and no NUL`);
@@ -29124,15 +29184,15 @@ function taskPrompt(options, maxChars) {
 function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
-async function resolveExecutable(command) {
-  if (path4.isAbsolute(command))
-    return path4.resolve(command);
+async function resolveExecutable(command2) {
+  if (path4.isAbsolute(command2))
+    return path4.resolve(command2);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
   for (const directory of (process.env.PATH || "").split(path4.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path4.join(directory, command + extension);
+      const candidate = path4.join(directory, command2 + extension);
       try {
         await access2(candidate);
         return candidate;
@@ -29140,7 +29200,7 @@ async function resolveExecutable(command) {
       }
     }
   }
-  return command;
+  return command2;
 }
 var CliAdapter = class {
   config;
@@ -29148,8 +29208,8 @@ var CliAdapter = class {
   help = "";
   version;
   installed = false;
-  constructor(config3, prefixArgs = []) {
-    this.config = config3;
+  constructor(config2, prefixArgs = []) {
+    this.config = config2;
     this.prefixArgs = prefixArgs;
   }
   environment() {
@@ -29659,8 +29719,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path7, errorMaps, issueData } = params;
-  const fullPath = [...path7, ...issueData.path || []];
+  const { data, path: path11, errorMaps, issueData } = params;
+  const fullPath = [...path11, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -29775,11 +29835,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path7, key) {
+  constructor(parent, value, path11, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path7;
+    this._path = path11;
     this._key = key;
   }
   get path() {
@@ -33330,11 +33390,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path7) {
-  if (path7.length === 0) {
+function getDotPath(path11) {
+  if (path11.length === 0) {
     return "object root";
   }
-  return path7.reduce((acc, seg, index) => {
+  return path11.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -34830,9 +34890,9 @@ var Protocol = class {
       });
       this.setRequestHandler(ListTasksRequestSchema, async (request, extra) => {
         try {
-          const { tasks: tasks2, nextCursor } = await this._taskStore.listTasks(request.params?.cursor, extra.sessionId);
+          const { tasks, nextCursor } = await this._taskStore.listTasks(request.params?.cursor, extra.sessionId);
           return {
-            tasks: tasks2,
+            tasks,
             nextCursor,
             _meta: {}
           };
@@ -36455,13 +36515,13 @@ var ExperimentalMcpServerTasks = class {
   constructor(_mcpServer) {
     this._mcpServer = _mcpServer;
   }
-  registerToolTask(name, config3, handler) {
-    const execution = { taskSupport: "required", ...config3.execution };
+  registerToolTask(name, config2, handler) {
+    const execution = { taskSupport: "required", ...config2.execution };
     if (execution.taskSupport === "forbidden") {
       throw new Error(`Cannot register task-based tool '${name}' with taskSupport 'forbidden'. Use registerTool() instead.`);
     }
     const mcpServerInternal = this._mcpServer;
-    return mcpServerInternal._createRegisteredTool(name, config3.title, config3.description, config3.inputSchema, config3.outputSchema, config3.annotations, execution, config3._meta, handler);
+    return mcpServerInternal._createRegisteredTool(name, config2.title, config2.description, config2.inputSchema, config2.outputSchema, config2.annotations, execution, config2._meta, handler);
   }
 };
 
@@ -36890,12 +36950,12 @@ var McpServer = class {
       return registeredResourceTemplate;
     }
   }
-  registerResource(name, uriOrTemplate, config3, readCallback) {
+  registerResource(name, uriOrTemplate, config2, readCallback) {
     if (typeof uriOrTemplate === "string") {
       if (this._registeredResources[uriOrTemplate]) {
         throw new Error(`Resource ${uriOrTemplate} is already registered`);
       }
-      const registeredResource = this._createRegisteredResource(name, config3.title, uriOrTemplate, config3, readCallback);
+      const registeredResource = this._createRegisteredResource(name, config2.title, uriOrTemplate, config2, readCallback);
       this.setResourceRequestHandlers();
       this.sendResourceListChanged();
       return registeredResource;
@@ -36903,7 +36963,7 @@ var McpServer = class {
       if (this._registeredResourceTemplates[name]) {
         throw new Error(`Resource template ${name} is already registered`);
       }
-      const registeredResourceTemplate = this._createRegisteredResourceTemplate(name, config3.title, uriOrTemplate, config3, readCallback);
+      const registeredResourceTemplate = this._createRegisteredResourceTemplate(name, config2.title, uriOrTemplate, config2, readCallback);
       this.setResourceRequestHandlers();
       this.sendResourceListChanged();
       return registeredResourceTemplate;
@@ -37101,11 +37161,11 @@ var McpServer = class {
   /**
    * Registers a tool with a config object and callback.
    */
-  registerTool(name, config3, cb) {
+  registerTool(name, config2, cb) {
     if (this._registeredTools[name]) {
       throw new Error(`Tool ${name} is already registered`);
     }
-    const { title, description, inputSchema, outputSchema, annotations, _meta } = config3;
+    const { title, description, inputSchema, outputSchema, annotations, _meta } = config2;
     return this._createRegisteredTool(name, title, description, inputSchema, outputSchema, annotations, { taskSupport: "forbidden" }, _meta, cb);
   }
   prompt(name, ...rest) {
@@ -37129,11 +37189,11 @@ var McpServer = class {
   /**
    * Registers a prompt with a config object and callback.
    */
-  registerPrompt(name, config3, cb) {
+  registerPrompt(name, config2, cb) {
     if (this._registeredPrompts[name]) {
       throw new Error(`Prompt ${name} is already registered`);
     }
-    const { title, description, argsSchema } = config3;
+    const { title, description, argsSchema } = config2;
     const registeredPrompt = this._createRegisteredPrompt(name, title, description, argsSchema, cb);
     this.setPromptRequestHandlers();
     this.sendPromptListChanged();
@@ -37316,8 +37376,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path7, text } = criterion.check;
-      const content = await file3(path7);
+      const { kind, path: path11, text } = criterion.check;
+      const content = await file3(path11);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -37361,18 +37421,18 @@ var receiptSchema = external_exports.object({
 async function nativeRunner(settings) {
   const fs = __require("node:fs");
   const crypto = __require("node:crypto");
-  const paths = __require("node:path");
+  const paths2 = __require("node:path");
   const processes = __require("node:child_process");
   const receipt = { nonce: settings.nonce, exitCode: null, truncated: false };
   let gitDirectory;
   let output2 = "";
   try {
-    if (paths.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== "")
+    if (paths2.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== "")
       throw new Error("Test working directory differs from the copy");
-    gitDirectory = fs.mkdtempSync(paths.join(process.cwd(), ".agy-test-snapshot-"));
+    gitDirectory = fs.mkdtempSync(paths2.join(process.cwd(), ".agy-test-snapshot-"));
     processes.execFileSync("git", ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
-    fs.mkdirSync(paths.join(gitDirectory, "info"), { recursive: true });
-    fs.appendFileSync(paths.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n/" + paths.basename(gitDirectory) + "/\n");
+    fs.mkdirSync(paths2.join(gitDirectory, "info"), { recursive: true });
+    fs.appendFileSync(paths2.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n/" + paths2.basename(gitDirectory) + "/\n");
     async function fingerprint() {
       const list = processes.execFileSync("git", ["--git-dir=" + gitDirectory, "--work-tree=" + process.cwd(), "ls-files", "--others", "--exclude-standard", "-z"], { maxBuffer: 1e7 }).toString("utf8").split("\0").filter(Boolean).sort();
       if (list.length > settings.maxCopyFiles)
@@ -37384,7 +37444,7 @@ async function nativeRunner(settings) {
         for (const part of relative.split("/")) {
           if (!part || part === ".." || part === "." || part === ".git")
             throw new Error("Unsafe test path");
-          current = paths.join(current, part);
+          current = paths2.join(current, part);
           if (fs.lstatSync(current).isSymbolicLink())
             throw new Error("Test snapshot contains a link");
         }
@@ -37408,7 +37468,7 @@ async function nativeRunner(settings) {
         throw new Error("Batch arguments contain unsupported shell metacharacters; use a native executable");
       const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
       const script = "$ErrorActionPreference='Stop'; try { $global:LASTEXITCODE=0; & (Get-Command -Name " + quote(executable) + " -CommandType Application -ErrorAction Stop).Source " + args.map(quote).join(" ") + "; exit $LASTEXITCODE } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 127 }";
-      executable = paths.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      executable = paths2.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
       args = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
     }
     const child = processes.spawn(executable, args, { cwd: process.cwd(), windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
@@ -37434,7 +37494,7 @@ async function nativeRunner(settings) {
     receipt.error = error62 instanceof Error ? error62.message : String(error62);
   } finally {
     if (gitDirectory) {
-      if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(process.cwd()) || !paths.basename(gitDirectory).startsWith(".agy-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
+      if (paths2.dirname(paths2.resolve(gitDirectory)) !== paths2.resolve(process.cwd()) || !paths2.basename(gitDirectory).startsWith(".agy-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
         throw new Error("Unsafe snapshot cleanup path");
       fs.rmSync(gitDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
@@ -37542,6 +37602,16 @@ function normalizeUsage(raw) {
   }));
 }
 function taskTokenUsage(task2) {
+  if (task2.usageProvenance === "local-executor") {
+    return {
+      scope: "task",
+      source: "local-executor",
+      counters: { inputTokens: 0, outputTokens: 0, totalTokens: 0, thinkingTokens: 0, cacheReadTokens: 0 },
+      available: true,
+      partial: false,
+      warnings: []
+    };
+  }
   const raw = task2.result?.usage;
   const current = normalizeUsage(raw);
   const counters = { ...current };
@@ -37580,13 +37650,13 @@ function sum(rows) {
     return [key, Number.isSafeInteger(total) ? total : null];
   }));
 }
-function aggregateUsage(tasks2) {
-  const byTask = tasks2.map((task2) => ({ taskId: task2.taskId, sessionId: task2.sessionId ?? null, model: task2.model ?? null, status: task2.status, ...taskTokenUsage(task2) }));
-  const models = [...new Set(tasks2.map((task2) => task2.model ?? null))];
-  const sessions = [...new Set(tasks2.map((task2) => task2.sessionId).filter((id2) => id2 !== void 0))];
+function aggregateUsage(tasks) {
+  const byTask = tasks.map((task2) => ({ taskId: task2.taskId, sessionId: task2.sessionId ?? null, model: task2.model ?? null, status: task2.status, ...taskTokenUsage(task2) }));
+  const models = [...new Set(tasks.map((task2) => task2.model ?? null))];
+  const sessions = [...new Set(tasks.map((task2) => task2.sessionId).filter((id2) => id2 !== void 0))];
   return {
     scope: "retained-tasks",
-    taskCount: tasks2.length,
+    taskCount: tasks.length,
     measuredTaskCount: byTask.filter((task2) => task2.available).length,
     counters: sum(byTask.map((task2) => task2.counters)),
     byTask,
@@ -37596,12 +37666,12 @@ function aggregateUsage(tasks2) {
     }),
     bySession: sessions.map((sessionId) => {
       const rows = byTask.filter((task2) => task2.sessionId === sessionId);
-      const latest = tasks2.filter((task2) => task2.sessionId === sessionId && task2.result?.usage !== void 0).at(-1);
+      const latest = tasks.filter((task2) => task2.sessionId === sessionId && task2.usageProvenance !== "local-executor" && (task2.lastObservedCliUsage !== void 0 || task2.result?.usage !== void 0)).at(-1);
       return {
         sessionId,
         taskCount: rows.length,
         counters: sum(rows.map((task2) => task2.counters)),
-        observedCumulative: latest ? normalizeUsage(latest.result.usage) : null
+        observedCumulative: latest?.lastObservedCliUsage ?? (latest ? normalizeUsage(latest.result.usage) : null)
       };
     })
   };
@@ -37626,7 +37696,7 @@ var handoffSchema = external_exports.object({
   tests: external_exports.array(external_exports.object({
     command: external_exports.string(),
     exitCode: external_exports.number().int(),
-    source: external_exports.enum(["client-reported", "agy-tool"]),
+    source: external_exports.enum(["client-reported", "agy-tool", "windows-executor"]),
     sha256: external_exports.string(),
     stale: external_exports.boolean()
   }).strict()).max(20)
@@ -37649,9 +37719,9 @@ var comparisonFindingSchema = external_exports.object({
   opinions: external_exports.array(external_exports.object({ model: external_exports.string(), finding: reviewerReportSchema.shape.findings.element }).strict()),
   notReportedBy: external_exports.array(external_exports.string())
 }).strict();
-function compareFindings(tasks2, models) {
+function compareFindings(tasks, models) {
   const groups = /* @__PURE__ */ new Map();
-  const valid = tasks2.filter((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
+  const valid = tasks.filter((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
   for (const task2 of valid) {
     if (task2.report?.role !== "reviewer" || !task2.model)
       continue;
@@ -37663,10 +37733,10 @@ function compareFindings(tasks2, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path7, line, quote } = opinions[0].finding;
+    const { path: path11, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path7,
+      path: path11,
       line,
       quote,
       opinions,
@@ -37676,6 +37746,275 @@ function compareFindings(tasks2, models) {
   });
 }
 
+// dist/src/sandbox-policy.js
+import { createHash as createHash4 } from "node:crypto";
+import { lstat as lstat3, readdir as readdir2, realpath as realpath3 } from "node:fs/promises";
+import os3 from "node:os";
+import path6 from "node:path";
+var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
+var persistedPolicySchema = external_exports.object({
+  readRoots: paths,
+  writeRoots: paths,
+  network: external_exports.boolean(),
+  childProcesses: external_exports.boolean(),
+  maxOutputChars: external_exports.number().int().min(256).max(64e3)
+}).strict();
+var sandboxPolicySchema = external_exports.object({
+  readRoots: paths.default([]),
+  writeRoots: paths.default([]),
+  network: external_exports.boolean().default(false),
+  childProcesses: external_exports.boolean().default(true),
+  maxOutputChars: external_exports.number().int().min(256).max(64e3).default(4e3)
+}).strict();
+var sandboxSelectionInputSchema = external_exports.object({
+  readPaths: paths.optional(),
+  writePaths: paths.optional(),
+  network: external_exports.boolean().optional(),
+  childProcesses: external_exports.boolean().optional(),
+  maxOutputChars: external_exports.number().int().min(256).max(64e3).optional()
+}).strict();
+var sandboxSelectionSchema = external_exports.object({
+  readPaths: paths.default([]),
+  writePaths: paths.default([]),
+  network: external_exports.boolean().default(false),
+  childProcesses: external_exports.boolean().default(true),
+  maxOutputChars: external_exports.number().int().min(256).max(64e3).default(4e3)
+}).strict();
+var ownedTemporaryDirectory = /^agy-mcp-(?:copy|baseline|runtime|controller|scratch)-/i;
+var windowsDevice = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
+function pathKey(value) {
+  return process.platform === "win32" ? value.toLocaleLowerCase("en-US") : value;
+}
+function comparePaths(left, right) {
+  const normalizedLeft = pathKey(left), normalizedRight = pathKey(right);
+  if (normalizedLeft < normalizedRight)
+    return -1;
+  if (normalizedLeft > normalizedRight)
+    return 1;
+  if (left < right)
+    return -1;
+  if (left > right)
+    return 1;
+  return 0;
+}
+function contains(root, target) {
+  const relative = path6.relative(pathKey(root), pathKey(target));
+  return relative === "" || !relative.startsWith(".." + path6.sep) && relative !== ".." && !path6.isAbsolute(relative);
+}
+function overlaps(left, right) {
+  return contains(left, right) || contains(right, left);
+}
+function uniquePaths(values) {
+  const unique = /* @__PURE__ */ new Map();
+  for (const value of values)
+    if (!unique.has(pathKey(value)))
+      unique.set(pathKey(value), value);
+  return [...unique.values()].sort(comparePaths);
+}
+function minimalRoots(values) {
+  const candidates = uniquePaths(values).sort((left, right) => left.length - right.length || comparePaths(left, right));
+  return candidates.filter((candidate) => !candidates.some((root) => root !== candidate && contains(root, candidate))).sort(comparePaths);
+}
+function canonicalPolicyShape(value) {
+  const readRoots = minimalRoots([...value.readRoots, ...value.writeRoots]);
+  if (readRoots.length > 20) {
+    throw new BridgeError("INVALID_SANDBOX_POLICY", "Write roots require corresponding read roots within the policy path limit");
+  }
+  return {
+    readRoots,
+    writeRoots: minimalRoots(value.writeRoots),
+    network: value.network,
+    childProcesses: value.childProcesses,
+    maxOutputChars: value.maxOutputChars
+  };
+}
+function requireNormalizedPolicy(value) {
+  const policy = persistedPolicySchema.parse(value);
+  const normalized = canonicalPolicyShape(policy);
+  if (JSON.stringify(policy) !== JSON.stringify(normalized)) {
+    throw new BridgeError("INVALID_SANDBOX_POLICY", "Sandbox policies must be normalized before they are persisted or hashed");
+  }
+  return policy;
+}
+function sandboxPolicyDigest(policy) {
+  const normalized = requireNormalizedPolicy(policy);
+  return createHash4("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
+}
+function parseSandboxPolicySnapshot(value) {
+  const snapshot = external_exports.object({
+    version: external_exports.literal(1),
+    policy: persistedPolicySchema,
+    sha256: external_exports.string().regex(/^[a-f0-9]{64}$/)
+  }).strict().parse(value);
+  const policy = requireNormalizedPolicy(snapshot.policy);
+  if (snapshot.sha256 !== sandboxPolicyDigest(policy)) {
+    throw new BridgeError("INVALID_SANDBOX_POLICY", "Sandbox policy digest does not match its normalized policy");
+  }
+  return { version: 1, policy, sha256: snapshot.sha256 };
+}
+function localAbsolutePath(value) {
+  if (value.includes("\0"))
+    throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot contain NUL characters");
+  if (process.platform === "win32") {
+    if (/^(?:\\\\|\/\/)/.test(value) || !/^[A-Za-z]:[\\/]/.test(value) || value.slice(2).includes(":")) {
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths without alternate streams");
+    }
+    for (const part of value.slice(2).split(/[\\/]+/).filter(Boolean)) {
+      const normalized = part.trimEnd().replace(/\.+$/, "");
+      if (!normalized || normalized === "." || normalized === ".." || windowsDevice.test(normalized)) {
+        throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
+      }
+    }
+  } else if (!path6.isAbsolute(value) || value.startsWith("//")) {
+    throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
+  }
+  return path6.resolve(value);
+}
+async function inspectExistingPath(absolute) {
+  const root = path6.parse(absolute).root;
+  const parts = path6.relative(root, absolute).split(path6.sep).filter(Boolean);
+  let current = root;
+  for (let index = 0; index < parts.length; index++) {
+    current = path6.join(current, parts[index]);
+    let info;
+    try {
+      info = await lstat3(current);
+    } catch (error62) {
+      if (error62.code === "ENOENT") {
+        throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must already exist");
+      }
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox permission target");
+    }
+    if (info.isSymbolicLink() || index < parts.length - 1 && !info.isDirectory() || index === parts.length - 1 && !info.isDirectory() && !info.isFile() || info.isFile() && info.nlink > 1) {
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets cannot contain links, hard links, or non-regular files");
+    }
+  }
+  let canonical;
+  try {
+    canonical = await realpath3(absolute);
+  } catch {
+    throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a sandbox permission target");
+  }
+  const final = await lstat3(canonical).catch(() => void 0);
+  if (!final || final.isSymbolicLink() || !final.isDirectory() && !final.isFile() || final.isFile() && final.nlink > 1) {
+    throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must resolve to regular files or directories");
+  }
+  return { canonical, directory: final.isDirectory() };
+}
+async function inspectDirectoryGrant(directory, limits) {
+  let entries = 0, bytes = 0;
+  const visit2 = async (current) => {
+    let children;
+    try {
+      children = await readdir2(current);
+    } catch {
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
+    }
+    for (const name of children) {
+      const child = path6.join(current, name);
+      let info;
+      try {
+        info = await lstat3(child);
+      } catch {
+        throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox directory grants cannot change during validation");
+      }
+      entries++;
+      if (entries > limits.maxCopyFiles)
+        throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Sandbox directory grant exceeds the existing copy file limit");
+      if (info.isSymbolicLink() || !info.isDirectory() && !info.isFile() || info.isFile() && info.nlink > 1) {
+        throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox directory grants cannot contain links, hard links, or non-regular files");
+      }
+      if (info.isDirectory())
+        await visit2(child);
+      else {
+        bytes += info.size;
+        if (bytes > limits.maxCopyBytes)
+          throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Sandbox directory grant exceeds the existing copy byte limit");
+      }
+    }
+  };
+  await visit2(directory);
+}
+async function inspectSandboxGrant(value) {
+  const first = await inspectExistingPath(localAbsolutePath(value));
+  return inspectExistingPath(first.canonical);
+}
+async function canonicalProtectedPath(value) {
+  const absolute = localAbsolutePath(value);
+  const root = path6.parse(absolute).root;
+  const parts = path6.relative(root, absolute).split(path6.sep).filter(Boolean);
+  let current = root, firstMissing = parts.length;
+  for (let index = 0; index < parts.length; index++) {
+    const next = path6.join(current, parts[index]);
+    let info;
+    try {
+      info = await lstat3(next);
+    } catch (error62) {
+      if (error62.code === "ENOENT") {
+        firstMissing = index;
+        break;
+      }
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a protected sandbox path");
+    }
+    if (info.isSymbolicLink() || index < parts.length - 1 && !info.isDirectory() || index === parts.length - 1 && !info.isDirectory() && !info.isFile()) {
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Protected sandbox paths cannot contain links or non-regular files");
+    }
+    current = next;
+  }
+  let canonical;
+  try {
+    canonical = await realpath3(current);
+  } catch {
+    throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
+  }
+  return path6.join(canonical, ...parts.slice(firstMissing));
+}
+async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
+  return Promise.all([
+    stateDirectory,
+    ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path6.join(os3.homedir(), name)),
+    ...forbidden
+  ].map(canonicalProtectedPath));
+}
+async function canonicalPaths(values, protectedRoots, limits) {
+  const temporary = await canonicalProtectedPath(os3.tmpdir());
+  const canonical = await Promise.all(values.map(async (value) => {
+    const target = await inspectSandboxGrant(value);
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path6.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+      throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
+    }
+    if (target.directory)
+      await inspectDirectoryGrant(target.canonical, limits);
+    return target.canonical;
+  }));
+  return minimalRoots(canonical);
+}
+async function normalizeSandboxPolicy(value, stateDirectory, forbidden, limits = DEFAULT_PROJECT_LIMITS, portableNodeCacheDirectory) {
+  const policy = sandboxPolicySchema.parse(value);
+  const protectedRoots = await protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory);
+  const writeRoots = await canonicalPaths(policy.writeRoots, protectedRoots, limits);
+  const readRoots = await canonicalPaths([...policy.readRoots, ...writeRoots], protectedRoots, limits);
+  return canonicalPolicyShape({ ...policy, readRoots, writeRoots });
+}
+async function resolveSandboxSelection(policy, value, sourceDirectory, stateDirectory, forbidden, limits = DEFAULT_PROJECT_LIMITS, portableNodeCacheDirectory) {
+  const ceiling = requireNormalizedPolicy(policy);
+  const selected = sandboxSelectionInputSchema.parse(value ?? {});
+  const protectedRoots = [...await protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory), await canonicalProtectedPath(sourceDirectory)];
+  const writePaths = await canonicalPaths(selected.writePaths ?? [], protectedRoots, limits);
+  const readPaths = await canonicalPaths([...selected.readPaths ?? [], ...writePaths], protectedRoots, limits);
+  if (readPaths.length > 20) {
+    throw new BridgeError("SANDBOX_PERMISSION_DENIED", "Write paths require corresponding read paths within the selection path limit");
+  }
+  const network = selected.network ?? false;
+  const childProcesses = selected.childProcesses ?? ceiling.childProcesses;
+  const maxOutputChars = selected.maxOutputChars ?? Math.min(4e3, ceiling.maxOutputChars);
+  if (network && !ceiling.network || childProcesses && !ceiling.childProcesses || maxOutputChars > ceiling.maxOutputChars || readPaths.some((target) => !ceiling.readRoots.some((root) => contains(root, target))) || writePaths.some((target) => !ceiling.writeRoots.some((root) => contains(root, target)))) {
+    throw new BridgeError("SANDBOX_PERMISSION_DENIED", "Requested permissions exceed the globally authorized sandbox policy");
+  }
+  return { readPaths, writePaths, network, childProcesses, maxOutputChars };
+}
+
 // dist/src/output-schemas.js
 var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var id = external_exports.string().uuid();
@@ -37683,20 +38022,25 @@ var count = external_exports.number().int().nonnegative();
 var timestamp = external_exports.string().datetime();
 var status = external_exports.enum(["queued", "starting", "running", "streaming", "completed", "failed", "cancelled", "timeout"]);
 var verificationStatus = external_exports.enum(["passed", "failed", "unverified"]);
+var portableNodeIdentity = external_exports.object({ buildId: external_exports.string(), nodeVersion: external_exports.string(), libuvVersion: external_exports.string(), sha256: hash2 }).strict();
 var testEvidenceSchema = external_exports.object({
   command: external_exports.string(),
-  exitCode: external_exports.number().int().min(0).max(255),
+  exitCode: external_exports.number().int().min(0).max(4294967295),
   output: external_exports.string(),
   sha256: hash2,
+  beforeSha256: hash2.optional(),
   recordedAt: timestamp,
-  source: external_exports.enum(["client-reported", "agy-tool"]),
+  source: external_exports.enum(["client-reported", "agy-tool", "windows-executor"]),
   treeSha256: hash2.optional(),
   beforeTreeSha256: hash2.optional(),
   executionError: external_exports.string().optional(),
   truncated: external_exports.boolean().optional(),
   attempt: count.optional(),
   testTaskId: id.optional(),
-  sandbox: external_exports.literal("agy-native-requested").optional()
+  sandbox: external_exports.enum(["agy-native-requested", "windows-lpac"]).optional(),
+  sandboxSelection: sandboxSelectionSchema.optional(),
+  sandboxPolicySha256: hash2.optional(),
+  portableNode: portableNodeIdentity.optional()
 }).strict();
 var verification = external_exports.object({
   sha256: hash2,
@@ -37708,7 +38052,7 @@ var verification = external_exports.object({
 }).strict();
 var tokenUsage = external_exports.object({
   scope: external_exports.literal("task"),
-  source: external_exports.enum(["session-total", "session-delta", "unavailable"]),
+  source: external_exports.enum(["session-total", "session-delta", "local-executor", "unavailable"]),
   counters: usageCountersSchema,
   available: external_exports.boolean(),
   partial: external_exports.boolean(),
@@ -37746,6 +38090,8 @@ var taskRecordSchema = external_exports.object({
   usageIsResume: external_exports.boolean().optional(),
   usageBaseline: usageCountersSchema.optional(),
   tokenUsage: tokenUsage.optional(),
+  usageProvenance: external_exports.literal("local-executor").optional(),
+  lastObservedCliUsage: usageCountersSchema.optional(),
   handoff: handoffSchema.optional(),
   comparison: comparisonSchema.optional(),
   roleDefinition: roleDefinitionSchema.optional()
@@ -37773,6 +38119,7 @@ var chunkShape = {
   offsetUnit: external_exports.literal("utf16-code-units")
 };
 var usageRow = external_exports.object({ taskId: id, sessionId: external_exports.string().nullable(), model: external_exports.string().nullable(), status, ...tokenUsage.shape }).strict();
+var sandboxPolicySnapshot = external_exports.object({ version: external_exports.literal(1), policy: sandboxPolicySchema, sha256: hash2 }).strict();
 var successOutputSchemas = {
   antigravity_health: external_exports.object({
     toolProfile: toolProfileSchema.optional(),
@@ -37796,10 +38143,21 @@ var successOutputSchemas = {
     bridgeLimitations: external_exports.object({
       interactiveReplies: external_exports.object({ available: external_exports.literal(false), reason: external_exports.string() }).strict(),
       preflightTokenCount: external_exports.object({ available: external_exports.literal(false), exactTokens: external_exports.null(), reason: external_exports.string() }).strict()
+    }).strict().optional(),
+    windowsRuntime: external_exports.object({
+      requestedMode: external_exports.enum(["system", "portable"]),
+      supported: external_exports.boolean(),
+      ready: external_exports.boolean(),
+      buildId: external_exports.string(),
+      nodeVersion: external_exports.string(),
+      libuvVersion: external_exports.string(),
+      sha256: hash2.nullable(),
+      error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
     }).strict().optional()
   }).strict(),
   antigravity_list_models: external_exports.object({ models: external_exports.array(external_exports.object({ id: external_exports.string(), name: external_exports.string() }).strict()) }).strict(),
   antigravity_get_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
+  antigravity_get_sandbox_policy: sandboxPolicySnapshot,
   antigravity_roles: external_exports.object({ roles: external_exports.array(external_exports.object({
     name: roleSchema,
     baseRole: builtinRoleSchema,
@@ -37808,6 +38166,7 @@ var successOutputSchemas = {
     instructionChars: count
   }).strict()) }).strict(),
   antigravity_set_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
+  antigravity_set_sandbox_policy: sandboxPolicySnapshot,
   antigravity_usage: external_exports.object({
     scope: external_exports.literal("retained-tasks"),
     taskCount: count,
@@ -37941,77 +38300,118 @@ function safe(operation) {
     }
   };
 }
-function createMcpServer(adapter2, tasks2) {
-  const server2 = new McpServer({ name: "antigravity-mcp-bridge", version: "0.5.2" }, {
-    instructions: "Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
+function sandboxPolicyConfirmation(previous, proposed) {
+  const describe3 = (snapshot) => JSON.stringify({
+    version: snapshot.version,
+    sha256: snapshot.sha256,
+    readRoots: snapshot.policy.readRoots,
+    writeRoots: snapshot.policy.writeRoots,
+    network: snapshot.policy.network,
+    childProcesses: snapshot.policy.childProcesses,
+    maxOutputChars: snapshot.policy.maxOutputChars
+  });
+  return "Atualizar o teto global do sandbox para testes Windows LPAC?\nPol\xEDtica anterior (vers\xE3o e digest): " + describe3(previous) + "\nProposta normalizada (vers\xE3o e digest): " + describe3(proposed) + "\nA confirma\xE7\xE3o humana autoriza apenas este teto global; o agente que chama o MCP seleciona concess\xF5es menores por teste e o Gemini delegado n\xE3o pode autoriz\xE1-las nem alter\xE1-las.\nRede habilitada concede internet e conex\xF5es de LAN de entrada e sa\xEDda ao processo LPAC. localhost continua sujeito \xE0s restri\xE7\xF5es do sistema operacional. Processos-filho e o limite de sa\xEDda acima ser\xE3o aplicados como teto. Confirme apenas os caminhos can\xF4nicos, capacidades e limite de sa\xEDda revisados.";
+}
+function createMcpServer(adapter, tasks) {
+  const server = new McpServer({ name: "antigravity-mcp-bridge", version: "0.6.0" }, {
+    instructions: "Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
-  const configuredRoleSchema = external_exports.enum(tasks2.roles().map((role) => role.name));
-  if (toolEnabled(tasks2.toolProfile, "antigravity_health"))
-    server2.registerTool("antigravity_health", {
+  const configuredRoleSchema = external_exports.enum(tasks.roles().map((role) => role.name));
+  if (toolEnabled(tasks.toolProfile, "antigravity_health"))
+    server.registerTool("antigravity_health", {
       outputSchema: outputSchemas.antigravity_health,
       title: "Check Antigravity CLI",
       description: "Inspect installed agy version, authentication and supported capabilities.",
       inputSchema: {},
       annotations: readOnly
     }, safe(async () => ({
-      ...await adapter2.health(),
-      toolProfile: tasks2.toolProfile,
+      ...await adapter.health(),
+      toolProfile: tasks.toolProfile,
+      windowsRuntime: await tasks.windowsRuntimeStatus(),
       bridgeLimitations: {
         interactiveReplies: { available: false, reason: "The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures." },
         preflightTokenCount: { available: false, exactTokens: null, reason: "No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts." }
       },
-      integrationApproval: { available: toolEnabled(tasks2.toolProfile, "antigravity_integrate") && Boolean(server2.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" }
+      integrationApproval: { available: toolEnabled(tasks.toolProfile, "antigravity_integrate") && Boolean(server.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" }
     })));
-  if (toolEnabled(tasks2.toolProfile, "antigravity_list_models"))
-    server2.registerTool("antigravity_list_models", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_list_models"))
+    server.registerTool("antigravity_list_models", {
       outputSchema: outputSchemas.antigravity_list_models,
       title: "List Antigravity models",
       description: "List model IDs actually returned by agy models for this account.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(async () => ({ models: await adapter2.listModels() })));
-  if (toolEnabled(tasks2.toolProfile, "antigravity_get_model"))
-    server2.registerTool("antigravity_get_model", {
+    }, safe(async () => ({ models: await adapter.listModels() })));
+  if (toolEnabled(tasks.toolProfile, "antigravity_get_model"))
+    server.registerTool("antigravity_get_model", {
       outputSchema: outputSchemas.antigravity_get_model,
       title: "Get selected model",
       description: "Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(() => ({ model: tasks2.getModel() ?? null })));
-  if (toolEnabled(tasks2.toolProfile, "antigravity_usage"))
-    server2.registerTool("antigravity_usage", {
+    }, safe(() => ({ model: tasks.getModel() ?? null })));
+  if (toolEnabled(tasks.toolProfile, "antigravity_get_sandbox_policy"))
+    server.registerTool("antigravity_get_sandbox_policy", {
+      outputSchema: outputSchemas.antigravity_get_sandbox_policy,
+      title: "Get Windows test sandbox policy",
+      description: "Read the normalized global ceiling for bridge-owned Windows LPAC test selections.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(() => tasks.getSandboxPolicy()));
+  if (toolEnabled(tasks.toolProfile, "antigravity_usage"))
+    server.registerTool("antigravity_usage", {
       outputSchema: outputSchemas.antigravity_usage,
       title: "Read observed token usage",
       description: "Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.",
       inputSchema: { taskId: external_exports.string().uuid().optional(), sessionId: external_exports.string().min(1).max(128).optional(), model: external_exports.string().min(1).max(128).optional() },
       annotations: readOnly
-    }, async (filters) => safe(() => tasks2.usage(filters))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_list_project_files"))
-    server2.registerTool("antigravity_list_project_files", {
+    }, async (filters) => safe(() => tasks.usage(filters))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_list_project_files"))
+    server.registerTool("antigravity_list_project_files", {
       outputSchema: outputSchemas.antigravity_list_project_files,
       title: "List files eligible for a project copy",
       description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
       inputSchema: { workingDirectory: external_exports.string().min(1) },
       annotations: readOnly
     }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_set_model"))
-    server2.registerTool("antigravity_set_model", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_set_model"))
+    server.registerTool("antigravity_set_model", {
       outputSchema: outputSchemas.antigravity_set_model,
       title: "Select Antigravity model",
       description: "Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.",
       inputSchema: { model: external_exports.string().min(1).max(128).nullable() },
       annotations: { ...readOnly, readOnlyHint: false }
-    }, async ({ model }) => safe(async () => ({ model: await tasks2.setModel(model) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_roles"))
-    server2.registerTool("antigravity_roles", {
+    }, async ({ model }) => safe(async () => ({ model: await tasks.setModel(model) }))());
+  if (tasks.toolProfile === "full" || tasks.toolProfile === "implementation")
+    server.registerTool("antigravity_set_sandbox_policy", {
+      outputSchema: outputSchemas.antigravity_set_sandbox_policy,
+      title: "Set Windows test sandbox policy",
+      description: "Propose a normalized global ceiling for bridge-owned Windows LPAC tests. A human must confirm the exact prior and proposed digests through an MCP form.",
+      inputSchema: { policy: sandboxPolicySchema, expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
+      annotations: action
+    }, async ({ policy, expectedSha256 }) => safe(() => tasks.setSandboxPolicy(policy, expectedSha256, async (previous, proposed) => {
+      if (!server.server.getClientCapabilities()?.elicitation?.form) {
+        throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to update the sandbox policy");
+      }
+      const answer = await server.server.elicitInput({
+        mode: "form",
+        message: sandboxPolicyConfirmation(previous, proposed),
+        requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "Confirmo esta pol\xEDtica de sandbox", default: false } }, required: ["confirm"] }
+      }, { timeout: 3e5 }).catch(() => {
+        throw new BridgeError("APPROVAL_FAILED", "Sandbox policy confirmation failed or timed out; no changes were applied");
+      });
+      return answer.action === "accept" && answer.content?.confirm === true;
+    }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_roles"))
+    server.registerTool("antigravity_roles", {
       outputSchema: outputSchemas.antigravity_roles,
       title: "List configured task roles",
       description: "List built-in and custom role names, base contracts and descriptions. Custom roles are configured in BRIDGE_CUSTOM_ROLES; instructions are snapshotted per task and inherited by resume. Planning/review bases remain read-only with existing structured reports.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(() => ({ roles: tasks2.roles() })));
+    }, safe(() => ({ roles: tasks.roles() })));
   const runSchema = {
     prompt: external_exports.string().min(1),
     model: external_exports.string().min(1).max(128).nullable().optional(),
@@ -38024,32 +38424,32 @@ function createMcpServer(adapter2, tasks2) {
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional()
   };
-  if (toolEnabled(tasks2.toolProfile, "antigravity_run"))
-    server2.registerTool("antigravity_run", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_run"))
+    server.registerTool("antigravity_run", {
       outputSchema: outputSchemas.antigravity_run,
       title: "Run Antigravity task",
       description: "Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.",
       inputSchema: runSchema,
       annotations: action
-    }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_resume"))
-    server2.registerTool("antigravity_resume", {
+    }, async (args) => safe(async () => ({ task: await tasks.run(args) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_resume"))
+    server.registerTool("antigravity_resume", {
       outputSchema: outputSchemas.antigravity_resume,
       title: "Resume Antigravity conversation",
       description: "Continue a completed session in its existing isolated copy.",
       inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
       annotations: action
-    }, async (args) => safe(async () => ({ task: await tasks2.run(args) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_context"))
-    server2.registerTool("antigravity_context", {
+    }, async (args) => safe(async () => ({ task: await tasks.run(args) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_context"))
+    server.registerTool("antigravity_context", {
       outputSchema: outputSchemas.antigravity_context,
       title: "Inspect role handoff context",
       description: "Inspect the current tree hash, structured report, criteria and inherited decisions of a completed task before transferring it to another role. Reports and decisions remain claims; a hash proves content identity only.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: readOnly
-    }, async ({ taskId }) => safe(() => tasks2.context(taskId))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_handoff"))
-    server2.registerTool("antigravity_handoff", {
+    }, async ({ taskId }) => safe(() => tasks.context(taskId))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_handoff"))
+    server.registerTool("antigravity_handoff", {
       outputSchema: outputSchemas.antigravity_handoff,
       title: "Transfer work to another role",
       description: "Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.",
@@ -38064,11 +38464,11 @@ function createMcpServer(adapter2, tasks2) {
       },
       annotations: action
     }, async ({ sourceTaskId, ...args }) => safe(async () => {
-      const source = tasks2.status(sourceTaskId);
-      return { task: await tasks2.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
+      const source = tasks.status(sourceTaskId);
+      return { task: await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory }) };
     })());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_compare"))
-    server2.registerTool("antigravity_compare", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_compare"))
+    server.registerTool("antigravity_compare", {
       outputSchema: outputSchemas.antigravity_compare,
       title: "Request independent model opinions",
       description: "Start read-only reviewer tasks with 2 to 4 distinct agy model IDs against independent copies of the same hashed context. Each model consumes quota. Returns task IDs and comparison ID; inspect start errors and wait for each task before synthesizing.",
@@ -38080,64 +38480,65 @@ function createMcpServer(adapter2, tasks2) {
         timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
       },
       annotations: action
-    }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) => safe(() => tasks2.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_comparison"))
-    server2.registerTool("antigravity_comparison", {
+    }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) => safe(() => tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_comparison"))
+    server.registerTool("antigravity_comparison", {
       outputSchema: outputSchemas.antigravity_comparison,
       title: "Compare model review evidence",
       description: "Read retained comparison opinions, per-model failures, token usage and findings grouped by exact file/line/quote. Distinguish identical findings, different interpretations and findings not reported by every model. Missing or failed opinions are not agreement. Check contextStale, complete and unverified fields; Codex must inspect and synthesize the evidence. No integration is performed.",
       inputSchema: { comparisonId: external_exports.string().uuid() },
       annotations: readOnly
-    }, async ({ comparisonId }) => safe(() => tasks2.comparison(comparisonId))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_preview"))
-    server2.registerTool("antigravity_preview", {
+    }, async ({ comparisonId }) => safe(() => tasks.comparison(comparisonId))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_preview"))
+    server.registerTool("antigravity_preview", {
       outputSchema: outputSchemas.antigravity_preview,
       title: "Preview isolated changes",
       description: "Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.",
       inputSchema: { taskId: external_exports.string().uuid(), includePatch: external_exports.boolean().optional() },
       annotations: readOnly
-    }, async ({ taskId, includePatch }) => safe(() => tasks2.preview(taskId, includePatch))());
+    }, async ({ taskId, includePatch }) => safe(() => tasks.preview(taskId, includePatch))());
   const chunkInput = { offset: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(2).max(5e4).optional() };
-  if (toolEnabled(tasks2.toolProfile, "antigravity_read_patch"))
-    server2.registerTool("antigravity_read_patch", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_read_patch"))
+    server.registerTool("antigravity_read_patch", {
       outputSchema: outputSchemas.antigravity_read_patch,
       title: "Read patch by file or chunk",
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path7, offset, limit }) => safe(() => tasks2.readPatch(taskId, expectedSha256, path7, offset, limit))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_read_result"))
-    server2.registerTool("antigravity_read_result", {
+    }, async ({ taskId, expectedSha256, path: path11, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path11, offset, limit))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
+    server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
       title: "Read result in chunks",
       description: "Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedContentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks2.readResult(taskId, offset, limit, expectedContentSha256))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_verify"))
-    server2.registerTool("antigravity_verify", {
+    }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks.readResult(taskId, offset, limit, expectedContentSha256))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_verify"))
+    server.registerTool("antigravity_verify", {
       outputSchema: outputSchemas.antigravity_verify,
       title: "Verify task acceptance criteria",
       description: "Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
       annotations: { ...readOnly, readOnlyHint: false }
-    }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks2.verify(taskId, expectedSha256, reviews))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_test"))
-    server2.registerTool("antigravity_test", {
+    }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks.verify(taskId, expectedSha256, reviews))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_test"))
+    server.registerTool("antigravity_test", {
       outputSchema: outputSchemas.antigravity_test,
-      title: "Run tests in the native agy sandbox",
-      description: "Start an asynchronous continuation that executes an exact command through agy run_command. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. No Docker or host execution fallback. Use the returned taskId for events, result, review and integration.",
+      title: "Run tests in the bridge sandbox",
+      description: "Start an asynchronous exact-command test. Windows defaults to the bridge-owned LPAC executor; an explicit legacy agy backend keeps its existing native sandbox flow. Within a human-authorized global ceiling, the MCP caller chooses the narrower test selection; delegated Gemini cannot authorize or change it. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. Use the returned taskId for events, result, review and integration.",
       inputSchema: {
         taskId: external_exports.string().uuid(),
         expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
         command: testCommandSchema,
         retries: external_exports.number().int().min(0).max(3).optional(),
-        timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
+        timeoutSeconds: external_exports.number().int().min(1).max(86400).optional(),
+        sandbox: sandboxSelectionInputSchema.optional()
       },
       annotations: action
-    }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds }) => safe(async () => ({ task: await tasks2.startTests(taskId, expectedSha256, command, retries, timeoutSeconds) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_record_test"))
-    server2.registerTool("antigravity_record_test", {
+    }, async ({ taskId, expectedSha256, command: command2, retries, timeoutSeconds, sandbox }) => safe(async () => ({ task: await tasks.startTests(taskId, expectedSha256, command2, retries, timeoutSeconds, sandbox) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_record_test"))
+    server.registerTool("antigravity_record_test", {
       outputSchema: outputSchemas.antigravity_record_test,
       title: "Record review test evidence",
       description: "Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.",
@@ -38149,20 +38550,20 @@ function createMcpServer(adapter2, tasks2) {
         output: external_exports.string().max(4e3).optional()
       },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-    }, async ({ taskId, expectedSha256, command, exitCode, output: output2 }) => safe(() => tasks2.recordTest(taskId, expectedSha256, command, exitCode, output2))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_integrate"))
-    server2.registerTool("antigravity_integrate", {
+    }, async ({ taskId, expectedSha256, command: command2, exitCode, output: output2 }) => safe(() => tasks.recordTest(taskId, expectedSha256, command2, exitCode, output2))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_integrate"))
+    server.registerTool("antigravity_integrate", {
       outputSchema: outputSchemas.antigravity_integrate,
       title: "Integrate reviewed changes",
       description: "Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
       annotations: action
-    }, async ({ taskId, expectedSha256 }) => safe(() => tasks2.integrate(taskId, expectedSha256, async (preview) => {
-      if (!server2.server.getClientCapabilities()?.elicitation?.form) {
+    }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, async (preview) => {
+      if (!server.server.getClientCapabilities()?.elicitation?.form) {
         throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
       }
       const files = preview.fileSummaries.map((file3) => `${file3.status} ${JSON.stringify(file3.path)} (${file3.binary ? "bin\xE1rio" : "+" + file3.insertions + " -" + file3.deletions})`).join("\n");
-      const answer = await server2.server.elicitInput({
+      const answer = await server.server.elicitInput({
         mode: "form",
         message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?
 Origem: ${JSON.stringify(preview.sourceDirectory)}
@@ -38176,69 +38577,69 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       });
       return answer.action === "accept" && answer.content?.confirm === true;
     }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_discard"))
-    server2.registerTool("antigravity_discard", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_discard"))
+    server.registerTool("antigravity_discard", {
       outputSchema: outputSchemas.antigravity_discard,
       title: "Discard an isolated copy",
       description: "Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: { ...action, openWorldHint: false }
-    }, async ({ taskId }) => safe(async () => ({ task: await tasks2.discard(taskId) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_cleanup"))
-    server2.registerTool("antigravity_cleanup", {
+    }, async ({ taskId }) => safe(async () => ({ task: await tasks.discard(taskId) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_cleanup"))
+    server.registerTool("antigravity_cleanup", {
       outputSchema: outputSchemas.antigravity_cleanup,
       title: "Clean expired isolated copies",
       description: "Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.",
       inputSchema: {},
       annotations: { ...action, openWorldHint: false }
-    }, safe(() => tasks2.cleanup()));
-  if (toolEnabled(tasks2.toolProfile, "antigravity_status"))
-    server2.registerTool("antigravity_status", {
+    }, safe(() => tasks.cleanup()));
+  if (toolEnabled(tasks.toolProfile, "antigravity_status"))
+    server.registerTool("antigravity_status", {
       outputSchema: outputSchemas.antigravity_status,
       title: "Get Antigravity task status",
       description: "Return task metadata, status, process ID and isolated copy path when available.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: readOnly
-    }, async ({ taskId }) => safe(() => ({ task: tasks2.status(taskId) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_tasks"))
-    server2.registerTool("antigravity_tasks", {
+    }, async ({ taskId }) => safe(() => ({ task: tasks.status(taskId) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_tasks"))
+    server.registerTool("antigravity_tasks", {
       outputSchema: outputSchemas.antigravity_tasks,
       title: "List persisted tasks",
       description: "Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(() => ({ tasks: tasks2.list().map(({ prompt: _prompt, ...task2 }) => task2) })));
-  if (toolEnabled(tasks2.toolProfile, "antigravity_events"))
-    server2.registerTool("antigravity_events", {
+    }, safe(() => ({ tasks: tasks.list().map(({ prompt: _prompt, ...task2 }) => task2) })));
+  if (toolEnabled(tasks.toolProfile, "antigravity_events"))
+    server.registerTool("antigravity_events", {
       outputSchema: outputSchemas.antigravity_events,
       title: "Read Antigravity events",
       description: "Read live normalized agy events after a sequence cursor. Includes original agy event payloads.",
       inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), limit: external_exports.number().int().min(1).max(1e3).optional() },
       annotations: readOnly
-    }, async ({ taskId, after, limit }) => safe(() => tasks2.readEvents(taskId, after, limit))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_wait"))
-    server2.registerTool("antigravity_wait", {
+    }, async ({ taskId, after, limit }) => safe(() => tasks.readEvents(taskId, after, limit))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_wait"))
+    server.registerTool("antigravity_wait", {
       outputSchema: outputSchemas.antigravity_wait,
       title: "Wait for real task progress",
       description: "Wait up to 60 seconds for completion while sending MCP progress notifications for observed events. Progress is an event sequence, not a percentage. A wait timeout or request cancellation leaves the task running. Return a bounded event page and continue from nextCursor; disclose truncated events.",
       inputSchema: { taskId: external_exports.string().uuid(), after: external_exports.number().int().min(0).optional(), timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
       annotations: readOnly
-    }, async ({ taskId, after, timeoutSeconds }, extra) => safe(() => tasks2.wait(taskId, after, timeoutSeconds, extra.signal, extra._meta?.progressToken === void 0 ? void 0 : async (event) => {
+    }, async ({ taskId, after, timeoutSeconds }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal, extra._meta?.progressToken === void 0 ? void 0 : async (event) => {
       await extra.sendNotification({ method: "notifications/progress", params: {
         progressToken: extra._meta.progressToken,
         progress: event.sequence,
         message: taskId + ": " + event.type
       } });
     }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_result"))
-    server2.registerTool("antigravity_result", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_result"))
+    server.registerTool("antigravity_result", {
       outputSchema: outputSchemas.antigravity_result,
       title: "Get Antigravity result",
       description: "Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.",
       inputSchema: { taskId: external_exports.string().uuid(), includeResult: external_exports.boolean().optional() },
       annotations: readOnly
     }, async ({ taskId, includeResult }) => safe(() => {
-      const result = tasks2.result(taskId);
+      const result = tasks.result(taskId);
       if (includeResult !== false)
         return result;
       const { prompt, result: output2, includedFiles, report: report2, handoff: handoff2, roleDefinition, ...metadata } = result.task;
@@ -38252,28 +38653,28 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
         includedFileCount: includedFiles?.length ?? 0
       };
     })());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_cancel"))
-    server2.registerTool("antigravity_cancel", {
+  if (toolEnabled(tasks.toolProfile, "antigravity_cancel"))
+    server.registerTool("antigravity_cancel", {
       outputSchema: outputSchemas.antigravity_cancel,
       title: "Cancel Antigravity task",
       description: "Cancel a queued task or terminate its local agy process.",
       inputSchema: { taskId: external_exports.string().uuid() },
       annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
-    }, async ({ taskId }) => safe(async () => ({ task: await tasks2.cancel(taskId) }))());
-  if (toolEnabled(tasks2.toolProfile, "antigravity_sessions"))
-    server2.registerTool("antigravity_sessions", {
+    }, async ({ taskId }) => safe(async () => ({ task: await tasks.cancel(taskId) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_sessions"))
+    server.registerTool("antigravity_sessions", {
       outputSchema: outputSchemas.antigravity_sessions,
       title: "List known Antigravity sessions",
       description: "List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(() => ({ sessions: tasks2.sessions(), scope: "local bridge state" })));
-  return server2;
+    }, safe(() => ({ sessions: tasks.sessions(), scope: "local bridge state" })));
+  return server;
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash5, randomUUID as randomUUID3 } from "node:crypto";
-import { spawn as spawn3 } from "node:child_process";
+import { createHash as createHash8, randomUUID as randomUUID5 } from "node:crypto";
+import { spawn as spawn5 } from "node:child_process";
 
 // dist/src/logger.js
 function logTaskEvent(taskId, type, data) {
@@ -38381,9 +38782,10 @@ var LineParser = class {
 // dist/src/state-store.js
 import { randomUUID as randomUUID2 } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import path6 from "node:path";
-import os3 from "node:os";
+import path7 from "node:path";
+import os4 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
+var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
 var snapshotSchema = external_exports.object({
   version: external_exports.literal(1),
@@ -38401,6 +38803,8 @@ var snapshotSchema = external_exports.object({
     discardedAt: external_exports.string().datetime().optional(),
     usageIsResume: external_exports.boolean().optional(),
     usageBaseline: usageCountersSchema.optional(),
+    lastObservedCliUsage: usageCountersSchema.optional(),
+    usageProvenance: external_exports.literal("local-executor").optional(),
     roleDefinition: roleDefinitionSchema.optional()
   }).passthrough(),
   options: external_exports.object({ prompt: external_exports.string(), workingDirectory: external_exports.string() }).passthrough(),
@@ -38426,7 +38830,7 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path6.isAbsolute(directory))
+    if (!path7.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
     mkdirSync(directory, { recursive: true, mode: 448 });
     if (lstatSync(directory).isSymbolicLink())
@@ -38435,10 +38839,10 @@ var StateStore = class {
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path6.join(this.directory, taskId + ".json");
+    return path7.join(this.directory, taskId + ".json");
   }
   loadModel() {
-    const file3 = path6.join(this.directory, "model-selection.json");
+    const file3 = path7.join(this.directory, "model-selection.json");
     try {
       const stat3 = lstatSync(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
@@ -38450,10 +38854,42 @@ var StateStore = class {
       throw new BridgeError("INVALID_STATE", "Invalid persisted model selection");
     }
   }
+  loadSandboxPolicy() {
+    const file3 = path7.join(this.directory, "sandbox-policy.json");
+    try {
+      const stat3 = lstatSync(file3);
+      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > maxSandboxPolicyFileBytes)
+        throw new Error("Unsafe sandbox policy");
+      return parseSandboxPolicySnapshot(JSON.parse(readFileSync(file3, "utf8")));
+    } catch (error62) {
+      if (error62.code === "ENOENT") {
+        const policy = sandboxPolicySchema.parse({});
+        return { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
+      }
+      throw new BridgeError("INVALID_STATE", "Invalid persisted sandbox policy");
+    }
+  }
+  saveSandboxPolicy(snapshot) {
+    let validated;
+    try {
+      validated = parseSandboxPolicySnapshot(snapshot);
+    } catch {
+      throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
+    }
+    const target = path7.join(this.directory, "sandbox-policy.json");
+    const temporary = target + "." + randomUUID2() + ".tmp";
+    try {
+      this.loadSandboxPolicy();
+      writeFileSync(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
+      renameSync(temporary, target);
+    } finally {
+      rmSync(temporary, { force: true });
+    }
+  }
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path6.join(this.directory, "model-selection.json");
+    const target = path7.join(this.directory, "model-selection.json");
     const temporary = target + "." + randomUUID2() + ".tmp";
     try {
       this.loadModel();
@@ -38477,7 +38913,7 @@ var StateStore = class {
   }
   load() {
     return readdirSync(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path6.join(this.directory, name);
+      const file3 = path7.join(this.directory, name);
       if (lstatSync(file3).isSymbolicLink() || lstatSync(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
@@ -38486,12 +38922,12 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path6.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path7.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path6.isAbsolute(directory) || path6.relative(os3.tmpdir(), path6.dirname(directory)) !== "" || !path6.basename(directory).startsWith(prefix)) {
+          if (!path7.isAbsolute(directory) || path7.relative(os4.tmpdir(), path7.dirname(directory)) !== "" || !path7.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -38512,7 +38948,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path6.join(this.directory, name + ".lock");
+    const file3 = path7.join(this.directory, name + ".lock");
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         writeFileSync(file3, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
@@ -38536,9 +38972,9 @@ var StateStore = class {
 };
 
 // dist/src/chunks.js
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash4("sha256").update(text).digest("hex");
+  const sha256 = createHash5("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -38564,7 +39000,2048 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 }
 
 // dist/src/task-manager.js
+import { setTimeout as delay2 } from "node:timers/promises";
+
+// dist/src/windows-executor.js
+import { spawn as spawn4 } from "node:child_process";
+import { lstat as lstat6, mkdir as mkdir5, mkdtemp as mkdtemp2, realpath as realpath4, rm as rm4, writeFile as writeFile2 } from "node:fs/promises";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import path10 from "node:path";
+import os5 from "node:os";
+
+// dist/src/windows-helper-source.js
+var windowsHelperSource = `using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Text;
+using System.Threading;
+using System.Web.Script.Serialization;
+using Microsoft.Win32.SafeHandles;
+
+internal static class WindowsTestRunner
+{
+    const uint FileShareRead = 1, FileShareWrite = 2, OpenExisting = 3, FileFlagBackupSemantics = 0x02000000, FileFlagOpenReparsePoint = 0x00200000, InvalidFileAttributes = 0xffffffff;
+    const uint WaitObject0 = 0, WaitTimeout = 0x102, ProcessQueryLimitedInformation = 0x1000, Synchronize = 0x100000;
+    const uint DosRawTargetPath = 1, DosRemoveDefinition = 2, DosExactMatchOnRemove = 4, DosNoBroadcast = 8;
+    const int ProcThreadAttributeSecurityCapabilities = 0x20009, ProcThreadAttributeHandleList = 0x20002, ProcThreadAttributeJobList = 0x2000D, ProcThreadAttributeAllApplicationPackagesPolicy = 0x2000F;
+    const uint AllApplicationPackagesPolicyLpac = 1, JobObjectExtendedLimitInformation = 9, JobObjectLimitKillOnJobClose = 0x2000, JobObjectLimitActiveProcess = 0x8, JobObjectLimitBreakawayOk = 0x800, JobObjectLimitSilentBreakawayOk = 0x1000;
+    public sealed class Request
+    {
+        public string action;
+        public string nonce;
+        public string profile;
+        public string cwd;
+        public string runtime;
+        public string scratch;
+        public string executable;
+        public string[] args;
+        public int timeoutSeconds;
+        public int maxFiles;
+        public int maxOutputChars;
+        public bool network;
+        public bool childProcesses;
+        public string stateDirectory;
+        public Grant[] grants;
+        public Dictionary<string, string> environment;
+    }
+
+    public sealed class Grant
+    {
+        public string path;
+        public string rights;
+        public bool directory;
+        public uint volume;
+        public uint fileIndexHigh;
+        public uint fileIndexLow;
+    }
+
+    public sealed class Lease
+    {
+        public int version;
+        public string nonce;
+        public string profile;
+        public string sid;
+        public string phase;
+        public int controllerPid;
+        public long controllerStarted;
+        public string cwd;
+        public string runtime;
+        public string scratch;
+        public Grant[] grants;
+        public string logon;
+        public AliasPlan[] aliases;
+    }
+
+    public sealed class AliasPlan
+    {
+        public string kind;
+        public string physicalRoot;
+        public string customName;
+        public string drive;
+        public string aliasRoot;
+        public string customTarget;
+        public string driveTarget;
+        public uint volume;
+        public uint fileIndexHigh;
+        public uint fileIndexLow;
+        internal Mutex gate;
+    }
+
+    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }
+    [StructLayout(LayoutKind.Sequential)] struct SecurityCapabilities { public IntPtr sid, capabilities; public uint count, reserved; }
+    [StructLayout(LayoutKind.Sequential)] struct SidAndAttributes { public IntPtr sid; public uint attributes; }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct StartupInfo
+    {
+        public int cb; public string reserved, desktop, title;
+        public uint x, y, xSize, ySize, xChars, yChars, fill, flags;
+        public short showWindow, reservedSize; public IntPtr reservedBytes, input, output, error;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct StartupInfoEx { public StartupInfo startup; public IntPtr attributes; }
+    [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process, thread; public uint pid, threadId; }
+    [StructLayout(LayoutKind.Sequential)] struct BasicLimits
+    {
+        public long processTime, jobTime; public uint flags; public UIntPtr minimumWorkingSet, maximumWorkingSet;
+        public uint activeProcesses; public UIntPtr affinity; public uint priority, scheduling;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong readOps, writeOps, otherOps, readBytes, writeBytes, otherBytes; }
+    [StructLayout(LayoutKind.Sequential)] struct ExtendedLimits { public BasicLimits basic; public IoCounters io; public UIntPtr processMemory, jobMemory, peakProcessMemory, peakJobMemory; }
+    [StructLayout(LayoutKind.Sequential)] struct FileTime { public uint low, high; }
+    [StructLayout(LayoutKind.Sequential)] struct Luid { public uint low; public int high; }
+    [StructLayout(LayoutKind.Sequential)] struct TokenStatistics
+    {
+        public Luid tokenId, authenticationId; public long expiration; public uint tokenType, impersonationLevel, dynamicCharged, dynamicAvailable, groupCount, privilegeCount; public Luid modifiedId;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct ByHandleFileInformation
+    {
+        public uint attributes; public FileTime created, accessed, written; public uint volume, sizeHigh, sizeLow, links, indexHigh, indexLow;
+    }
+
+    sealed class PinnedTarget : IDisposable
+    {
+        public Grant grant;
+        readonly List<IntPtr> handles = new List<IntPtr>();
+        public void Add(IntPtr value) { handles.Add(value); }
+        public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }
+    }
+
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string display, string description, IntPtr capabilities, uint count, out IntPtr sid);
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeriveAppContainerSidFromAppContainerName(string name, out IntPtr sid);
+    [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);
+    [DllImport("kernelbase.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DeriveCapabilitySidsFromName(string name, out IntPtr groups, out uint groupCount, out IntPtr capabilities, out uint capabilityCount);
+    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, uint flags, ref UIntPtr size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, UIntPtr size, IntPtr previous, IntPtr returned);
+    [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcess(string app, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string cwd, ref StartupInfoEx startup, out ProcessInfo process);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes attributes, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int info, IntPtr limits, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr job, uint code);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint code);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint ResumeThread(IntPtr thread);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);
+    [DllImport("secur32.dll")] static extern int LsaEnumerateLogonSessions(out uint count, out IntPtr sessions);
+    [DllImport("secur32.dll")] static extern int LsaFreeReturnBuffer(IntPtr buffer);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint desiredAccess, bool inherit, uint processId);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetProcessTimes(IntPtr process, out FileTime creation, out FileTime exit, out FileTime kernel, out FileTime user);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int info, IntPtr limits, uint size, IntPtr returned);
+
+    static readonly IntPtr InvalidHandle = new IntPtr(-1);
+
+    static void Check(bool success, string operation)
+    {
+        if (!success) { int code = Marshal.GetLastWin32Error(); throw new Win32Exception(code, operation + " (Win32 " + code + "): " + new Win32Exception(code).Message); }
+    }
+    static void CheckHr(int result, string operation) { if (result < 0) throw new Exception(operation + ": 0x" + result.ToString("x8")); }
+    static bool IsNotFoundHresult(int value) { return value == unchecked((int)0x80070002) || value == unchecked((int)0x80070003); }
+    static long FileTimeValue(FileTime value) { return ((long)value.high << 32) | value.low; }
+
+    sealed class ControllerIdentity
+    {
+        public SecurityIdentifier user;
+        public string logon;
+    }
+
+    static ControllerIdentity CurrentControllerIdentity()
+    {
+        IntPtr token;
+        Check(OpenProcessToken(Process.GetCurrentProcess().Handle, 8, out token), "Open controller token");
+        try
+        {
+            uint returned;
+            GetTokenInformation(token, 1, IntPtr.Zero, 0, out returned);
+            if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid controller user token size");
+            IntPtr userData = Marshal.AllocHGlobal(checked((int)returned));
+            try
+            {
+                Check(GetTokenInformation(token, 1, userData, returned, out returned), "Read controller user token");
+                var user = new SecurityIdentifier(Marshal.ReadIntPtr(userData));
+                if (user.IsWellKnown(WellKnownSidType.LocalSystemSid)) throw new Exception("LocalSystem cannot create local DOS aliases");
+                int size = Marshal.SizeOf(typeof(TokenStatistics)); IntPtr statisticsData = Marshal.AllocHGlobal(size);
+                try
+                {
+                    Check(GetTokenInformation(token, 10, statisticsData, (uint)size, out returned), "Read controller logon token");
+                    var statistics = (TokenStatistics)Marshal.PtrToStructure(statisticsData, typeof(TokenStatistics));
+                    return new ControllerIdentity { user = user, logon = ((uint)statistics.authenticationId.high).ToString("x8") + "." + statistics.authenticationId.low.ToString("x8") };
+                }
+                finally { Marshal.FreeHGlobal(statisticsData); }
+            }
+            finally { Marshal.FreeHGlobal(userData); }
+        }
+        finally { CloseHandle(token); }
+    }
+
+    static bool TryParseLogon(string value, out Luid logon)
+    {
+        logon = new Luid();
+        if (String.IsNullOrEmpty(value) || value.Length != 17 || value[8] != '.') return false;
+        for (int index = 0; index < value.Length; index++) if (index != 8 && !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f') || (value[index] >= 'A' && value[index] <= 'F'))) return false;
+        uint high, low;
+        if (!UInt32.TryParse(value.Substring(0, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out high) || !UInt32.TryParse(value.Substring(9, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out low)) return false;
+        logon.high = unchecked((int)high); logon.low = low; return true;
+    }
+
+    static string DriveGateName(string logon, char letter)
+    {
+        Luid parsed; if (!TryParseLogon(logon, out parsed)) throw new Exception("Invalid logon identifier for DOS alias mutex");
+        return "Global\\\\AGY.TEST.DOS." + logon + "." + letter;
+    }
+
+    static bool LogonSessionExists(string value)
+    {
+        Luid expected; if (!TryParseLogon(value, out expected)) throw new Exception("Invalid logon identifier for DOS alias recovery");
+        uint count; IntPtr sessions; int status = LsaEnumerateLogonSessions(out count, out sessions);
+        if (status != 0) throw new Exception("Enumerate logon sessions: 0x" + status.ToString("x8"));
+        try
+        {
+            if (count > 1048576) throw new Exception("Logon session enumeration exceeded its bounded count");
+            int size = Marshal.SizeOf(typeof(Luid));
+            for (uint index = 0; index < count; index++)
+            {
+                var candidate = (Luid)Marshal.PtrToStructure(IntPtr.Add(sessions, checked((int)(index * (uint)size))), typeof(Luid));
+                if (candidate.high == expected.high && candidate.low == expected.low) return true;
+            }
+            return false;
+        }
+        finally
+        {
+            if (sessions != IntPtr.Zero)
+            {
+                int released = LsaFreeReturnBuffer(sessions);
+                if (released != 0) throw new Exception("Free logon session enumeration: 0x" + released.ToString("x8"));
+            }
+        }
+    }
+
+    static string[] QueryDosTargets(string name)
+    {
+        for (uint capacity = 256; capacity <= 65536; capacity *= 2)
+        {
+            var buffer = new char[checked((int)capacity)];
+            uint length = QueryDosDevice(name, buffer, capacity);
+            if (length != 0) return new String(buffer, 0, checked((int)length)).Split(new char[] { '\\0' }, StringSplitOptions.RemoveEmptyEntries);
+            int error = Marshal.GetLastWin32Error();
+            if (error == 2) return null;
+            if (error == 122) continue;
+            throw new Win32Exception(error, "Query DOS device " + name);
+        }
+        throw new Exception("DOS device query exceeded its bounded buffer");
+    }
+
+    static void RequireDosAbsent(string name)
+    {
+        string[] targets = QueryDosTargets(name);
+        if (targets != null) throw new Exception("DOS device is already defined: " + name);
+    }
+
+    static void RequireDosExact(string name, string target)
+    {
+        string[] targets = QueryDosTargets(name);
+        if (targets == null || targets.Length != 1 || !String.Equals(targets[0], target, StringComparison.Ordinal)) throw new Exception("DOS device definition is missing, foreign, or stacked: " + name);
+    }
+
+    static Mutex AcquireDriveGate(char letter, ControllerIdentity controller)
+    {
+        var security = new MutexSecurity(); security.SetOwner(controller.user);
+        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
+        bool created; Mutex gate = new Mutex(true, DriveGateName(controller.logon, letter), out created, security);
+        if (created) return gate;
+        gate.Close(); return null;
+    }
+
+    static Mutex AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)
+    {
+        var security = new MutexSecurity(); security.SetOwner(controller.user);
+        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
+        bool created, owned = false; Mutex gate = null;
+        try
+        {
+            gate = new Mutex(false, DriveGateName(logon, letter), out created, security);
+            try { owned = gate.WaitOne(0); }
+            catch (AbandonedMutexException) { owned = true; }
+            if (!owned) throw new Exception("DOS drive mutex is held: " + letter);
+            return gate;
+        }
+        catch
+        {
+            if (gate != null) { if (owned) gate.ReleaseMutex(); gate.Close(); }
+            throw;
+        }
+    }
+
+    static string RawDosTarget(string value) { return "\\\\??\\\\" + value; }
+
+    static AliasPlan[] CreateAliasPlan(Guid nonce, ControllerIdentity controller, PinnedTarget[] roots)
+    {
+        if (roots == null || roots.Length != 3) throw new Exception("Exactly three owned roots are required for DOS aliases");
+        string[] kinds = new string[] { "copy", "runtime", "scratch" };
+        var aliases = new AliasPlan[3]; int selected = 0;
+        try
+        {
+            for (char letter = 'Z'; letter >= 'D' && selected < aliases.Length; letter--)
+            {
+                string drive = letter + ":"; if (QueryDosTargets(drive) != null) continue;
+                Mutex gate = AcquireDriveGate(letter, controller); if (gate == null) continue;
+                try
+                {
+                    if (QueryDosTargets(drive) != null) continue;
+                    Grant root = roots[selected].grant;
+                    if (!root.directory) throw new Exception("Owned DOS alias root is not a directory");
+                    string custom = "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();
+                    RequireDosAbsent(custom);
+                    aliases[selected] = new AliasPlan { kind = kinds[selected], physicalRoot = root.path, customName = custom, drive = drive, aliasRoot = drive + "\\\\", customTarget = RawDosTarget(root.path), driveTarget = RawDosTarget(custom), volume = root.volume, fileIndexHigh = root.fileIndexHigh, fileIndexLow = root.fileIndexLow, gate = gate };
+                    gate = null; selected++;
+                }
+                finally { if (gate != null) { gate.ReleaseMutex(); gate.Close(); } }
+            }
+            if (selected != aliases.Length) throw new Exception("Fewer than three unused DOS drive letters are available");
+            return aliases;
+        }
+        catch { ReleaseAliasGates(aliases); throw; }
+    }
+
+    static void ReleaseAliasGates(AliasPlan[] aliases)
+    {
+        if (aliases == null) return;
+        for (int index = aliases.Length - 1; index >= 0; index--) if (aliases[index] != null && aliases[index].gate != null)
+        {
+            aliases[index].gate.ReleaseMutex(); aliases[index].gate.Close(); aliases[index].gate = null;
+        }
+    }
+
+    static void AcquireRecoveryAliasGates(AliasPlan[] aliases, ControllerIdentity controller, string logon)
+    {
+        try
+        {
+            for (int index = 0; index < aliases.Length; index++) aliases[index].gate = AcquireRecoveryDriveGate(aliases[index].drive[0], controller, logon);
+        }
+        catch { ReleaseAliasGates(aliases); throw; }
+    }
+
+    static void VerifyAliasRoot(AliasPlan alias)
+    {
+        IntPtr handle = CreateFile(alias.aliasRoot, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+        if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open DOS alias root");
+        try
+        {
+            ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect DOS alias root");
+            if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0 || (info.attributes & (uint)FileAttributes.Directory) == 0 || info.volume != alias.volume || info.indexHigh != alias.fileIndexHigh || info.indexLow != alias.fileIndexLow) throw new Exception("DOS alias root identity changed");
+        }
+        finally { CloseHandle(handle); }
+    }
+
+    static void DefineAlias(AliasPlan alias, bool drive)
+    {
+        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;
+        RequireDosAbsent(name); Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast, name, target), "Define DOS device " + name); RequireDosExact(name, target);
+    }
+
+    static void ApplyAliases(AliasPlan[] aliases)
+    {
+        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], false);
+        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], true);
+        for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
+    }
+
+    static void RemoveAlias(AliasPlan alias, bool drive)
+    {
+        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;
+        string[] current = QueryDosTargets(name); if (current == null) return;
+        if (current.Length != 1 || !String.Equals(current[0], target, StringComparison.Ordinal)) throw new Exception("DOS alias cleanup found a foreign or stacked definition: " + name);
+        Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast | DosRemoveDefinition | DosExactMatchOnRemove, name, target), "Remove DOS device " + name);
+        if (QueryDosTargets(name) != null) throw new Exception("DOS alias remained after exact cleanup: " + name);
+    }
+
+    static void RemoveAliases(AliasPlan[] aliases)
+    {
+        if (aliases == null) return;
+        var failures = new List<string>();
+        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], true); } catch (Exception error) { failures.Add(error.Message); }
+        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], false); } catch (Exception error) { failures.Add(error.Message); }
+        if (failures.Count != 0) throw new Exception(String.Join("; ", failures.ToArray()));
+    }
+
+    static bool IsPhysicalAbsolutePath(string value)
+    {
+        return !String.IsNullOrEmpty(value) && value.Length >= 3 && Char.IsLetter(value[0]) && value[1] == ':' && (value[2] == '\\\\' || value[2] == '/') && !value.StartsWith("\\\\\\\\", StringComparison.Ordinal) && value.IndexOf(':', 2) < 0;
+    }
+
+    static string ProjectOwnedPath(string value, AliasPlan[] aliases)
+    {
+        if (!IsPhysicalAbsolutePath(value)) return value;
+        for (int index = 0; index < aliases.Length; index++)
+        {
+            string root = aliases[index].physicalRoot;
+            if (value.Length < root.Length) continue;
+            bool match = true;
+            for (int character = 0; character < root.Length; character++)
+            {
+                char actual = value[character], expected = root[character];
+                if ((actual == '\\\\' || actual == '/') && (expected == '\\\\' || expected == '/')) continue;
+                if (Char.ToUpperInvariant(actual) != Char.ToUpperInvariant(expected)) { match = false; break; }
+            }
+            if (!match || (value.Length > root.Length && value[root.Length] != '\\\\' && value[root.Length] != '/')) continue;
+            string tail = value.Substring(root.Length).TrimStart('\\\\', '/');
+            foreach (string part in tail.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries)) if (part == "." || part == "..") return value;
+            return aliases[index].aliasRoot + tail.Replace('/', '\\\\');
+        }
+        return value;
+    }
+
+    static string[] ProjectArguments(string[] arguments, AliasPlan[] aliases)
+    {
+        var projected = new string[arguments.Length]; for (int index = 0; index < arguments.Length; index++) projected[index] = ProjectOwnedPath(arguments[index], aliases); return projected;
+    }
+
+    static Dictionary<string, string> ProjectEnvironment(Request request, AliasPlan[] aliases)
+    {
+        string systemRoot = Environment.GetEnvironmentVariable("SystemRoot"); RequireLocalAbsolutePath(systemRoot, "SystemRoot");
+        var projected = new Dictionary<string, string>(request.environment, StringComparer.OrdinalIgnoreCase);
+        AliasPlan runtime = aliases[1], scratch = aliases[2];
+        projected["PATH"] = runtime.aliasRoot + ";" + Path.Combine(systemRoot, "System32");
+        foreach (string key in new string[] { "TEMP", "TMP", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA" }) projected[key] = scratch.aliasRoot;
+        string comspec; if (!projected.TryGetValue("COMSPEC", out comspec)) comspec = Path.Combine(systemRoot, "System32", "cmd.exe"); projected["COMSPEC"] = ProjectOwnedPath(comspec, aliases);
+        return projected;
+    }
+
+    static List<Dictionary<string, string>> PathMappings(AliasPlan[] aliases)
+    {
+        var mappings = new List<Dictionary<string, string>>(); foreach (AliasPlan alias in aliases) mappings.Add(new Dictionary<string, string> { { "kind", alias.kind }, { "aliasRoot", alias.aliasRoot }, { "physicalRoot", alias.physicalRoot } }); return mappings;
+    }
+
+    static void RequireLocalAbsolutePath(string value, string description)
+    {
+        if (String.IsNullOrEmpty(value) || value.IndexOf('\\0') >= 0 || value.StartsWith("\\\\\\\\", StringComparison.Ordinal) || value.StartsWith("//", StringComparison.Ordinal) ||
+            value.StartsWith("\\\\\\\\?\\\\", StringComparison.Ordinal) || value.StartsWith("\\\\\\\\.\\\\", StringComparison.Ordinal) || value.Length < 3 ||
+            !Char.IsLetter(value[0]) || value[1] != ':' || (value[2] != '\\\\' && value[2] != '/')) throw new Exception(description + " must be a local absolute path");
+        if (value.IndexOf(':', 2) >= 0) throw new Exception(description + " cannot use an alternate data stream");
+    }
+
+    static string OwnedTemporaryPath(string directory, string prefix)
+    {
+        RequireLocalAbsolutePath(directory, "Directory");
+        string full = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);
+        string parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
+        if (!String.Equals(Path.GetDirectoryName(full), parent, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith(prefix, StringComparison.Ordinal)) throw new Exception("Directory is not owned temporary storage");
+        return full;
+    }
+
+    static string OwnedDirectory(string directory, string prefix)
+    {
+        string full = OwnedTemporaryPath(directory, prefix);
+        if (!Directory.Exists(full) || (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0) throw new Exception("Directory was replaced or linked");
+        return full;
+    }
+
+    static string StateLeaseDirectory(string stateDirectory)
+    {
+        RequireLocalAbsolutePath(stateDirectory, "State directory");
+        string state = Path.GetFullPath(stateDirectory).TrimEnd(Path.DirectorySeparatorChar);
+        if (!Directory.Exists(state) || (File.GetAttributes(state) & FileAttributes.ReparsePoint) != 0) throw new Exception("State directory is unavailable or linked");
+        string lease = Path.Combine(state, "windows-lpac-leases");
+        if (!Directory.Exists(lease)) Directory.CreateDirectory(lease);
+        if ((File.GetAttributes(lease) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease directory is linked");
+        return lease;
+    }
+
+    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)
+    {
+        RequireLocalAbsolutePath(full, "Permission target");
+        string canonical = Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar);
+        if (String.Equals(canonical + Path.DirectorySeparatorChar, Path.GetPathRoot(canonical), StringComparison.OrdinalIgnoreCase)) throw new Exception("Permission target cannot be a volume root");
+        string root = Path.GetPathRoot(canonical), tail = canonical.Substring(root.Length), current = root;
+        if (tail.Length == 0) throw new Exception("Permission target cannot be a volume root");
+        string[] pieces = tail.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        for (int index = 0; index < pieces.Length; index++)
+        {
+            current = Path.Combine(current, pieces[index]);
+            IntPtr handle = CreateFile(current, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+            if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open permission target");
+            try
+            {
+                ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");
+                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0) throw new Exception("Permission target contains a reparse point");
+                bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;
+                if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");
+                if (index == pieces.Length - 1)
+                {
+                    if (!directory && info.links > 1) throw new Exception("Permission target file has multiple hard links");
+                    target.grant.path = canonical; target.grant.directory = directory; target.grant.volume = info.volume; target.grant.fileIndexHigh = info.indexHigh; target.grant.fileIndexLow = info.indexLow;
+                }
+                target.Add(handle); handle = IntPtr.Zero;
+            }
+            finally { if (handle != IntPtr.Zero && handle != InvalidHandle) CloseHandle(handle); }
+        }
+        if (walkTree && target.grant.directory) ScanTree(canonical, maxFiles, new int[] { 0 });
+    }
+
+    static void ScanTree(string directory, int maxFiles, int[] count)
+    {
+        foreach (string child in Directory.GetFileSystemEntries(directory))
+        {
+            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
+            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };
+            try { ValidatePathComponents(child, temporary, false, maxFiles); if (temporary.grant.directory) ScanTree(child, maxFiles, count); }
+            finally { temporary.Dispose(); }
+        }
+    }
+
+    static PinnedTarget PinGrant(Grant supplied, int maxFiles)
+    {
+        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights } };
+        try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }
+        catch { target.Dispose(); throw; }
+    }
+
+    static bool SameIdentity(Grant expected, Grant actual)
+    {
+        return expected.directory == actual.directory && expected.volume == actual.volume && expected.fileIndexHigh == actual.fileIndexHigh && expected.fileIndexLow == actual.fileIndexLow;
+    }
+
+    static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }
+
+    static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)
+    {
+        var rule = new FileSystemAccessRule(identity, RightsFor(target.grant), target.grant.directory ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit : InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow);
+        if (target.grant.directory)
+        {
+            var acl = Directory.GetAccessControl(target.grant.path);
+            if (grant) acl.AddAccessRule(rule); else acl.RemoveAccessRuleSpecific(rule);
+            Directory.SetAccessControl(target.grant.path, acl);
+        }
+        else
+        {
+            var acl = File.GetAccessControl(target.grant.path);
+            if (grant) acl.AddAccessRule(rule); else acl.RemoveAccessRuleSpecific(rule);
+            File.SetAccessControl(target.grant.path, acl);
+        }
+    }
+
+    static string Quote(string argument)
+    {
+        var result = new StringBuilder("\\""); int slashes = 0;
+        foreach (char character in argument)
+        {
+            if (character == '\\\\') { slashes++; continue; }
+            if (character == '"') result.Append('\\\\', slashes * 2 + 1);
+            else result.Append('\\\\', slashes);
+            result.Append(character); slashes = 0;
+        }
+        result.Append('\\\\', slashes * 2); return result.Append('"').ToString();
+    }
+
+    static long CurrentProcessStart()
+    {
+        FileTime created, exited, kernel, user;
+        Check(GetProcessTimes(Process.GetCurrentProcess().Handle, out created, out exited, out kernel, out user), "Read controller start time");
+        return FileTimeValue(created);
+    }
+
+    static void WriteLease(string path, Lease lease, bool initial, JavaScriptSerializer serializer)
+    {
+        byte[] data = new UTF8Encoding(false).GetBytes(serializer.Serialize(lease));
+        if (initial)
+        {
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }
+            return;
+        }
+        string temporary = path + ".update." + Process.GetCurrentProcess().Id.ToString() + ".tmp";
+        using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }
+        try { File.Replace(temporary, path, null); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    static void ValidateLease(Lease lease, string expectedFile)
+    {
+        Guid nonce;
+        if (lease == null || (lease.version != 1 && lease.version != 2) || !Guid.TryParseExact(lease.nonce, "D", out nonce) || String.IsNullOrEmpty(lease.profile) ||
+            !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||
+            lease.controllerPid <= 0 || lease.controllerStarted <= 0 || lease.grants == null || (lease.phase != "creating" && lease.phase != "active" && lease.phase != "cleanup-failed")) throw new Exception("Invalid Windows LPAC lease");
+        if (lease.phase != "creating" && String.IsNullOrEmpty(lease.sid)) throw new Exception("Lease has no profile identity");
+        OwnedTemporaryPath(lease.cwd, "agy-mcp-copy-"); OwnedTemporaryPath(lease.runtime, "agy-mcp-runtime-"); OwnedTemporaryPath(lease.scratch, "agy-mcp-scratch-");
+        if (lease.version == 2) ValidateLeaseAliases(lease, nonce);
+    }
+
+    static void ValidateLeaseAliases(Lease lease, Guid nonce)
+    {
+        Luid logon; if (!TryParseLogon(lease.logon, out logon) || lease.aliases == null || lease.aliases.Length != 3) throw new Exception("Invalid Windows LPAC alias lease");
+        string[] kinds = new string[] { "copy", "runtime", "scratch" }, roots = new string[] { lease.cwd, lease.runtime, lease.scratch }; var drives = new HashSet<char>();
+        for (int index = 0; index < lease.aliases.Length; index++)
+        {
+            AliasPlan alias = lease.aliases[index];
+            if (alias == null || !String.Equals(alias.kind, kinds[index], StringComparison.Ordinal) || !String.Equals(alias.physicalRoot, roots[index], StringComparison.OrdinalIgnoreCase) ||
+                !String.Equals(alias.customName, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||
+                String.IsNullOrEmpty(alias.drive) || alias.drive.Length != 2 || alias.drive[0] < 'D' || alias.drive[0] > 'Z' || alias.drive[1] != ':' || !drives.Add(alias.drive[0]) || (index != 0 && alias.drive[0] >= lease.aliases[index - 1].drive[0]) || !String.Equals(alias.aliasRoot, alias.drive + "\\\\", StringComparison.Ordinal) ||
+                !String.Equals(alias.customTarget, RawDosTarget(roots[index]), StringComparison.Ordinal) || !String.Equals(alias.driveTarget, RawDosTarget(alias.customName), StringComparison.Ordinal)) throw new Exception("Invalid Windows LPAC alias plan");
+        }
+    }
+
+    static bool ControllerIsActive(Lease lease)
+    {
+        IntPtr process = OpenProcess(ProcessQueryLimitedInformation | Synchronize, false, (uint)lease.controllerPid);
+        if (process == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            if (error == 87 || error == 1168) return false;
+            throw new Win32Exception(error, "Cannot verify lease controller");
+        }
+        try
+        {
+            FileTime created, exited, kernel, user;
+            Check(GetProcessTimes(process, out created, out exited, out kernel, out user), "Verify lease controller start time");
+            uint state = WaitForSingleObject(process, 0);
+            if (state == WaitTimeout) return FileTimeValue(created) == lease.controllerStarted;
+            if (state == WaitObject0) return false;
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Verify lease controller state");
+        }
+        finally { CloseHandle(process); }
+    }
+
+    static SecurityIdentifier LeaseIdentity(Lease lease)
+    {
+        if (lease.phase == "creating") return null;
+        var identity = new SecurityIdentifier(lease.sid);
+        IntPtr derived; int result = DeriveAppContainerSidFromAppContainerName(lease.profile, out derived);
+        if (result >= 0 && derived != IntPtr.Zero)
+        {
+            try { if (!identity.Equals(new SecurityIdentifier(derived))) throw new Exception("Lease profile SID does not match its profile name"); }
+            finally { FreeSid(derived); }
+        }
+        else if (!IsNotFoundHresult(result)) CheckHr(result, "Verify lease profile SID");
+        return identity;
+    }
+
+    static bool IsMissingOwnedTemporaryGrant(Lease lease, Grant grant)
+    {
+        if (grant == null || !grant.directory) return false;
+        string directory = null, prefix = null;
+        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = "agy-mcp-copy-"; }
+        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = "agy-mcp-runtime-"; }
+        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = "agy-mcp-scratch-"; }
+        else return false;
+        directory = OwnedTemporaryPath(directory, prefix);
+        if (GetFileAttributes(directory) != InvalidFileAttributes) return false;
+        int error = Marshal.GetLastWin32Error();
+        return error == 2 || error == 3;
+    }
+
+    static void DeleteProfile(string profile)
+    {
+        int result = DeleteAppContainerProfile(profile);
+        if (result < 0 && !IsNotFoundHresult(result)) CheckHr(result, "Delete AppContainer profile");
+    }
+
+    static void Recover(string stateDirectory, Dictionary<string, object> result, JavaScriptSerializer serializer)
+    {
+        string directory = StateLeaseDirectory(stateDirectory); var failures = new List<string>(); int recovered = 0, active = 0;
+        foreach (string file in Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease file is linked");
+                Lease lease = serializer.Deserialize<Lease>(File.ReadAllText(file, Encoding.UTF8)); ValidateLease(lease, file);
+                if (ControllerIsActive(lease)) { active++; continue; }
+                SecurityIdentifier identity = LeaseIdentity(lease); var pins = new List<PinnedTarget>(); var cleanupFailures = new List<string>();
+                try
+                {
+                    if (lease.version == 2)
+                    {
+                        try
+                        {
+                            ControllerIdentity controller = CurrentControllerIdentity();
+                            if (String.Equals(controller.logon, lease.logon, StringComparison.Ordinal))
+                            {
+                                AcquireRecoveryAliasGates(lease.aliases, controller, lease.logon);
+                                try { RemoveAliases(lease.aliases); }
+                                finally { ReleaseAliasGates(lease.aliases); }
+                            }
+                            else if (LogonSessionExists(lease.logon)) throw new Exception("Lease logon session remains active");
+                        }
+                        catch (Exception error) { cleanupFailures.Add("DOS aliases: " + error.Message); }
+                    }
+                    if (identity != null)
+                    {
+                        for (int index = lease.grants.Length - 1; index >= 0; index--)
+                        {
+                            if (IsMissingOwnedTemporaryGrant(lease, lease.grants[index])) continue;
+                            PinnedTarget pin = null;
+                            try { pin = PinGrant(lease.grants[index], 1000000); if (!SameIdentity(lease.grants[index], pin.grant)) throw new Exception("Granted target identity changed"); Access(pin, identity, false); pins.Add(pin); pin = null; }
+                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); if (pin != null) pin.Dispose(); }
+                        }
+                    }
+                    try { DeleteProfile(lease.profile); } catch (Exception error) { cleanupFailures.Add("Profile: " + error.Message); }
+                }
+                finally { for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose(); }
+                if (cleanupFailures.Count != 0)
+                {
+                    lease.phase = "cleanup-failed"; try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }
+                    throw new Exception(String.Join("; ", cleanupFailures.ToArray()));
+                }
+                File.Delete(file); recovered++;
+            }
+            catch (Exception error) { failures.Add(Path.GetFileName(file) + ": " + error.Message); }
+        }
+        result["recovered"] = recovered; result["active"] = active;
+        if (failures.Count != 0) result["error"] = "Windows LPAC recovery failed: " + String.Join("; ", failures.ToArray());
+    }
+
+    static IntPtr DeriveCapability(string name, List<IntPtr> allocations)
+    {
+        IntPtr groups, caps; uint groupCount, capabilityCount;
+        Check(DeriveCapabilitySidsFromName(name, out groups, out groupCount, out caps, out capabilityCount), "Derive " + name + " capability");
+        try
+        {
+            if (capabilityCount != 1) throw new Exception("Unexpected " + name + " capability count");
+            IntPtr sid = Marshal.ReadIntPtr(caps); allocations.Add(sid); return sid;
+        }
+        finally
+        {
+            for (int index = 0; index < (int)groupCount; index++) LocalFree(Marshal.ReadIntPtr(groups, index * IntPtr.Size));
+            if (groups != IntPtr.Zero) LocalFree(groups);
+            if (caps != IntPtr.Zero) LocalFree(caps);
+        }
+    }
+
+    static void AddGrant(List<Grant> grants, string path, string rights)
+    {
+        if (String.IsNullOrEmpty(path)) throw new Exception("Missing owned permission target");
+        foreach (Grant existing in grants) if (String.Equals(existing.path, path, StringComparison.OrdinalIgnoreCase)) { if (rights == "modify") existing.rights = "modify"; return; }
+        grants.Add(new Grant { path = path, rights = rights });
+    }
+
+    static bool IsBridgeOwnedTemporaryPath(string value)
+    {
+        foreach (string part in value.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("agy-mcp-copy-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-baseline-", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith("agy-mcp-runtime-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-controller-", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    static int Main(string[] arguments)
+    {
+        Console.OutputEncoding = new UTF8Encoding(false);
+        var serializer = new JavaScriptSerializer { MaxJsonLength = 2 * 1024 * 1024 };
+        var result = new Dictionary<string, object>();
+        string profile = null, leaseFile = null, cwd = null, runtime = null, scratch = null;
+        SecurityIdentifier identity = null; Lease lease = null;
+        ControllerIdentity controller = null; AliasPlan[] aliases = null;
+        IntPtr sid = IntPtr.Zero, job = IntPtr.Zero, attributes = IntPtr.Zero, capabilityData = IntPtr.Zero, lpacData = IntPtr.Zero, handleData = IntPtr.Zero, jobData = IntPtr.Zero, envData = IntPtr.Zero, capabilityList = IntPtr.Zero;
+        IntPtr read = IntPtr.Zero, write = IntPtr.Zero, inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero;
+        ProcessInfo child = new ProcessInfo(); bool attributesInitialized = false, profileCreated = false;
+        var pins = new List<PinnedTarget>(); var applied = new List<PinnedTarget>();
+        var capabilitySids = new List<IntPtr>();
+        var output = new StringBuilder(); bool truncated = false; Thread reader = null; object jobGate = new object(); int cancellation = 0;
+        try
+        {
+            if (arguments.Length != 1) throw new Exception("One controller request file is required");
+            var request = serializer.Deserialize<Request>(File.ReadAllText(arguments[0], Encoding.UTF8));
+            if (request == null || String.IsNullOrEmpty(request.action)) throw new Exception("Invalid controller request");
+            if (request.action == "recover")
+            {
+                Recover(request.stateDirectory, result, serializer); result["output"] = ""; result["truncated"] = false;
+                Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
+            }
+            if (request.action != "write" && request.action != "read-only") throw new Exception("Invalid controller action");
+            Guid nonce; if (!Guid.TryParseExact(request.nonce, "D", out nonce)) throw new Exception("Invalid nonce");
+            if (!String.Equals(request.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");
+            result["nonce"] = request.nonce;
+            if (request.timeoutSeconds < 1 || request.timeoutSeconds > 86400 || request.maxFiles < 1 || request.maxFiles > 1000000 || request.maxOutputChars < 256 || request.maxOutputChars > 64000 || request.args == null || request.environment == null || request.grants == null) throw new Exception("Invalid request");
+            if (request.args.Length > 50) throw new Exception("Too many command arguments");
+            foreach (string argument in request.args) if (argument == null || argument.Length > 4000 || argument.IndexOf('\\0') >= 0) throw new Exception("Invalid command argument");
+            cwd = OwnedDirectory(request.cwd, "agy-mcp-copy-"); runtime = OwnedDirectory(request.runtime, "agy-mcp-runtime-"); scratch = OwnedDirectory(request.scratch, "agy-mcp-scratch-");
+            string executable = Path.GetFullPath(request.executable);
+            if (!executable.StartsWith(runtime + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(executable) || (File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0) throw new Exception("Executable must be staged inside the runtime");
+            var requestedGrants = new List<Grant>();
+            AddGrant(requestedGrants, cwd, request.action == "read-only" ? "read" : "modify");
+            AddGrant(requestedGrants, runtime, "read"); AddGrant(requestedGrants, scratch, "modify");
+            foreach (Grant grant in request.grants)
+            {
+                if (grant == null || IsBridgeOwnedTemporaryPath(grant.path)) throw new Exception("External permission grant targets bridge-owned temporary storage");
+                AddGrant(requestedGrants, grant.path, grant.rights);
+            }
+            if (requestedGrants.Count > 23) throw new Exception("Too many permission grants");
+            foreach (Grant grant in requestedGrants) pins.Add(PinGrant(grant, request.maxFiles));
+            string state = StateLeaseDirectory(request.stateDirectory);
+            profile = request.profile; leaseFile = Path.Combine(state, nonce.ToString("N") + ".json");
+            controller = CurrentControllerIdentity(); aliases = CreateAliasPlan(nonce, controller, new PinnedTarget[] { pins[0], pins[1], pins[2] });
+            lease = new Lease { version = 2, nonce = request.nonce, profile = profile, phase = "creating", controllerPid = Process.GetCurrentProcess().Id, controllerStarted = CurrentProcessStart(), cwd = cwd, runtime = runtime, scratch = scratch, grants = new Grant[0], logon = controller.logon, aliases = aliases };
+            WriteLease(leaseFile, lease, true, serializer);
+            CheckHr(CreateAppContainerProfile(profile, profile, "Isolated test process", IntPtr.Zero, 0, out sid), "CreateAppContainerProfile");
+            profileCreated = true; identity = new SecurityIdentifier(sid);
+            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Temp"));
+            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Local"));
+            var recorded = new List<Grant>(); foreach (PinnedTarget pin in pins) recorded.Add(pin.grant);
+            lease.sid = identity.Value; lease.grants = recorded.ToArray(); lease.phase = "active"; WriteLease(leaseFile, lease, false, serializer);
+            foreach (PinnedTarget pin in pins) { applied.Add(pin); Access(pin, identity, true); }
+            ApplyAliases(aliases); result["pathMappings"] = PathMappings(aliases);
+
+            var inheritable = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), inherit = 1 };
+            Check(CreatePipe(out read, out write, ref inheritable, 0), "Create output pipe"); Check(SetHandleInformation(read, 1, 0), "Protect output reader");
+            Check(CreatePipe(out inputRead, out inputWrite, ref inheritable, 0), "Create input pipe"); CloseHandle(inputWrite); inputWrite = IntPtr.Zero;
+            job = CreateJobObject(IntPtr.Zero, null); Check(job != IntPtr.Zero, "Create job");
+            var limits = new ExtendedLimits(); limits.basic.flags = JobObjectLimitKillOnJobClose | (request.childProcesses ? 0u : JobObjectLimitActiveProcess); limits.basic.activeProcesses = request.childProcesses ? 0u : 1u; IntPtr limitData = Marshal.AllocHGlobal(Marshal.SizeOf(limits));
+            try { Marshal.StructureToPtr(limits, limitData, false); Check(SetInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits)), "Require job cleanup"); Marshal.DestroyStructure(limitData, typeof(ExtendedLimits)); Check(QueryInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits), IntPtr.Zero), "Verify job limits"); var observed = (ExtendedLimits)Marshal.PtrToStructure(limitData, typeof(ExtendedLimits)); if ((observed.basic.flags & JobObjectLimitKillOnJobClose) == 0 || (observed.basic.flags & (JobObjectLimitBreakawayOk | JobObjectLimitSilentBreakawayOk)) != 0 || (!request.childProcesses && ((observed.basic.flags & JobObjectLimitActiveProcess) == 0 || observed.basic.activeProcesses != 1))) throw new Exception("Job limits were not applied"); }
+            finally { Marshal.FreeHGlobal(limitData); }
+            DeriveCapability("registryRead", capabilitySids);
+            if (request.network) { DeriveCapability("internetClient", capabilitySids); DeriveCapability("privateNetworkClientServer", capabilitySids); }
+                int sidAndAttributesSize = Marshal.SizeOf(typeof(SidAndAttributes)); capabilityList = Marshal.AllocHGlobal(sidAndAttributesSize * capabilitySids.Count);
+                for (int index = 0; index < capabilitySids.Count; index++) Marshal.StructureToPtr(new SidAndAttributes { sid = capabilitySids[index], attributes = 4 }, IntPtr.Add(capabilityList, index * sidAndAttributesSize), false);
+                var caps = new SecurityCapabilities { sid = sid, capabilities = capabilityList, count = (uint)capabilitySids.Count };
+                capabilityData = Marshal.AllocHGlobal(Marshal.SizeOf(caps)); Marshal.StructureToPtr(caps, capabilityData, false);
+                int attributeCount = 4; UIntPtr size = UIntPtr.Zero; InitializeProcThreadAttributeList(IntPtr.Zero, attributeCount, 0, ref size);
+                attributes = Marshal.AllocHGlobal(checked((int)size.ToUInt64())); Check(InitializeProcThreadAttributeList(attributes, attributeCount, 0, ref size), "Initialize attributes"); attributesInitialized = true;
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeSecurityCapabilities), capabilityData, new UIntPtr((uint)Marshal.SizeOf(caps)), IntPtr.Zero, IntPtr.Zero), "Set AppContainer");
+                lpacData = Marshal.AllocHGlobal(4); Marshal.WriteInt32(lpacData, (int)AllApplicationPackagesPolicyLpac);
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeAllApplicationPackagesPolicy), lpacData, new UIntPtr(4), IntPtr.Zero, IntPtr.Zero), "Require LPAC");
+                handleData = Marshal.AllocHGlobal(IntPtr.Size * 2); Marshal.WriteIntPtr(handleData, write); Marshal.WriteIntPtr(handleData, IntPtr.Size, inputRead);
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeHandleList), handleData, new UIntPtr((uint)(IntPtr.Size * 2)), IntPtr.Zero, IntPtr.Zero), "Restrict inherited handles");
+                jobData = Marshal.AllocHGlobal(IntPtr.Size); Marshal.WriteIntPtr(jobData, job);
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeJobList), jobData, new UIntPtr((uint)IntPtr.Size), IntPtr.Zero, IntPtr.Zero), "Assign job at process creation");
+            var startup = new StartupInfoEx(); startup.startup.cb = Marshal.SizeOf(startup); startup.startup.flags = 0x100; startup.startup.input = inputRead; startup.startup.output = write; startup.startup.error = write; startup.attributes = attributes;
+            string aliasExecutable = ProjectOwnedPath(executable, aliases), aliasCwd = ProjectOwnedPath(cwd, aliases); if (String.Equals(aliasExecutable, executable, StringComparison.OrdinalIgnoreCase) || String.Equals(aliasCwd, cwd, StringComparison.OrdinalIgnoreCase)) throw new Exception("Owned paths were not projected to DOS aliases");
+            var command = new StringBuilder(Quote(aliasExecutable)); foreach (string argument in ProjectArguments(request.args, aliases)) command.Append(' ').Append(Quote(argument));
+            Dictionary<string, string> projectedEnvironment = ProjectEnvironment(request, aliases); var environment = new StringBuilder(); var keys = new List<string>(projectedEnvironment.Keys); keys.Sort(StringComparer.OrdinalIgnoreCase);
+            foreach (string key in keys) { string value = projectedEnvironment[key]; if (String.IsNullOrEmpty(key) || value == null || key.IndexOfAny(new char[] { '=', '\\0' }) >= 0 || value.IndexOf('\\0') >= 0) throw new Exception("Invalid environment"); environment.Append(key).Append('=').Append(value).Append('\\0'); }
+            environment.Append('\\0'); envData = Marshal.StringToHGlobalUni(environment.ToString());
+            Check(CreateProcess(aliasExecutable, command, IntPtr.Zero, IntPtr.Zero, true, 0x80000 | 0x400 | 0x4 | 0x8000000, envData, aliasCwd, ref startup, out child), "Create isolated process");
+            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);
+            capabilitySids.Clear();
+            bool inJob; Check(IsProcessInJob(child.process, job, out inJob) && inJob, "Verify isolated job");
+            IntPtr token; Check(OpenProcessToken(child.process, 8, out token), "Inspect child token");
+            try
+            {
+                IntPtr info = Marshal.AllocHGlobal(IntPtr.Size); uint returned;
+                try
+                {
+                    Check(GetTokenInformation(token, 29, info, (uint)IntPtr.Size, out returned), "Verify AppContainer token"); if (Marshal.ReadInt32(info) != 1) throw new Exception("AppContainer token missing");
+                    GetTokenInformation(token, 31, IntPtr.Zero, 0, out returned); if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid package identity size"); IntPtr packageInfo = Marshal.AllocHGlobal(checked((int)returned));
+                    try { Check(GetTokenInformation(token, 31, packageInfo, returned, out returned), "Verify package identity"); if (!identity.Equals(new SecurityIdentifier(Marshal.ReadIntPtr(packageInfo)))) throw new Exception("Package identity mismatch"); }
+                    finally { Marshal.FreeHGlobal(packageInfo); }
+                }
+                finally { Marshal.FreeHGlobal(info); }
+            }
+            finally { CloseHandle(token); }
+            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
+            var cancelReader = new Thread(delegate() { string message = Console.ReadLine(); if (message == null || message == "cancel " + request.nonce) { Interlocked.Exchange(ref cancellation, 1); lock (jobGate) { if (job != IntPtr.Zero) TerminateJobObject(job, 125); } } }); cancelReader.IsBackground = true; cancelReader.Start();
+            CloseHandle(write); write = IntPtr.Zero; CloseHandle(inputRead); inputRead = IntPtr.Zero; IntPtr outputHandle = read; read = IntPtr.Zero;
+            reader = new Thread(delegate() { using (var stream = new FileStream(new SafeFileHandle(outputHandle, true), FileAccess.Read)) using (var text = new StreamReader(stream, Encoding.UTF8)) { char[] buffer = new char[2048]; int count; while ((count = text.Read(buffer, 0, buffer.Length)) != 0) { output.Append(buffer, 0, count); if (output.Length > request.maxOutputChars) { truncated = true; output.Remove(0, output.Length - request.maxOutputChars); } } } }); reader.Start();
+            if (ResumeThread(child.thread) == UInt32.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error(), "Resume isolated process");
+            result["pid"] = child.pid; result["sandbox"] = "windows-lpac";
+            uint wait = WaitForSingleObject(child.process, checked((uint)request.timeoutSeconds * 1000));
+            if (wait == WaitTimeout) { result["error"] = "Command timed out"; Check(TerminateJobObject(job, 124), "Terminate timed out job"); if (WaitForSingleObject(child.process, 5000) != WaitObject0) throw new Exception("Timed out process did not terminate"); }
+            else if (wait != WaitObject0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Wait for isolated process");
+            uint exit; Check(GetExitCodeProcess(child.process, out exit), "Read exit code"); result["exitCode"] = exit;
+            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
+            if (Interlocked.CompareExchange(ref cancellation, 0, 0) != 0) result["error"] = "Command cancelled";
+        }
+        catch (Exception error) { result["error"] = error.Message; result["exitCode"] = null; }
+        finally
+        {
+            if (child.process != IntPtr.Zero) TerminateProcess(child.process, 125);
+            lock (jobGate) { if (job != IntPtr.Zero) { CloseHandle(job); job = IntPtr.Zero; } }
+            if (write != IntPtr.Zero) CloseHandle(write); if (reader != null && !reader.Join(5000)) result["error"] = "Output reader did not terminate";
+            if (child.thread != IntPtr.Zero) CloseHandle(child.thread); if (child.process != IntPtr.Zero) CloseHandle(child.process); if (read != IntPtr.Zero) CloseHandle(read); if (inputRead != IntPtr.Zero) CloseHandle(inputRead); if (inputWrite != IntPtr.Zero) CloseHandle(inputWrite);
+            if (attributesInitialized) DeleteProcThreadAttributeList(attributes);
+            foreach (IntPtr pointer in new IntPtr[] { attributes, capabilityData, capabilityList, lpacData, handleData, jobData, envData }) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer);
+            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);
+            var failures = new List<string>();
+            if (aliases != null) try { RemoveAliases(aliases); result["aliasesDeleted"] = true; } catch (Exception error) { failures.Add("DOS aliases: " + error.Message); } finally { ReleaseAliasGates(aliases); }
+            for (int index = applied.Count - 1; index >= 0; index--) try { Access(applied[index], identity, false); } catch (Exception error) { failures.Add("ACL " + index.ToString() + ": " + error.Message); }
+            if (profileCreated) try { DeleteProfile(profile); result["profileDeleted"] = true; } catch (Exception error) { failures.Add("Profile: " + error.Message); }
+            for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose();
+            if (sid != IntPtr.Zero) FreeSid(sid);
+            if (leaseFile != null)
+            {
+                if (failures.Count == 0 && profileCreated) { try { File.Delete(leaseFile); } catch (Exception error) { failures.Add("Lease: " + error.Message); } }
+                if (failures.Count != 0) try { if (lease != null) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }
+            }
+            if (failures.Count != 0) result["error"] = "Cleanup failed: " + String.Join("; ", failures.ToArray());
+        }
+        result["output"] = output.ToString(); result["truncated"] = truncated; Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
+    }
+}
+`;
+
+// dist/src/windows-runtime.js
+import { constants as constants3 } from "node:fs";
+import { createHash as createHash7 } from "node:crypto";
+import { chmod, lstat as lstat5, mkdir as mkdir4, open as open3, readdir as readdir4, unlink as unlink2 } from "node:fs/promises";
+import path9 from "node:path";
+
+// dist/src/portable-node.js
+import { createHash as createHash6, randomUUID as randomUUID3 } from "node:crypto";
+import { spawn as spawn3 } from "node:child_process";
+import { constants as constants2 } from "node:fs";
+import { lstat as lstat4, mkdir as mkdir3, open as open2, readFile as readFile3, readdir as readdir3, rename, rm as rm3, unlink } from "node:fs/promises";
+import path8 from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+
+// dist/src/portable-node-descriptor.js
+var portableNodeDescriptor = {
+  available: true,
+  buildId: "node-v24.21.0-lpac1-win-x64",
+  releaseTag: "runtime-node-v24.21.0-lpac1-win-x64",
+  releaseRepository: "https://github.com/Zythenth/antigravity-mcp-bridge",
+  platform: "win32",
+  arch: "x64",
+  nodeVersion: "24.21.0",
+  moduleAbi: 137,
+  libuvVersion: "1.52.1",
+  libuvPatch: "f46e4246b5277fe1c5888b88b24d8b78020dd4f8",
+  source: {
+    repository: "https://github.com/nodejs/node",
+    ref: "v24.21.0",
+    libuvPatch: "f46e4246b5277fe1c5888b88b24d8b78020dd4f8"
+  },
+  assets: {
+    node: {
+      fileName: "node.exe",
+      url: "https://github.com/Zythenth/antigravity-mcp-bridge/releases/download/runtime-node-v24.21.0-lpac1-win-x64/node.exe",
+      bytes: 104059392,
+      sha256: "17a57ea14327d66e4c873866c29b3d87adce9321b9868b071d73c938458390e8"
+    },
+    license: {
+      fileName: "LICENSE",
+      url: "https://github.com/Zythenth/antigravity-mcp-bridge/releases/download/runtime-node-v24.21.0-lpac1-win-x64/LICENSE",
+      bytes: 157609,
+      sha256: "5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace"
+    },
+    buildMetadata: {
+      fileName: "build.json",
+      url: "https://github.com/Zythenth/antigravity-mcp-bridge/releases/download/runtime-node-v24.21.0-lpac1-win-x64/build.json",
+      bytes: 1682,
+      sha256: "bec7b3c590076895c074c4a085ea9d6aea7dec1cecb19518e7eb968eaf522d7e"
+    }
+  }
+};
+
+// dist/src/portable-node.js
+var downloadTimeoutMs = 6e4;
+var redirectLimit = 5;
+var maxAssetBytes = { "node.exe": 256 * 1024 * 1024, LICENSE: 1024 * 1024, "build.json": 1024 * 1024 };
+var githubRedirectHosts = /* @__PURE__ */ new Set(["github.com", "objects.githubusercontent.com", "github-releases.githubusercontent.com", "release-assets.githubusercontent.com"]);
+var windowsPowerShell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+var releaseRepository = "https://github.com/Zythenth/antigravity-mcp-bridge";
+var releaseTag = "runtime-node-v24.21.0-lpac1-win-x64";
+var buildId = "node-v24.21.0-lpac1-win-x64";
+var nodeVersion = "24.21.0";
+var libuvVersion = "1.52.1";
+var libuvPatch = "f46e4246b5277fe1c5888b88b24d8b78020dd4f8";
+var cacheRepair = " Remove the affected portable Node build cache manually, then run --prepare-windows-runtime.";
+var reparsePointScript = `$ErrorActionPreference='Stop';$request=[Console]::In.ReadToEnd()|ConvertFrom-Json;foreach($target in @($request.paths)){$root=[IO.Path]::GetPathRoot([string]$target);if([string]::IsNullOrEmpty($root)){throw 'Path must be absolute'};$relative=([string]$target).Substring($root.Length);$current=$root;try{$attributes=[IO.File]::GetAttributes($current)}catch{throw 'Could not inspect root'};if(($attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'};foreach($part in ($relative -split '[\\\\/]+')){if([string]::IsNullOrWhiteSpace($part)){continue};$current=Join-Path -Path $current -ChildPath $part;try{$attributes=[IO.File]::GetAttributes($current)}catch [IO.FileNotFoundException]{break}catch [IO.DirectoryNotFoundException]{break};if(($attributes -band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'}}};[Console]::Out.Write('{"safe":true}')`;
+var reparsePointCommand = Buffer.from(reparsePointScript, "utf16le").toString("base64");
+function fail(code, message) {
+  throw new BridgeError(code, message);
+}
+function sameFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
+}
+function assetPath(root, descriptor, asset) {
+  return path8.join(root, cacheLeafName(descriptor), asset.fileName);
+}
+function cacheLeafName(descriptor) {
+  return descriptor.buildId + "-" + descriptor.assets.node.sha256;
+}
+function descriptorError(descriptor) {
+  return new BridgeError("PORTABLE_NODE_DESCRIPTOR_UNAVAILABLE", descriptor.available ? "Portable Node runtime descriptor is invalid" : descriptor.unavailableReason);
+}
+function requireDescriptor(value) {
+  if (!value.available)
+    throw descriptorError(value);
+  const assets = [value.assets.node, value.assets.license, value.assets.buildMetadata];
+  const names = ["node.exe", "LICENSE", "build.json"];
+  if (value.buildId !== buildId || value.releaseTag !== releaseTag || value.releaseRepository !== releaseRepository || value.nodeVersion !== nodeVersion || value.libuvVersion !== libuvVersion || value.libuvPatch !== libuvPatch || value.source.repository !== "https://github.com/nodejs/node" || value.source.ref !== "v24.21.0" || value.source.libuvPatch !== libuvPatch || value.platform !== "win32" || value.arch !== "x64" || value.moduleAbi !== 137 || assets.some((asset, index) => asset.fileName !== names[index] || !Number.isSafeInteger(asset.bytes) || asset.bytes < 1 || asset.bytes > maxAssetBytes[asset.fileName] || !/^[a-f0-9]{64}$/.test(asset.sha256) || !isGithubReleaseAsset(value, asset))) {
+    throw descriptorError(value);
+  }
+  return value;
+}
+function isGithubReleaseAsset(descriptor, asset) {
+  let url2;
+  try {
+    url2 = new URL(asset.url);
+  } catch {
+    return false;
+  }
+  let repository;
+  try {
+    repository = new URL(descriptor.releaseRepository);
+  } catch {
+    return false;
+  }
+  return repository.protocol === "https:" && repository.hostname === "github.com" && repository.username === "" && repository.password === "" && url2.protocol === "https:" && url2.hostname === repository.hostname && url2.username === "" && url2.password === "" && url2.search === "" && url2.hash === "" && url2.pathname === repository.pathname + "/releases/download/" + descriptor.releaseTag + "/" + asset.fileName;
+}
+function absoluteCacheDirectory(value) {
+  if (typeof value !== "string" || value.includes("\0"))
+    fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local path");
+  if (process.platform === "win32") {
+    if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
+      fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
+    }
+  } else if (!path8.isAbsolute(value)) {
+    fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
+  }
+  const absolute = path8.resolve(value);
+  if (absolute === path8.parse(absolute).root)
+    fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
+  return absolute;
+}
+async function inspectReparsePoints(paths2) {
+  if (process.platform !== "win32" || paths2.length === 0)
+    return;
+  const result = await new Promise((resolve, reject) => {
+    const child = spawn3(windowsPowerShell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", reparsePointCommand], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "", stderr = "", stopped = false;
+    const stop = () => {
+      if (!stopped) {
+        stopped = true;
+        child.kill();
+      }
+    };
+    const timer = setTimeout(stop, 5e3);
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+      if (stdout.length > 1024)
+        stop();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+      if (stderr.length > 1024)
+        stop();
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    });
+    child.stdin.end(JSON.stringify({ paths: paths2 }));
+  }).catch((error62) => {
+    throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Could not inspect portable runtime cache reparse points: " + (error62 instanceof Error ? error62.message : String(error62)));
+  });
+  if (result.code !== 0 || result.stdout !== '{"safe":true}') {
+    throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected");
+  }
+}
+async function inspectCachePath(value, create = false) {
+  const absolute = absoluteCacheDirectory(value);
+  await inspectReparsePoints([absolute]);
+  if (create)
+    await mkdir3(absolute, { recursive: true, mode: 448 });
+  const info = await lstat4(absolute).catch((error62) => {
+    if (error62.code === "ENOENT")
+      fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime has not been prepared");
+    throw error62;
+  });
+  if (!info.isDirectory() || info.isSymbolicLink())
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache must be a regular directory");
+  await inspectReparsePoints([absolute]);
+}
+async function regularCacheFile(file3, expectedSize) {
+  await inspectReparsePoints([file3]);
+  const info = await lstat4(file3).catch((error62) => {
+    if (error62.code === "ENOENT")
+      fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is incomplete; run --prepare-windows-runtime");
+    throw error62;
+  });
+  if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1 || !Number.isSafeInteger(info.size) || info.size < 0 || expectedSize !== void 0 && info.size !== expectedSize) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache contains an unsafe or unexpected file." + cacheRepair);
+  }
+  return info;
+}
+async function sha256File2(file3, expectedSize) {
+  const before = await regularCacheFile(file3, expectedSize);
+  const size = Number(before.size);
+  if (!Number.isSafeInteger(size) || size < 0)
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file has an invalid size");
+  const handle = await open2(file3, "r");
+  try {
+    const opened = await handle.stat();
+    if (!sameFile(opened, before))
+      fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
+    const hash3 = createHash6("sha256");
+    const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
+    let offset = 0;
+    while (offset < size) {
+      const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, size - offset), offset);
+      if (bytesRead === 0)
+        fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file was truncated while it was verified." + cacheRepair);
+      hash3.update(buffer.subarray(0, bytesRead));
+      offset += bytesRead;
+    }
+    const after = await handle.stat();
+    if (!sameFile(after, before))
+      fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
+    return hash3.digest("hex");
+  } finally {
+    await handle.close();
+  }
+}
+async function verifyAsset(root, descriptor, asset) {
+  const file3 = assetPath(root, descriptor, asset);
+  if (await sha256File2(file3, asset.bytes) !== asset.sha256) {
+    fail("PORTABLE_NODE_HASH_MISMATCH", "Portable Node cache asset hash does not match the embedded descriptor." + cacheRepair);
+  }
+}
+async function verifyCacheLayout(root, descriptor) {
+  const leaf = path8.join(root, cacheLeafName(descriptor));
+  const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
+  const entries = await readdir3(leaf, { withFileTypes: true });
+  if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache build directory has an unexpected entry." + cacheRepair);
+  }
+}
+async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableNodeDescriptor) {
+  if (process.platform !== "win32" || process.arch !== "x64")
+    fail("WINDOWS_RUNTIME_UNSUPPORTED", "Portable Node runtime is only available on Windows x64");
+  const pinned = requireDescriptor(descriptor);
+  const root = absoluteCacheDirectory(cacheDirectory);
+  await inspectCachePath(root);
+  const leaf = path8.join(root, cacheLeafName(pinned));
+  const leafInfo = await lstat4(leaf).catch((error62) => {
+    if (error62.code === "ENOENT")
+      fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
+    throw error62;
+  });
+  if (!leafInfo.isDirectory() || leafInfo.isSymbolicLink())
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache build directory is unsafe." + cacheRepair);
+  await inspectReparsePoints([leaf]);
+  await verifyCacheLayout(root, pinned);
+  await verifyAsset(root, pinned, pinned.assets.node);
+  await verifyAsset(root, pinned, pinned.assets.license);
+  await verifyAsset(root, pinned, pinned.assets.buildMetadata);
+  return {
+    nodePath: assetPath(root, pinned, pinned.assets.node),
+    identity: { buildId: pinned.buildId, nodeVersion: pinned.nodeVersion, libuvVersion: pinned.libuvVersion, sha256: pinned.assets.node.sha256 }
+  };
+}
+async function fetchAsset(url2, fetchImpl, signal) {
+  let current = url2;
+  for (let redirects = 0; redirects <= redirectLimit; redirects++) {
+    if (current.protocol !== "https:" || current.username !== "" || current.password !== "" || current.hash !== "" || !githubRedirectHosts.has(current.hostname)) {
+      fail("PORTABLE_NODE_DOWNLOAD_REJECTED", "Portable Node download URL or redirect host is not allowed");
+    }
+    const response2 = await fetchImpl(current, { redirect: "manual", signal });
+    if (response2.status >= 300 && response2.status < 400) {
+      const location = response2.headers.get("location");
+      if (!location)
+        fail("PORTABLE_NODE_DOWNLOAD_REJECTED", "Portable Node download redirect did not include a location");
+      current = new URL(location, current);
+      continue;
+    }
+    if (!response2.ok || !response2.body)
+      fail("PORTABLE_NODE_DOWNLOAD_FAILED", "Portable Node download returned HTTP " + response2.status);
+    return response2;
+  }
+  fail("PORTABLE_NODE_DOWNLOAD_REJECTED", "Portable Node download exceeded the redirect limit");
+}
+async function downloadAsset(asset, destination, fetchImpl) {
+  const url2 = new URL(asset.url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), downloadTimeoutMs);
+  try {
+    const response2 = await fetchAsset(url2, fetchImpl, controller.signal);
+    const contentLength = response2.headers.get("content-length");
+    if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) !== asset.bytes)) {
+      fail("PORTABLE_NODE_DOWNLOAD_REJECTED", "Portable Node download size does not match the embedded descriptor");
+    }
+    const file3 = await open2(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
+    try {
+      const reader = response2.body.getReader();
+      const hash3 = createHash6("sha256");
+      let bytes = 0;
+      for (; ; ) {
+        const item = await reader.read();
+        if (item.done)
+          break;
+        const chunk = Buffer.from(item.value);
+        bytes += chunk.length;
+        if (bytes > asset.bytes)
+          fail("PORTABLE_NODE_DOWNLOAD_REJECTED", "Portable Node download exceeded its embedded size limit");
+        hash3.update(chunk);
+        let offset = 0;
+        while (offset < chunk.length) {
+          const written = await file3.write(chunk, offset, chunk.length - offset, bytes - chunk.length + offset);
+          if (written.bytesWritten === 0)
+            fail("PORTABLE_NODE_DOWNLOAD_FAILED", "Portable Node download could not be written completely");
+          offset += written.bytesWritten;
+        }
+      }
+      if (bytes !== asset.bytes || hash3.digest("hex") !== asset.sha256) {
+        fail("PORTABLE_NODE_HASH_MISMATCH", "Portable Node download does not match the embedded descriptor");
+      }
+    } finally {
+      await file3.close();
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+async function removeOwnedTemporary(root, temporary) {
+  if (path8.dirname(temporary) !== root || !path8.basename(temporary).startsWith(".portable-node-")) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
+  }
+  await inspectReparsePoints([temporary]);
+  const info = await lstat4(temporary).catch((error62) => {
+    if (error62.code === "ENOENT")
+      return void 0;
+    throw error62;
+  });
+  if (!info)
+    return;
+  if (!info.isDirectory() || info.isSymbolicLink())
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary directory was replaced");
+  await rm3(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+}
+function processAlive2(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error62) {
+    return error62.code !== "ESRCH";
+  }
+}
+async function recoverDeadPreparationLock(file3) {
+  await inspectReparsePoints([file3]);
+  const before = await lstat4(file3).catch((error62) => {
+    if (error62.code === "ENOENT")
+      return void 0;
+    throw error62;
+  });
+  if (!before)
+    return true;
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink > 1 || Number(before.size) > 512) {
+    fail("PORTABLE_NODE_BUSY", "Portable Node preparation lock is not safe to recover");
+  }
+  let owner;
+  try {
+    owner = JSON.parse(await readFile3(file3, "utf8"));
+  } catch {
+    fail("PORTABLE_NODE_BUSY", "Portable Node preparation lock owner is unknown");
+  }
+  const pid = typeof owner === "object" && owner !== null ? owner.pid : void 0;
+  if (!Number.isSafeInteger(pid) || typeof pid !== "number" || pid < 1 || processAlive2(pid))
+    return false;
+  const after = await lstat4(file3).catch(() => void 0);
+  if (!after || !sameFile(before, after))
+    return false;
+  await unlink(file3);
+  return true;
+}
+async function acquirePreparationLock(root, descriptor) {
+  const file3 = path8.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  for (let attempt = 0; attempt < 120; attempt++) {
+    try {
+      const handle = await open2(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
+      await handle.writeFile(JSON.stringify({ pid: process.pid }));
+      const expected = await handle.stat();
+      await handle.close();
+      return async () => {
+        await inspectReparsePoints([file3]);
+        const current = await lstat4(file3).catch((error62) => {
+          if (error62.code === "ENOENT")
+            return void 0;
+          throw error62;
+        });
+        if (!current)
+          fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock disappeared before release");
+        if (!sameFile(current, expected))
+          fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock was replaced before release");
+        await unlink(file3);
+      };
+    } catch (error62) {
+      if (error62.code !== "EEXIST")
+        throw error62;
+      if (await recoverDeadPreparationLock(file3))
+        continue;
+      try {
+        await resolvePortableNodeRuntime(root, descriptor);
+        return async () => {
+        };
+      } catch (verifyError) {
+        if (!(verifyError instanceof BridgeError) || verifyError.code !== "PORTABLE_NODE_NOT_PREPARED")
+          throw verifyError;
+      }
+      await delay(250);
+    }
+  }
+  fail("PORTABLE_NODE_BUSY", "Another process is preparing the portable Node runtime");
+}
+async function preparePortableNodeRuntime(options) {
+  if (process.platform !== "win32" || process.arch !== "x64")
+    fail("WINDOWS_RUNTIME_UNSUPPORTED", "Portable Node preparation is only available on Windows x64");
+  const descriptor = requireDescriptor(options.descriptor ?? portableNodeDescriptor);
+  const root = absoluteCacheDirectory(options.cacheDirectory);
+  await inspectCachePath(root, true);
+  try {
+    return await resolvePortableNodeRuntime(root, descriptor);
+  } catch (error62) {
+    if (!(error62 instanceof BridgeError) || error62.code !== "PORTABLE_NODE_NOT_PREPARED")
+      throw error62;
+  }
+  const release = await acquirePreparationLock(root, descriptor);
+  const temporary = path8.join(root, ".portable-node-" + randomUUID3());
+  try {
+    try {
+      return await resolvePortableNodeRuntime(root, descriptor);
+    } catch (error62) {
+      if (!(error62 instanceof BridgeError) || error62.code !== "PORTABLE_NODE_NOT_PREPARED")
+        throw error62;
+    }
+    await mkdir3(temporary, { mode: 448 });
+    await inspectReparsePoints([temporary]);
+    const fetchImpl = options.fetch ?? globalThis.fetch;
+    for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
+      await downloadAsset(asset, path8.join(temporary, asset.fileName), fetchImpl);
+    }
+    const final = path8.join(root, cacheLeafName(descriptor));
+    try {
+      await rename(temporary, final);
+    } catch (error62) {
+      if (error62.code !== "EEXIST" && error62.code !== "EPERM")
+        throw error62;
+      try {
+        await lstat4(final);
+      } catch {
+        throw error62;
+      }
+    }
+    return await resolvePortableNodeRuntime(root, descriptor);
+  } finally {
+    let cleanupError;
+    try {
+      await removeOwnedTemporary(root, temporary);
+    } catch (error62) {
+      cleanupError = error62;
+    }
+    try {
+      await release();
+    } catch (releaseError) {
+      if (cleanupError)
+        throw new AggregateError([cleanupError, releaseError], "Portable Node preparation cleanup and lock release failed");
+      throw releaseError;
+    }
+    if (cleanupError)
+      throw cleanupError;
+  }
+}
+async function portableNodeStatus(requestedMode, cacheDirectory, descriptor = portableNodeDescriptor) {
+  const base = {
+    requestedMode,
+    supported: process.platform === "win32" && process.arch === "x64",
+    ready: false,
+    buildId: descriptor.buildId,
+    nodeVersion: descriptor.nodeVersion,
+    libuvVersion: descriptor.libuvVersion,
+    sha256: descriptor.available ? descriptor.assets.node.sha256 : null
+  };
+  if (!base.supported)
+    return { ...base, error: { code: "WINDOWS_RUNTIME_UNSUPPORTED", message: "Portable Node is only supported on Windows x64" } };
+  try {
+    const runtime = await resolvePortableNodeRuntime(cacheDirectory, descriptor);
+    return { ...base, ready: true, sha256: runtime.identity.sha256 };
+  } catch (error62) {
+    return { ...base, error: { code: error62 instanceof BridgeError ? error62.code : "PORTABLE_NODE_STATUS_FAILED", message: error62 instanceof Error ? error62.message : String(error62) } };
+  }
+}
+
+// dist/src/windows-runtime.js
+var maxInspectionBytes = 128 * 1024;
+function fail2(code, message) {
+  throw new BridgeError(code, message);
+}
+function canonicalKey2(file3) {
+  return path9.resolve(file3).toLocaleLowerCase("en-US");
+}
+function isUnsafeWindowsPath(value) {
+  const normalized = value.replaceAll("/", "\\");
+  const basename = path9.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
+  return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename) || withoutDrive.includes(":");
+}
+function validateWindowsCommand(command2) {
+  if (typeof command2.executable !== "string" || !Array.isArray(command2.args) || command2.executable.length === 0 || command2.executable.length > 1e3 || command2.args.length > 50 || isUnsafeWindowsPath(command2.executable) || command2.args.some((argument) => typeof argument !== "string" || argument.length > 4e3 || argument.includes("\0"))) {
+    fail2("INVALID_TEST_COMMAND", "Windows commands cannot use remote paths, device paths, alternate streams or NUL characters");
+  }
+  const normalized = command2.executable.replaceAll("/", "\\");
+  if (normalized.split("\\").some((part) => part === "." || part === "..")) {
+    fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
+  }
+  if (!path9.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+    fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
+  }
+}
+function validateLimits(limits) {
+  if (!Number.isSafeInteger(limits.maxBytes) || limits.maxBytes < 1 || !Number.isSafeInteger(limits.maxFiles) || limits.maxFiles < 1) {
+    fail2("INVALID_RUNTIME_LIMIT", "Runtime byte and file limits must be positive safe integers");
+  }
+}
+async function assertSafePath(file3) {
+  const absolute = path9.resolve(file3);
+  const parsed = path9.parse(absolute);
+  const parts = path9.relative(parsed.root, absolute).split(path9.sep).filter(Boolean);
+  let current = parsed.root;
+  for (const part of parts) {
+    current = path9.join(current, part);
+    const info = await lstat5(current);
+    if (info.isSymbolicLink())
+      fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
+  }
+}
+function isSameFile(observed, expected) {
+  return observed.dev === expected.dev && observed.ino === expected.ino && observed.size === expected.size && observed.nlink === expected.nlink;
+}
+async function regularFile(file3, allowMultipleLinks = false) {
+  await assertSafePath(file3);
+  const info = await lstat5(file3);
+  if (!info.isFile() || info.isSymbolicLink())
+    fail2("UNSAFE_RUNTIME_PATH", "Runtime files must be regular files: " + file3);
+  if (!allowMultipleLinks && info.nlink > 1)
+    fail2("UNSAFE_RUNTIME_PATH", "Runtime files cannot have multiple hard links: " + file3);
+  if (!Number.isSafeInteger(info.size) || info.size < 0)
+    fail2("UNSAFE_RUNTIME_PATH", "Runtime file has an invalid size: " + file3);
+  return info;
+}
+async function readBoundedFile(file3, limit) {
+  const expected = await regularFile(file3);
+  if (expected.size > limit)
+    fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher or manifest exceeds its inspection limit");
+  const source = await open3(file3, "r");
+  try {
+    const observed = await source.stat();
+    if (!observed.isFile() || observed.nlink > 1 || !isSameFile(observed, expected) || observed.size > limit) {
+      fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher or manifest changed while it was inspected");
+    }
+    const bytes = Buffer.alloc(expected.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const { bytesRead } = await source.read(bytes, offset, bytes.length - offset, offset);
+      if (bytesRead === 0)
+        fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher or manifest was truncated while it was inspected");
+      offset += bytesRead;
+    }
+    return bytes;
+  } finally {
+    await source.close();
+  }
+}
+function commandNames(executable) {
+  const basename = path9.win32.basename(executable).toLocaleLowerCase("en-US");
+  if (basename === "npm" || basename === "npm.cmd") {
+    return { kind: "npm", names: [basename === "npm" ? executable + ".cmd" : executable] };
+  }
+  const extension = path9.extname(executable).toLocaleLowerCase("en-US");
+  if (extension === ".cmd" || extension === ".bat") {
+    fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
+  }
+  if (extension && extension !== ".exe") {
+    fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "The Windows executor requires a native .exe or npm.cmd");
+  }
+  return { kind: "native", names: [extension ? executable : executable + ".exe"] };
+}
+async function resolveCommand(executable) {
+  const requested = commandNames(executable);
+  const directories = path9.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path9.delimiter).filter((directory) => directory && path9.isAbsolute(directory));
+  for (const directory of directories) {
+    for (const name of requested.names) {
+      const candidate = path9.isAbsolute(name) ? path9.resolve(name) : path9.resolve(directory, name);
+      try {
+        if (!(await lstat5(candidate)).isFile())
+          continue;
+        await regularFile(candidate);
+        return { file: candidate, kind: requested.kind };
+      } catch (error62) {
+        if (error62.code === "ENOENT" || error62.code === "ENOTDIR")
+          continue;
+        throw error62;
+      }
+    }
+  }
+  fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
+}
+function stagedPath(runtime, relative) {
+  const target = path9.resolve(runtime, ...relative);
+  const prefix = runtime.endsWith(path9.sep) ? runtime : runtime + path9.sep;
+  if (!target.startsWith(prefix))
+    fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
+  return target;
+}
+async function stageDirectory(directory, state) {
+  const target = path9.resolve(directory);
+  if (target === state.runtime)
+    return;
+  const prefix = state.runtime.endsWith(path9.sep) ? state.runtime : state.runtime + path9.sep;
+  if (!target.startsWith(prefix))
+    fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
+  const targetKey = canonicalKey2(target);
+  if (state.directories.has(targetKey))
+    return;
+  if (state.targets.has(targetKey))
+    fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
+  const parent = path9.dirname(target);
+  if (parent === target)
+    fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
+  await stageDirectory(parent, state);
+  if (state.entries + 1 > state.maxFiles)
+    fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
+  await mkdir4(target);
+  state.entries++;
+  state.directories.add(targetKey);
+}
+async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
+  const source = path9.resolve(sourcePath);
+  const target = path9.resolve(targetPath);
+  const sourceKey = canonicalKey2(source);
+  const targetKey = canonicalKey2(target);
+  const previousTarget = state.sources.get(sourceKey);
+  if (previousTarget !== void 0) {
+    if (previousTarget !== targetKey)
+      fail2("UNSAFE_RUNTIME_PATH", "A runtime source was assigned more than one staging path");
+    return target;
+  }
+  const previousSource = state.targets.get(targetKey);
+  if (previousSource !== void 0 && previousSource !== sourceKey) {
+    fail2("UNSAFE_RUNTIME_PATH", "Different runtime sources would overwrite the same staging path");
+  }
+  const expected = await regularFile(source, allowMultipleLinks);
+  if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
+    fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
+  }
+  await stageDirectory(path9.dirname(target), state);
+  const sourceHandle = await open3(source, "r");
+  let targetHandle;
+  let created = false;
+  try {
+    const observed = await sourceHandle.stat();
+    if (!observed.isFile() || !allowMultipleLinks && observed.nlink > 1 || !isSameFile(observed, expected))
+      fail2("UNSAFE_RUNTIME_PATH", "Runtime file changed while it was staged: " + source);
+    if (requirePe) {
+      const dosHeader = Buffer.alloc(64);
+      const dosRead = await sourceHandle.read(dosHeader, 0, dosHeader.length, 0);
+      const peOffset = dosRead.bytesRead === dosHeader.length ? dosHeader.readUInt32LE(60) : 0;
+      if (dosHeader.subarray(0, 2).toString("ascii") !== "MZ" || peOffset < dosHeader.length || peOffset > expected.size - 4) {
+        fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "Runtime executable or DLL has no Windows image header");
+      }
+      const signature = Buffer.alloc(4);
+      const signatureRead = await sourceHandle.read(signature, 0, signature.length, peOffset);
+      if (signatureRead.bytesRead !== signature.length || signature.toString("ascii") !== "PE\0\0") {
+        fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "Runtime executable or DLL has no Windows image header");
+      }
+    }
+    targetHandle = await open3(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
+    created = true;
+    const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = expectedSha256 ? createHash7("sha256") : void 0;
+    let offset = 0;
+    while (offset < expected.size) {
+      const length = Math.min(buffer.length, expected.size - offset);
+      const { bytesRead } = await sourceHandle.read(buffer, 0, length, offset);
+      if (bytesRead === 0)
+        fail2("UNSAFE_RUNTIME_PATH", "Runtime file was truncated while it was staged: " + source);
+      hash3?.update(buffer.subarray(0, bytesRead));
+      let written = 0;
+      while (written < bytesRead) {
+        const result = await targetHandle.write(buffer, written, bytesRead - written, offset + written);
+        if (result.bytesWritten === 0)
+          fail2("UNSAFE_RUNTIME_PATH", "Runtime file could not be staged completely: " + source);
+        written += result.bytesWritten;
+      }
+      offset += bytesRead;
+    }
+    const after = await sourceHandle.stat();
+    if (!after.isFile() || !allowMultipleLinks && after.nlink > 1 || !isSameFile(after, expected))
+      fail2("UNSAFE_RUNTIME_PATH", "Runtime file changed while it was staged: " + source);
+    if (hash3 && hash3.digest("hex") !== expectedSha256)
+      fail2("PORTABLE_NODE_HASH_MISMATCH", "Portable Node cache executable changed while it was staged");
+    await chmod(target, 292);
+    state.entries++;
+    state.bytes += expected.size;
+    state.sources.set(sourceKey, targetKey);
+    state.targets.set(targetKey, sourceKey);
+    return target;
+  } catch (error62) {
+    if (created)
+      await unlink2(target).catch(() => {
+      });
+    throw error62;
+  } finally {
+    await targetHandle?.close();
+    await sourceHandle.close();
+  }
+}
+async function hashStagedFile(file3) {
+  const expected = await regularFile(file3);
+  const handle = await open3(file3, "r");
+  try {
+    const opened = await handle.stat();
+    if (!isSameFile(opened, expected))
+      fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
+    const hash3 = createHash7("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    let offset = 0;
+    while (offset < expected.size) {
+      const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
+      if (bytesRead === 0)
+        fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file was truncated while it was verified");
+      hash3.update(buffer.subarray(0, bytesRead));
+      offset += bytesRead;
+    }
+    if (!isSameFile(await handle.stat(), expected))
+      fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
+    return hash3.digest("hex");
+  } finally {
+    await handle.close();
+  }
+}
+async function stageNativeExecutable(source, destination, state, expectedSha256) {
+  const executable = await stageFile(source, destination, state, true, false, expectedSha256);
+  if (expectedSha256 && await hashStagedFile(executable) !== expectedSha256) {
+    fail2("PORTABLE_NODE_HASH_MISMATCH", "Staged portable Node executable hash does not match the embedded descriptor");
+  }
+  if (expectedSha256)
+    return executable;
+  const directory = path9.dirname(source);
+  const siblings = await readdir4(directory, { withFileTypes: true });
+  for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
+    if (!/\.dll$/iu.test(entry.name))
+      continue;
+    if (!entry.isFile() || entry.isSymbolicLink())
+      fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
+    await stageFile(path9.join(directory, entry.name), path9.join(path9.dirname(destination), entry.name), state, true);
+  }
+  return executable;
+}
+function npmPathIsOmitted(parts) {
+  const lower = parts.map((part) => part.toLocaleLowerCase("en-US"));
+  const name = lower.at(-1);
+  if (lower.some((part) => part === "docs" || part === "man"))
+    return true;
+  if (lower.length === 1 && name === "cache")
+    return true;
+  if (name === ".npmrc" || name === ".netrc" || name === "credentials" || name === "credentials.json")
+    return true;
+  return name === "npmrc" && lower.length !== 1;
+}
+function npmrcContainsSecret(contents) {
+  return /(?:^|\r?\n)\s*(?:(?:\/\/)[^\s:]+(?::\d+)?\/?:)?(?:_auth(?:token)?|_password|password|token|certfile|keyfile)\s*=/iu.test(contents);
+}
+async function stageNpmDirectory(source, destination, state, relative = []) {
+  await stageDirectory(destination, state);
+  const entries = await readdir4(source, { withFileTypes: true });
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
+    const childRelative = [...relative, entry.name];
+    if (npmPathIsOmitted(childRelative))
+      continue;
+    const childSource = path9.join(source, entry.name);
+    const childDestination = path9.join(destination, entry.name);
+    if (entry.isSymbolicLink())
+      fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
+    if (entry.isDirectory()) {
+      await stageNpmDirectory(childSource, childDestination, state, childRelative);
+    } else if (entry.isFile()) {
+      if (childRelative.length === 1 && entry.name.toLocaleLowerCase("en-US") === "npmrc") {
+        const contents = (await readBoundedFile(childSource, maxInspectionBytes)).toString("utf8");
+        if (npmrcContainsSecret(contents))
+          fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The bundled npm configuration contains credentials");
+      }
+      await stageFile(childSource, childDestination, state);
+    } else {
+      fail2("UNSAFE_RUNTIME_PATH", "npm runtime contains an unsupported file type");
+    }
+  }
+}
+async function stageSystemCmd(systemRoot, runtime, state) {
+  const source = path9.join(systemRoot, "System32", "cmd.exe");
+  return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
+}
+async function stageNpm(launcher, runtime, state, args, portableNode) {
+  const launcherText = (await readBoundedFile(launcher, maxInspectionBytes)).toString("utf8").replaceAll("/", "\\").toLocaleLowerCase("en-US");
+  if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
+    fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
+  }
+  const nodeDirectory = path9.dirname(launcher);
+  const nodeSource = path9.join(nodeDirectory, "node.exe");
+  const npmSource = path9.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path9.join(npmSource, "package.json");
+  const cliSource = path9.join(npmSource, "bin", "npm-cli.js");
+  let manifest;
+  try {
+    manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
+  } catch (error62) {
+    if (error62 instanceof BridgeError)
+      throw error62;
+    fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The installed npm package manifest is invalid");
+  }
+  const npmManifest = typeof manifest === "object" && manifest !== null ? manifest : void 0;
+  const bin = npmManifest?.bin;
+  const npmBin = typeof bin === "object" && bin !== null ? bin.npm : void 0;
+  if (npmManifest?.name !== "npm" || typeof npmBin !== "string" || npmBin.replaceAll("/", "\\").toLocaleLowerCase("en-US") !== "bin\\npm-cli.js") {
+    fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The installed npm package name or bin entry is incompatible with staged execution");
+  }
+  await regularFile(cliSource);
+  const node2 = await stageNativeExecutable(portableNode?.nodePath ?? nodeSource, stagedPath(runtime, ["node.exe"]), state, portableNode?.identity.sha256);
+  await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
+  const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
+  const systemRoot = process.env.SystemRoot || "C:\\Windows";
+  if (!path9.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+    fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
+  }
+  const comspec = await stageSystemCmd(systemRoot, runtime, state);
+  return { executable: node2, args: [cli, ...args], pathEntries: [path9.dirname(node2)], comspec, portableNode: portableNode?.identity };
+}
+async function hostNodeIdentity(file3) {
+  const [candidate, host] = await Promise.all([regularFile(file3), regularFile(process.execPath)]);
+  return isSameFile(candidate, host);
+}
+async function portableNodeForHostRuntime(file3, selection) {
+  if ((selection.mode ?? "system") !== "portable" || !await hostNodeIdentity(file3))
+    return void 0;
+  const major = Number.parseInt(process.versions.node.split(".")[0] || "", 10);
+  if (major !== 24)
+    fail2("PORTABLE_NODE_HOST_UNSUPPORTED", "Portable Node substitution requires the bridge host Node.js major version to be 24");
+  if (!selection.portableNodeCacheDirectory)
+    fail2("PORTABLE_NODE_NOT_PREPARED", "Portable Node cache directory was not configured");
+  return resolvePortableNodeRuntime(selection.portableNodeCacheDirectory);
+}
+async function stageWindowsCommand(command2, runtimeDirectory, limits, selection = {}) {
+  if (process.platform !== "win32")
+    fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
+  validateWindowsCommand(command2);
+  validateLimits(limits);
+  const runtime = path9.resolve(runtimeDirectory);
+  await assertSafePath(runtime);
+  const runtimeInfo = await lstat5(runtime);
+  if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir4(runtime)).length !== 0) {
+    fail2("UNSAFE_RUNTIME_PATH", "Windows runtime staging requires an empty owned directory");
+  }
+  const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
+  const resolved = await resolveCommand(command2.executable);
+  if (resolved.kind === "npm") {
+    const adjacentNode = path9.join(path9.dirname(resolved.file), "node.exe");
+    return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection));
+  }
+  const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path9.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  return { executable, args: [...command2.args], pathEntries: [path9.dirname(executable)], portableNode: portableNode?.identity };
+}
+
+// dist/src/windows-executor.js
+var pathMappingSchema = external_exports.object({ kind: external_exports.enum(["copy", "runtime", "scratch"]), aliasRoot: external_exports.string().regex(/^[A-Z]:\\$/), physicalRoot: external_exports.string().min(3).max(32767) }).strict();
+var executionSchema = external_exports.object({
+  nonce: external_exports.string().uuid(),
+  pid: external_exports.number().int().positive().optional(),
+  sandbox: external_exports.literal("windows-lpac").optional(),
+  exitCode: external_exports.number().int().min(0).max(4294967295).nullable(),
+  error: external_exports.string().optional(),
+  output: external_exports.string().max(64e3),
+  truncated: external_exports.boolean(),
+  profileDeleted: external_exports.boolean().optional(),
+  aliasesDeleted: external_exports.literal(true),
+  pathMappings: external_exports.array(pathMappingSchema).length(3)
+}).strict();
+var recoverySchema = external_exports.object({
+  recovered: external_exports.number().int().nonnegative(),
+  active: external_exports.number().int().nonnegative(),
+  error: external_exports.string().optional(),
+  output: external_exports.string(),
+  truncated: external_exports.boolean()
+}).strict();
+var libraryRuntime = (() => {
+  const config2 = loadConfig();
+  return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
+})();
+function verifyPathMappings(result, roots) {
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path10.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const aliases = /* @__PURE__ */ new Set();
+  for (const mapping of result.pathMappings) {
+    if (expected.get(mapping.kind) !== path10.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
+    if (aliases.has(mapping.aliasRoot))
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
+    aliases.add(mapping.aliasRoot);
+    expected.delete(mapping.kind);
+  }
+  if (expected.size !== 0)
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
+}
+function contains2(root, target) {
+  const relative = path10.relative(root, target);
+  return relative === "" || !relative.startsWith(".." + path10.sep) && relative !== ".." && !path10.isAbsolute(relative);
+}
+function overlaps2(left, right) {
+  return contains2(left, right) || contains2(right, left);
+}
+async function ownedDirectory(directory, temp, prefix) {
+  const canonical = await realpath4(directory);
+  if (path10.dirname(canonical) !== temp || !path10.basename(canonical).startsWith(prefix) || (await lstat6(directory)).isSymbolicLink()) {
+    throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+  }
+  return canonical;
+}
+async function nativeProcess(executable, args, options, input2) {
+  options.signal?.throwIfAborted();
+  const child = spawn4(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  options.onProcess?.(child);
+  let stdout = "", stderr = "", oversized = false, stopping = false;
+  const controllerOutputLimit = Math.max(1e5, Math.min(4e5, (options.sandbox?.maxOutputChars ?? 4e3) * 6 + 12e3));
+  let hardStop;
+  const stop = () => {
+    if (stopping)
+      return;
+    stopping = true;
+    if (input2)
+      child.stdin.write(input2 + "\n", () => {
+      });
+    else
+      child.kill();
+    hardStop = setTimeout(() => child.kill(), 5e3);
+    hardStop.unref();
+  };
+  options.signal?.addEventListener("abort", stop, { once: true });
+  const timer = setTimeout(stop, (options.timeoutSeconds + 10) * 1e3);
+  child.stdout.on("data", (chunk) => {
+    stdout += String(chunk);
+    if (stdout.length > controllerOutputLimit) {
+      oversized = true;
+      stop();
+    }
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr = (stderr + String(chunk)).slice(-4e3);
+  });
+  child.stdin.on("error", () => {
+  });
+  if (!input2)
+    child.stdin.end();
+  try {
+    const code = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", resolve);
+    });
+    if (oversized)
+      throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller output exceeded its limit");
+    return { code, stdout, stderr };
+  } finally {
+    clearTimeout(timer);
+    if (hardStop)
+      clearTimeout(hardStop);
+    options.signal?.removeEventListener("abort", stop);
+  }
+}
+async function compileController(temp, options) {
+  const compiler = path10.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  if (!(await lstat6(compiler).catch(() => void 0))?.isFile())
+    throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
+  const directory = await realpath4(await mkdtemp2(path10.join(temp, "agy-mcp-controller-")));
+  const source = path10.join(directory, "runner.cs"), helper = path10.join(directory, "runner.exe");
+  try {
+    await writeFile2(source, windowsHelperSource, { flag: "wx" });
+    const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
+    if (built.code !== 0)
+      throw new BridgeError("WINDOWS_EXECUTOR_BUILD_FAILED", (built.stdout + built.stderr).slice(-4e3));
+    return { directory, helper };
+  } catch (error62) {
+    await rm4(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {
+    });
+    throw error62;
+  }
+}
+async function writeRequest(directory, request) {
+  const file3 = path10.join(directory, "request-" + randomUUID4() + ".json");
+  await writeFile2(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
+  return file3;
+}
+async function removeOwned(directories, temp) {
+  const failures = [];
+  for (const [directory, prefix] of directories) {
+    try {
+      await ownedDirectory(directory, temp, prefix);
+      await rm4(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (error62) {
+      failures.push(error62 instanceof Error ? error62.message : String(error62));
+    }
+  }
+  if (failures.length)
+    throw new BridgeError("UNSAFE_RUNTIME_PATH", failures.join("; "));
+}
+async function grantPaths(selection, protectedPaths2, maxFiles) {
+  const protectedCanonical = await Promise.all(protectedPaths2.map(async (value) => {
+    try {
+      return await realpath4(value);
+    } catch {
+      return path10.resolve(value);
+    }
+  }));
+  const paths2 = /* @__PURE__ */ new Map();
+  const inspect = async (value, rights) => {
+    if (!path10.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+      throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
+    }
+    const canonical = await realpath4(value), root = path10.parse(canonical).root;
+    if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
+      throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
+    }
+    const relative = path10.relative(root, canonical).split(path10.sep).filter(Boolean);
+    let current = root, entries = 0;
+    const walk = async (candidate) => {
+      const stat3 = await lstat6(candidate);
+      if (stat3.isSymbolicLink() || !stat3.isDirectory() && !stat3.isFile() || stat3.isFile() && stat3.nlink > 1) {
+        throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets cannot contain links, hard links, or non-regular files");
+      }
+      if (stat3.isDirectory())
+        for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
+          if (++entries > maxFiles)
+            throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
+          await walk(path10.join(candidate, name));
+        }
+    };
+    for (const part of relative) {
+      current = path10.join(current, part);
+      const stat3 = await lstat6(current);
+      if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
+        throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
+    }
+    await walk(canonical);
+    const key = process.platform === "win32" ? canonical.toLocaleLowerCase("en-US") : canonical;
+    const previous = paths2.get(key);
+    paths2.set(key, { path: canonical, rights: previous?.rights === "modify" || rights === "modify" ? "modify" : "read" });
+  };
+  for (const value of selection.readPaths)
+    await inspect(value, "read");
+  for (const value of selection.writePaths)
+    await inspect(value, "modify");
+  return [...paths2.values()];
+}
+async function runRecoveryWithController(stateDirectory, options) {
+  if (process.platform !== "win32")
+    return;
+  const temp = await realpath4(os5.tmpdir()), controller = await compileController(temp, options);
+  try {
+    const request = await writeRequest(controller.directory, { action: "recover", stateDirectory });
+    const observed = await nativeProcess(controller.helper, [request], options);
+    const result = recoverySchema.parse(JSON.parse(observed.stdout));
+    if (observed.code !== 0 || result.error)
+      throw new BridgeError("WINDOWS_EXECUTION_RECOVERY_FAILED", result.error || "Windows LPAC recovery did not complete");
+  } finally {
+    await removeOwned([[controller.directory, "agy-mcp-controller-"]], temp);
+  }
+}
+async function recoverWindowsExecutions(stateDirectory) {
+  const effective = path10.resolve(stateDirectory);
+  await mkdir5(effective, { recursive: true, mode: 448 });
+  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
+}
+async function executeWindowsTest(command2, copyDirectory, options) {
+  if (process.platform !== "win32")
+    throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
+  validateWindowsCommand(command2);
+  const selection = options.sandbox ?? { readPaths: [], writePaths: [], network: false, childProcesses: true, maxOutputChars: 4e3 };
+  const mode = options.mode ?? "write", maxFiles = options.maxFiles ?? 1e4;
+  const runtimeSelection = {
+    mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
+    portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
+  };
+  const stateDirectory = path10.resolve(options.stateDirectory ?? path10.join(os5.homedir(), ".antigravity-mcp-bridge"));
+  await mkdir5(stateDirectory, { recursive: true, mode: 448 });
+  await runRecoveryWithController(stateDirectory, options);
+  const temp = await realpath4(os5.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
+  const controller = await compileController(temp, options);
+  const runtime = await realpath4(await mkdtemp2(path10.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath4(await mkdtemp2(path10.join(temp, "agy-mcp-scratch-")));
+  try {
+    const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
+    const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
+    const nonce = randomUUID4(), systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const request = {
+      action: mode,
+      nonce,
+      profile: "agy.test." + nonce.replaceAll("-", ""),
+      cwd,
+      runtime,
+      scratch,
+      executable: staged.executable,
+      args: staged.args,
+      timeoutSeconds: options.timeoutSeconds,
+      maxFiles,
+      maxOutputChars: selection.maxOutputChars,
+      network: selection.network,
+      childProcesses: selection.childProcesses,
+      stateDirectory,
+      grants,
+      environment: {
+        SystemRoot: systemRoot,
+        WINDIR: systemRoot,
+        PATH: [...staged.pathEntries, path10.join(systemRoot, "System32")].join(path10.delimiter),
+        PATHEXT: ".COM;.EXE;.BAT;.CMD",
+        TEMP: scratch,
+        TMP: scratch,
+        USERPROFILE: scratch,
+        HOME: scratch,
+        APPDATA: scratch,
+        LOCALAPPDATA: scratch,
+        COMSPEC: staged.comspec ?? path10.join(systemRoot, "System32", "cmd.exe")
+      }
+    };
+    const file3 = await writeRequest(controller.directory, request);
+    let observed;
+    try {
+      observed = await nativeProcess(controller.helper, [file3], options, "cancel " + nonce);
+    } finally {
+      await runRecoveryWithController(stateDirectory, { ...options, signal: void 0 });
+    }
+    const result = executionSchema.parse(JSON.parse(observed.stdout));
+    verifyPathMappings(result, { copy: cwd, runtime, scratch });
+    if (result.nonce !== nonce || result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > selection.maxOutputChars)
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce, DOS aliases, output limit, or profile cleanup was not verified");
+    if (!result.error && (observed.code !== 0 || result.sandbox !== "windows-lpac" || result.exitCode === null))
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+    return { ...result, portableNode: staged.portableNode };
+  } finally {
+    await removeOwned([[scratch, "agy-mcp-scratch-"], [runtime, "agy-mcp-runtime-"], [controller.directory, "agy-mcp-controller-"]], temp);
+  }
+}
+
+// dist/src/task-manager.js
 var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
 var TaskManager = class {
   adapter;
@@ -38578,11 +41055,16 @@ var TaskManager = class {
   stopped = false;
   busyProjects = /* @__PURE__ */ new Set();
   state;
-  constructor(adapter2, config3) {
-    this.adapter = adapter2;
-    this.config = config3;
-    this.state = new StateStore(config3.stateDirectory);
-    this.events = new EventStore(config3.eventBufferSize, (taskId) => this.persist(taskId));
+  nativeRecovery;
+  nativeRecoveryError;
+  constructor(adapter, config2) {
+    this.adapter = adapter;
+    this.config = config2;
+    this.state = new StateStore(config2.stateDirectory);
+    this.events = new EventStore(config2.eventBufferSize, (taskId) => this.persist(taskId));
+    this.nativeRecovery = (config2.testExecutor === "windows-lpac" ? recoverWindowsExecutions(config2.stateDirectory) : Promise.resolve()).catch((error62) => {
+      this.nativeRecoveryError = error62;
+    });
     this.refresh();
   }
   persist(taskId) {
@@ -38591,7 +41073,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash5("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash8("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -38635,6 +41117,37 @@ var TaskManager = class {
   roles() {
     return listRoles(this.config.customRoles);
   }
+  getSandboxPolicy() {
+    return this.state.loadSandboxPolicy();
+  }
+  windowsRuntimeStatus() {
+    return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory);
+  }
+  async setSandboxPolicy(value, expectedSha256, confirm) {
+    const previous = this.state.loadSandboxPolicy();
+    if (previous.sha256 !== expectedSha256)
+      throw new BridgeError("SANDBOX_POLICY_CHANGED", "Reload the current sandbox policy before proposing an update");
+    const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const proposed = { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
+    if (!confirm)
+      throw new BridgeError("APPROVAL_REQUIRED", "Sandbox policy updates require confirmation through the MCP client");
+    if (!await confirm(previous, proposed))
+      throw new BridgeError("APPROVAL_DENIED", "Sandbox policy update was not confirmed");
+    const release = this.state.acquire("sandbox-policy");
+    try {
+      const current = this.state.loadSandboxPolicy();
+      if (current.sha256 !== previous.sha256)
+        throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox policy changed while confirmation was pending");
+      const rechecked = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      if (sandboxPolicyDigest(rechecked) !== proposed.sha256) {
+        throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox policy proposal changed while confirmation was pending");
+      }
+      this.state.saveSandboxPolicy(proposed);
+      return proposed;
+    } finally {
+      release();
+    }
+  }
   async setModel(model) {
     if (model !== null) {
       const models = await this.adapter.listModels();
@@ -38656,6 +41169,7 @@ var TaskManager = class {
     if (options.acceptanceCriteria !== void 0)
       criteriaSchema.parse(options.acceptanceCriteria);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
+    await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.isolateWorktree === false)
       throw new BridgeError("ISOLATION_REQUIRED", "Direct execution in the source project is disabled");
     const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
@@ -38760,7 +41274,7 @@ var TaskManager = class {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record2 = {
-        taskId: randomUUID3(),
+        taskId: randomUUID5(),
         sessionId: options.sessionId,
         model,
         mode,
@@ -38772,7 +41286,7 @@ var TaskManager = class {
         comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests,
         usageIsResume: Boolean(previous),
-        usageBaseline: previous ? normalizeUsage(previous.record.result?.usage) : void 0,
+        usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : void 0,
         workingDirectory,
         status: "queued",
         createdAt: (/* @__PURE__ */ new Date()).toISOString()
@@ -38807,6 +41321,12 @@ var TaskManager = class {
     if (filters.taskId)
       this.status(filters.taskId);
     return aggregateUsage(this.list().filter((task2) => (!filters.taskId || task2.taskId === filters.taskId) && (!filters.sessionId || task2.sessionId === filters.sessionId) && (!filters.model || task2.model === filters.model)));
+  }
+  latestObservedUsage(sessionId, workingDirectory) {
+    if (!sessionId)
+      return void 0;
+    const observed = [...this.tasks.values()].reverse().find((candidate) => candidate.record.sessionId === sessionId && candidate.record.workingDirectory === workingDirectory && (candidate.record.lastObservedCliUsage !== void 0 || candidate.record.result?.usage !== void 0));
+    return observed?.record.lastObservedCliUsage ?? (observed ? normalizeUsage(observed.record.result.usage) : void 0);
   }
   result(taskId) {
     const task2 = this.status(taskId);
@@ -38847,7 +41367,7 @@ var TaskManager = class {
     return this.withProject(task2.project, async () => {
       const preview = await previewProjectCopy(task2.project, this.config);
       const current = task2.record.verification && await verifyCriteria(task2.project, preview.sha256, task2.record.acceptanceCriteria, task2.record.verification.review.evidence);
-      const tree = task2.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task2.project, this.config) : void 0;
+      const tree = task2.record.tests?.some((test) => test.source === "agy-tool" || test.source === "windows-executor") ? await fingerprintProjectCopy(task2.project, this.config) : void 0;
       return {
         ...preview,
         patch: includePatch ? preview.patch : void 0,
@@ -38884,7 +41404,7 @@ var TaskManager = class {
     if (this.config.maxRetainedTasks < models.length + 1 || this.config.maxQueuedTasks < models.length)
       throw new BridgeError("COMPARISON_LIMIT_EXCEEDED", "Retention and queue limits must accommodate all comparison members and the source");
     const source = this.status(sourceTaskId);
-    const comparison = { comparisonId: randomUUID3(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
+    const comparison = { comparisonId: randomUUID5(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
     const taskIds = [];
     this.batching++;
     try {
@@ -38922,19 +41442,19 @@ var TaskManager = class {
     }
   }
   async comparison(comparisonId) {
-    const tasks2 = this.list().filter((task2) => task2.comparison?.comparisonId === comparisonId);
-    const comparison = tasks2[0]?.comparison;
+    const tasks = this.list().filter((task2) => task2.comparison?.comparisonId === comparisonId);
+    const comparison = tasks[0]?.comparison;
     if (!comparison)
       throw new BridgeError("COMPARISON_NOT_FOUND", "No retained tasks for this comparison");
-    const missingModels = comparison.models.filter((model) => !tasks2.some((task2) => task2.model === model));
-    const ready = tasks2.every((task2) => terminal.has(task2.status));
-    const complete = ready && !missingModels.length && tasks2.every((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
+    const missingModels = comparison.models.filter((model) => !tasks.some((task2) => task2.model === model));
+    const ready = tasks.every((task2) => terminal.has(task2.status));
+    const complete = ready && !missingModels.length && tasks.every((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
     const current = await this.context(comparison.sourceTaskId).catch((error62) => {
       if (error62 instanceof BridgeError && ["INVALID_CONTEXT", "TASK_NOT_FOUND", "TASK_NOT_READY"].includes(error62.code))
         return null;
       throw error62;
     });
-    const opinions = await Promise.all(tasks2.map(async (task2) => {
+    const opinions = await Promise.all(tasks.map(async (task2) => {
       const project = this.tasks.get(task2.taskId)?.project;
       const contextMatches = project && terminal.has(task2.status) ? await this.withProject(project, async () => await fingerprintProjectCopy(project, this.config) === comparison.treeSha256).catch((error62) => {
         if (error62 instanceof BridgeError && error62.code === "TASK_NOT_READY")
@@ -38958,7 +41478,7 @@ var TaskManager = class {
       missingModels,
       contextStale: current === null || current.treeSha256 !== comparison.treeSha256 || opinions.some((opinion) => terminal.has(opinion.status) && opinion.contextMatches !== true),
       opinions,
-      findings: compareFindings(tasks2.filter((task2) => opinions.some((opinion) => opinion.taskId === task2.taskId && opinion.contextMatches === true)), comparison.models),
+      findings: compareFindings(tasks.filter((task2) => opinions.some((opinion) => opinion.taskId === task2.taskId && opinion.contextMatches === true)), comparison.models),
       warnings: [
         "Findings are model-reported with checked citations, not verified conclusions. Identical means exact matching findings only.",
         "Missing findings, failed opinions and unverified fields do not demonstrate agreement. Codex must inspect and synthesize the reports before making recommendations."
@@ -38990,8 +41510,8 @@ var TaskManager = class {
     if (current.status !== "passed" || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
       throw new BridgeError("VERIFICATION_STALE", "Verification files or evidence changed; verify again");
     }
-    const tree = task2.record.tests?.some((test) => test.source === "agy-tool") ? await fingerprintProjectCopy(task2.project, this.config) : void 0;
-    const latestTests = new Map((task2.record.tests || []).filter((test) => test.source === "agy-tool").map((test) => [test.command, test]));
+    const tree = task2.record.tests?.some((test) => test.source === "agy-tool" || test.source === "windows-executor") ? await fingerprintProjectCopy(task2.project, this.config) : void 0;
+    const latestTests = new Map((task2.record.tests || []).filter((test) => test.source === "agy-tool" || test.source === "windows-executor").map((test) => [test.command, test]));
     if ([...latestTests.values()].some((test) => test.sha256 !== sha256 || test.treeSha256 !== tree)) {
       throw new BridgeError("TESTS_STALE", "Run the observed test commands again against the current files");
     }
@@ -38999,8 +41519,8 @@ var TaskManager = class {
       throw new BridgeError("TESTS_FAILED", "The latest observed command failed or changed project files");
     }
   }
-  async startTests(taskId, expectedSha256, command, retries = 0, timeoutSeconds = 600) {
-    testCommandSchema.parse(command);
+  async startTests(taskId, expectedSha256, command2, retries = 0, timeoutSeconds = 600, sandbox) {
+    testCommandSchema.parse(command2);
     if (!Number.isInteger(retries) || retries < 0 || retries > 3)
       throw new BridgeError("INVALID_TEST_COMMAND", "retries must be between 0 and 3");
     const task2 = this.status(taskId);
@@ -39009,30 +41529,121 @@ var TaskManager = class {
     const preview = await this.preview(taskId);
     if (preview.sha256 !== expectedSha256)
       throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before starting tests");
+    if (this.config.testExecutor === "windows-lpac")
+      return this.queueWindowsTest(taskId, task2, expectedSha256, command2, retries, timeoutSeconds, sandbox);
+    if (sandbox !== void 0)
+      throw new BridgeError("SANDBOX_PERMISSIONS_UNSUPPORTED", "Per-test sandbox permissions require the Windows LPAC executor");
     return this.run({
       prompt: "Run the requested tests in the native sandbox.",
       workingDirectory: task2.workingDirectory,
       sessionId: task2.sessionId,
       model: task2.model,
       timeoutSeconds,
-      nativeTest: { ...command, expectedSha256, maxAttempts: retries + 1 }
+      nativeTest: { ...command2, expectedSha256, maxAttempts: retries + 1 }
     });
   }
-  async recordTest(taskId, expectedSha256, command, exitCode, output2 = "") {
+  async queueWindowsTest(sourceTaskId, source, expectedSha256, command2, retries, timeoutSeconds, sandbox) {
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
+      throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
+    }
+    const policy = this.state.loadSandboxPolicy();
+    const selection = await resolveSandboxSelection(policy.policy, sandbox, source.workingDirectory, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const nativeTest = {
+      ...command2,
+      expectedSha256,
+      maxAttempts: retries + 1,
+      backend: "windows-lpac",
+      sandbox: selection,
+      policySha256: policy.sha256
+    };
+    const releaseRegistry = this.state.acquire("registry");
+    let releaseProject;
+    try {
+      this.refresh();
+      const current = this.tasks.get(sourceTaskId);
+      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal.has(current.record.status) || current.record.status !== "completed" && current.record.error?.code !== "TEST_FAILED" || current.record.integratedAt) {
+        throw new BridgeError("TASK_NOT_READY", "Tests require a completed write task with an isolated copy and CLI conversation");
+      }
+      if ([...this.tasks.values()].filter((candidate) => candidate.project === current.project).at(-1) !== current) {
+        throw new BridgeError("TASK_NOT_READY", "Run tests from the latest retained task for this isolated copy");
+      }
+      if (this.busyProjects.has(current.project))
+        throw new BridgeError("TASK_NOT_READY", "Wait for all operations on this copy to finish");
+      const currentPreview = await this.preview(sourceTaskId, false);
+      if (currentPreview.sha256 !== nativeTest.expectedSha256)
+        throw new BridgeError("REVIEW_CHANGED", "Copy changed while tests were queued");
+      if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks)
+        throw new BridgeError("QUEUE_FULL", "Task queue is full");
+      releaseProject = this.state.acquire(this.projectLock(current.project));
+      if (this.tasks.size >= this.config.maxRetainedTasks) {
+        const oldestFinished = [...this.tasks.values()].find((candidate) => terminal.has(candidate.record.status) && candidate !== current) ?? current;
+        if (!oldestFinished)
+          throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
+        if (oldestFinished !== current && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
+          await this.discard(oldestFinished.record.taskId);
+        }
+        this.tasks.delete(oldestFinished.record.taskId);
+        this.events.drop(oldestFinished.record.taskId);
+        this.state.drop(oldestFinished.record.taskId);
+      }
+      const record2 = {
+        taskId: randomUUID5(),
+        sessionId: current.record.sessionId,
+        model: current.record.model,
+        mode: "write",
+        role: current.record.role,
+        roleDefinition: current.record.roleDefinition,
+        prompt: "Run the requested tests in the Windows sandbox.",
+        acceptanceCriteria: current.record.acceptanceCriteria,
+        handoff: current.record.handoff,
+        tests: current.record.tests,
+        usageIsResume: true,
+        usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
+        workingDirectory: current.record.workingDirectory,
+        copyDirectory: current.project.copyDirectory,
+        includedFiles: current.project.includedFiles,
+        status: "queued",
+        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      const options = {
+        prompt: record2.prompt,
+        workingDirectory: record2.workingDirectory,
+        sessionId: record2.sessionId,
+        model: record2.model,
+        timeoutSeconds,
+        mode: "write",
+        role: record2.role,
+        roleDefinition: record2.roleDefinition,
+        acceptanceCriteria: record2.acceptanceCriteria,
+        nativeTest
+      };
+      this.tasks.set(record2.taskId, { record: record2, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
+      releaseProject = void 0;
+      this.queue.push(record2.taskId);
+      this.events.append(record2.taskId, "task.queued", { workingDirectory: record2.workingDirectory, model: record2.model, backend: "windows-lpac" });
+      if (!this.batching)
+        this.pump();
+      return { ...record2 };
+    } finally {
+      releaseProject?.();
+      releaseRegistry();
+    }
+  }
+  async recordTest(taskId, expectedSha256, command2, exitCode, output2 = "") {
     this.refresh();
     const task2 = this.tasks.get(taskId);
     if (!task2?.project || !terminal.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before recording tests");
-    if (!command.trim() || command.length > 1e3 || !Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255 || output2.length > 4e3) {
+    if (!command2.trim() || command2.length > 1e3 || !Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255 || output2.length > 4e3) {
       throw new BridgeError("INVALID_TEST_EVIDENCE", "Invalid command, exit code or output size");
     }
     return this.withProject(task2.project, async () => {
       const preview = await previewProjectCopy(task2.project, this.config);
       if (preview.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "Preview again before recording test evidence");
-      const evidence = { command, exitCode, output: output2, sha256: expectedSha256, recordedAt: (/* @__PURE__ */ new Date()).toISOString(), source: "client-reported" };
+      const evidence = { command: command2, exitCode, output: output2, sha256: expectedSha256, recordedAt: (/* @__PURE__ */ new Date()).toISOString(), source: "client-reported" };
       task2.record.tests = [...(task2.record.tests || []).slice(-19), evidence];
-      this.events.append(taskId, "review.test-recorded", { command, exitCode, sha256: expectedSha256 });
+      this.events.append(taskId, "review.test-recorded", { command: command2, exitCode, sha256: expectedSha256 });
       return evidence;
     });
   }
@@ -39112,7 +41723,7 @@ var TaskManager = class {
       await this.requireVerification(task2, expectedSha256);
       if (!await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash5("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash8("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -39163,7 +41774,7 @@ var TaskManager = class {
             ...this.events.read(taskId, after, 1e3),
             tokenUsage: task2.tokenUsage
           };
-        await delay(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
+        await delay2(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
       }
     } catch (error62) {
       if (signal?.aborted)
@@ -39204,7 +41815,9 @@ var TaskManager = class {
       task2.releaseProject = void 0;
     } else {
       task2.termination = "cancelled";
-      if (task2.child)
+      if (task2.nativeAbort)
+        task2.nativeAbort.abort();
+      else if (task2.child)
         this.terminate(task2.child);
     }
     return this.status(taskId);
@@ -39232,6 +41845,18 @@ var TaskManager = class {
   }
   async execute(task2) {
     const record2 = task2.record;
+    if (task2.options.nativeTest && "backend" in task2.options.nativeTest && task2.options.nativeTest.backend === "windows-lpac") {
+      record2.usageProvenance = "local-executor";
+      try {
+        await this.executeWindowsNativeTest(task2);
+      } catch (error62) {
+        if (task2.termination)
+          this.finish(task2, task2.termination);
+        else
+          this.finish(task2, "failed", error62 instanceof BridgeError ? error62.code : "WINDOWS_EXECUTION_UNVERIFIED", error62 instanceof Error ? error62.message : String(error62));
+      }
+      return;
+    }
     record2.status = "starting";
     record2.startedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.events.append(record2.taskId, "task.started", {});
@@ -39365,6 +41990,214 @@ ${error62.message}`;
       await native?.cleanup();
     }
   }
+  windowsRequest(task2) {
+    const request = task2.options.nativeTest;
+    if (!request || !("backend" in request) || request.backend !== "windows-lpac") {
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Missing frozen Windows test request");
+    }
+    return request;
+  }
+  async beginWindowsNativeTest(task2, request) {
+    await this.nativeRecovery;
+    if (this.nativeRecoveryError)
+      throw this.nativeRecoveryError;
+    const release = this.state.acquire("sandbox-policy");
+    try {
+      const current = this.state.loadSandboxPolicy();
+      if (current.sha256 !== request.policySha256) {
+        throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox policy changed while this Windows test was queued");
+      }
+      const selected = await resolveSandboxSelection(current.policy, request.sandbox, task2.record.workingDirectory, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      if (JSON.stringify(selected) !== JSON.stringify(request.sandbox)) {
+        throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox selection changed while this Windows test was queued");
+      }
+      if (task2.termination)
+        return;
+      task2.record.status = "starting";
+      task2.record.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.events.append(task2.record.taskId, "task.started", { backend: "windows-lpac", policySha256: request.policySha256 });
+    } finally {
+      release();
+    }
+  }
+  remainingSeconds(deadline) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0)
+      return 0;
+    return Math.max(1, Math.ceil(remaining / 1e3));
+  }
+  async executeWindowsCommand(task2, request, timeoutSeconds) {
+    if (!task2.project)
+      throw new BridgeError("TASK_NOT_READY", "Windows tests require an isolated project copy");
+    const controller = new AbortController();
+    task2.nativeAbort = controller;
+    try {
+      return await executeWindowsTest({ executable: request.executable, args: request.args }, task2.project.copyDirectory, {
+        timeoutSeconds,
+        maxRuntimeBytes: this.config.maxCopyBytes,
+        maxFiles: this.config.maxCopyFiles,
+        mode: task2.record.mode,
+        stateDirectory: this.config.stateDirectory,
+        protectedPaths: [task2.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.config.forbiddenDirectories],
+        windowsNodeRuntime: this.config.windowsNodeRuntime,
+        portableNodeCacheDirectory: this.config.windowsNodeCacheDirectory,
+        sandbox: request.sandbox,
+        signal: controller.signal,
+        onProcess: (child) => {
+          task2.child = child;
+          task2.record.pid = child.pid;
+          this.events.append(task2.record.taskId, "process.started", { pid: child.pid, executor: "windows-lpac" });
+        }
+      });
+    } finally {
+      if (task2.nativeAbort === controller)
+        task2.nativeAbort = void 0;
+      task2.child = void 0;
+    }
+  }
+  async repairWindowsTest(task2, request, observedExitCode, timeoutSeconds) {
+    if (!task2.project)
+      throw new BridgeError("TASK_NOT_READY", "Windows test copy is unavailable");
+    const { nativeTest: _nativeTest, ...baseOptions } = task2.options;
+    const options = {
+      ...baseOptions,
+      timeoutSeconds,
+      prompt: "The bridge observed this exact test command exit with code " + observedExitCode + ": " + JSON.stringify({ executable: request.executable, args: request.args }) + ". Make only relevant fixes in the isolated copy. Do not run tests, change the command, weaken assertions, alter sandbox permissions, or change bridge configuration. Stop after the repair so the bridge can rerun the same command."
+    };
+    task2.record.result = void 0;
+    task2.record.usage = void 0;
+    const child = this.adapter.spawnTask(options, task2.record.model, task2.project.copyDirectory);
+    task2.child = child;
+    task2.record.pid = child.pid;
+    task2.record.status = "running";
+    this.events.append(task2.record.taskId, "process.started", { pid: child.pid, repair: true });
+    let stderr = "";
+    const stdoutParser = new LineParser((line) => this.handleStdout(task2, line));
+    const stderrParser = new LineParser((line) => {
+      stderr = (stderr + "\n" + line).slice(-1e4);
+      this.events.append(task2.record.taskId, "process.stderr", { text: line.slice(0, 4e3) });
+    });
+    child.stdout.on("data", (chunk) => stdoutParser.write(chunk));
+    child.stderr.on("data", (chunk) => stderrParser.write(chunk));
+    const exitCode = await new Promise((resolve) => {
+      child.once("error", (error62) => {
+        stderr += "\n" + error62.message;
+        this.events.append(task2.record.taskId, "process.error", { message: error62.message });
+      });
+      child.once("close", resolve);
+    });
+    stdoutParser.end();
+    stderrParser.end();
+    task2.child = void 0;
+    task2.record.exitCode = exitCode;
+    if (task2.termination)
+      return;
+    if (CliAdapter.authError(stderr + JSON.stringify(task2.record.result || ""))) {
+      throw new BridgeError("AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
+    }
+    if (exitCode !== 0 || !task2.record.result || task2.record.result.status !== "SUCCESS") {
+      const message = task2.record.result?.error || `agy repair exited with code ${exitCode}`;
+      throw new BridgeError("AGY_PROCESS_FAILED", message);
+    }
+  }
+  async executeWindowsNativeTest(task2) {
+    const request = this.windowsRequest(task2);
+    await this.beginWindowsNativeTest(task2, request);
+    if (task2.termination) {
+      this.finish(task2, task2.termination);
+      return;
+    }
+    if (!task2.project)
+      throw new BridgeError("TASK_NOT_READY", "Windows tests require an isolated project copy");
+    const initial = await previewProjectCopy(task2.project, this.config);
+    if (initial.sha256 !== request.expectedSha256)
+      throw new BridgeError("REVIEW_CHANGED", "Copy changed while the Windows test was queued");
+    const deadline = Date.now() + task2.options.timeoutSeconds * 1e3;
+    let modelInvoked = false;
+    task2.timer = setTimeout(() => {
+      task2.termination = "timeout";
+      if (task2.nativeAbort)
+        task2.nativeAbort.abort();
+      else if (task2.child)
+        this.terminate(task2.child);
+    }, task2.options.timeoutSeconds * 1e3);
+    try {
+      for (let attempt = 1; attempt <= request.maxAttempts; attempt++) {
+        if (task2.termination)
+          break;
+        const remaining = this.remainingSeconds(deadline);
+        if (!remaining) {
+          task2.termination = "timeout";
+          break;
+        }
+        const beforePreview = await previewProjectCopy(task2.project, this.config);
+        const beforeTree = await fingerprintProjectCopy(task2.project, this.config);
+        if (attempt === 1 && beforePreview.sha256 !== request.expectedSha256) {
+          throw new BridgeError("REVIEW_CHANGED", "Copy changed before the Windows test command started");
+        }
+        const result = await this.executeWindowsCommand(task2, request, remaining);
+        const afterTree = await fingerprintProjectCopy(task2.project, this.config);
+        const afterPreview = await previewProjectCopy(task2.project, this.config);
+        task2.record.exitCode = result.exitCode;
+        if (result.exitCode !== null) {
+          task2.record.tests = [...(task2.record.tests || []).slice(-19), {
+            command: JSON.stringify({ executable: request.executable, args: request.args }),
+            exitCode: result.exitCode,
+            output: result.output,
+            sha256: afterPreview.sha256,
+            beforeSha256: beforePreview.sha256,
+            recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            source: "windows-executor",
+            treeSha256: afterTree,
+            beforeTreeSha256: beforeTree,
+            executionError: result.error,
+            truncated: result.truncated,
+            attempt,
+            testTaskId: task2.record.taskId,
+            sandbox: "windows-lpac",
+            sandboxSelection: request.sandbox,
+            sandboxPolicySha256: request.policySha256,
+            portableNode: result.portableNode
+          }];
+        }
+        this.events.append(task2.record.taskId, "test.results", { attempt, exitCode: result.exitCode, sha256: afterPreview.sha256, sandbox: "windows-lpac" });
+        if (task2.termination)
+          break;
+        if (result.exitCode === null || result.error || result.profileDeleted !== true) {
+          throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "The Windows executor did not return a clean, verified execution receipt");
+        }
+        if (beforeTree !== afterTree)
+          throw new BridgeError("TEST_CHANGED_PATCH", "Project files changed during the observed Windows test command");
+        if (result.exitCode === 0) {
+          if (!modelInvoked)
+            task2.record.usageProvenance = "local-executor";
+          this.finish(task2, "completed");
+          return;
+        }
+        if (attempt === request.maxAttempts) {
+          if (!modelInvoked)
+            task2.record.usageProvenance = "local-executor";
+          this.finish(task2, "failed", "TEST_FAILED", "Observed Windows test command failed");
+          return;
+        }
+        const repairSeconds = this.remainingSeconds(deadline);
+        if (!repairSeconds) {
+          task2.termination = "timeout";
+          break;
+        }
+        modelInvoked = true;
+        task2.record.usageProvenance = void 0;
+        await this.repairWindowsTest(task2, request, result.exitCode, repairSeconds);
+      }
+      if (task2.termination)
+        this.finish(task2, task2.termination);
+    } finally {
+      if (task2.timer)
+        clearTimeout(task2.timer);
+      task2.timer = void 0;
+      task2.nativeAbort = void 0;
+    }
+  }
   handleStdout(task2, line) {
     const record2 = task2.record;
     let raw;
@@ -39421,8 +42254,10 @@ ${error62.message}`;
       const result = raw.result;
       if (typeof result.conversation_id === "string")
         record2.sessionId = result.conversation_id;
-      if (result.usage !== void 0)
+      if (result.usage !== void 0) {
         record2.usage = result.usage;
+        record2.lastObservedCliUsage = normalizeUsage(result.usage);
+      }
       this.events.append(record2.taskId, "agy.result", result, raw);
     } else
       this.events.append(record2.taskId, "agy.event", raw, raw);
@@ -39448,7 +42283,7 @@ ${error62.message}`;
       if (child.exitCode !== null)
         return;
       if (process.platform === "win32" && child.pid)
-        spawn3("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+        spawn5("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
       else
         child.kill("SIGKILL");
     }, 3e3);
@@ -39457,30 +42292,54 @@ ${error62.message}`;
 };
 
 // dist/src/index.js
-var config2 = loadConfig();
-var adapter = new CliAdapter(config2);
-await adapter.discover();
-var tasks = new TaskManager(adapter, config2);
-await tasks.cleanup();
-var server = createMcpServer(adapter, tasks);
-await server.connect(new StdioServerTransport());
-var cleanupTimer = setInterval(() => {
-  void tasks.cleanup().catch((error62) => process.stderr.write(`Copy cleanup failed: ${String(error62)}
-`));
-}, 6e4);
-cleanupTimer.unref();
-var closing = false;
-async function shutdown() {
-  if (closing)
-    return;
-  closing = true;
-  clearInterval(cleanupTimer);
-  await tasks.shutdown();
-  await server.close();
+var command = process.argv.slice(2);
+async function runtimeCommand() {
+  if (command.length === 0)
+    return false;
+  if (command.length !== 1 || command[0] !== "--prepare-windows-runtime" && command[0] !== "--windows-runtime-status") {
+    throw new Error("Expected exactly one startup command: --prepare-windows-runtime or --windows-runtime-status");
+  }
+  const config2 = loadConfig();
+  if (command[0] === "--windows-runtime-status") {
+    process.stdout.write(JSON.stringify(await portableNodeStatus(config2.windowsNodeRuntime, config2.windowsNodeCacheDirectory)) + "\n");
+    return true;
+  }
+  try {
+    await preparePortableNodeRuntime({ cacheDirectory: config2.windowsNodeCacheDirectory });
+    process.stdout.write(JSON.stringify(await portableNodeStatus(config2.windowsNodeRuntime, config2.windowsNodeCacheDirectory)) + "\n");
+    return true;
+  } catch (error62) {
+    process.stderr.write((error62 instanceof Error ? error62.message : String(error62)) + "\n");
+    process.exitCode = 1;
+    return true;
+  }
 }
-process.on("SIGINT", () => {
-  void shutdown();
-});
-process.on("SIGTERM", () => {
-  void shutdown();
-});
+if (!await runtimeCommand()) {
+  const config2 = loadConfig();
+  const adapter = new CliAdapter(config2);
+  await adapter.discover();
+  const tasks = new TaskManager(adapter, config2);
+  await tasks.cleanup();
+  const server = createMcpServer(adapter, tasks);
+  await server.connect(new StdioServerTransport());
+  const cleanupTimer = setInterval(() => {
+    void tasks.cleanup().catch((error62) => process.stderr.write(`Copy cleanup failed: ${String(error62)}
+`));
+  }, 6e4);
+  cleanupTimer.unref();
+  let closing = false;
+  async function shutdown() {
+    if (closing)
+      return;
+    closing = true;
+    clearInterval(cleanupTimer);
+    await tasks.shutdown();
+    await server.close();
+  }
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+  process.on("SIGTERM", () => {
+    void shutdown();
+  });
+}

@@ -43,6 +43,29 @@ async function check(command, args, label) {
   } finally { await client.close(); }
 }
 
+function checkRuntimeStatus(command, args, label) {
+  const output = execFileSync(command, [...args, '--windows-runtime-status'], {
+    cwd: directory,
+    env: { AGY_PATH: path.join(directory, 'missing-agy'), BRIDGE_STATE_DIRECTORY: path.join(directory, 'status-' + label) },
+    encoding: 'utf8',
+  });
+  const status = JSON.parse(output);
+  assert.ok(status && typeof status === 'object');
+  assert.ok(status.requestedMode === 'system' || status.requestedMode === 'portable');
+  assert.equal(typeof status.supported, 'boolean');
+  assert.equal(typeof status.ready, 'boolean');
+  assert.equal(typeof status.buildId, 'string');
+  assert.equal(typeof status.nodeVersion, 'string');
+  assert.equal(typeof status.libuvVersion, 'string');
+  assert.ok(status.sha256 === null || typeof status.sha256 === 'string');
+  if (status.error !== undefined) {
+    assert.equal(typeof status.error.code, 'string');
+    assert.equal(typeof status.error.message, 'string');
+  }
+  if (process.platform !== 'win32') assert.equal(status.supported, false);
+  console.log(`${label}: read-only runtime status passed`);
+}
+
 try {
   const packed = JSON.parse(execFileSync(process.execPath, [npmCli, 'pack', '--ignore-scripts', '--json', '--pack-destination', directory], { encoding: 'utf8' }))[0];
   assert.deepEqual(packed.files.map(file => file.path).sort(), expectedFiles);
@@ -60,6 +83,7 @@ try {
   assert.equal(JSON.parse(await readFile(path.join(directory, 'package/plugin/.codex-plugin/plugin.json'), 'utf8')).version, manifest.version);
   const bin = path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs');
   assert.ok((await readFile(bin, 'utf8')).startsWith('#!/usr/bin/env node\n'));
+  checkRuntimeStatus(process.execPath, [bin], 'tarball');
   await check(process.execPath, [bin], 'tarball');
   await check(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--offline', '--yes', '--ignore-scripts', '--cache', path.join(directory, 'cache'), '--package', archive, 'antigravity-mcp-bridge'], 'npx');
   console.log(`Package ${manifest.version}: exact ${expectedFiles.length}-file allowlist passed; no runtime dependency installation`);

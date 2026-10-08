@@ -3,7 +3,8 @@
     "antigravity": {
       "command": "node",
       "args": ["./server.mjs"],
-      "cwd": "."
+      "cwd": ".",
+      "env": { "BRIDGE_WINDOWS_NODE_RUNTIME": "portable" }
     }
   }
 }

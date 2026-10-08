@@ -4,13 +4,23 @@ import path from 'node:path';
 import { z } from 'zod';
 import { BridgeError } from './types.js';
 import type { ProjectCopy } from './isolation.js';
+import type { SandboxSelection } from './sandbox-policy.js';
 
 export const testCommandSchema = z.object({
   executable: z.string().min(1).max(1000),
   args: z.array(z.string().max(4000)).max(50).default([]),
 }).strict();
 export type TestCommand = z.infer<typeof testCommandSchema>;
-export interface NativeTestRequest extends TestCommand { expectedSha256: string; maxAttempts: number }
+export interface NativeTestRequest extends TestCommand {
+  expectedSha256: string;
+  maxAttempts: number;
+}
+export interface WindowsNativeTestRequest extends NativeTestRequest {
+  backend: 'windows-lpac';
+  sandbox: SandboxSelection;
+  policySha256: string;
+}
+export type BridgeNativeTestRequest = NativeTestRequest | WindowsNativeTestRequest;
 export const receiptSchema = z.object({
   nonce: z.string().uuid(), exitCode: z.number().int().min(0).max(255).nullable(),
   beforeSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),

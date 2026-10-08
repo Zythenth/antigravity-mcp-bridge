@@ -5,6 +5,7 @@ import { usageCountersSchema } from './usage.js';
 import { toolProfileSchema } from './tool-profiles.js';
 import { handoffSchema } from './handoff.js';
 import { comparisonSchema, comparisonFindingSchema } from './comparison.js';
+import { sandboxPolicySchema, sandboxSelectionSchema } from './sandbox-policy.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().uuid();
@@ -12,11 +13,14 @@ const count = z.number().int().nonnegative();
 const timestamp = z.string().datetime();
 const status = z.enum(['queued', 'starting', 'running', 'streaming', 'completed', 'failed', 'cancelled', 'timeout']);
 const verificationStatus = z.enum(['passed', 'failed', 'unverified']);
+const portableNodeIdentity = z.object({ buildId: z.string(), nodeVersion: z.string(), libuvVersion: z.string(), sha256: hash }).strict();
 export const testEvidenceSchema = z.object({
-  command: z.string(), exitCode: z.number().int().min(0).max(255), output: z.string(), sha256: hash, recordedAt: timestamp,
-  source: z.enum(['client-reported', 'agy-tool']), treeSha256: hash.optional(), beforeTreeSha256: hash.optional(),
+  command: z.string(), exitCode: z.number().int().min(0).max(0xffffffff), output: z.string(), sha256: hash, beforeSha256: hash.optional(), recordedAt: timestamp,
+  source: z.enum(['client-reported', 'agy-tool', 'windows-executor']), treeSha256: hash.optional(), beforeTreeSha256: hash.optional(),
   executionError: z.string().optional(), truncated: z.boolean().optional(), attempt: count.optional(),
-  testTaskId: id.optional(), sandbox: z.literal('agy-native-requested').optional(),
+  testTaskId: id.optional(), sandbox: z.enum(['agy-native-requested', 'windows-lpac']).optional(),
+  sandboxSelection: sandboxSelectionSchema.optional(), sandboxPolicySha256: hash.optional(),
+  portableNode: portableNodeIdentity.optional(),
 }).strict();
 const verification = z.object({
   sha256: hash, checkedAt: timestamp, status: verificationStatus,
@@ -25,7 +29,7 @@ const verification = z.object({
   fileHashes: z.record(z.string(), hash.nullable()),
 }).strict();
 const tokenUsage = z.object({
-  scope: z.literal('task'), source: z.enum(['session-total', 'session-delta', 'unavailable']),
+  scope: z.literal('task'), source: z.enum(['session-total', 'session-delta', 'local-executor', 'unavailable']),
   counters: usageCountersSchema, available: z.boolean(), partial: z.boolean(), warnings: z.array(z.string()),
 }).strict();
 const report = z.discriminatedUnion('role', [
@@ -42,6 +46,7 @@ export const taskRecordSchema = z.object({
   mode: z.enum(['write', 'read-only']).optional(), tests: z.array(testEvidenceSchema).optional(),
   acceptanceCriteria: z.array(criterionSchema).optional(), verification: verification.optional(), role: roleSchema.optional(),
   report: report.optional(), usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(), tokenUsage: tokenUsage.optional(),
+  usageProvenance: z.literal('local-executor').optional(), lastObservedCliUsage: usageCountersSchema.optional(),
   handoff: handoffSchema.optional(),
   comparison: comparisonSchema.optional(),
   roleDefinition: roleDefinitionSchema.optional(),
@@ -59,6 +64,7 @@ const chunkShape = {
   hasMore: z.boolean(), contentSha256: hash, offsetUnit: z.literal('utf16-code-units'),
 };
 const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model: z.string().nullable(), status, ...tokenUsage.shape }).strict();
+const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxPolicySchema, sha256: hash }).strict();
 
 export const successOutputSchemas = {
   antigravity_health: z.object({
@@ -73,12 +79,16 @@ export const successOutputSchemas = {
       interactiveReplies: z.object({ available: z.literal(false), reason: z.string() }).strict(),
       preflightTokenCount: z.object({ available: z.literal(false), exactTokens: z.null(), reason: z.string() }).strict(),
     }).strict().optional(),
+    windowsRuntime: z.object({ requestedMode: z.enum(['system', 'portable']), supported: z.boolean(), ready: z.boolean(), buildId: z.string(),
+      nodeVersion: z.string(), libuvVersion: z.string(), sha256: hash.nullable(), error: z.object({ code: z.string(), message: z.string() }).strict().optional() }).strict().optional(),
   }).strict(),
   antigravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
   antigravity_get_model: z.object({ model: z.string().nullable() }).strict(),
+  antigravity_get_sandbox_policy: sandboxPolicySnapshot,
   antigravity_roles: z.object({ roles: z.array(z.object({ name: roleSchema, baseRole: builtinRoleSchema,
     description: z.string().nullable(), custom: z.boolean(), instructionChars: count }).strict()) }).strict(),
   antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),
+  antigravity_set_sandbox_policy: sandboxPolicySnapshot,
   antigravity_usage: z.object({
     scope: z.literal('retained-tasks'), taskCount: count, measuredTaskCount: count, counters: usageCountersSchema, byTask: z.array(usageRow),
     byModel: z.array(z.object({ model: z.string().nullable(), taskCount: count, counters: usageCountersSchema }).strict()),

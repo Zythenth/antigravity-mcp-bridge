@@ -1,9 +1,11 @@
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
-import type { NativeTestRequest } from './native-tests.js';
+import type { BridgeNativeTestRequest } from './native-tests.js';
 import type { RoleReport, TaskRole, RoleDefinition } from './roles.js';
 import type { UsageCounters, taskTokenUsage } from './usage.js';
 import type { HandoffContext } from './handoff.js';
 import type { Comparison } from './comparison.js';
+import type { SandboxSelection } from './sandbox-policy.js';
+import type { PortableNodeIdentity } from './portable-node.js';
 
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
@@ -44,6 +46,8 @@ export interface TaskRecord {
   report?: RoleReport;
   usageIsResume?: boolean;
   usageBaseline?: UsageCounters;
+  usageProvenance?: 'local-executor';
+  lastObservedCliUsage?: UsageCounters;
   tokenUsage?: ReturnType<typeof taskTokenUsage>;
   handoff?: HandoffContext;
   comparison?: Comparison;
@@ -54,15 +58,19 @@ export interface TestEvidence {
   exitCode: number;
   output: string;
   sha256: string;
+  beforeSha256?: string;
   recordedAt: string;
-  source: 'client-reported' | 'agy-tool';
+  source: 'client-reported' | 'agy-tool' | 'windows-executor';
   treeSha256?: string;
   beforeTreeSha256?: string;
   executionError?: string;
   truncated?: boolean;
   attempt?: number;
   testTaskId?: string;
-  sandbox?: 'agy-native-requested';
+  sandbox?: 'agy-native-requested' | 'windows-lpac';
+  sandboxSelection?: SandboxSelection;
+  sandboxPolicySha256?: string;
+  portableNode?: PortableNodeIdentity;
 }
 
 export interface RunOptions {
@@ -73,7 +81,7 @@ export interface RunOptions {
   decisions?: string[];
   handoff?: HandoffContext;
   role?: TaskRole;
-  nativeTest?: NativeTestRequest;
+  nativeTest?: BridgeNativeTestRequest;
   acceptanceCriteria?: AcceptanceCriterion[];
   prompt: string;
   model?: string | null;

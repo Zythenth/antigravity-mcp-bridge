@@ -6,10 +6,10 @@ import { EventStore } from './event-store.js';
 import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
-import { validatePrompt, validateWorkingDirectory } from './validation.js';
+import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
-import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand } from './native-tests.js';
+import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand, type WindowsNativeTestRequest } from './native-tests.js';
 import { textChunk } from './chunks.js';
 import { roleSchema, validateRoleReport, resolveRole, listRoles } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
@@ -18,8 +18,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { BridgeEvent } from './types.js';
 import { decisionsSchema, handoffSchema } from './handoff.js';
 import { comparisonModelsSchema, compareFindings, type Comparison } from './comparison.js';
+import { normalizeSandboxPolicy, resolveSandboxSelection, sandboxPolicyDigest, type SandboxPolicySnapshot } from './sandbox-policy.js';
+import { executeWindowsTest, recoverWindowsExecutions } from './windows-executor.js';
+import { portableNodeStatus, type PortableNodeStatus } from './portable-node.js';
 
-interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
+interface InternalTask { record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 export class TaskManager {
@@ -32,10 +35,14 @@ export class TaskManager {
   private stopped = false;
   private readonly busyProjects = new Set<ProjectCopy>();
   private readonly state: StateStore;
+  private readonly nativeRecovery: Promise<void>;
+  private nativeRecoveryError: unknown;
 
   constructor(private readonly adapter: CliAdapter, private readonly config: Config) {
     this.state = new StateStore(config.stateDirectory);
     this.events = new EventStore(config.eventBufferSize, taskId => this.persist(taskId));
+    this.nativeRecovery = (config.testExecutor === 'windows-lpac' ? recoverWindowsExecutions(config.stateDirectory) : Promise.resolve())
+      .catch(error => { this.nativeRecoveryError = error; });
     this.refresh();
   }
 
@@ -85,6 +92,30 @@ export class TaskManager {
   get toolProfile() { return this.config.toolProfile; }
   roles() { return listRoles(this.config.customRoles); }
 
+  getSandboxPolicy(): SandboxPolicySnapshot { return this.state.loadSandboxPolicy(); }
+  windowsRuntimeStatus(): Promise<PortableNodeStatus> { return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory); }
+
+  async setSandboxPolicy(value: unknown, expectedSha256: string,
+    confirm?: (previous: SandboxPolicySnapshot, proposed: SandboxPolicySnapshot) => Promise<boolean>): Promise<SandboxPolicySnapshot> {
+    const previous = this.state.loadSandboxPolicy();
+    if (previous.sha256 !== expectedSha256) throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Reload the current sandbox policy before proposing an update');
+    const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const proposed: SandboxPolicySnapshot = { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
+    if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Sandbox policy updates require confirmation through the MCP client');
+    if (!await confirm(previous, proposed)) throw new BridgeError('APPROVAL_DENIED', 'Sandbox policy update was not confirmed');
+    const release = this.state.acquire('sandbox-policy');
+    try {
+      const current = this.state.loadSandboxPolicy();
+      if (current.sha256 !== previous.sha256) throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox policy changed while confirmation was pending');
+      const rechecked = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      if (sandboxPolicyDigest(rechecked) !== proposed.sha256) {
+        throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox policy proposal changed while confirmation was pending');
+      }
+      this.state.saveSandboxPolicy(proposed);
+      return proposed;
+    } finally { release(); }
+  }
+
   async setModel(model: string | null): Promise<string | null> {
     if (model !== null) {
       const models = await this.adapter.listModels();
@@ -103,6 +134,7 @@ export class TaskManager {
     validatePrompt(options.prompt, this.config.maxPromptChars);
     if (options.acceptanceCriteria !== undefined) criteriaSchema.parse(options.acceptanceCriteria);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
+    await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
     const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
@@ -190,7 +222,7 @@ export class TaskManager {
       const record: TaskRecord = { taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
-        usageBaseline: previous ? normalizeUsage((previous.record.result as { usage?: unknown } | undefined)?.usage) : undefined,
+        usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
         workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
       this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
       accepted = true;
@@ -218,6 +250,13 @@ export class TaskManager {
     if (filters.taskId) this.status(filters.taskId);
     return aggregateUsage(this.list().filter(task => (!filters.taskId || task.taskId === filters.taskId) &&
       (!filters.sessionId || task.sessionId === filters.sessionId) && (!filters.model || task.model === filters.model)));
+  }
+
+  private latestObservedUsage(sessionId: string | undefined, workingDirectory: string) {
+    if (!sessionId) return undefined;
+    const observed = [...this.tasks.values()].reverse().find(candidate => candidate.record.sessionId === sessionId && candidate.record.workingDirectory === workingDirectory &&
+      (candidate.record.lastObservedCliUsage !== undefined || (candidate.record.result as { usage?: unknown } | undefined)?.usage !== undefined));
+    return observed?.record.lastObservedCliUsage ?? (observed ? normalizeUsage((observed.record.result as { usage: unknown }).usage) : undefined);
   }
 
   result(taskId: string) {
@@ -253,7 +292,7 @@ export class TaskManager {
     return this.withProject(task.project, async () => {
       const preview = await previewProjectCopy(task.project!, this.config);
       const current = task.record.verification && await verifyCriteria(task.project!, preview.sha256, task.record.acceptanceCriteria, task.record.verification.review.evidence);
-      const tree = task.record.tests?.some(test => test.source === 'agy-tool') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
+      const tree = task.record.tests?.some(test => test.source === 'agy-tool' || test.source === 'windows-executor') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
       return { ...preview, patch: includePatch ? preview.patch : undefined, patchLength: preview.patch.length,
         tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 || (test.treeSha256 !== undefined && test.treeSha256 !== tree) })),
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 ||
@@ -354,8 +393,8 @@ export class TaskManager {
     if (current.status !== 'passed' || JSON.stringify(current.fileHashes) !== JSON.stringify(previous.fileHashes)) {
       throw new BridgeError('VERIFICATION_STALE', 'Verification files or evidence changed; verify again');
     }
-    const tree = task.record.tests?.some(test => test.source === 'agy-tool') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
-    const latestTests = new Map((task.record.tests || []).filter(test => test.source === 'agy-tool').map(test => [test.command, test]));
+    const tree = task.record.tests?.some(test => test.source === 'agy-tool' || test.source === 'windows-executor') ? await fingerprintProjectCopy(task.project!, this.config) : undefined;
+    const latestTests = new Map((task.record.tests || []).filter(test => test.source === 'agy-tool' || test.source === 'windows-executor').map(test => [test.command, test]));
     if ([...latestTests.values()].some(test => test.sha256 !== sha256 || test.treeSha256 !== tree)) {
       throw new BridgeError('TESTS_STALE', 'Run the observed test commands again against the current files');
     }
@@ -364,15 +403,71 @@ export class TaskManager {
     }
   }
 
-  async startTests(taskId: string, expectedSha256: string, command: TestCommand, retries = 0, timeoutSeconds = 600) {
+  async startTests(taskId: string, expectedSha256: string, command: TestCommand, retries = 0, timeoutSeconds = 600, sandbox?: unknown) {
     testCommandSchema.parse(command);
     if (!Number.isInteger(retries) || retries < 0 || retries > 3) throw new BridgeError('INVALID_TEST_COMMAND', 'retries must be between 0 and 3');
     const task = this.status(taskId);
     if (!task.sessionId || task.mode === 'read-only') throw new BridgeError('TASK_NOT_READY', 'Tests require a completed write task with a CLI conversation');
     const preview = await this.preview(taskId);
     if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before starting tests');
+    if (this.config.testExecutor === 'windows-lpac') return this.queueWindowsTest(taskId, task, expectedSha256, command, retries, timeoutSeconds, sandbox);
+    if (sandbox !== undefined) throw new BridgeError('SANDBOX_PERMISSIONS_UNSUPPORTED', 'Per-test sandbox permissions require the Windows LPAC executor');
     return this.run({ prompt: 'Run the requested tests in the native sandbox.', workingDirectory: task.workingDirectory, sessionId: task.sessionId,
       model: task.model, timeoutSeconds, nativeTest: { ...command, expectedSha256, maxAttempts: retries + 1 } });
+  }
+
+  private async queueWindowsTest(sourceTaskId: string, source: TaskRecord, expectedSha256: string, command: TestCommand, retries: number, timeoutSeconds: number, sandbox: unknown): Promise<TaskRecord> {
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
+      throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
+    }
+    const policy = this.state.loadSandboxPolicy();
+    const selection = await resolveSandboxSelection(policy.policy, sandbox, source.workingDirectory, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const nativeTest: WindowsNativeTestRequest = { ...command, expectedSha256,
+      maxAttempts: retries + 1, backend: 'windows-lpac', sandbox: selection, policySha256: policy.sha256 };
+    const releaseRegistry = this.state.acquire('registry');
+    let releaseProject: (() => void) | undefined;
+    try {
+      this.refresh();
+      const current = this.tasks.get(sourceTaskId);
+      if (!current?.project || !current.record.sessionId || current.record.mode === 'read-only' ||
+        !terminal.has(current.record.status) || (current.record.status !== 'completed' && current.record.error?.code !== 'TEST_FAILED') ||
+        current.record.integratedAt) {
+        throw new BridgeError('TASK_NOT_READY', 'Tests require a completed write task with an isolated copy and CLI conversation');
+      }
+      if ([...this.tasks.values()].filter(candidate => candidate.project === current.project).at(-1) !== current) {
+        throw new BridgeError('TASK_NOT_READY', 'Run tests from the latest retained task for this isolated copy');
+      }
+      if (this.busyProjects.has(current.project)) throw new BridgeError('TASK_NOT_READY', 'Wait for all operations on this copy to finish');
+      const currentPreview = await this.preview(sourceTaskId, false);
+      if (currentPreview.sha256 !== nativeTest.expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Copy changed while tests were queued');
+      if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) throw new BridgeError('QUEUE_FULL', 'Task queue is full');
+      releaseProject = this.state.acquire(this.projectLock(current.project));
+      if (this.tasks.size >= this.config.maxRetainedTasks) {
+        const oldestFinished = [...this.tasks.values()].find(candidate => terminal.has(candidate.record.status) && candidate !== current) ?? current;
+        if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
+        if (oldestFinished !== current && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
+          await this.discard(oldestFinished.record.taskId);
+        }
+        this.tasks.delete(oldestFinished.record.taskId);
+        this.events.drop(oldestFinished.record.taskId);
+        this.state.drop(oldestFinished.record.taskId);
+      }
+      const record: TaskRecord = { taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model,
+        mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
+        acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
+        usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
+        workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
+        status: 'queued', createdAt: new Date().toISOString() };
+      const options: RunOptions = { prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
+        model: record.model, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
+        acceptanceCriteria: record.acceptanceCriteria, nativeTest };
+      this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
+      releaseProject = undefined;
+      this.queue.push(record.taskId);
+      this.events.append(record.taskId, 'task.queued', { workingDirectory: record.workingDirectory, model: record.model, backend: 'windows-lpac' });
+      if (!this.batching) this.pump();
+      return { ...record };
+    } finally { releaseProject?.(); releaseRegistry(); }
   }
 
   async recordTest(taskId: string, expectedSha256: string, command: string, exitCode: number, output = '') {
@@ -527,7 +622,8 @@ export class TaskManager {
       task.releaseProject?.(); task.releaseProject = undefined;
     } else {
       task.termination = 'cancelled';
-      if (task.child) this.terminate(task.child);
+      if (task.nativeAbort) task.nativeAbort.abort();
+      else if (task.child) this.terminate(task.child);
     }
     return this.status(taskId);
   }
@@ -550,6 +646,15 @@ export class TaskManager {
 
   private async execute(task: InternalTask): Promise<void> {
     const record = task.record;
+    if (task.options.nativeTest && 'backend' in task.options.nativeTest && task.options.nativeTest.backend === 'windows-lpac') {
+      record.usageProvenance = 'local-executor';
+      try { await this.executeWindowsNativeTest(task); }
+      catch (error) {
+        if (task.termination) this.finish(task, task.termination);
+        else this.finish(task, 'failed', error instanceof BridgeError ? error.code : 'WINDOWS_EXECUTION_UNVERIFIED', error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
     record.status = 'starting';
     record.startedAt = new Date().toISOString();
     this.events.append(record.taskId, 'task.started', {});
@@ -650,6 +755,174 @@ export class TaskManager {
     } finally { await native?.cleanup(); }
   }
 
+  private windowsRequest(task: InternalTask): WindowsNativeTestRequest {
+    const request = task.options.nativeTest;
+    if (!request || !('backend' in request) || request.backend !== 'windows-lpac') {
+      throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Missing frozen Windows test request');
+    }
+    return request;
+  }
+
+  private async beginWindowsNativeTest(task: InternalTask, request: WindowsNativeTestRequest): Promise<void> {
+    await this.nativeRecovery;
+    if (this.nativeRecoveryError) throw this.nativeRecoveryError;
+    const release = this.state.acquire('sandbox-policy');
+    try {
+      const current = this.state.loadSandboxPolicy();
+      if (current.sha256 !== request.policySha256) {
+        throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox policy changed while this Windows test was queued');
+      }
+      const selected = await resolveSandboxSelection(current.policy, request.sandbox, task.record.workingDirectory,
+        this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      if (JSON.stringify(selected) !== JSON.stringify(request.sandbox)) {
+        throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox selection changed while this Windows test was queued');
+      }
+      if (task.termination) return;
+      task.record.status = 'starting';
+      task.record.startedAt = new Date().toISOString();
+      this.events.append(task.record.taskId, 'task.started', { backend: 'windows-lpac', policySha256: request.policySha256 });
+    } finally { release(); }
+  }
+
+  private remainingSeconds(deadline: number): number {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return 0;
+    return Math.max(1, Math.ceil(remaining / 1000));
+  }
+
+  private async executeWindowsCommand(task: InternalTask, request: WindowsNativeTestRequest, timeoutSeconds: number) {
+    if (!task.project) throw new BridgeError('TASK_NOT_READY', 'Windows tests require an isolated project copy');
+    const controller = new AbortController();
+    task.nativeAbort = controller;
+    try {
+      return await executeWindowsTest({ executable: request.executable, args: request.args }, task.project.copyDirectory, {
+        timeoutSeconds, maxRuntimeBytes: this.config.maxCopyBytes, maxFiles: this.config.maxCopyFiles,
+        mode: task.record.mode, stateDirectory: this.config.stateDirectory,
+        protectedPaths: [task.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.config.forbiddenDirectories],
+        windowsNodeRuntime: this.config.windowsNodeRuntime, portableNodeCacheDirectory: this.config.windowsNodeCacheDirectory,
+        sandbox: request.sandbox, signal: controller.signal,
+        onProcess: child => {
+          task.child = child;
+          task.record.pid = child.pid;
+          this.events.append(task.record.taskId, 'process.started', { pid: child.pid, executor: 'windows-lpac' });
+        },
+      });
+    } finally {
+      if (task.nativeAbort === controller) task.nativeAbort = undefined;
+      task.child = undefined;
+    }
+  }
+
+  private async repairWindowsTest(task: InternalTask, request: WindowsNativeTestRequest, observedExitCode: number, timeoutSeconds: number): Promise<void> {
+    if (!task.project) throw new BridgeError('TASK_NOT_READY', 'Windows test copy is unavailable');
+    const { nativeTest: _nativeTest, ...baseOptions } = task.options;
+    const options: RunOptions = { ...baseOptions, timeoutSeconds,
+      prompt: 'The bridge observed this exact test command exit with code ' + observedExitCode + ': ' +
+        JSON.stringify({ executable: request.executable, args: request.args }) +
+        '. Make only relevant fixes in the isolated copy. Do not run tests, change the command, weaken assertions, alter sandbox permissions, or change bridge configuration. Stop after the repair so the bridge can rerun the same command.' };
+    task.record.result = undefined;
+    task.record.usage = undefined;
+    const child = this.adapter.spawnTask(options, task.record.model, task.project.copyDirectory);
+    task.child = child;
+    task.record.pid = child.pid;
+    task.record.status = 'running';
+    this.events.append(task.record.taskId, 'process.started', { pid: child.pid, repair: true });
+    let stderr = '';
+    const stdoutParser = new LineParser(line => this.handleStdout(task, line));
+    const stderrParser = new LineParser(line => {
+      stderr = (stderr + '\n' + line).slice(-10000);
+      this.events.append(task.record.taskId, 'process.stderr', { text: line.slice(0, 4000) });
+    });
+    child.stdout.on('data', chunk => stdoutParser.write(chunk));
+    child.stderr.on('data', chunk => stderrParser.write(chunk));
+    const exitCode = await new Promise<number | null>(resolve => {
+      child.once('error', error => {
+        stderr += '\n' + error.message;
+        this.events.append(task.record.taskId, 'process.error', { message: error.message });
+      });
+      child.once('close', resolve);
+    });
+    stdoutParser.end(); stderrParser.end();
+    task.child = undefined;
+    task.record.exitCode = exitCode;
+    if (task.termination) return;
+    if (CliAdapter.authError(stderr + JSON.stringify(task.record.result || ''))) {
+      throw new BridgeError('AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
+    }
+    if (exitCode !== 0 || !task.record.result || (task.record.result as { status?: string }).status !== 'SUCCESS') {
+      const message = (task.record.result as { error?: string } | undefined)?.error || `agy repair exited with code ${exitCode}`;
+      throw new BridgeError('AGY_PROCESS_FAILED', message);
+    }
+  }
+
+  private async executeWindowsNativeTest(task: InternalTask): Promise<void> {
+    const request = this.windowsRequest(task);
+    await this.beginWindowsNativeTest(task, request);
+    if (task.termination) { this.finish(task, task.termination); return; }
+    if (!task.project) throw new BridgeError('TASK_NOT_READY', 'Windows tests require an isolated project copy');
+    const initial = await previewProjectCopy(task.project, this.config);
+    if (initial.sha256 !== request.expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Copy changed while the Windows test was queued');
+    const deadline = Date.now() + task.options.timeoutSeconds! * 1000;
+    let modelInvoked = false;
+    task.timer = setTimeout(() => {
+      task.termination = 'timeout';
+      if (task.nativeAbort) task.nativeAbort.abort();
+      else if (task.child) this.terminate(task.child);
+    }, task.options.timeoutSeconds! * 1000);
+    try {
+      for (let attempt = 1; attempt <= request.maxAttempts; attempt++) {
+        if (task.termination) break;
+        const remaining = this.remainingSeconds(deadline);
+        if (!remaining) { task.termination = 'timeout'; break; }
+        const beforePreview = await previewProjectCopy(task.project, this.config);
+        const beforeTree = await fingerprintProjectCopy(task.project, this.config);
+        if (attempt === 1 && beforePreview.sha256 !== request.expectedSha256) {
+          throw new BridgeError('REVIEW_CHANGED', 'Copy changed before the Windows test command started');
+        }
+        const result = await this.executeWindowsCommand(task, request, remaining);
+        const afterTree = await fingerprintProjectCopy(task.project, this.config);
+        const afterPreview = await previewProjectCopy(task.project, this.config);
+        task.record.exitCode = result.exitCode;
+        if (result.exitCode !== null) {
+          task.record.tests = [...(task.record.tests || []).slice(-19), {
+            command: JSON.stringify({ executable: request.executable, args: request.args }), exitCode: result.exitCode,
+            output: result.output, sha256: afterPreview.sha256, beforeSha256: beforePreview.sha256, recordedAt: new Date().toISOString(), source: 'windows-executor',
+            treeSha256: afterTree, beforeTreeSha256: beforeTree, executionError: result.error, truncated: result.truncated,
+            attempt, testTaskId: task.record.taskId, sandbox: 'windows-lpac', sandboxSelection: request.sandbox,
+            sandboxPolicySha256: request.policySha256,
+            portableNode: result.portableNode,
+          }];
+        }
+        this.events.append(task.record.taskId, 'test.results', { attempt, exitCode: result.exitCode, sha256: afterPreview.sha256, sandbox: 'windows-lpac' });
+        if (task.termination) break;
+        if (result.exitCode === null || result.error || result.profileDeleted !== true) {
+          throw new BridgeError('TEST_EXECUTION_UNVERIFIED', 'The Windows executor did not return a clean, verified execution receipt');
+        }
+        if (beforeTree !== afterTree) throw new BridgeError('TEST_CHANGED_PATCH', 'Project files changed during the observed Windows test command');
+        if (result.exitCode === 0) {
+          if (!modelInvoked) task.record.usageProvenance = 'local-executor';
+          this.finish(task, 'completed');
+          return;
+        }
+        if (attempt === request.maxAttempts) {
+          if (!modelInvoked) task.record.usageProvenance = 'local-executor';
+          this.finish(task, 'failed', 'TEST_FAILED', 'Observed Windows test command failed');
+          return;
+        }
+        const repairSeconds = this.remainingSeconds(deadline);
+        if (!repairSeconds) { task.termination = 'timeout'; break; }
+        modelInvoked = true;
+        task.record.usageProvenance = undefined;
+        await this.repairWindowsTest(task, request, result.exitCode, repairSeconds);
+      }
+      if (task.termination) this.finish(task, task.termination);
+    } finally {
+      if (task.timer) clearTimeout(task.timer);
+      task.timer = undefined;
+      task.nativeAbort = undefined;
+    }
+  }
+
   private handleStdout(task: InternalTask, line: string): void {
     const record = task.record;
     let raw: Record<string, unknown>;
@@ -696,7 +969,10 @@ export class TaskManager {
       record.result = raw.result;
       const result = raw.result as Record<string, unknown>;
       if (typeof result.conversation_id === 'string') record.sessionId = result.conversation_id;
-      if (result.usage !== undefined) record.usage = result.usage;
+      if (result.usage !== undefined) {
+        record.usage = result.usage;
+        record.lastObservedCliUsage = normalizeUsage(result.usage);
+      }
       this.events.append(record.taskId, 'agy.result', result, raw);
     } else this.events.append(record.taskId, 'agy.event', raw, raw);
   }

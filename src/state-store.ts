@@ -20,6 +20,7 @@ const snapshotSchema = z.object({
     createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(), pid: z.number().int().positive().optional(),
     mode: z.enum(['write', 'read-only']).optional(), integratedAt: z.string().datetime().optional(), discardedAt: z.string().datetime().optional(),
     usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
+    lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
     roleDefinition: roleDefinitionSchema.optional(),
   }).passthrough(),
   options: z.object({ prompt: z.string(), workingDirectory: z.string() }).passthrough(),

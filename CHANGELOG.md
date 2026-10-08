@@ -1,5 +1,15 @@
 # Histórico de versões
 
+## 0.6.0
+
+- Executor de testes próprio do bridge no Windows, isolado em AppContainer/LPAC e selecionado por padrão; `BRIDGE_TEST_EXECUTOR=agy` mantém o caminho legado explícito e não há alternativa de execução no host.
+- Política global de permissões de sandbox com consulta, alteração confirmada por formulário MCP e comparação pelo hash anterior. O agente que chama o MCP seleciona, em cada teste, apenas permissões dentro dos limites autorizados pela pessoa usuária. A configuração não é encaminhada ao `agy`; o Gemini delegado não pode escolhê-la, autorizá-la nem alterá-la.
+- Evidências de teste agora distinguem o executor Windows, a seleção de sandbox e o hash da política. Execução local conhecida registra zero tokens de modelo; reparos opcionais pelo `agy` continuam com os contadores observados, inclusive `null` quando ausentes.
+- Staging limitado de executáveis Windows e de `npm`/`npm.cmd`, que executa o `node.exe` e `npm-cli.js` verificados. Lotes arbitrários continuam sem suporte.
+- Aliases DOS temporários em dois níveis para cópia, runtime e scratch, com três letras livres de `D:` a `Z:`, verificação de identidade e remoção, e recuperação de execução interrompida. Eles são locais ao contexto de logon, sem ACL na raiz do volume, UAC ou mount persistente.
+- Limitação conhecida: no Node 24.14.1/libuv 1.51, `child_process.spawnSync` com pipes padrão falha no LPAC e expira com exit code 124; stdio herdado e o ciclo real do npm não demonstram compatibilidade geral. O [PR 5181 do libuv](https://github.com/libuv/libuv/pull/5181/files), presente no [libuv 1.53](https://github.com/libuv/libuv/releases/tag/v1.53.0), foi aplicado ao runtime portátil Node 24.21.0 LPAC1; o Node 24.14.1 do sistema mantém a limitação.
+- Runtime Node 24.21.0 LPAC1 para Windows x64 publicado em Release imutável, com libuv base 1.52.1 e somente o PR 5181 aplicado. O descritor fixa URL, tamanho e SHA-256 dos três arquivos instalados: `node.exe`, `LICENSE` e `build.json`. Esse build passou pela regressão LPAC com pipes padrão capturados (1 teste) e pelos testes de isolamento e ciclo de vida (22 testes, sem falhas nem skips). A preparação é explícita.
+
 ## 0.5.2
 
 - Restauração de `PATHEXT` ausente no subprocesso Windows para clientes MCP com ambiente reduzido, preservando valores explícitos e as permissões do sandbox.

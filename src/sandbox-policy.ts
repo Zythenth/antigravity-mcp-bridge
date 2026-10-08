@@ -239,9 +239,10 @@ async function canonicalProtectedPath(value: string): Promise<string> {
   return path.join(canonical, ...parts.slice(firstMissing));
 }
 
-async function protectedPaths(stateDirectory: string, forbidden: string[]): Promise<string[]> {
+async function protectedPaths(stateDirectory: string, forbidden: string[], portableNodeCacheDirectory?: string): Promise<string[]> {
   return Promise.all([
     stateDirectory,
+    ...(portableNodeCacheDirectory ? [portableNodeCacheDirectory] : []),
     ...['.codex', '.gemini', '.ssh', '.aws', '.azure'].map(name => path.join(os.homedir(), name)),
     ...forbidden,
   ].map(canonicalProtectedPath));
@@ -262,9 +263,9 @@ async function canonicalPaths(values: string[], protectedRoots: string[], limits
 }
 
 export async function normalizeSandboxPolicy(value: unknown, stateDirectory: string, forbidden: string[],
-  limits: SandboxPathValidationLimits = DEFAULT_PROJECT_LIMITS): Promise<SandboxPolicy> {
+  limits: SandboxPathValidationLimits = DEFAULT_PROJECT_LIMITS, portableNodeCacheDirectory?: string): Promise<SandboxPolicy> {
   const policy = sandboxPolicySchema.parse(value);
-  const protectedRoots = await protectedPaths(stateDirectory, forbidden);
+  const protectedRoots = await protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory);
   const writeRoots = await canonicalPaths(policy.writeRoots, protectedRoots, limits);
   const readRoots = await canonicalPaths([...policy.readRoots, ...writeRoots], protectedRoots, limits);
   return canonicalPolicyShape({ ...policy, readRoots, writeRoots });
@@ -272,10 +273,10 @@ export async function normalizeSandboxPolicy(value: unknown, stateDirectory: str
 
 export async function resolveSandboxSelection(policy: SandboxPolicy, value: unknown | undefined,
   sourceDirectory: string, stateDirectory: string, forbidden: string[],
-  limits: SandboxPathValidationLimits = DEFAULT_PROJECT_LIMITS): Promise<SandboxSelection> {
+  limits: SandboxPathValidationLimits = DEFAULT_PROJECT_LIMITS, portableNodeCacheDirectory?: string): Promise<SandboxSelection> {
   const ceiling = requireNormalizedPolicy(policy);
   const selected = sandboxSelectionInputSchema.parse(value ?? {});
-  const protectedRoots = [...await protectedPaths(stateDirectory, forbidden), await canonicalProtectedPath(sourceDirectory)];
+  const protectedRoots = [...await protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory), await canonicalProtectedPath(sourceDirectory)];
   const writePaths = await canonicalPaths(selected.writePaths ?? [], protectedRoots, limits);
   const readPaths = await canonicalPaths([...(selected.readPaths ?? []), ...writePaths], protectedRoots, limits);
   if (readPaths.length > 20) {

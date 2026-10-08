@@ -20,6 +20,11 @@ export function normalizeUsage(raw: unknown): UsageCounters {
 }
 
 export function taskTokenUsage(task: TaskRecord) {
+  if (task.usageProvenance === 'local-executor') {
+    return { scope: 'task' as const, source: 'local-executor' as const,
+      counters: { inputTokens: 0, outputTokens: 0, totalTokens: 0, thinkingTokens: 0, cacheReadTokens: 0 },
+      available: true, partial: false, warnings: [] as string[] };
+  }
   const raw = (task.result as { usage?: unknown } | undefined)?.usage;
   const current = normalizeUsage(raw);
   const counters = { ...current };
@@ -61,9 +66,10 @@ export function aggregateUsage(tasks: TaskRecord[]) {
     }),
     bySession: sessions.map(sessionId => {
       const rows = byTask.filter(task => task.sessionId === sessionId);
-      const latest = tasks.filter(task => task.sessionId === sessionId && (task.result as { usage?: unknown } | undefined)?.usage !== undefined).at(-1);
+      const latest = tasks.filter(task => task.sessionId === sessionId && task.usageProvenance !== 'local-executor' &&
+        (task.lastObservedCliUsage !== undefined || (task.result as { usage?: unknown } | undefined)?.usage !== undefined)).at(-1);
       return { sessionId, taskCount: rows.length, counters: sum(rows.map(task => task.counters)),
-        observedCumulative: latest ? normalizeUsage((latest.result as { usage: unknown }).usage) : null };
+        observedCumulative: latest?.lastObservedCliUsage ?? (latest ? normalizeUsage((latest.result as { usage: unknown }).usage) : null) };
     }),
   };
 }

@@ -45,7 +45,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
 
 test('tool profiles reduce the MCP catalog and reject writes in query/review', async () => {
   assert.throws(() => loadConfig({ BRIDGE_TOOL_PROFILE: 'unknown' }));
-  for (const [profile, count] of [['full', 29], ['query', 20], ['review', 23], ['implementation', 29]] as const) {
+  for (const [profile, count] of [['full', 31], ['query', 21], ['review', 24], ['implementation', 31]] as const) {
     const f = await fixture(profile);
     try {
       const names = (await f.client.listTools()).tools.map(tool => tool.name);
@@ -55,9 +55,11 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
       assert.equal(health.bridgeLimitations.interactiveReplies.available, false);
       assert.equal(health.bridgeLimitations.preflightTokenCount.available, false);
       assert.equal(health.bridgeLimitations.preflightTokenCount.exactTokens, null);
+      assert.ok(names.includes('antigravity_get_sandbox_policy'));
       if (profile === 'query' || profile === 'review') {
         assert.ok(!names.includes('antigravity_integrate'));
         assert.ok(!names.includes('antigravity_test'));
+        assert.ok(!names.includes('antigravity_set_sandbox_policy'));
         const disabled = await f.client.callTool({ name: 'antigravity_set_model', arguments: { model: null } });
         assert.equal(disabled.isError, true);
         const write = await f.client.callTool({ name: 'antigravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, mode: 'write' } });
@@ -65,6 +67,7 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
         const run = await f.call('antigravity_run', { prompt: 'slow:test', workingDirectory: f.source });
         assert.equal(run.task.mode, 'read-only');
       }
+      else assert.ok(names.includes('antigravity_set_sandbox_policy'));
     } finally { await f.close(); }
   }
 });

@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { access, realpath, stat } from 'node:fs/promises';
+import { access, lstat, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { BridgeError } from './types.js';
 
@@ -22,6 +22,29 @@ export async function validateWorkingDirectory(input: string, forbidden: string[
   } catch (error) {
     if (error instanceof BridgeError) throw error;
     throw new BridgeError('INVALID_WORKING_DIRECTORY', `workingDirectory is unavailable: ${input}`);
+  }
+}
+
+export async function validateRuntimeCacheSeparation(workingDirectory: string, cacheDirectory: string): Promise<void> {
+  let existing = path.resolve(cacheDirectory);
+  const missing: string[] = [];
+  try {
+    for (;;) {
+      try { await lstat(existing); break; }
+      catch (error) {
+        const parent = path.dirname(existing);
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || parent === existing) throw error;
+        missing.unshift(path.basename(existing));
+        existing = parent;
+      }
+    }
+    const cache = path.join(await realpath(existing), ...missing);
+    if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
+      throw new BridgeError('INVALID_WORKING_DIRECTORY', 'workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project');
+    }
+  } catch (error) {
+    if (error instanceof BridgeError) throw error;
+    throw new BridgeError('INVALID_WORKING_DIRECTORY', 'Could not resolve BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY before copying the project');
   }
 }
 

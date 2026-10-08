@@ -16,6 +16,11 @@ execFileSync('git', ['init', '--quiet', source]);
 await writeFile(path.join(source, 'source.txt'), 'original');
 const client = new Client({ name: 'native-test-integration', version: '1' });
 let firstId, testId;
+const windowsLpac = process.platform === 'win32' && process.env.BRIDGE_TEST_EXECUTOR !== 'agy';
+const expectedEvidence = windowsLpac
+  ? { source: 'windows-executor', sandbox: 'windows-lpac' }
+  : { source: 'agy-tool', sandbox: 'agy-native-requested' };
+const portableRuntime = windowsLpac && process.env.BRIDGE_WINDOWS_NODE_RUNTIME === 'portable';
 async function call(name, args = {}) {
   const result = await client.callTool({ name, arguments: args });
   if (result.isError) throw Error(JSON.stringify(result.structuredContent));
@@ -34,15 +39,22 @@ async function wait(taskId) {
 try {
   await client.connect(new StdioClientTransport({ command: process.execPath, args: [path.resolve('dist/src/index.js')],
     env: { BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TOOL_PROFILE: 'full',
-      ...(process.env.AGY_PATH ? { AGY_PATH: process.env.AGY_PATH } : {}),
-      ...(process.env.BRIDGE_DEFAULT_MODEL ? { BRIDGE_DEFAULT_MODEL: process.env.BRIDGE_DEFAULT_MODEL } : {}) }, stderr: 'pipe' }));
+       ...(process.env.AGY_PATH ? { AGY_PATH: process.env.AGY_PATH } : {}),
+       ...(process.env.BRIDGE_DEFAULT_MODEL ? { BRIDGE_DEFAULT_MODEL: process.env.BRIDGE_DEFAULT_MODEL } : {}),
+       ...(process.env.BRIDGE_TEST_EXECUTOR ? { BRIDGE_TEST_EXECUTOR: process.env.BRIDGE_TEST_EXECUTOR } : {}),
+       ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
+       ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) }, stderr: 'pipe' }));
   const first = await call('antigravity_run', { prompt: 'Do not change files. Reply ready for a test command.', workingDirectory: source, timeoutSeconds: 60,
     acceptanceCriteria: [{ id: 'source', description: 'Keep the source file', check: { kind: 'file-contains', path: 'source.txt', text: 'original' } }] });
   firstId = first.task.taskId;
   const finished = await wait(firstId);
-  if (finished.status !== 'completed') throw Error(JSON.stringify(finished.error));
+  if (finished.status !== 'completed') throw Error(JSON.stringify({ error: finished.error, initialTokenUsage: finished.tokenUsage }));
   const preview = await call('antigravity_preview', { taskId: firstId });
-  const runtimeLookup = process.platform === 'win32' ?
+  const runtimeLookup = windowsLpac ?
+    'const cp=require("node:child_process");const lookup=cp.spawnSync(process.execPath,["--version"],{encoding:"utf8"});' +
+    'if(lookup.status!==0){console.error(lookup.stderr||lookup.stdout);process.exit(11)}' +
+    'if(!lookup.stdout.trim()){console.error(lookup.stderr||"staged node produced no version output");process.exit(12)}console.log("sandbox resolves staged node: "+lookup.stdout.trim());' :
+    process.platform === 'win32' ?
     'const cp=require("node:child_process");const lookup=cp.spawnSync(' +
     JSON.stringify(path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')) +
     ',["-NoProfile","-NonInteractive","-Command","$ErrorActionPreference=\'Stop\';(Get-Command -Name node -CommandType Application -ErrorAction Stop).Source"],{encoding:"utf8"});' +
@@ -58,16 +70,19 @@ try {
   testId = tested.task.taskId;
   const final = await wait(testId);
   const evidence = final.tests?.at(-1);
-  if (final.status !== 'completed' || evidence?.source !== 'agy-tool' || evidence.exitCode !== 0 || !evidence.output.includes('native executor ran')) {
+  const localUsage = final.tokenUsage;
+  if (final.status !== 'completed' || evidence?.source !== expectedEvidence.source || evidence?.sandbox !== expectedEvidence.sandbox || evidence.exitCode !== 0 || !evidence.output.includes('native executor ran') ||
+       (portableRuntime && !evidence?.portableNode) ||
+       (windowsLpac && (localUsage?.source !== 'local-executor' || Object.values(localUsage.counters || {}).some(value => value !== 0)))) {
     const events = await call('antigravity_events', { taskId: testId });
-    throw Error(JSON.stringify({ error: final.error, result: final.result, evidence, tokenUsage: final.tokenUsage, sessionUsage: final.usage,
+    throw Error(JSON.stringify({ error: final.error, result: final.result, evidence, initialTokenUsage: finished.tokenUsage, tokenUsage: final.tokenUsage, sessionUsage: final.usage,
       diagnostics: events.events.filter(event => !['copy.ready', 'copy.created', 'task.queued'].includes(event.type)) }));
   }
   const after = await call('antigravity_preview', { taskId: testId });
   if (after.tests.at(-1).stale || after.sha256 !== preview.sha256) throw Error('Native test evidence or patch changed');
   if (await readFile(path.join(source, 'source.txt'), 'utf8') !== 'original') throw Error('Original source changed');
   if (await readFile(markerPath, 'utf8') !== markerContent) throw Error('Host marker changed');
-  console.log(JSON.stringify({ status: 'passed', source: evidence.source, exitCode: evidence.exitCode, output: evidence.output, sandbox: evidence.sandbox, tokenUsage: final.tokenUsage, sessionUsage: final.usage }));
+  console.log(JSON.stringify({ status: 'passed', source: evidence.source, exitCode: evidence.exitCode, output: evidence.output, sandbox: evidence.sandbox, portableNode: evidence.portableNode, initialTokenUsage: finished.tokenUsage, tokenUsage: final.tokenUsage, sessionUsage: final.usage }));
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

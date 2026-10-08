@@ -37,3 +37,15 @@ test('missing, malformed, reset and overflowing counters never become fabricated
   const huge = task('huge', 'model', { ...firstUsage, total_tokens: Number.MAX_SAFE_INTEGER });
   assert.equal(aggregateUsage([huge, huge]).counters.totalTokens, null);
 });
+
+test('local executor records a known zero without replacing the session cumulative CLI counters', () => {
+  const model = task('model', 'model', firstUsage);
+  const local = task('local', 'model', {}, { usageIsResume: true, usageBaseline: normalizeUsage(firstUsage), usageProvenance: 'local-executor' });
+  const usage = taskTokenUsage(local);
+  assert.equal(usage.source, 'local-executor');
+  assert.equal(usage.counters.totalTokens, 0);
+  assert.equal(usage.warnings.length, 0);
+  const aggregate = aggregateUsage([model, local]);
+  assert.equal(aggregate.counters.totalTokens, 120);
+  assert.equal(aggregate.bySession[0]?.observedCumulative?.totalTokens, 120);
+});

@@ -578,7 +578,7 @@ test('cleanup expires only inactive copies and deletion rejects source paths', a
 
 function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> = {}) {
   const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(stateDirectory);
-  const config = loadConfig({ AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '2', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });
+  const config = loadConfig({ AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '2', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });
   const adapter = new CliAdapter(config, prefixArgs);
   const tasks = new TaskManager(adapter, config); managers.push(tasks);
   return { adapter, tasks, config };
