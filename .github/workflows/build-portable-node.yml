@@ -20,7 +20,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $buildWorkspace = Join-Path $env:RUNNER_TEMP "portable-node-workspace-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $buildWorkspace = Join-Path $env:RUNNER_TEMP "n-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           New-Item -ItemType Directory -Path $buildWorkspace | Out-Null
           & .\scripts\build-portable-node.ps1 -WorkspaceDirectory $buildWorkspace -PrepareNasmOnly
           [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "workspace=$buildWorkspace`n", [System.Text.UTF8Encoding]::new($false))

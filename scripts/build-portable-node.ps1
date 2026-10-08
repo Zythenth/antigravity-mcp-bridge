@@ -552,7 +552,12 @@ if ($PrepareNasmOnly) {
   exit 0
 }
 
-$workName = "portable-node-source-$([guid]::NewGuid().ToString('N'))"
+$workName = "s-$([guid]::NewGuid().ToString('N'))"
+$plannedSourceDirectory = Join-Path (Join-Path $workspaceRoot $workName) $manifest.source.directory
+Write-Host "Fonte planejada: $plannedSourceDirectory; comprimento $($plannedSourceDirectory.Length) caracteres."
+if (-not $PrepareOnly -and $plannedSourceDirectory.Length -gt 80) {
+  throw "WorkspaceDirectory produz uma raiz de fonte com $($plannedSourceDirectory.Length) caracteres; a compilação exige no máximo 80 para os caminhos do FileTracker. Use um WorkspaceDirectory mais curto dentro de RUNNER_TEMP."
+}
 $workDirectory = New-OwnedDirectory -Root $workspaceRoot -Name $workName
 $archivePath = Join-Path $workDirectory 'node-v24.21.0.tar.gz'
 Assert-ChildPath -Root $workspaceRoot -Candidate $archivePath -Description 'Arquivo fonte'
