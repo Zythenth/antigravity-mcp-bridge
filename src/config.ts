@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { preauthorizedIntegrationRoots } from './integration-policy.js';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
 import { customRolesSchema, type RoleDefinition } from './roles.js';
@@ -18,6 +19,7 @@ export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxC
 
 export interface Config extends ProjectLimits {
   toolProfile: ToolProfile;
+  preauthorizedIntegrationRoots: string[];
   customRoles: RoleDefinition[];
   agyPath: string;
   defaultModel?: string;
@@ -71,6 +73,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
+    preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),
     agyPath: env.AGY_PATH || 'agy',
     defaultModel,

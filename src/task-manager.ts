@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { integrationPreauthorized } from './integration-policy.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } from './skills.js';
@@ -96,6 +97,8 @@ export class TaskManager {
   }
 
   get toolProfile() { return this.config.toolProfile; }
+  get preauthorizedProjectCount() { return this.config.preauthorizedIntegrationRoots.length; }
+  integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.config.preauthorizedIntegrationRoots); }
   roles() { return listRoles(this.config.customRoles); }
 
   getSandboxPolicy(): SandboxPolicySnapshot { return this.state.loadSandboxPolicy(); }
@@ -576,9 +579,10 @@ export class TaskManager {
       const reviewed = await previewProjectCopy(task.project!, this.config);
       if (!reviewed.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');
       if (reviewed.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before requesting confirmation');
-      if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation through the MCP client');
+      const preauthorized = this.integrationPreauthorized(taskId);
+      if (!preauthorized && !confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation or a configured project preauthorization');
       await this.requireVerification(task, expectedSha256);
-      if (!await confirm(reviewed)) throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
+      if (!preauthorized && !await confirm!(reviewed)) throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
       const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
       try {
         const current = await previewProjectCopy(task.project!, this.config);
@@ -587,7 +591,7 @@ export class TaskManager {
         const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();
-          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: 'mcp-elicitation' });
+          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: preauthorized ? 'configured-project' : 'mcp-elicitation' });
         }
         return preview;
       } finally { releaseSource(); }

@@ -274,3 +274,22 @@ test('persisted duplicate message IDs and dangling dispatch claims are rejected'
     } finally { store.save(original); }
   } finally { await f.close(); }
 });
+
+
+test('project preauthorization skips only the repeated form and keeps hash, review and mode gates', async () => {
+  const f = await fixture(false);
+  try {
+    const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed'); await delay(10);
+    await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
+    const preview = await f.tasks.preview(id);
+    await assert.rejects(f.tasks.integrate(id, preview.sha256), { code: 'APPROVAL_REQUIRED' });
+    const authorized = new TaskManager(f.adapter, { ...f.config, preauthorizedIntegrationRoots: [process.platform === 'win32' ? f.source.toLowerCase() : f.source] }); f.managers.push(authorized);
+    await assert.rejects(authorized.integrate(id, '0'.repeat(64)), { code: 'REVIEW_CHANGED' });
+    await assert.rejects(authorized.integrate(id, preview.sha256), { code: 'VERIFICATION_REQUIRED' });
+    await authorized.verify(id, preview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'changed', explanation: 'Observed fixture content' }]);
+    let prompted = false;
+    await authorized.integrate(id, preview.sha256, async () => { prompted = true; return false; });
+    assert.equal(prompted, false);
+    assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'changed');
+  } finally { await f.close(); }
+});

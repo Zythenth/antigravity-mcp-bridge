@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path12) {
-      let input2 = path12;
+    function removeDotSegments(path13) {
+      let input2 = path13;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path12 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path12 && path12 !== "/" ? path12 : void 0;
+        const path13 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path13 && path13 !== "/" ? path13 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path12) {
-  if (!path12)
+function getElementAtPath(obj, path13) {
+  if (!path13)
     return obj;
-  return path12.reduce((acc, key) => acc?.[key], obj);
+  return path13.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path12, issues) {
+function prefixIssues(path13, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path12);
+    iss.path.unshift(path13);
     return iss;
   });
 }
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path12 = []) => {
+  const processError = (error63, path13 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path12, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path13, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path12, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path12, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
       } else {
-        const fullpath = [...path12, ...issue2.path];
+        const fullpath = [...path13, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8868,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path12 = []) => {
+  const processError = (error63, path13 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path12, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path13, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path12, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path12, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
       } else {
-        const fullpath = [...path12, ...issue2.path];
+        const fullpath = [...path13, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8917,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path12 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path12) {
+  const path13 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path13) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path12 = ref.slice(1).split("/").filter(Boolean);
-  if (path12.length === 0) {
+  const path13 = ref.slice(1).split("/").filter(Boolean);
+  if (path13.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path12[0] === defsKey) {
-    const key = path12[1] === void 0 ? void 0 : decodeJSONPointerSegment(path12[1]);
+  if (path13[0] === defsKey) {
+    const key = path13[1] === void 0 ? void 0 : decodeJSONPointerSegment(path13[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28513,7 +28513,7 @@ var StdioServerTransport = class {
 // dist/src/cli-adapter.js
 import { spawn as spawn2 } from "node:child_process";
 import { access as access2 } from "node:fs/promises";
-import path5 from "node:path";
+import path6 from "node:path";
 
 // dist/src/types.js
 var BridgeError = class extends Error {
@@ -28534,16 +28534,38 @@ import { spawn } from "node:child_process";
 import { createReadStream as createReadStream2 } from "node:fs";
 import { copyFile, lstat as lstat2, mkdir as mkdir2, mkdtemp, readdir as readdir2, realpath, rm } from "node:fs/promises";
 import os2 from "node:os";
-import path3 from "node:path";
+import path4 from "node:path";
 
 // dist/src/skills.js
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, writeFile } from "node:fs/promises";
-import path2 from "node:path";
+import path3 from "node:path";
 
 // dist/src/config.js
+import path2 from "node:path";
+
+// dist/src/integration-policy.js
+import { realpathSync, statSync } from "node:fs";
 import path from "node:path";
+function preauthorizedIntegrationRoots(value) {
+  const roots = JSON.parse(value ?? "[]");
+  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path.isAbsolute(root))) {
+    throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
+  }
+  return [...new Set(roots.map((root) => {
+    const canonical = realpathSync(root);
+    if (!statSync(canonical).isDirectory() || canonical === path.parse(canonical).root)
+      throw new Error("Preauthorization requires a project directory, not a volume root");
+    return process.platform === "win32" ? canonical.toLowerCase() : canonical;
+  }))];
+}
+function integrationPreauthorized(workingDirectory, roots) {
+  const canonical = process.platform === "win32" ? workingDirectory.toLowerCase() : workingDirectory;
+  return roots.includes(canonical);
+}
+
+// dist/src/config.js
 import os from "node:os";
 
 // dist/src/tool-profiles.js
@@ -28608,18 +28630,18 @@ function windowsNodeRuntime(value) {
   throw new Error("BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable");
 }
 function windowsNodeCacheDirectory(value) {
-  const directory = value ?? path.join(os.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
+  const directory = value ?? path2.join(os.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
   if (value !== void 0) {
     if (process.platform === "win32") {
       if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
         throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path");
       }
-    } else if (!path.isAbsolute(value)) {
+    } else if (!path2.isAbsolute(value)) {
       throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute");
     }
   }
-  const resolved = path.resolve(directory);
-  if (resolved === path.parse(resolved).root)
+  const resolved = path2.resolve(directory);
+  if (resolved === path2.parse(resolved).root)
     throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
   return resolved;
 }
@@ -28630,6 +28652,7 @@ function loadConfig(env = process.env) {
   }
   return {
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
+    preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? "[]")),
     agyPath: env.AGY_PATH || "agy",
     defaultModel,
@@ -28640,11 +28663,11 @@ function loadConfig(env = process.env) {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), ".antigravity-mcp-bridge"),
+    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path2.join(os.homedir(), ".antigravity-mcp-bridge"),
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path.delimiter).filter(Boolean).map((p) => path.resolve(p)),
+    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path2.delimiter).filter(Boolean).map((p) => path2.resolve(p)),
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY)
@@ -28923,7 +28946,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `copyDirectory must be a non-link directory: ${copyDirectory}`);
   }
-  const agentsPath = path2.join(copyDirectory, ".agents");
+  const agentsPath = path3.join(copyDirectory, ".agents");
   const agentsStat = await lstat(agentsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -28934,7 +28957,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Existing .agents is not a directory or is a symbolic link");
     }
   }
-  const skillsPath = path2.join(copyDirectory, ".agents", "skills");
+  const skillsPath = path3.join(copyDirectory, ".agents", "skills");
   const skillsStat = await lstat(skillsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -28953,9 +28976,9 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     }
   }
   for (const bundle of bundles) {
-    const relSkillDir = path2.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
+    const relSkillDir = path3.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
     await checkedPath(copyDirectory, relSkillDir, false);
-    const targetSkillDir = path2.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
+    const targetSkillDir = path3.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
     const targetStat = await lstat(targetSkillDir).catch((err) => {
       if (err.code === "ENOENT")
         return void 0;
@@ -28968,10 +28991,10 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   await mkdir(skillsPath, { recursive: true });
   const stagedSkills = [];
   for (const bundle of bundles) {
-    const skillDir = path2.join(skillsPath, bundle.name.toLowerCase());
+    const skillDir = path3.join(skillsPath, bundle.name.toLowerCase());
     await mkdir(skillDir, { recursive: true });
     const files = [];
-    const skillMdTarget = path2.join(skillDir, "SKILL.md");
+    const skillMdTarget = path3.join(skillDir, "SKILL.md");
     await writeFile(skillMdTarget, bundle.content, { encoding: "utf8", flag: "wx" });
     files.push(Object.freeze({
       path: `.agents/skills/${bundle.name.toLowerCase()}/SKILL.md`,
@@ -28980,8 +29003,8 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     if (bundle.resources) {
       for (const res of bundle.resources) {
         const norm = res.path.replaceAll("\\", "/");
-        const targetFile = path2.join(skillDir, ...norm.split("/"));
-        await mkdir(path2.dirname(targetFile), { recursive: true });
+        const targetFile = path3.join(skillDir, ...norm.split("/"));
+        await mkdir(path3.dirname(targetFile), { recursive: true });
         await writeFile(targetFile, res.content, { encoding: "utf8", flag: "wx" });
         files.push(Object.freeze({
           path: `.agents/skills/${bundle.name.toLowerCase()}/${norm}`,
@@ -29090,7 +29113,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
     throw new BridgeError("SKILL_VERIFICATION_FAILED", "copyDirectory must be a directory and not a link");
   }
   for (const rel of [".agents", ".agents/skills"]) {
-    const full = path2.join(copyDirectory, ...rel.split("/"));
+    const full = path3.join(copyDirectory, ...rel.split("/"));
     const st = await lstat(full).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Missing required directory: ${rel}`);
     });
@@ -29101,7 +29124,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
   let totalVerifiedBytes = 0;
   for (const skill of manifest) {
     const skillRelative = `.agents/skills/${skill.name.toLowerCase()}`;
-    const skillDir = path2.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
+    const skillDir = path3.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
     const skillStat = await lstat(skillDir).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Skill directory not found: ${skillRelative}`);
     });
@@ -29145,7 +29168,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
       const entries = await readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         const entryRel = relPrefix + "/" + entry.name;
-        const fullPath = path2.join(dir, entry.name);
+        const fullPath = path3.join(dir, entry.name);
         const st = await lstat(fullPath);
         if (st.isSymbolicLink()) {
           throw new BridgeError("SKILL_VERIFICATION_FAILED", `Symbolic link found in skill: ${entryRel}`);
@@ -29189,8 +29212,8 @@ async function discardProjectCopy(project) {
     [project.gitDirectory, "agy-mcp-baseline-"]
   ];
   for (const [directory, prefix] of targets) {
-    const absolute = path3.resolve(directory);
-    if (path3.relative(root, await realpath(path3.dirname(absolute))) !== "" || !path3.basename(absolute).startsWith(prefix)) {
+    const absolute = path4.resolve(directory);
+    if (path4.relative(root, await realpath(path4.dirname(absolute))) !== "" || !path4.basename(absolute).startsWith(prefix)) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
     }
     const info = await lstat2(absolute).catch((error62) => {
@@ -29202,7 +29225,7 @@ async function discardProjectCopy(project) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
   }
   for (const [directory] of targets)
-    await rm(path3.resolve(directory), { recursive: true, force: true });
+    await rm(path4.resolve(directory), { recursive: true, force: true });
 }
 async function git(cwd, args, input2, allowedCodes = [0]) {
   return new Promise((resolve, reject) => {
@@ -29249,7 +29272,7 @@ async function checkedPath(root, relative, mustExist) {
   const parts = validRelative(relative).split("/");
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path3.join(current, parts[index]);
+    current = path4.join(current, parts[index]);
     let info;
     try {
       info = await lstat2(current);
@@ -29277,7 +29300,7 @@ async function listProjectFiles(sourceDirectory) {
   } catch {
     throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
   }
-  if (path3.relative(await realpath(top), await realpath(sourceDirectory)) !== "") {
+  if (path4.relative(await realpath(top), await realpath(sourceDirectory)) !== "") {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
   }
   const candidates = [...new Set(splitNull(await git(sourceDirectory, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
@@ -29310,8 +29333,8 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     if (totalBytes > limits.maxCopyBytes)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
-  const copyDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path4.join(os2.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path4.join(os2.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   try {
     const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
@@ -29319,8 +29342,8 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     totalBytes = 0;
     for (const relative of selected) {
       const source = await checkedPath(sourceDirectory, relative, true);
-      const target = path3.join(copyDirectory, ...relative.split("/"));
-      await mkdir2(path3.dirname(target), { recursive: true });
+      const target = path4.join(copyDirectory, ...relative.split("/"));
+      await mkdir2(path4.dirname(target), { recursive: true });
       await copyFile(source, target);
       totalBytes += (await lstat2(target)).size;
       if (totalBytes > limits.maxCopyBytes)
@@ -29341,7 +29364,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
       "-c",
       "user.email=bridge@invalid.local",
       "-c",
-      "core.hooksPath=" + path3.join(gitDirectory, "disabled-hooks"),
+      "core.hooksPath=" + path4.join(gitDirectory, "disabled-hooks"),
       "commit",
       "--quiet",
       "--allow-empty",
@@ -29350,10 +29373,10 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     ]);
     return project;
   } catch (error62) {
-    if (path3.dirname(copyDirectory) === os2.tmpdir() && path3.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+    if (path4.dirname(copyDirectory) === os2.tmpdir() && path4.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
       await rm(copyDirectory, { recursive: true, force: true });
     }
-    if (path3.dirname(gitDirectory) === os2.tmpdir() && path3.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+    if (path4.dirname(gitDirectory) === os2.tmpdir() && path4.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
       await rm(gitDirectory, { recursive: true, force: true });
     }
     throw error62;
@@ -29413,10 +29436,10 @@ async function verifyReadOnlyCopy(project, baseline = new Map([...project.baseli
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path3.join(directory, entry.name), relative + "/");
+        await visit2(path4.join(directory, entry.name), relative + "/");
       else {
         seen.add(relative);
-        if (!entry.isFile() || baseline.get(relative) !== await sha256File2(path3.join(directory, entry.name))) {
+        if (!entry.isFile() || baseline.get(relative) !== await sha256File2(path4.join(directory, entry.name))) {
           throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative);
         }
       }
@@ -29452,7 +29475,7 @@ async function snapshotCopyFiles(project, limits) {
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path3.join(directory, entry.name), relative + "/");
+        await visit2(path4.join(directory, entry.name), relative + "/");
       else {
         const file3 = await checkedPath(project.copyDirectory, relative, true);
         bytes += (await lstat2(file3)).size;
@@ -29478,8 +29501,8 @@ async function forkProjectCopy(project, limits) {
     for (const file3 of splitNull(await git(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
       ignored.add(file3);
   }
-  const copyDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path3.join(os2.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path4.join(os2.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path4.join(os2.tmpdir(), "agy-mcp-baseline-"));
   const fork = { ...project, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
   try {
     let bytes = 0;
@@ -29495,8 +29518,8 @@ async function forkProjectCopy(project, limits) {
       bytes += (await lstat2(source)).size;
       if (fork.includedFiles.length >= limits.maxCopyFiles || bytes > limits.maxCopyBytes)
         throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
-      const target = path3.join(copyDirectory, ...validRelative(relative).split("/"));
-      await mkdir2(path3.dirname(target), { recursive: true });
+      const target = path4.join(copyDirectory, ...validRelative(relative).split("/"));
+      await mkdir2(path4.dirname(target), { recursive: true });
       await copyFile(source, target);
       fork.includedFiles.push(relative);
     }
@@ -29662,13 +29685,13 @@ async function validateRoleReport(role, raw, copyDirectory) {
 // dist/src/validation.js
 import { constants } from "node:fs";
 import { access, lstat as lstat3, realpath as realpath2, stat as stat2 } from "node:fs/promises";
-import path4 from "node:path";
+import path5 from "node:path";
 function within(root, candidate) {
-  const relative = path4.relative(root, candidate);
-  return relative === "" || relative !== ".." && !relative.startsWith(`..${path4.sep}`) && !path4.isAbsolute(relative);
+  const relative = path5.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path5.sep}`) && !path5.isAbsolute(relative);
 }
 async function validateWorkingDirectory(input2, forbidden) {
-  if (!path4.isAbsolute(input2))
+  if (!path5.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
     const directory = await realpath2(input2);
@@ -29676,7 +29699,7 @@ async function validateWorkingDirectory(input2, forbidden) {
       throw new Error("not a directory");
     await access(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath2(excluded).catch(() => path4.resolve(excluded));
+      const resolved = await realpath2(excluded).catch(() => path5.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -29688,7 +29711,7 @@ async function validateWorkingDirectory(input2, forbidden) {
   }
 }
 async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
-  let existing = path4.resolve(cacheDirectory);
+  let existing = path5.resolve(cacheDirectory);
   const missing = [];
   try {
     for (; ; ) {
@@ -29696,14 +29719,14 @@ async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) 
         await lstat3(existing);
         break;
       } catch (error62) {
-        const parent = path4.dirname(existing);
+        const parent = path5.dirname(existing);
         if (error62.code !== "ENOENT" || parent === existing)
           throw error62;
-        missing.unshift(path4.basename(existing));
+        missing.unshift(path5.basename(existing));
         existing = parent;
       }
     }
-    const cache = path4.join(await realpath2(existing), ...missing);
+    const cache = path5.join(await realpath2(existing), ...missing);
     if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
       throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
     }
@@ -29737,14 +29760,14 @@ function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
 async function resolveExecutable(command2) {
-  if (path5.isAbsolute(command2))
-    return path5.resolve(command2);
+  if (path6.isAbsolute(command2))
+    return path6.resolve(command2);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
-  for (const directory of (process.env.PATH || "").split(path5.delimiter)) {
+  for (const directory of (process.env.PATH || "").split(path6.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path5.join(directory, command2 + extension);
+      const candidate = path6.join(directory, command2 + extension);
       try {
         await access2(candidate);
         return candidate;
@@ -30271,8 +30294,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path12, errorMaps, issueData } = params;
-  const fullPath = [...path12, ...issueData.path || []];
+  const { data, path: path13, errorMaps, issueData } = params;
+  const fullPath = [...path13, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -30387,11 +30410,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path12, key) {
+  constructor(parent, value, path13, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path12;
+    this._path = path13;
     this._key = key;
   }
   get path() {
@@ -33942,11 +33965,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path12) {
-  if (path12.length === 0) {
+function getDotPath(path13) {
+  if (path13.length === 0) {
     return "object root";
   }
-  return path12.reduce((acc, seg, index) => {
+  return path13.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -38030,8 +38053,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path12, text } = criterion.check;
-      const content = await file3(path12);
+      const { kind, path: path13, text } = criterion.check;
+      const content = await file3(path13);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -38059,7 +38082,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
 // dist/src/native-tests.js
 import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
 import { appendFile, mkdir as mkdir3, readFile as readFile2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
-import path6 from "node:path";
+import path7 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
   args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
@@ -38159,11 +38182,11 @@ async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID2();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path6.join(project.copyDirectory, file3);
+  const absolute = path7.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
   const hash3 = createHash5("sha256").update(script).digest("hex");
-  const exclude = path6.join(project.gitDirectory, "info", "exclude");
-  await mkdir3(path6.dirname(exclude), { recursive: true });
+  const exclude = path7.join(project.gitDirectory, "info", "exclude");
+  await mkdir3(path7.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
   await writeFile2(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
@@ -38387,10 +38410,10 @@ function compareFindings(tasks, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path12, line, quote } = opinions[0].finding;
+    const { path: path13, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path12,
+      path: path13,
       line,
       quote,
       opinions,
@@ -38404,7 +38427,7 @@ function compareFindings(tasks, models) {
 import { createHash as createHash6 } from "node:crypto";
 import { lstat as lstat4, readdir as readdir3, realpath as realpath3 } from "node:fs/promises";
 import os3 from "node:os";
-import path7 from "node:path";
+import path8 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
 var persistedPolicySchema = external_exports.object({
   readRoots: paths,
@@ -38452,8 +38475,8 @@ function comparePaths(left, right) {
   return 0;
 }
 function contains(root, target) {
-  const relative = path7.relative(pathKey(root), pathKey(target));
-  return relative === "" || !relative.startsWith(".." + path7.sep) && relative !== ".." && !path7.isAbsolute(relative);
+  const relative = path8.relative(pathKey(root), pathKey(target));
+  return relative === "" || !relative.startsWith(".." + path8.sep) && relative !== ".." && !path8.isAbsolute(relative);
 }
 function overlaps(left, right) {
   return contains(left, right) || contains(right, left);
@@ -38519,17 +38542,17 @@ function localAbsolutePath(value) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
       }
     }
-  } else if (!path7.isAbsolute(value) || value.startsWith("//")) {
+  } else if (!path8.isAbsolute(value) || value.startsWith("//")) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
   }
-  return path7.resolve(value);
+  return path8.resolve(value);
 }
 async function inspectExistingPath(absolute) {
-  const root = path7.parse(absolute).root;
-  const parts = path7.relative(root, absolute).split(path7.sep).filter(Boolean);
+  const root = path8.parse(absolute).root;
+  const parts = path8.relative(root, absolute).split(path8.sep).filter(Boolean);
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path7.join(current, parts[index]);
+    current = path8.join(current, parts[index]);
     let info;
     try {
       info = await lstat4(current);
@@ -38565,7 +38588,7 @@ async function inspectDirectoryGrant(directory, limits) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
     for (const name of children) {
-      const child = path7.join(current, name);
+      const child = path8.join(current, name);
       let info;
       try {
         info = await lstat4(child);
@@ -38595,11 +38618,11 @@ async function inspectSandboxGrant(value) {
 }
 async function canonicalProtectedPath(value) {
   const absolute = localAbsolutePath(value);
-  const root = path7.parse(absolute).root;
-  const parts = path7.relative(root, absolute).split(path7.sep).filter(Boolean);
+  const root = path8.parse(absolute).root;
+  const parts = path8.relative(root, absolute).split(path8.sep).filter(Boolean);
   let current = root, firstMissing = parts.length;
   for (let index = 0; index < parts.length; index++) {
-    const next = path7.join(current, parts[index]);
+    const next = path8.join(current, parts[index]);
     let info;
     try {
       info = await lstat4(next);
@@ -38621,13 +38644,13 @@ async function canonicalProtectedPath(value) {
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
-  return path7.join(canonical, ...parts.slice(firstMissing));
+  return path8.join(canonical, ...parts.slice(firstMissing));
 }
 async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
   return Promise.all([
     stateDirectory,
     ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
-    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path7.join(os3.homedir(), name)),
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path8.join(os3.homedir(), name)),
     ...forbidden
   ].map(canonicalProtectedPath));
 }
@@ -38635,7 +38658,7 @@ async function canonicalPaths(values, protectedRoots, limits) {
   const temporary = await canonicalProtectedPath(os3.tmpdir());
   const canonical = await Promise.all(values.map(async (value) => {
     const target = await inspectSandboxGrant(value);
-    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path7.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path8.sep).some((part) => ownedTemporaryDirectory.test(part))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
     }
     if (target.directory)
@@ -38797,7 +38820,7 @@ var successOutputSchemas = {
       cancel: external_exports.boolean()
     }).strict(),
     error: external_exports.string().optional(),
-    integrationApproval: external_exports.object({ available: external_exports.boolean(), method: external_exports.literal("mcp-form-elicitation") }).strict(),
+    integrationApproval: external_exports.object({ available: external_exports.boolean(), method: external_exports.enum(["mcp-form-elicitation", "project-preauthorization-or-mcp-form"]), preauthorizedProjectCount: count.optional() }).strict(),
     bridgeLimitations: external_exports.object({
       interactiveReplies: external_exports.object({ available: external_exports.literal(false), reason: external_exports.string() }).strict(),
       preflightTokenCount: external_exports.object({ available: external_exports.literal(false), exactTokens: external_exports.null(), reason: external_exports.string() }).strict()
@@ -38990,7 +39013,7 @@ function sandboxPolicyConfirmation(previous, proposed) {
 }
 function createMcpServer(adapter, tasks) {
   const server = new McpServer({ name: "antigravity-mcp-bridge", version: "0.6.1" }, {
-    instructions: "For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a UI mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and confirmation through MCP form elicitation, bound to the reviewed SHA-256. The original project changes only through confirmed integration."
+    instructions: "For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a UI mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; exact projects explicitly preauthorized in server configuration skip repeated human forms. All other projects require MCP form elicitation. The original project changes only through confirmed integration."
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -39010,7 +39033,7 @@ function createMcpServer(adapter, tasks) {
         interactiveReplies: { available: false, reason: "The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures." },
         preflightTokenCount: { available: false, exactTokens: null, reason: "No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts." }
       },
-      integrationApproval: { available: toolEnabled(tasks.toolProfile, "antigravity_integrate") && Boolean(server.server.getClientCapabilities()?.elicitation?.form), method: "mcp-form-elicitation" }
+      integrationApproval: { available: toolEnabled(tasks.toolProfile, "antigravity_integrate") && (Boolean(server.server.getClientCapabilities()?.elicitation?.form) || tasks.preauthorizedProjectCount > 0), method: tasks.preauthorizedProjectCount ? "project-preauthorization-or-mcp-form" : "mcp-form-elicitation", preauthorizedProjectCount: tasks.preauthorizedProjectCount }
     })));
   if (toolEnabled(tasks.toolProfile, "antigravity_list_models"))
     server.registerTool("antigravity_list_models", {
@@ -39183,7 +39206,7 @@ function createMcpServer(adapter, tasks) {
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path12, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path12, offset, limit))());
+    }, async ({ taskId, expectedSha256, path: path13, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path13, offset, limit))());
   if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
     server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
@@ -39233,7 +39256,7 @@ function createMcpServer(adapter, tasks) {
     server.registerTool("antigravity_integrate", {
       outputSchema: outputSchemas.antigravity_integrate,
       title: "Integrate reviewed changes",
-      description: "Request human confirmation through MCP form elicitation, then apply the reviewed patch. Requires the SHA-256 from antigravity_preview. Clients without form elicitation cannot integrate; no tool argument substitutes for user confirmation.",
+      description: "Apply a currently verified patch bound to its preview SHA-256. Exact projects preauthorized in server configuration skip the repeated form; other projects require human MCP form confirmation. Caller text or tool arguments cannot change that policy.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
       annotations: action
     }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, async (preview) => {
@@ -39488,7 +39511,7 @@ var LineParser = class {
 // dist/src/state-store.js
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import path8 from "node:path";
+import path9 from "node:path";
 import os4 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
@@ -39572,7 +39595,7 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path8.isAbsolute(directory))
+    if (!path9.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
     mkdirSync(directory, { recursive: true, mode: 448 });
     if (lstatSync(directory).isSymbolicLink())
@@ -39581,10 +39604,10 @@ var StateStore = class {
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path8.join(this.directory, taskId + ".json");
+    return path9.join(this.directory, taskId + ".json");
   }
   loadModel() {
-    const file3 = path8.join(this.directory, "model-selection.json");
+    const file3 = path9.join(this.directory, "model-selection.json");
     try {
       const stat3 = lstatSync(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
@@ -39597,7 +39620,7 @@ var StateStore = class {
     }
   }
   loadSandboxPolicy() {
-    const file3 = path8.join(this.directory, "sandbox-policy.json");
+    const file3 = path9.join(this.directory, "sandbox-policy.json");
     try {
       const stat3 = lstatSync(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > maxSandboxPolicyFileBytes)
@@ -39618,7 +39641,7 @@ var StateStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
-    const target = path8.join(this.directory, "sandbox-policy.json");
+    const target = path9.join(this.directory, "sandbox-policy.json");
     const temporary = target + "." + randomUUID3() + ".tmp";
     try {
       this.loadSandboxPolicy();
@@ -39631,7 +39654,7 @@ var StateStore = class {
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path8.join(this.directory, "model-selection.json");
+    const target = path9.join(this.directory, "model-selection.json");
     const temporary = target + "." + randomUUID3() + ".tmp";
     try {
       this.loadModel();
@@ -39655,7 +39678,7 @@ var StateStore = class {
   }
   load() {
     return readdirSync(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path8.join(this.directory, name);
+      const file3 = path9.join(this.directory, name);
       if (lstatSync(file3).isSymbolicLink() || lstatSync(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
@@ -39664,7 +39687,7 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path8.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path9.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       const messages = data.record.messages ?? [];
@@ -39676,7 +39699,7 @@ var StateStore = class {
       }
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path8.isAbsolute(directory) || path8.relative(os4.tmpdir(), path8.dirname(directory)) !== "" || !path8.basename(directory).startsWith(prefix)) {
+          if (!path9.isAbsolute(directory) || path9.relative(os4.tmpdir(), path9.dirname(directory)) !== "" || !path9.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -39697,7 +39720,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path8.join(this.directory, name + ".lock");
+    const file3 = path9.join(this.directory, name + ".lock");
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         writeFileSync(file3, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
@@ -39755,7 +39778,7 @@ import { setTimeout as delay2 } from "node:timers/promises";
 import { spawn as spawn4 } from "node:child_process";
 import { lstat as lstat7, mkdir as mkdir6, mkdtemp as mkdtemp2, realpath as realpath4, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
 import { randomUUID as randomUUID5 } from "node:crypto";
-import path11 from "node:path";
+import path12 from "node:path";
 import os5 from "node:os";
 
 // dist/src/windows-helper-source.js
@@ -40724,14 +40747,14 @@ internal static class WindowsTestRunner
 import { constants as constants3 } from "node:fs";
 import { createHash as createHash9 } from "node:crypto";
 import { chmod, lstat as lstat6, mkdir as mkdir5, open as open3, readdir as readdir5, unlink as unlink2 } from "node:fs/promises";
-import path10 from "node:path";
+import path11 from "node:path";
 
 // dist/src/portable-node.js
 import { createHash as createHash8, randomUUID as randomUUID4 } from "node:crypto";
 import { spawn as spawn3 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
 import { lstat as lstat5, mkdir as mkdir4, open as open2, readFile as readFile3, readdir as readdir4, rename, rm as rm3, unlink } from "node:fs/promises";
-import path9 from "node:path";
+import path10 from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 // dist/src/portable-node-descriptor.js
@@ -40808,7 +40831,7 @@ function sameFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
 }
 function assetPath(root, descriptor, asset) {
-  return path9.join(root, cacheLeafName(descriptor), asset.fileName);
+  return path10.join(root, cacheLeafName(descriptor), asset.fileName);
 }
 function cacheLeafName(descriptor) {
   return descriptor.buildId + "-" + descriptor.assets.node.sha256;
@@ -40848,11 +40871,11 @@ function absoluteCacheDirectory(value) {
     if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
       fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
     }
-  } else if (!path9.isAbsolute(value)) {
+  } else if (!path10.isAbsolute(value)) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
   }
-  const absolute = path9.resolve(value);
-  if (absolute === path9.parse(absolute).root)
+  const absolute = path10.resolve(value);
+  if (absolute === path10.parse(absolute).root)
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
@@ -40961,7 +40984,7 @@ async function verifyAsset(root, descriptor, asset) {
   }
 }
 async function verifyCacheLayout(root, descriptor) {
-  const leaf = path9.join(root, cacheLeafName(descriptor));
+  const leaf = path10.join(root, cacheLeafName(descriptor));
   const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
   const entries = await readdir4(leaf, { withFileTypes: true });
   if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
@@ -40974,7 +40997,7 @@ async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableN
   const pinned = requireDescriptor(descriptor);
   const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root);
-  const leaf = path9.join(root, cacheLeafName(pinned));
+  const leaf = path10.join(root, cacheLeafName(pinned));
   const leafInfo = await lstat5(leaf).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
@@ -41055,7 +41078,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
   }
 }
 async function removeOwnedTemporary(root, temporary) {
-  if (path9.dirname(temporary) !== root || !path9.basename(temporary).startsWith(".portable-node-")) {
+  if (path10.dirname(temporary) !== root || !path10.basename(temporary).startsWith(".portable-node-")) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
   }
   await inspectReparsePoints([temporary]);
@@ -41106,7 +41129,7 @@ async function recoverDeadPreparationLock(file3) {
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
-  const file3 = path9.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  const file3 = path10.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
       const handle = await open2(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
@@ -41157,7 +41180,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path9.join(root, ".portable-node-" + randomUUID4());
+  const temporary = path10.join(root, ".portable-node-" + randomUUID4());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -41169,9 +41192,9 @@ async function preparePortableNodeRuntime(options) {
     await inspectReparsePoints([temporary]);
     const fetchImpl = options.fetch ?? globalThis.fetch;
     for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
-      await downloadAsset(asset, path9.join(temporary, asset.fileName), fetchImpl);
+      await downloadAsset(asset, path10.join(temporary, asset.fileName), fetchImpl);
     }
-    const final = path9.join(root, cacheLeafName(descriptor));
+    const final = path10.join(root, cacheLeafName(descriptor));
     try {
       await rename(temporary, final);
     } catch (error62) {
@@ -41228,11 +41251,11 @@ function fail2(code, message) {
   throw new BridgeError(code, message);
 }
 function canonicalKey2(file3) {
-  return path10.resolve(file3).toLocaleLowerCase("en-US");
+  return path11.resolve(file3).toLocaleLowerCase("en-US");
 }
 function isUnsafeWindowsPath(value) {
   const normalized = value.replaceAll("/", "\\");
-  const basename = path10.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const basename = path11.win32.basename(normalized).replace(/[ .]+$/u, "");
   const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
   return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename) || withoutDrive.includes(":");
 }
@@ -41244,7 +41267,7 @@ function validateWindowsCommand(command2) {
   if (normalized.split("\\").some((part) => part === "." || part === "..")) {
     fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
   }
-  if (!path10.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+  if (!path11.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
     fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
   }
 }
@@ -41254,12 +41277,12 @@ function validateLimits(limits) {
   }
 }
 async function assertSafePath(file3) {
-  const absolute = path10.resolve(file3);
-  const parsed = path10.parse(absolute);
-  const parts = path10.relative(parsed.root, absolute).split(path10.sep).filter(Boolean);
+  const absolute = path11.resolve(file3);
+  const parsed = path11.parse(absolute);
+  const parts = path11.relative(parsed.root, absolute).split(path11.sep).filter(Boolean);
   let current = parsed.root;
   for (const part of parts) {
-    current = path10.join(current, part);
+    current = path11.join(current, part);
     const info = await lstat6(current);
     if (info.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
@@ -41303,11 +41326,11 @@ async function readBoundedFile(file3, limit) {
   }
 }
 function commandNames(executable) {
-  const basename = path10.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename = path11.win32.basename(executable).toLocaleLowerCase("en-US");
   if (basename === "npm" || basename === "npm.cmd") {
     return { kind: "npm", names: [basename === "npm" ? executable + ".cmd" : executable] };
   }
-  const extension = path10.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path11.extname(executable).toLocaleLowerCase("en-US");
   if (extension === ".cmd" || extension === ".bat") {
     fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
   }
@@ -41318,10 +41341,10 @@ function commandNames(executable) {
 }
 async function resolveCommand(executable) {
   const requested = commandNames(executable);
-  const directories = path10.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path10.delimiter).filter((directory) => directory && path10.isAbsolute(directory));
+  const directories = path11.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path11.delimiter).filter((directory) => directory && path11.isAbsolute(directory));
   for (const directory of directories) {
     for (const name of requested.names) {
-      const candidate = path10.isAbsolute(name) ? path10.resolve(name) : path10.resolve(directory, name);
+      const candidate = path11.isAbsolute(name) ? path11.resolve(name) : path11.resolve(directory, name);
       try {
         const info = await lstat6(candidate);
         if (info.isSymbolicLink())
@@ -41340,17 +41363,17 @@ async function resolveCommand(executable) {
   fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
 }
 function stagedPath(runtime, relative) {
-  const target = path10.resolve(runtime, ...relative);
-  const prefix = runtime.endsWith(path10.sep) ? runtime : runtime + path10.sep;
+  const target = path11.resolve(runtime, ...relative);
+  const prefix = runtime.endsWith(path11.sep) ? runtime : runtime + path11.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   return target;
 }
 async function stageDirectory(directory, state) {
-  const target = path10.resolve(directory);
+  const target = path11.resolve(directory);
   if (target === state.runtime)
     return;
-  const prefix = state.runtime.endsWith(path10.sep) ? state.runtime : state.runtime + path10.sep;
+  const prefix = state.runtime.endsWith(path11.sep) ? state.runtime : state.runtime + path11.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   const targetKey = canonicalKey2(target);
@@ -41358,7 +41381,7 @@ async function stageDirectory(directory, state) {
     return;
   if (state.targets.has(targetKey))
     fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
-  const parent = path10.dirname(target);
+  const parent = path11.dirname(target);
   if (parent === target)
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   await stageDirectory(parent, state);
@@ -41369,8 +41392,8 @@ async function stageDirectory(directory, state) {
   state.directories.add(targetKey);
 }
 async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path10.resolve(sourcePath);
-  const target = path10.resolve(targetPath);
+  const source = path11.resolve(sourcePath);
+  const target = path11.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
   const previousTarget = state.sources.get(sourceKey);
@@ -41387,7 +41410,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
     fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
   }
-  await stageDirectory(path10.dirname(target), state);
+  await stageDirectory(path11.dirname(target), state);
   const sourceHandle = await open3(source, "r");
   let targetHandle;
   let created = false;
@@ -41479,14 +41502,14 @@ async function stageNativeExecutable(source, destination, state, expectedSha256)
   }
   if (expectedSha256)
     return executable;
-  const directory = path10.dirname(source);
+  const directory = path11.dirname(source);
   const siblings = await readdir5(directory, { withFileTypes: true });
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     if (!/\.dll$/iu.test(entry.name))
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path10.join(directory, entry.name), path10.join(path10.dirname(destination), entry.name), state, true);
+    await stageFile(path11.join(directory, entry.name), path11.join(path11.dirname(destination), entry.name), state, true);
   }
   return executable;
 }
@@ -41511,8 +41534,8 @@ async function stageNpmDirectory(source, destination, state, relative = []) {
     const childRelative = [...relative, entry.name];
     if (npmPathIsOmitted(childRelative))
       continue;
-    const childSource = path10.join(source, entry.name);
-    const childDestination = path10.join(destination, entry.name);
+    const childSource = path11.join(source, entry.name);
+    const childDestination = path11.join(destination, entry.name);
     if (entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
     if (entry.isDirectory()) {
@@ -41530,7 +41553,7 @@ async function stageNpmDirectory(source, destination, state, relative = []) {
   }
 }
 async function stageSystemCmd(systemRoot, runtime, state) {
-  const source = path10.join(systemRoot, "System32", "cmd.exe");
+  const source = path11.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
 async function stageNpm(launcher, runtime, state, args, portableNode) {
@@ -41538,11 +41561,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
   }
-  const nodeDirectory = path10.dirname(launcher);
-  const nodeSource = path10.join(nodeDirectory, "node.exe");
-  const npmSource = path10.join(nodeDirectory, "node_modules", "npm");
-  const manifestPath = path10.join(npmSource, "package.json");
-  const cliSource = path10.join(npmSource, "bin", "npm-cli.js");
+  const nodeDirectory = path11.dirname(launcher);
+  const nodeSource = path11.join(nodeDirectory, "node.exe");
+  const npmSource = path11.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path11.join(npmSource, "package.json");
+  const cliSource = path11.join(npmSource, "bin", "npm-cli.js");
   let manifest;
   try {
     manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
@@ -41562,11 +41585,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
   const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  if (!path10.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+  if (!path11.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
-  return { executable: node2, args: [cli, ...args], pathEntries: [path10.dirname(node2)], comspec, portableNode: portableNode?.identity };
+  return { executable: node2, args: [cli, ...args], pathEntries: [path11.dirname(node2)], comspec, portableNode: portableNode?.identity };
 }
 async function hostNodeIdentity(file3) {
   const [candidate, host] = await Promise.all([regularFile(file3), regularFile(process.execPath)]);
@@ -41587,7 +41610,7 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
   validateWindowsCommand(command2);
   validateLimits(limits);
-  const runtime = path10.resolve(runtimeDirectory);
+  const runtime = path11.resolve(runtimeDirectory);
   await assertSafePath(runtime);
   const runtimeInfo = await lstat6(runtime);
   if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir5(runtime)).length !== 0) {
@@ -41596,12 +41619,12 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
-    const adjacentNode = path10.join(path10.dirname(resolved.file), "node.exe");
+    const adjacentNode = path11.join(path11.dirname(resolved.file), "node.exe");
     return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection));
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
-  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path10.basename(resolved.file)]), state, portableNode?.identity.sha256);
-  return { executable, args: [...command2.args], pathEntries: [path10.dirname(executable)], portableNode: portableNode?.identity };
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path11.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  return { executable, args: [...command2.args], pathEntries: [path11.dirname(executable)], portableNode: portableNode?.identity };
 }
 
 // dist/src/windows-executor.js
@@ -41630,10 +41653,10 @@ var libraryRuntime = (() => {
   return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
 })();
 function verifyPathMappings(result, roots) {
-  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path11.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path12.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
   const aliases = /* @__PURE__ */ new Set();
   for (const mapping of result.pathMappings) {
-    if (expected.get(mapping.kind) !== path11.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+    if (expected.get(mapping.kind) !== path12.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
     if (aliases.has(mapping.aliasRoot))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
@@ -41644,15 +41667,15 @@ function verifyPathMappings(result, roots) {
     throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
 }
 function contains2(root, target) {
-  const relative = path11.relative(root, target);
-  return relative === "" || !relative.startsWith(".." + path11.sep) && relative !== ".." && !path11.isAbsolute(relative);
+  const relative = path12.relative(root, target);
+  return relative === "" || !relative.startsWith(".." + path12.sep) && relative !== ".." && !path12.isAbsolute(relative);
 }
 function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
   const canonical = await realpath4(directory);
-  if (path11.dirname(canonical) !== temp || !path11.basename(canonical).startsWith(prefix) || (await lstat7(directory)).isSymbolicLink()) {
+  if (path12.dirname(canonical) !== temp || !path12.basename(canonical).startsWith(prefix) || (await lstat7(directory)).isSymbolicLink()) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
@@ -41708,11 +41731,11 @@ async function nativeProcess(executable, args, options, input2) {
   }
 }
 async function compileController(temp, options) {
-  const compiler = path11.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  const compiler = path12.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat7(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath4(await mkdtemp2(path11.join(temp, "agy-mcp-controller-")));
-  const source = path11.join(directory, "runner.cs"), helper = path11.join(directory, "runner.exe");
+  const directory = await realpath4(await mkdtemp2(path12.join(temp, "agy-mcp-controller-")));
+  const source = path12.join(directory, "runner.cs"), helper = path12.join(directory, "runner.exe");
   try {
     await writeFile3(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
@@ -41726,7 +41749,7 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path11.join(directory, "request-" + randomUUID5() + ".json");
+  const file3 = path12.join(directory, "request-" + randomUUID5() + ".json");
   await writeFile3(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
@@ -41748,19 +41771,19 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     try {
       return await realpath4(value);
     } catch {
-      return path11.resolve(value);
+      return path12.resolve(value);
     }
   }));
   const paths2 = /* @__PURE__ */ new Map();
   const inspect = async (value, rights) => {
-    if (!path11.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+    if (!path12.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath4(value), root = path11.parse(canonical).root;
+    const canonical = await realpath4(value), root = path12.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
-    const relative = path11.relative(root, canonical).split(path11.sep).filter(Boolean);
+    const relative = path12.relative(root, canonical).split(path12.sep).filter(Boolean);
     let current = root, entries = 0;
     const walk = async (candidate) => {
       const stat3 = await lstat7(candidate);
@@ -41771,11 +41794,11 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
         for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
           if (++entries > maxFiles)
             throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
-          await walk(path11.join(candidate, name));
+          await walk(path12.join(candidate, name));
         }
     };
     for (const part of relative) {
-      current = path11.join(current, part);
+      current = path12.join(current, part);
       const stat3 = await lstat7(current);
       if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
@@ -41806,7 +41829,7 @@ async function runRecoveryWithController(stateDirectory, options) {
   }
 }
 async function recoverWindowsExecutions(stateDirectory) {
-  const effective = path11.resolve(stateDirectory);
+  const effective = path12.resolve(stateDirectory);
   await mkdir6(effective, { recursive: true, mode: 448 });
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
@@ -41820,13 +41843,13 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
   };
-  const stateDirectory = path11.resolve(options.stateDirectory ?? path11.join(os5.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path12.resolve(options.stateDirectory ?? path12.join(os5.homedir(), ".antigravity-mcp-bridge"));
   await mkdir6(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
   const temp = await realpath4(os5.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath4(await mkdtemp2(path11.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath4(await mkdtemp2(path11.join(temp, "agy-mcp-scratch-")));
+  const runtime = await realpath4(await mkdtemp2(path12.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath4(await mkdtemp2(path12.join(temp, "agy-mcp-scratch-")));
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
@@ -41850,7 +41873,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       environment: {
         SystemRoot: systemRoot,
         WINDIR: systemRoot,
-        PATH: [...staged.pathEntries, path11.join(systemRoot, "System32")].join(path11.delimiter),
+        PATH: [...staged.pathEntries, path12.join(systemRoot, "System32")].join(path12.delimiter),
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
         TEMP: scratch,
         TMP: scratch,
@@ -41858,7 +41881,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
         HOME: scratch,
         APPDATA: scratch,
         LOCALAPPDATA: scratch,
-        COMSPEC: staged.comspec ?? path11.join(systemRoot, "System32", "cmd.exe")
+        COMSPEC: staged.comspec ?? path12.join(systemRoot, "System32", "cmd.exe")
       }
     };
     const file3 = await writeRequest(controller.directory, request);
@@ -41956,6 +41979,12 @@ var TaskManager = class {
   }
   get toolProfile() {
     return this.config.toolProfile;
+  }
+  get preauthorizedProjectCount() {
+    return this.config.preauthorizedIntegrationRoots.length;
+  }
+  integrationPreauthorized(taskId) {
+    return integrationPreauthorized(this.status(taskId).workingDirectory, this.config.preauthorizedIntegrationRoots);
   }
   roles() {
     return listRoles(this.config.customRoles);
@@ -42605,10 +42634,11 @@ var TaskManager = class {
         throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
       if (reviewed.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before requesting confirmation");
-      if (!confirm)
-        throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation through the MCP client");
+      const preauthorized = this.integrationPreauthorized(taskId);
+      if (!preauthorized && !confirm)
+        throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation or a configured project preauthorization");
       await this.requireVerification(task2, expectedSha256);
-      if (!await confirm(reviewed))
+      if (!preauthorized && !await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
       const releaseSource = this.state.acquire("source-" + createHash10("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
@@ -42620,7 +42650,7 @@ var TaskManager = class {
         for (const related of this.tasks.values())
           if (related.project === task2.project) {
             related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
-            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: "mcp-elicitation" });
+            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: preauthorized ? "configured-project" : "mcp-elicitation" });
           }
         return preview;
       } finally {

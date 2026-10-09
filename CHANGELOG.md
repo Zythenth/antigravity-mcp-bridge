@@ -2,6 +2,8 @@
 
 ## Em desenvolvimento
 
+- Autorização prévia configurável por raiz exata de projeto para dispensar formulários repetidos, preservando critérios, hash, revisão e testes atuais.
+
 - Caixa de mensagens do chamador com recibos idempotentes, despacho sequencial por sessão, recuperação sem repetição de envios incertos e ponteiros de continuação.
 
 - Entrega opcional de mensagens públicas compactas ao chamador, com cursores próprios, atribuição, referências a resultados, perda de histórico explícita e conservação do modo de eventos.

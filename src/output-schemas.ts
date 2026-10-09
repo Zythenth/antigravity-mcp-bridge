@@ -80,7 +80,7 @@ export const successOutputSchemas = {
       structuredOutput: z.boolean(), streaming: z.boolean(), sandbox: z.boolean(), readOnlyMode: z.boolean(),
       models: z.boolean(), modelSelection: z.boolean(), resume: z.boolean(), sessionsList: z.boolean(), cancel: z.boolean(),
     }).strict(), error: z.string().optional(),
-    integrationApproval: z.object({ available: z.boolean(), method: z.literal('mcp-form-elicitation') }).strict(),
+    integrationApproval: z.object({ available: z.boolean(), method: z.enum(['mcp-form-elicitation', 'project-preauthorization-or-mcp-form']), preauthorizedProjectCount: count.optional() }).strict(),
     bridgeLimitations: z.object({
       interactiveReplies: z.object({ available: z.literal(false), reason: z.string() }).strict(),
       preflightTokenCount: z.object({ available: z.literal(false), exactTokens: z.null(), reason: z.string() }).strict(),

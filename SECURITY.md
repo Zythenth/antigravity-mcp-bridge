@@ -14,7 +14,7 @@ Use [Report a vulnerability](https://github.com/Zythenth/antigravity-mcp-bridge/
 - Limites configuráveis de tempo, fila, retenção, arquivos, bytes e alterações.
 - Modo de consulta com `agy --mode plan` e verificação posterior da cópia.
 - Revisão por patch/hash e recusa de integração quando os arquivos afetados na origem mudaram.
-- Confirmação de integração por formulário MCP, com recusa em clientes sem suporte e nova verificação do patch após confirmação.
+- Integração exige um formulário MCP ou autorização prévia da raiz exata na configuração privada do servidor; hash e verificação atual continuam obrigatórios.
 - Persistência local com escrita atômica e locks para proteger operações na mesma cópia.
 - Critérios definidos antes da tarefa, revisão com citações conferidas e verificação obrigatória antes/depois da aprovação.
 - Testes com comando exato, saída limitada, exit code e fingerprints antes/depois. No Windows, o executor usa um perfil LPAC novo e concessões ACL para o SID exclusivo da execução; fora dele, o caminho legado confere o recibo do `agy`. Não há execução direta no host como alternativa.
@@ -31,6 +31,6 @@ O runtime portátil é preparado apenas por uma chamada explícita de inicializa
 
 O cache deve ficar fora dos projetos. O bridge resolve os caminhos reais e recusa sobreposição em ambas as direções entre o projeto e `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` antes de consultar modelos, enfileirar a tarefa ou copiar arquivos, mesmo com `includePaths` ou no modo `system`.
 
-A confirmação depende de um cliente MCP confiável que apresente o formulário ao usuário e envie sua resposta. O bridge exige essa troca no protocolo e não aceita aprovação como argumento da ferramenta; ele não autentica uma pessoa nominal nem protege contra um cliente malicioso ou programas com as mesmas permissões locais.
+Nos projetos sem autorização prévia, a confirmação depende de um cliente MCP confiável que apresente o formulário ao usuário e envie sua resposta. O bridge exige essa troca no protocolo e não aceita aprovação como argumento da ferramenta; ele não autentica uma pessoa nominal nem protege contra um cliente malicioso ou programas com as mesmas permissões locais.
 
 Mantenha o diretório de estado privado e fora de projetos versionados. Ele contém prompts, resultados, eventos, política e informações de recuperação sem criptografia própria. Regras de ignore não protegem segredos enviados diretamente no prompt. Testes registrados pelo cliente são relatos. Saída não confiável do modelo não é recibo. A evidência do executor comprova somente os limites e resultados observados; o bridge não atesta a correção semântica do parecer de revisão.

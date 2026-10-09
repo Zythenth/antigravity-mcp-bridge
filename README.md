@@ -122,7 +122,7 @@ Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 | `review` | 26 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
 | `implementation` | 33 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
-O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a confirmação de integração continuam necessários. Valores desconhecidos impedem a inicialização.
+O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
 ## Espera com progresso
 
@@ -172,6 +172,14 @@ Use `antigravity_send_message({taskId, messageId, text})` para enviar até 2.000
 Se o turno estiver ativo, o recibo fica `queued`. Após sua conclusão, o bridge retoma a sessão oficial na mesma cópia e processa os inputs em sequência. `sent` indica aceitação do novo turno pelo bridge, sem provar que o modelo leu a mensagem. Falhas e cancelamento ficam explícitos; um envio interrompido sem evidência de aceitação não é repetido automaticamente.
 
 Acompanhe `continuationTaskId` com um novo cursor em zero. `continuationPending: true` em `antigravity_wait` indica inputs aguardando despacho; o término do turno anterior não encerra toda a conversa. Retomadas preservam seleção, skills, papel, modo e critérios. Mensagens não concedem permissões nem aprovam integração; solicitações de controle do agy continuam indisponíveis.
+
+## Integração com autorização prévia
+
+Para liberar integrações de um projeto uma vez, configure `BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS` no ambiente privado do servidor como um array JSON de raízes absolutas, por exemplo `["<raiz-absoluta-do-projeto>"]`, e reinicie a conexão. Os diretórios precisam existir. A configuração não pode autorizar uma raiz de disco; a correspondência é exata e não abrange projetos descendentes ou vizinhos. Remova a raiz e reinicie para revogar a autorização.
+
+Nesses projetos, `antigravity_integrate` dispensa o formulário repetido. Continuam obrigatórios: tarefa de escrita concluída, hash atual, critérios verificados, revisão apoiada nos arquivos e evidência de testes sem falhas ou desatualização. O bridge confere novamente o patch antes de aplicar. Outros projetos mantêm a confirmação humana pelo cliente MCP. Texto do Gemini, mensagens do chamador e argumentos de ferramentas não alteram essa configuração nem concedem permissões de sandbox.
+
+`antigravity_health.integrationApproval.preauthorizedProjectCount` informa a quantidade configurada; a existência de uma raiz autorizada não libera as demais.
 
 ## Skills fornecidas pelo cliente
 
@@ -232,7 +240,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_read_patch` | Lê o patch por arquivo ou em trechos vinculados ao hash completo |
 | `antigravity_read_result` | Lê o JSON final do CLI em trechos com hash de conteúdo |
 | `antigravity_usage` | Consolida tokens observados por tarefa, sessão e modelo |
-| `antigravity_integrate` | Solicita confirmação via MCP e aplica o patch revisado ao original |
+| `antigravity_integrate` | Aplica o patch verificado ao original; dispensa novo formulário somente em projetos previamente autorizados |
 | `antigravity_tasks` | Recupera IDs e metadados de tarefas persistidas localmente |
 | `antigravity_status` | Consulta estado, processo, sessão, uso e snapshots Git |
 | `antigravity_wait` | Espera até 60 segundos com notificações MCP dos eventos observados; timeout não cancela a tarefa |
