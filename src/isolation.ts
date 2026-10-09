@@ -328,22 +328,6 @@ export async function fingerprintProjectCopy(project: ProjectCopy, limits: Proje
   return digest.digest('hex');
 }
 
-export async function undoProjectChange(project: ProjectCopy, expectedSha256: string, relative: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
-  const preview = await previewProjectCopy(project, limits);
-  if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before undoing a change');
-  const selected = validRelative(relative);
-  if (!preview.files.some(file => file.path === selected)) throw new BridgeError('INVALID_PATCH_PATH', 'Select a currently changed file');
-  if (project.baseline.has(selected)) {
-    await checkedPath(project.copyDirectory, selected, false);
-    await git(project.copyDirectory, ['--literal-pathspecs', '--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory,
-      'restore', '--source=HEAD', '--worktree', '--', selected]);
-  } else {
-    const target = await checkedPath(project.copyDirectory, selected, true);
-    await rm(target);
-  }
-  return previewProjectCopy(project, limits);
-}
-
 export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
   const preview = await previewProjectCopy(project, limits);
   if (!preview.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');

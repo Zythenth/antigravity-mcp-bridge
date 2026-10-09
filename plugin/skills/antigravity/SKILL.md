@@ -34,13 +34,7 @@ O contador prévio exato está indisponível e `exactTokens` permanece `null`. U
 
 Prefira `deliveryMode: "messages"` para delegações comuns. `antigravity_wait` entrega perguntas públicas estruturadas, bloqueios e trechos finais com referências; não envia o histórico detalhado de ferramentas ao principal. Guarde `nextCursor`, confira `deliveryMode` e informe perdas sinalizadas por `truncated`. Uma mensagem pode chegar com `ready: false`; responda à questão pertinente e continue acompanhando. Uma mensagem não prova leitura, execução, verificação nem aprovação humana.
 
-Use `events` quando o usuário pedir diagnóstico detalhado. `antigravity_events`, leitores de resultado e patch permanecem disponíveis quando necessários. Ao mudar o modo com `antigravity_set_delivery_mode`, reinicie `after: 0`; cursores de eventos e de mensagens são diferentes. Envie `cursorMode` com o modo do cursor anterior; `cursorReset: true` informa reinício automático quando a interface mudou a entrega. A omissão conserva o modo legado e a retomada herda a escolha. Conteúdo é público emitido pelo CLI; não extraia raciocínio privado nem use a mensagem como resposta a uma permissão pendente do agy.
-
-## Painel de agentes
-
-Use `antigravity_open_panel` quando o usuário quiser acompanhar ou conversar visualmente. A interface declara entrada na lateral do Codex e precisa do suporte MCP Apps do host. Ela consulta detalhes diretamente; `antigravity_panel_state` e `antigravity_panel_undo` são exclusivas do app. Continue a orquestração com mensagens compactas, cursores e referências. O painel usa avatares nativos da instalação local, sem caminhos fixos de usuário.
-
-Cards refletem a prévia real. Desfazer altera somente um arquivo da cópia concluída e invalida a revisão; não dá permissão de integração nem encerra turnos ativos. O resumo ao principal exige clique explícito e capacidade do host. Não apresente eventos públicos como raciocínio privado, sucesso de teste ou prova de conclusão. `completed` indica término da execução.
+Use `events` quando o usuário pedir diagnóstico detalhado. `antigravity_events`, leitores de resultado e patch permanecem disponíveis quando necessários. Ao mudar o modo com `antigravity_set_delivery_mode`, reinicie `after: 0`; cursores de eventos e de mensagens são diferentes. Envie `cursorMode` com o modo do cursor anterior; `cursorReset: true` informa reinício automático quando o chamador mudou a entrega. A omissão conserva o modo legado e a retomada herda a escolha. Conteúdo é público emitido pelo CLI; não extraia raciocínio privado nem use a mensagem como resposta a uma permissão pendente do agy.
 
 ## Conversar com a sessão
 

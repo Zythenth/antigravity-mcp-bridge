@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.7.1
+
+- Remove o painel MCP Apps e seus recursos de aparência, mantendo entrega compacta, mensagens por sessão, skills selecionadas, concorrência e autorização prévia de integração.
+- Normaliza raízes autorizadas com o resolvedor nativo do Windows, incluindo aliases 8.3.
+
 ## 0.7.0
 
 - Painel MCP Apps com lista e conversa no estilo do Codex, recursos nativos descobertos localmente, controles de saída técnica e cards de alterações reais.

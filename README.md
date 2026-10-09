@@ -115,12 +115,12 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Ferramentas no código-fonte 0.7.0 | Catálogo e execução |
+| Valor | Ferramentas no código-fonte 0.7.1 | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 36 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 25 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 28 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 36 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 33 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 23 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 26 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 33 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -163,17 +163,9 @@ Use `deliveryMode: "messages"` em `antigravity_run` para receber perguntas públ
 
 Cada mensagem inclui origem, modelo informado, ID, sequência e data; cada texto tem no máximo 2.000 caracteres. Até 100 mensagens são retidas por tarefa e as páginas indicam perdas de mensagens antigas. O resultado final aponta para `antigravity_read_result`, com o hash correspondente. As mensagens do modelo continuam sendo relatos, sem comprovar testes nem autorizar integração.
 
-Omitir a opção conserva `events`, com o histórico de eventos existente. `antigravity_events` continua disponível para uma consulta detalhada explícita. `antigravity_set_delivery_mode` muda a entrega de uma tarefa; reinicie o cursor em `after: 0` após trocar de modo. Passe também `cursorMode` com o modo do cursor anterior: se a interface trocar a entrega, a espera reinicia em zero e informa `cursorReset: true`. A retomada herda a escolha, que não altera permissões ou papéis.
+Omitir a opção conserva `events`, com o histórico de eventos existente. `antigravity_events` continua disponível para uma consulta detalhada explícita. `antigravity_set_delivery_mode` muda a entrega de uma tarefa; reinicie o cursor em `after: 0` após trocar de modo. Passe também `cursorMode` com o modo do cursor anterior: se o modo de entrega mudar, a espera reinicia em zero e informa `cursorReset: true`. A retomada herda a escolha, que não altera permissões ou papéis.
 
-## Painel de agentes
-
-Chame `antigravity_open_panel` em um cliente com suporte a MCP Apps. O recurso `ui://antigravity/panel.html` declara entrada lateral no chat do Codex. A lista mostra simultaneamente agentes ativos e concluídos, com tempos reais e uma conversa por sessão; a seleção abre a tela de conversa com resposta pública, atividade paginada, mensagens, recibos, uso observado e opções de entrega.
-
-Os avatares e ícones são lidos da instalação local do Codex e usados na interface. O plugin descobre o pacote Windows automaticamente e os caminhos usuais de Codex.app no macOS. Para instalação em outro local, configure `CODEX_APP_DIRECTORY` com uma pasta absoluta do aplicativo. O código não contém caminhos de usuário e o pacote não distribui os gráficos extraídos. Se a instalação estiver ausente ou seu formato não for compatível, os avatares ficam indisponíveis; as ferramentas de delegação continuam funcionando. Fontes e cores fornecidas pelo host usam as APIs oficiais MCP Apps.
-
-Na cópia concluída, os cards mostram alterações reais A/M/D, linhas e binários. “Visualizar alterações” lê o patch vinculado ao hash atual. “Desfazer” restaura um arquivo ao baseline da cópia e invalida sua revisão; o original permanece intacto. A ação exige uma cópia de escrita, perfil completo, o último turno terminado e ausência de inputs pendentes. Não encerra nem modifica uma execução ativa. Saídas técnicas têm controles de expansão e cópia; o host recebe apenas permissão de escrita na área de transferência para esse botão.
-
-`antigravity_panel_state` e `antigravity_panel_undo` têm visibilidade exclusiva para o app. O histórico não entra automaticamente no contexto do principal. “Enviar resumo ao Codex” envia somente após clique, com texto limitado e referência ao resultado. Hosts sem capacidades de ferramenta ou mensagem mostram a indisponibilidade. A interface acompanha atividade pública do CLI, sem extrair raciocínio privado.
+## Execução simultânea
 
 A instalação do plugin configura duas tarefas simultâneas; o servidor independente mantém uma por padrão. `MAX_CONCURRENT_TASKS` aceita 1 a 16. Retomadas da mesma cópia continuam sequenciais.
 
@@ -234,8 +226,6 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 
 | Ferramenta | Função |
 | --- | --- |
-| `antigravity_open_panel` | Abre o painel MCP Apps com resposta compacta |
-| `antigravity_panel_state` / `antigravity_panel_undo` | Consultas e ações exclusivas do app, mantendo o histórico fora do contexto do principal |
 | `antigravity_health` | Verifica executável, versão, autenticação aparente e capacidades |
 | `antigravity_list_models` | Lista os IDs devolvidos por `agy models` |
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
