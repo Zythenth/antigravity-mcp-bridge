@@ -44197,7 +44197,9 @@ ${error62.message}`;
         this.finish(task2, task2.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))
         this.finish(task2, "failed", "AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
-      else if (exitCode !== 0 || !record2.result || record2.result.status !== "SUCCESS") {
+      else if (/no output produced[^\r\n]*["']mcp["'][^\r\n]*permission[^\r\n]*headless/iu.test(stderr)) {
+        this.finish(task2, "failed", "AGY_MCP_PERMISSION_REQUIRED", "Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.");
+      } else if (exitCode !== 0 || !record2.result || record2.result.status !== "SUCCESS") {
         const message = record2.result?.error || `agy exited with code ${exitCode}`;
         this.finish(task2, "failed", !record2.result && task2.parseErrors ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message);
       } else {

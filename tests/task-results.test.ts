@@ -324,4 +324,20 @@ else {
     }
   });
 
+  it('native MCP permission denial is explicit even when CLI reports SUCCESS without output', async () => {
+    adapter.nextProcessFactory = () => {
+      const child = createMockProcess([{event:'init',conversation_id:'session-mcp-denied'},{event:'result',result:{status:'SUCCESS'}}],0,()=>child.stderr.write('jetski: no output produced — a tool required the "mcp" permission that headless mode cannot prompt for, so it was auto-denied.\n'));
+      return child;
+    };
+    const denied = await tasks.run({prompt:'Permission fixture.',workingDirectory:repoDir,outputSchema:{type:'object'}});
+    await tasks.wait(denied.taskId);
+    assert.equal(tasks.status(denied.taskId).error?.code,'AGY_MCP_PERMISSION_REQUIRED');
+    adapter.nextProcessFactory = () => {
+      const child = createMockProcess([{event:'init',conversation_id:'session-mcp-documentation'},{event:'result',result:{status:'SUCCESS',structured_output:{}}}],0,()=>child.stderr.write('Documentation mentions mcp permission in headless mode.\n'));
+      return child;
+    };
+    const normal = await tasks.run({prompt:'Harmless stderr fixture.',workingDirectory:repoDir,outputSchema:{type:'object'}});
+    await tasks.wait(normal.taskId);assert.equal(tasks.status(normal.taskId).status,'completed');
+  });
+
 });

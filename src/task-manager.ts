@@ -1067,6 +1067,9 @@ export class TaskManager {
       if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project, readOnlyBaseline);
       if (task.termination) this.finish(task, task.termination);
       else if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
+      else if (/no output produced[^\r\n]*["']mcp["'][^\r\n]*permission[^\r\n]*headless/iu.test(stderr)) {
+        this.finish(task, 'failed', 'AGY_MCP_PERMISSION_REQUIRED', 'Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.');
+      }
       else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {
         const message = (record.result as { error?: string } | undefined)?.error || `agy exited with code ${exitCode}`;
         this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
