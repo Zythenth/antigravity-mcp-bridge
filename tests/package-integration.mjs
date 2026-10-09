@@ -12,7 +12,7 @@ const npmCli = process.env.npm_execpath;
 if (!npmCli) throw Error('Run with npm run test:package');
 const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-package-test-')));
 const expectedFiles = [
-  'package.json', 'bin/antigravity-mcp-bridge.mjs', 'plugin/server.mjs',
+  'package.json', 'bin/antigravity-mcp-bridge.mjs', 'plugin/server.mjs', 'plugin/panel.html',
   'plugin/.codex-plugin/plugin.json', 'plugin/.mcp.json',
   'plugin/skills/antigravity/SKILL.md', 'plugin/skills/antigravity/agents/openai.yaml',
   'LICENSE', 'README.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',

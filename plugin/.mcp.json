@@ -2,9 +2,14 @@
   "mcpServers": {
     "antigravity": {
       "command": "node",
-      "args": ["./server.mjs"],
+      "args": [
+        "./server.mjs"
+      ],
       "cwd": ".",
-      "env": { "BRIDGE_WINDOWS_NODE_RUNTIME": "portable" }
+      "env": {
+        "BRIDGE_WINDOWS_NODE_RUNTIME": "portable",
+        "MAX_CONCURRENT_TASKS": "2"
+      }
     }
   }
 }

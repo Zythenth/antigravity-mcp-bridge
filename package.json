@@ -1,29 +1,47 @@
 {
   "name": "antigravity-mcp-bridge",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Local MCP bridge for the official Antigravity CLI, with isolated project copies and reviewed integration.",
-  "repository": { "type": "git", "url": "git+https://github.com/Zythenth/antigravity-mcp-bridge.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zythenth/antigravity-mcp-bridge.git"
+  },
   "homepage": "https://github.com/Zythenth/antigravity-mcp-bridge#readme",
-  "bugs": { "url": "https://github.com/Zythenth/antigravity-mcp-bridge/issues" },
-  "engines": { "node": ">=24" },
-  "bin": { "antigravity-mcp-bridge": "bin/antigravity-mcp-bridge.mjs" },
+  "bugs": {
+    "url": "https://github.com/Zythenth/antigravity-mcp-bridge/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "antigravity-mcp-bridge": "bin/antigravity-mcp-bridge.mjs"
+  },
   "files": [
     "bin/antigravity-mcp-bridge.mjs",
     "plugin/server.mjs",
+    "plugin/panel.html",
     "plugin/.codex-plugin/plugin.json",
     "plugin/.mcp.json",
     "plugin/skills/antigravity/SKILL.md",
     "plugin/skills/antigravity/agents/openai.yaml",
-    "LICENSE", "README.md", "CHANGELOG.md", "PRIVACY.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md"
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-windows-helper.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/build-windows-helper.mjs && tsc -p tsconfig.panel.json && node scripts/build-panel.mjs",
     "build:plugin": "npm run build && node scripts/build-plugin.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.panel.json",
+    "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json && tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.panel.json",
     "test": "npm run build && node --test --test-concurrency=1 dist/tests/*.test.js",
     "test:integration": "node tests/real-integration.mjs",
     "test:package": "node tests/package-integration.mjs",

@@ -1,6 +1,9 @@
 # Histórico de versões
 
-## Em desenvolvimento
+## 0.7.0
+
+- Painel MCP Apps com lista e conversa no estilo do Codex, recursos nativos descobertos localmente, controles de saída técnica e cards de alterações reais.
+- Leitura de diffs e Desfazer por arquivo somente na cópia, vinculados ao hash atual e aos limites de perfil e execução.
 
 - Autorização prévia configurável por raiz exata de projeto para dispensar formulários repetidos, preservando critérios, hash, revisão e testes atuais.
 

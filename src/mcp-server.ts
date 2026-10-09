@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { registerPanel } from './panel.js';
 import { clientTask, compactTask, deliveryModeSchema } from './messages.js';
 import { providedSkillsSchema } from './skills.js';
 import { CliAdapter } from './cli-adapter.js';
@@ -45,9 +46,10 @@ function sandboxPolicyConfirmation(previous: SandboxPolicySnapshot, proposed: Sa
 }
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
-  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.6.1' }, {
+  const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.7.0' }, {
     instructions: 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a UI mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; exact projects explicitly preauthorized in server configuration skip repeated human forms. All other projects require MCP form elicitation. The original project changes only through confirmed integration.',
   });
+  registerPanel(server, tasks);
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   const configuredRoleSchema = z.enum(tasks.roles().map(role => role.name) as [string, ...string[]]);

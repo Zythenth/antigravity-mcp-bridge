@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { panelOutputSchemas } from './panel.js';
 import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
@@ -56,6 +57,7 @@ export const taskRecordSchema = z.object({
   roleDefinition: roleDefinitionSchema.optional(),
   continuationTaskId: id.optional(),
   parentTaskId: id.optional(),
+  providedSkillSummaries: z.array(z.object({name: z.string(), sha256: z.string().regex(/^[a-f0-9]{64}$/), fileCount: count}).strict()).max(8).optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -73,6 +75,7 @@ const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model:
 const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxPolicySchema, sha256: hash }).strict();
 
 export const successOutputSchemas = {
+  ...panelOutputSchemas,
   antigravity_health: z.object({
     toolProfile: toolProfileSchema.optional(),
     installed: z.boolean(), path: z.string(), version: z.string().optional(), authenticated: z.boolean().nullable(),

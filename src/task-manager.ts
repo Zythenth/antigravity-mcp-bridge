@@ -6,7 +6,7 @@ import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } f
 import { CliAdapter, taskPrompt } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, undoProjectChange, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory } from './validation.js';
@@ -16,7 +16,7 @@ import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testComma
 import { textChunk } from './chunks.js';
 import { roleSchema, validateRoleReport, resolveRole, listRoles } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
-import { profileReadOnly } from './tool-profiles.js';
+import { profileReadOnly, toolEnabled } from './tool-profiles.js';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { BridgeEvent } from './types.js';
 import { decisionsSchema, handoffSchema } from './handoff.js';
@@ -97,6 +97,21 @@ export class TaskManager {
   }
 
   get toolProfile() { return this.config.toolProfile; }
+  panelCapabilities(taskId?: string) {
+    const task = taskId ? this.tasks.get(taskId) : undefined;
+    const writableOwner = Boolean(task && (task.owned || terminal.has(task.record.status)));
+    const related = task?.project ? [...this.tasks.values()].filter(candidate => candidate.project === task.project) : [];
+    const copyIdle = Boolean(task?.project && !this.busyProjects.has(task.project) && related.every(candidate => terminal.has(candidate.record.status)) && !related.some(candidate => this.hasPendingInbox(candidate.record)));
+    const latest = related.at(-1) === task;
+    return { maxConcurrentTasks: this.config.maxConcurrentTasks,
+      messaging: Boolean(writableOwner && !this.stopped && !task!.record.integratedAt && !task!.record.discardedAt &&
+        (task!.project || !terminal.has(task!.record.status)) && (!terminal.has(task!.record.status) || task!.record.status === 'completed') &&
+        (!profileReadOnly(this.config.toolProfile) || task!.record.mode === 'read-only')),
+      preview: Boolean(copyIdle && toolEnabled(this.config.toolProfile, 'antigravity_preview')),
+      undo: Boolean(writableOwner && copyIdle && latest && task?.project && terminal.has(task.record.status) && task.record.mode === 'write' && !task.record.integratedAt && !task.record.discardedAt && !profileReadOnly(this.config.toolProfile)),
+      deliveryMode: writableOwner, cancel: Boolean(task?.owned && !terminal.has(task.record.status)) };
+  }
+
   get preauthorizedProjectCount() { return this.config.preauthorizedIntegrationRoots.length; }
   integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.config.preauthorizedIntegrationRoots); }
   roles() { return listRoles(this.config.customRoles); }
@@ -329,6 +344,24 @@ export class TaskManager {
         tests: (task.record.tests || []).map(test => ({ ...test, stale: test.sha256 !== preview.sha256 || (test.treeSha256 !== undefined && test.treeSha256 !== tree) })),
         verification: task.record.verification ? { ...task.record.verification, stale: task.record.verification.sha256 !== preview.sha256 ||
           JSON.stringify(current!.fileHashes) !== JSON.stringify(task.record.verification.fileHashes) } : null };
+    });
+  }
+
+  async undoChange(taskId: string, expectedSha256: string, relative: string) {
+    if (profileReadOnly(this.config.toolProfile)) throw new BridgeError('PROFILE_READ_ONLY', 'This profile cannot change the isolated copy');
+    this.refresh(); const task = this.tasks.get(taskId);
+    if (!task?.project || !terminal.has(task.record.status) || task.record.mode === 'read-only' || task.record.integratedAt || task.record.discardedAt) {
+      throw new BridgeError('TASK_NOT_READY', 'Undo requires a finished, retained write copy');
+    }
+    const related = [...this.tasks.values()].filter(candidate => candidate.project === task.project);
+    if (related.at(-1) !== task || related.some(candidate => this.hasPendingInbox(candidate.record))) throw new BridgeError('TASK_NOT_READY', 'Wait for the latest turn and pending inputs before undo');
+    return this.withProject(task.project, async () => {
+      const preview = await undoProjectChange(task.project!, expectedSha256, relative, this.config);
+      for (const candidate of related) {
+        delete candidate.record.verification;
+        this.events.append(candidate.record.taskId, 'copy.change-undone', { path: relative, sha256: preview.sha256 });
+      }
+      return { taskId, path: relative, sha256: preview.sha256, filesChanged: preview.summary.filesChanged };
     });
   }
 

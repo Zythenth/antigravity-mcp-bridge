@@ -115,12 +115,12 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Ferramentas no código-fonte 0.6.1 | Catálogo e execução |
+| Valor | Ferramentas no código-fonte 0.7.0 | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 33 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 23 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 26 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 33 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 36 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 25 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 28 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 36 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -165,6 +165,18 @@ Cada mensagem inclui origem, modelo informado, ID, sequência e data; cada texto
 
 Omitir a opção conserva `events`, com o histórico de eventos existente. `antigravity_events` continua disponível para uma consulta detalhada explícita. `antigravity_set_delivery_mode` muda a entrega de uma tarefa; reinicie o cursor em `after: 0` após trocar de modo. Passe também `cursorMode` com o modo do cursor anterior: se a interface trocar a entrega, a espera reinicia em zero e informa `cursorReset: true`. A retomada herda a escolha, que não altera permissões ou papéis.
 
+## Painel de agentes
+
+Chame `antigravity_open_panel` em um cliente com suporte a MCP Apps. O recurso `ui://antigravity/panel.html` declara entrada lateral no chat do Codex. A lista mostra simultaneamente agentes ativos e concluídos, com tempos reais e uma conversa por sessão; a seleção abre a tela de conversa com resposta pública, atividade paginada, mensagens, recibos, uso observado e opções de entrega.
+
+Os avatares e ícones são lidos da instalação local do Codex e usados na interface. O plugin descobre o pacote Windows automaticamente e os caminhos usuais de Codex.app no macOS. Para instalação em outro local, configure `CODEX_APP_DIRECTORY` com uma pasta absoluta do aplicativo. O código não contém caminhos de usuário e o pacote não distribui os gráficos extraídos. Se a instalação estiver ausente ou seu formato não for compatível, os avatares ficam indisponíveis; as ferramentas de delegação continuam funcionando. Fontes e cores fornecidas pelo host usam as APIs oficiais MCP Apps.
+
+Na cópia concluída, os cards mostram alterações reais A/M/D, linhas e binários. “Visualizar alterações” lê o patch vinculado ao hash atual. “Desfazer” restaura um arquivo ao baseline da cópia e invalida sua revisão; o original permanece intacto. A ação exige uma cópia de escrita, perfil completo, o último turno terminado e ausência de inputs pendentes. Não encerra nem modifica uma execução ativa. Saídas técnicas têm controles de expansão e cópia; o host recebe apenas permissão de escrita na área de transferência para esse botão.
+
+`antigravity_panel_state` e `antigravity_panel_undo` têm visibilidade exclusiva para o app. O histórico não entra automaticamente no contexto do principal. “Enviar resumo ao Codex” envia somente após clique, com texto limitado e referência ao resultado. Hosts sem capacidades de ferramenta ou mensagem mostram a indisponibilidade. A interface acompanha atividade pública do CLI, sem extrair raciocínio privado.
+
+A instalação do plugin configura duas tarefas simultâneas; o servidor independente mantém uma por padrão. `MAX_CONCURRENT_TASKS` aceita 1 a 16. Retomadas da mesma cópia continuam sequenciais.
+
 ## Mensagens para a sessão
 
 Use `antigravity_send_message({taskId, messageId, text})` para enviar até 2.000 caracteres; `messageId` é um UUID escolhido pelo cliente. Repetir o mesmo ID e texto retorna o recibo existente. Outro texto com o mesmo ID é recusado. Até 20 inputs ficam retidos por tarefa.
@@ -183,7 +195,7 @@ Nesses projetos, `antigravity_integrate` dispensa o formulário repetido. Contin
 
 ## Skills fornecidas pelo cliente
 
-O Codex ou outro cliente pode enviar skills selecionadas em `antigravity_run.skills`. Cada pacote contém o texto de `SKILL.md` e, opcionalmente, recursos de texto com caminhos relativos à skill:
+O Codex ou outro cliente pode enviar skills selecionadas em `antigravity_run.skills`. No modo compacto, `providedSkillSummaries` contém apenas nome, hash e quantidade de arquivos. Cada pacote contém o texto de `SKILL.md` e, opcionalmente, recursos de texto com caminhos relativos à skill:
 
 ```json
 {
@@ -222,6 +234,8 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 
 | Ferramenta | Função |
 | --- | --- |
+| `antigravity_open_panel` | Abre o painel MCP Apps com resposta compacta |
+| `antigravity_panel_state` / `antigravity_panel_undo` | Consultas e ações exclusivas do app, mantendo o histórico fora do contexto do principal |
 | `antigravity_health` | Verifica executável, versão, autenticação aparente e capacidades |
 | `antigravity_list_models` | Lista os IDs devolvidos por `agy models` |
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
@@ -273,12 +287,12 @@ Fluxo típico:
 3. Acompanhe com `antigravity_wait`, preservando `nextCursor` e repetindo a espera quando `ready` for falso. `timedOut` encerra apenas a espera. Use `antigravity_events` para consultar os eventos detalhados.
 4. Após o término, confira o status e os erros em `antigravity_result` com `includeResult: false`. Leia o resultado com `antigravity_read_result` e o patch com `antigravity_preview` (`includePatch: false`) e `antigravity_read_patch`. Se houver falha, confira a causa antes de retomar; `completed` não comprova os requisitos.
 5. No Windows com o executor LPAC, consulte a política de sandbox e execute os testes pertinentes com `antigravity_test`, usando o hash da prévia e somente uma seleção já aprovada. Nos demais sistemas, ou com `BRIDGE_TEST_EXECUTOR=agy`, execute o teste sem seletor `sandbox`, pois a seleção explícita é recusada no caminho legado. A ferramenta devolve outro `taskId`: acompanhe e revise esse ID, confira a origem da evidência, exit codes e evidências desatualizadas e obtenha a prévia atual novamente. `antigravity_record_test` registra testes executados pelo cliente, como relatos; não substitui a evidência observada do executor.
-6. Confira os arquivos reais contra cada critério e envie evidências de revisão a `antigravity_verify` com o hash atual. Com verificação aprovada e atual, confira também se os testes observados continuam válidos e chame `antigravity_integrate` na tarefa de implementação mais recente dessa cópia para solicitar a confirmação humana. Alterações no patch, nas evidências ou nos arquivos afetados do original exigem nova conferência.
+6. Confira os arquivos reais contra cada critério e envie evidências de revisão a `antigravity_verify` com o hash atual. Com verificação aprovada e atual, confira também se os testes observados continuam válidos e chame `antigravity_integrate` na tarefa de implementação mais recente dessa cópia para aplicar segundo a política de autorização configurada. Alterações no patch, nas evidências ou nos arquivos afetados do original exigem nova conferência.
 7. Informe o uso observado com `antigravity_usage` e, quando o trabalho puder ser removido, descarte a cópia com `antigravity_discard`.
 
 Esse fluxo de implementação requer `full` ou `implementation`. Para planejamento, revisão ou comparação, use os papéis de leitura e os fluxos específicos acima. Uma revisão por handoff recebe outra cópia; ela não altera qual é a tarefa mais recente da cópia de implementação.
 
-A integração exige suporte do cliente a **MCP form elicitation**. `antigravity_health` informa `integrationApproval.available`. O formulário mostra origem, tarefa, hash, arquivos e contagens de linhas; só `accept` com `confirm: true` permite aplicar. Recusa, cancelamento, timeout ou falta de suporte preservam o original. O hash identifica o patch e a confirmação vem de uma resposta separada do cliente; nenhum argumento `approved` é aceito como autorização. Após a resposta, o bridge confere novamente hash e origem. A confirmação depende de um cliente confiável que apresente a decisão ao usuário.
+Nos projetos sem autorização prévia, a integração exige suporte do cliente a **MCP form elicitation**. `antigravity_health` informa `integrationApproval.available`. O formulário mostra origem, tarefa, hash, arquivos e contagens de linhas; só `accept` com `confirm: true` permite aplicar. Recusa, cancelamento, timeout ou falta de suporte preservam o original. O hash identifica o patch e a confirmação vem de uma resposta separada do cliente; nenhum argumento `approved` é aceito como autorização. Após a resposta, o bridge confere novamente hash e origem. A confirmação depende de um cliente confiável que apresente a decisão ao usuário.
 
 ## Verificação dos resultados
 

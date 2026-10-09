@@ -293,3 +293,28 @@ test('project preauthorization skips only the repeated form and keeps hash, revi
     assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'changed');
   } finally { await f.close(); }
 });
+
+
+test('per-file undo changes only the isolated baseline, rejects stale and unknown paths, and invalidates review', async () => {
+  const f = await fixture(false);
+  try {
+    const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed'); await delay(10);
+    const copy = f.tasks.status(id).copyDirectory!;
+    await writeFile(path.join(copy,'source.txt'),'edited source'); await writeFile(path.join(copy,'new.txt'),'new file');
+    let preview = await f.tasks.preview(id);
+    await f.tasks.verify(id,preview.sha256,[{criterionId:'source',verdict:'passed',path:'source.txt',line:1,quote:'edited source',explanation:'Observed fixture'}]);
+    await assert.rejects(f.tasks.undoChange(id,'0'.repeat(64),'source.txt'),{code:'REVIEW_CHANGED'});
+    await assert.rejects(f.tasks.undoChange(id,preview.sha256,'../outside.txt'),{code:'INVALID_INCLUDE_PATH'});
+    await assert.rejects(f.tasks.undoChange(id,preview.sha256,'unknown.txt'),{code:'INVALID_PATCH_PATH'});
+    await f.tasks.undoChange(id,preview.sha256,'source.txt');
+    assert.equal(await readFile(path.join(copy,'source.txt'),'utf8'),'source');
+    assert.equal(f.tasks.status(id).verification,undefined);
+    preview = await f.tasks.preview(id); assert.equal(preview.summary.filesChanged,1);
+    await f.tasks.undoChange(id,preview.sha256,'new.txt');
+    assert.equal((await f.tasks.preview(id)).summary.filesChanged,0);
+    assert.equal(await readFile(path.join(f.source,'source.txt'),'utf8'),'source');
+    await assert.rejects(readFile(path.join(f.source,'new.txt')),{code:'ENOENT'});
+    const query = new TaskManager(f.adapter,{...f.config,toolProfile:'query'}); f.managers.push(query);
+    await assert.rejects(query.undoChange(id,preview.sha256,'source.txt'),{code:'PROFILE_READ_ONLY'});
+  } finally { await f.close(); }
+});

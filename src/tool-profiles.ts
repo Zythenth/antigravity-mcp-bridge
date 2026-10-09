@@ -9,7 +9,7 @@ const queryTools = new Set([
   'antigravity_cancel', 'antigravity_sessions', 'antigravity_wait', 'antigravity_context', 'antigravity_handoff',
   'antigravity_compare', 'antigravity_comparison',
   'antigravity_roles', 'antigravity_get_sandbox_policy', 'antigravity_set_delivery_mode',
-  'antigravity_send_message',
+  'antigravity_send_message', 'antigravity_open_panel', 'antigravity_panel_state',
 ]);
 const reviewTools = new Set([...queryTools, 'antigravity_preview', 'antigravity_read_patch', 'antigravity_verify']);
 

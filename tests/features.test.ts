@@ -45,7 +45,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
 
 test('tool profiles reduce the MCP catalog and reject writes in query/review', async () => {
   assert.throws(() => loadConfig({ BRIDGE_TOOL_PROFILE: 'unknown' }));
-  for (const [profile, count] of [['full', 33], ['query', 23], ['review', 26], ['implementation', 33]] as const) {
+  for (const [profile, count] of [['full', 36], ['query', 25], ['review', 28], ['implementation', 36]] as const) {
     const f = await fixture(profile);
     try {
       const names = (await f.client.listTools()).tools.map(tool => tool.name);

@@ -36,6 +36,12 @@ Prefira `deliveryMode: "messages"` para delegações comuns. `antigravity_wait` 
 
 Use `events` quando o usuário pedir diagnóstico detalhado. `antigravity_events`, leitores de resultado e patch permanecem disponíveis quando necessários. Ao mudar o modo com `antigravity_set_delivery_mode`, reinicie `after: 0`; cursores de eventos e de mensagens são diferentes. Envie `cursorMode` com o modo do cursor anterior; `cursorReset: true` informa reinício automático quando a interface mudou a entrega. A omissão conserva o modo legado e a retomada herda a escolha. Conteúdo é público emitido pelo CLI; não extraia raciocínio privado nem use a mensagem como resposta a uma permissão pendente do agy.
 
+## Painel de agentes
+
+Use `antigravity_open_panel` quando o usuário quiser acompanhar ou conversar visualmente. A interface declara entrada na lateral do Codex e precisa do suporte MCP Apps do host. Ela consulta detalhes diretamente; `antigravity_panel_state` e `antigravity_panel_undo` são exclusivas do app. Continue a orquestração com mensagens compactas, cursores e referências. O painel usa avatares nativos da instalação local, sem caminhos fixos de usuário.
+
+Cards refletem a prévia real. Desfazer altera somente um arquivo da cópia concluída e invalida a revisão; não dá permissão de integração nem encerra turnos ativos. O resumo ao principal exige clique explícito e capacidade do host. Não apresente eventos públicos como raciocínio privado, sucesso de teste ou prova de conclusão. `completed` indica término da execução.
+
 ## Conversar com a sessão
 
 Use `antigravity_send_message` com taskId, messageId UUID estável e text de até 2.000 caracteres. Guarde ID e texto: repetir os mesmos valores consulta o recibo existente. Com erro de transporte ambíguo, não gere automaticamente outro ID. `queued` aguarda o turno atual; `sent` informa aceitação de uma continuação, sem comprovar leitura pelo modelo. Falha ou cancelamento não autorizam repetição automática e consumo adicional de quota.
@@ -50,7 +56,7 @@ O usuário pode configurar `BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS` com raízes 
 
 Quando o usuário pedir uma skill na delegação, leia sua definição e os recursos necessários e forneça somente os pacotes selecionados em `antigravity_run.skills`: `[{ name, content, resources?: [{ path, content }] }]`. `content` é o texto completo de `SKILL.md`; cada recurso usa um caminho relativo à pasta da skill e conteúdo UTF-8. Não importe todas as skills globais nem envie instruções privadas, credenciais ou documentos internos. Dependências de conectores ou ferramentas do Codex não passam a existir no agy só porque a skill foi copiada.
 
-O bridge conserva o nome e conteúdo, prepara os arquivos em `.agents/skills/<nome-em-minúsculas>/` na cópia e pede ao CLI para carregá-los. Até 8 pacotes, 100 recursos por skill e 1 MiB no total, também sujeitos aos limites da cópia. Os metadados `providedSkills` devolvem nomes e hashes. A retomada mantém esses arquivos; não passe `skills` novamente. Alterações nos pacotes bloqueiam verificação/integração. Os auxiliares não são integrados ao original e não ampliam permissões.
+O bridge conserva o nome e conteúdo, prepara os arquivos em `.agents/skills/<nome-em-minúsculas>/` na cópia e pede ao CLI para carregá-los. Até 8 pacotes, 100 recursos por skill e 1 MiB no total, também sujeitos aos limites da cópia. Os metadados `providedSkills` devolvem nomes e hashes; no modo compacto, `providedSkillSummaries` informa nomes, hashes e contagens sem listas extensas de arquivos. A retomada mantém esses arquivos; não passe `skills` novamente. Alterações nos pacotes bloqueiam verificação/integração. Os auxiliares não são integrados ao original e não ampliam permissões.
 
 ## Informar tokens usados
 
