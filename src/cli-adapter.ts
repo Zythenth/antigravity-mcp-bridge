@@ -1,4 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { lstatSync, mkdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { BridgeError, type RunOptions } from './types.js';
@@ -18,6 +20,29 @@ export function taskPrompt(options: RunOptions, maxChars: number): string {
   const content = options.prompt + skillInstructions + messageInstructions + instructions + context + customInstruction + (contract ? '\n' + contract.instruction : '');
   validatePrompt(content, maxChars);
   return content;
+}
+
+
+export type CliProcess = ChildProcessWithoutNullStreams & { schemaCleanupError?: BridgeError };
+
+function stageSchemaFile(stateDirectory: string, content: string) {
+  if (!path.isAbsolute(stateDirectory)) throw new BridgeError('INVALID_STATE_DIRECTORY', 'Schema storage must be absolute');
+  mkdirSync(stateDirectory, { recursive: true, mode: 0o700 });
+  if (lstatSync(stateDirectory).isSymbolicLink()) throw new BridgeError('INVALID_STATE_DIRECTORY', 'Schema storage cannot be a link');
+  const root = realpathSync.native(stateDirectory);
+  const identity = lstatSync(root);
+  const file = path.join(root, 'cli-schema-' + randomUUID() + '.json');
+  writeFileSync(file, content, { flag: 'wx', mode: 0o600 });
+  let cleaned = false;
+  return { file, cleanup() {
+    if (cleaned) return;
+    const current = lstatSync(root);
+    if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) {
+      throw new BridgeError('SCHEMA_CLEANUP_FAILED', 'Schema storage changed; private schema was preserved');
+    }
+    unlinkSync(file);
+    cleaned = true;
+  } };
 }
 
 interface ProbeResult { code: number | null; stdout: string; stderr: string }
@@ -125,7 +150,7 @@ export class CliAdapter {
     return models;
   }
 
-  spawnTask(options: RunOptions, model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {
+  spawnTask(options: RunOptions, model: string | undefined, cwd: string): CliProcess {
     if (!this.installed) throw new BridgeError('AGY_NOT_FOUND', 'agy executable not found');
     if (!this.help.includes('stream-json')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise stream-json');
     if (!this.help.includes('--sandbox')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --sandbox');
@@ -140,13 +165,29 @@ export class CliAdapter {
     }
     if (model) args.push('--model', model);
     if (options.sessionId) args.push('--conversation', options.sessionId);
-    const contract = roleContract((options.roleDefinition ?? resolveRole(options.role ?? 'implementer')).baseRole);
-    if (contract) {
-      if (!this.help.includes('--json-schema')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Structured roles require agy --json-schema');
-      args.push('--json-schema', JSON.stringify(contract.schema));
+    if (!options.nativeTest && options.outputSchema !== undefined) {
+      if (!this.help.includes('--json-schema')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --json-schema');
+      args.push('--json-schema', JSON.stringify(options.outputSchema));
+    } else {
+      const contract = roleContract((options.roleDefinition ?? resolveRole(options.role ?? 'implementer')).baseRole);
+      if (contract) {
+        if (!this.help.includes('--json-schema')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Structured roles require agy --json-schema');
+        args.push('--json-schema', JSON.stringify(contract.schema));
+      }
     }
     const content = taskPrompt(options, this.config.maxPromptChars);
-    const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    const schemaIndex = args.indexOf('--json-schema');
+    const staged = schemaIndex >= 0 && args[schemaIndex + 1]!.length > 8000 ? stageSchemaFile(this.config.stateDirectory, args[schemaIndex + 1]!) : undefined;
+    if (staged) args[schemaIndex + 1] = staged.file;
+    let child: CliProcess;
+    try { child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    catch (error) { staged?.cleanup(); throw error; }
+    const cleanup = () => {
+      try { staged?.cleanup(); }
+      catch { child.schemaCleanupError = new BridgeError('SCHEMA_CLEANUP_FAILED', 'Private schema cleanup failed; inspect schema storage'); }
+    };
+    child.once('error', cleanup);
+    child.once('close', cleanup);
     child.stdin.end(JSON.stringify({ event: 'user', message: { content } }) + '\n');
     return child;
   }

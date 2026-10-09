@@ -10,6 +10,7 @@ const queryTools = new Set([
   'antigravity_compare', 'antigravity_comparison',
   'antigravity_roles', 'antigravity_get_sandbox_policy', 'antigravity_set_delivery_mode',
   'antigravity_send_message',
+  'antigravity_read_structured_result', 'antigravity_artifacts', 'antigravity_read_artifact',
 ]);
 const reviewTools = new Set([...queryTools, 'antigravity_preview', 'antigravity_read_patch', 'antigravity_verify']);
 

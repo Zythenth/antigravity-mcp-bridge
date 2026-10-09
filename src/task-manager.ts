@@ -3,7 +3,7 @@ import { integrationPreauthorized } from './integration-policy.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } from './skills.js';
-import { CliAdapter, taskPrompt } from './cli-adapter.js';
+import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
 import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
@@ -18,6 +18,8 @@ import { roleSchema, validateRoleReport, resolveRole, listRoles } from './roles.
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
 import { profileReadOnly } from './tool-profiles.js';
 import { setTimeout as delay } from 'node:timers/promises';
+import { validateOutputSchema, validateStructuredResult } from './structured-results.js';
+import { artifactPathsSchema, collectArtifacts, readArtifact } from './artifacts.js';
 import type { BridgeEvent } from './types.js';
 import { decisionsSchema, handoffSchema } from './handoff.js';
 import { comparisonModelsSchema, compareFindings, type Comparison } from './comparison.js';
@@ -135,6 +137,7 @@ export class TaskManager {
   }
 
   async run(options: RunOptions): Promise<TaskRecord> {
+    options = { ...options };
     if (profileReadOnly(this.config.toolProfile)) {
       if (options.mode === 'write') throw new BridgeError('PROFILE_READ_ONLY', 'This tool profile only permits read-only tasks');
       options = { ...options, mode: 'read-only' };
@@ -150,6 +153,8 @@ export class TaskManager {
       options = { ...options, skills: parsed.data };
     }
     if (options.acceptanceCriteria !== undefined) criteriaSchema.parse(options.acceptanceCriteria);
+    if (options.outputSchema !== undefined) options.outputSchema = validateOutputSchema(options.outputSchema);
+    if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
@@ -183,6 +188,12 @@ export class TaskManager {
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
       if ((previous || contextSource) && options.skills !== undefined) throw new BridgeError('INVALID_SKILLS', 'Resume and handoff retain supplied skills; new bundles require a new task');
+      if (previous && options.outputSchema !== undefined) throw new BridgeError('INVALID_SCHEMA', 'A resumed task retains its original structured output schema');
+      if (previous && options.artifactPaths !== undefined) throw new BridgeError('INVALID_ARTIFACT_PATHS', 'A resumed task retains its original artifact paths');
+      options.outputSchema = previous?.record.outputSchema ?? options.outputSchema;
+      options.artifactPaths = previous?.record.artifactPaths ?? options.artifactPaths;
+      if (options.outputSchema !== undefined) options.outputSchema = validateOutputSchema(options.outputSchema);
+      if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
       if (previous?.project) await verifyProvidedSkills(previous.project.copyDirectory, previous.project.providedSkills ?? []);
       options.handoff ??= previous?.record.handoff;
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
@@ -191,6 +202,7 @@ export class TaskManager {
       if (previous && role !== (previous.record.role ?? 'implementer')) throw new BridgeError('INVALID_ROLE', 'A resumed task retains its original role');
       const mode = options.mode ?? previous?.record.mode ?? (roleDefinition.baseRole === 'implementer' ? 'write' : 'read-only');
       if (roleDefinition.baseRole !== 'implementer' && mode !== 'read-only') throw new BridgeError('INVALID_ROLE', 'Roles based on planner and reviewer require read-only mode');
+      if (roleDefinition.baseRole !== 'implementer' && options.outputSchema !== undefined) throw new BridgeError('INVALID_ROLE', 'Structured output schema requires an implementer base role');
       if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
       if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
@@ -240,11 +252,18 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
+      const recordOutputSchema = options.outputSchema;
+      const recordArtifactPaths = options.artifactPaths;
+      if (options.nativeTest) {
+        options.outputSchema = undefined;
+        options.artifactPaths = undefined;
+      }
       const record: TaskRecord = { parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
-        workingDirectory, status: 'queued', createdAt: new Date().toISOString() };
+        workingDirectory, status: 'queued', createdAt: new Date().toISOString(),
+        outputSchema: recordOutputSchema, artifactPaths: recordArtifactPaths };
       this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
       accepted = true;
       pendingProjectRelease = undefined;
@@ -301,6 +320,53 @@ export class TaskManager {
     if (!result.ready) return { ready: false as const, taskId, status: result.task.status };
     return { ready: true as const, taskId, status: result.task.status,
       ...textChunk(JSON.stringify(result.task.result ?? null), offset, limit, expectedContentSha256) };
+  }
+
+  readStructuredResult(taskId: string, offset = 0, limit = 10000, expectedContentSha256?: string) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
+    if (task.record.status !== 'completed') {
+      throw new BridgeError('TASK_NOT_READY', 'Structured result requires a completed task');
+    }
+    if (!task.record.structuredResult) {
+      throw new BridgeError('STRUCTURED_RESULT_NOT_AVAILABLE', 'No structured result recorded for this task');
+    }
+    return {
+      taskId,
+      ...textChunk(JSON.stringify(task.record.structuredResult.value), offset, limit, expectedContentSha256),
+    };
+  }
+
+  listArtifacts(taskId: string) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
+    if (task.record.status !== 'completed') {
+      throw new BridgeError('TASK_NOT_READY', 'Artifacts require a completed task');
+    }
+    return {
+      taskId,
+      artifacts: task.record.artifacts ?? [],
+    };
+  }
+
+  async readArtifact(taskId: string, artifactPath: string, expectedSha256: string, offset = 0, limit = 65536) {
+    this.refresh();
+    const task = this.tasks.get(taskId);
+    if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
+    if (task.record.status !== 'completed' || !task.project || task.record.discardedAt) {
+      throw new BridgeError('TASK_NOT_READY', 'Reading artifacts requires a completed task with a retained copy');
+    }
+    const normalized = artifactPath.replaceAll('\\', '/');
+    const ref = task.record.artifacts?.find(entry => entry.path === normalized);
+    if (!ref) {
+      throw new BridgeError('ARTIFACT_NOT_FOUND', `Artifact not recorded: ${artifactPath}`);
+    }
+    return this.withProject(task.project, async () => {
+      const chunk = await readArtifact(task.project!, ref, expectedSha256, offset, limit, this.config.maxCopyBytes);
+      return { taskId, ...chunk };
+    });
   }
 
   async readPatch(taskId: string, expectedSha256: string, relative?: string, offset = 0, limit = 10000) {
@@ -489,7 +555,8 @@ export class TaskManager {
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
-        status: 'queued', createdAt: new Date().toISOString() };
+        status: 'queued', createdAt: new Date().toISOString(),
+        outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths };
       const options: RunOptions = { deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
         model: record.model, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
@@ -954,6 +1021,7 @@ export class TaskManager {
       });
       stdoutParser.end(); stderrParser.end();
       if (task.timer) clearTimeout(task.timer);
+      if ((child as CliProcess).schemaCleanupError) throw (child as CliProcess).schemaCleanupError;
       record.exitCode = exitCode;
       if (native) {
         await native.cleanup(); native = undefined;
@@ -994,6 +1062,13 @@ export class TaskManager {
         if (record.mode !== 'read-only') await previewProjectCopy(task.project, this.config);
         record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
           (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
+        if (!task.options.nativeTest && record.outputSchema !== undefined) {
+          const rawStructured = (record.result as { structured_output?: unknown } | undefined)?.structured_output;
+          record.structuredResult = validateStructuredResult(record.outputSchema, rawStructured);
+        }
+        if (!task.options.nativeTest && record.artifactPaths !== undefined) {
+          record.artifacts = await collectArtifacts(task.project, record.artifactPaths, this.config);
+        }
         this.finish(task, 'completed');
       }
     } catch (error) {
@@ -1062,7 +1137,7 @@ export class TaskManager {
 
   private async repairWindowsTest(task: InternalTask, request: WindowsNativeTestRequest, observedExitCode: number, timeoutSeconds: number): Promise<void> {
     if (!task.project) throw new BridgeError('TASK_NOT_READY', 'Windows test copy is unavailable');
-    const { nativeTest: _nativeTest, ...baseOptions } = task.options;
+    const { nativeTest: _nativeTest, outputSchema: _outputSchema, artifactPaths: _artifactPaths, ...baseOptions } = task.options;
     const options: RunOptions = { ...baseOptions, timeoutSeconds,
       prompt: 'The bridge observed this exact test command exit with code ' + observedExitCode + ': ' +
         JSON.stringify({ executable: request.executable, args: request.args }) +

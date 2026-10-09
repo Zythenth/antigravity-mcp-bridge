@@ -62,7 +62,11 @@ export function resultReference(record: Pick<TaskRecord, 'taskId' | 'result'>): 
     contentSha256: createHash('sha256').update(JSON.stringify(record.result ?? null)).digest('hex') };
 }
 
-export type CompactTask = Pick<TaskRecord, 'taskId' | 'workingDirectory' | 'status' | 'createdAt' | 'sessionId' | 'model' | 'mode' | 'role' | 'startedAt' | 'completedAt' | 'exitCode' | 'error' | 'tokenUsage' | 'integratedAt' | 'discardedAt' | 'deliveryMode' | 'continuationTaskId'> & { providedSkillSummaries?: Array<{ name: string; sha256: string; fileCount: number }> };
+export type CompactTask = Pick<TaskRecord, 'taskId' | 'workingDirectory' | 'status' | 'createdAt' | 'sessionId' | 'model' | 'mode' | 'role' | 'startedAt' | 'completedAt' | 'exitCode' | 'error' | 'tokenUsage' | 'integratedAt' | 'discardedAt' | 'deliveryMode' | 'continuationTaskId'> & {
+  providedSkillSummaries?: Array<{ name: string; sha256: string; fileCount: number }>;
+  structuredResultSha256?: string;
+  artifactCount?: number;
+};
 
 export function compactTask(task: TaskRecord): CompactTask {
   return { taskId: task.taskId, workingDirectory: task.workingDirectory, status: task.status, createdAt: task.createdAt,
@@ -70,5 +74,7 @@ export function compactTask(task: TaskRecord): CompactTask {
     exitCode: task.exitCode, error: task.error, tokenUsage: task.tokenUsage,
     integratedAt: task.integratedAt, discardedAt: task.discardedAt, deliveryMode: task.deliveryMode,
     ...(task.providedSkills?.length ? { providedSkillSummaries: task.providedSkills.map(skill => ({ name: skill.name, sha256: skill.sha256, fileCount: skill.files.length })) } : {}),
-    ...(task.continuationTaskId ? { continuationTaskId: task.continuationTaskId } : {}) };
+    ...(task.continuationTaskId ? { continuationTaskId: task.continuationTaskId } : {}),
+    ...(task.structuredResult ? { structuredResultSha256: task.structuredResult.sha256 } : {}),
+    ...(task.artifacts !== undefined ? { artifactCount: task.artifacts.length } : {}) };
 }

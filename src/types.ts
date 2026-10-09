@@ -8,6 +8,9 @@ import type { HandoffContext } from './handoff.js';
 import type { Comparison } from './comparison.js';
 import type { SandboxSelection } from './sandbox-policy.js';
 import type { PortableNodeIdentity } from './portable-node.js';
+import type { ArtifactReference } from './artifacts.js';
+
+export type { ArtifactReference } from './artifacts.js';
 
 export type TaskStatus = 'queued' | 'starting' | 'running' | 'streaming' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 
@@ -62,6 +65,10 @@ export interface TaskRecord {
   sourceMessage?: { taskId: string; messageId: string };
   inbox?: CallerInboxItem[];
   dispatching?: { messageId: string; continuationTaskId?: string; ownerId?: string };
+  outputSchema?: Record<string, unknown>;
+  artifactPaths?: string[];
+  structuredResult?: { value: unknown; sha256: string };
+  artifacts?: ArtifactReference[];
 }
 
 export type CallerReceiptState = 'queued' | 'sent' | 'failed' | 'cancelled';
@@ -125,6 +132,8 @@ export interface RunOptions {
   mode?: 'write' | 'read-only';
   parentTaskId?: string;
   sourceMessage?: { taskId: string; messageId: string };
+  outputSchema?: Record<string, unknown>;
+  artifactPaths?: string[];
 }
 
 export class BridgeError extends Error {

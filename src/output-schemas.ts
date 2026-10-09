@@ -57,6 +57,12 @@ export const taskRecordSchema = z.object({
   continuationTaskId: id.optional(),
   parentTaskId: id.optional(),
   providedSkillSummaries: z.array(z.object({name: z.string(), sha256: z.string().regex(/^[a-f0-9]{64}$/), fileCount: count}).strict()).max(8).optional(),
+  outputSchema: z.record(z.string(), z.unknown()).optional(),
+  artifactPaths: z.array(z.string()).optional(),
+  structuredResult: z.object({ value: z.unknown(), sha256: hash }).strict().optional(),
+  artifacts: z.array(z.object({ path: z.string(), sha256: hash, bytes: count }).strict()).optional(),
+  structuredResultSha256: hash.optional(),
+  artifactCount: count.optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -142,6 +148,7 @@ export const successOutputSchemas = {
   antigravity_result: z.object({
     task: taskRecordSchema, ready: z.boolean(), resultAvailable: z.boolean().optional(), reportAvailable: z.boolean().optional(), includedFileCount: count.optional(),
     handoffAvailable: z.boolean().optional(), roleDefinitionAvailable: z.boolean().optional(),
+    structuredResultAvailable: z.boolean().optional(), artifactCount: count.optional(),
   }).strict(),
   antigravity_wait: z.object({
     taskId: id, status, ready: z.boolean(), timedOut: z.boolean(), tokenUsage: tokenUsage.optional(),
@@ -163,6 +170,29 @@ export const successOutputSchemas = {
       continuationTaskId: id.optional(),
       error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
     }).strict(),
+  }).strict(),
+  antigravity_read_structured_result: z.object({
+    taskId: id, ...chunkShape,
+  }).strict(),
+  antigravity_artifacts: z.object({
+    taskId: id,
+    artifacts: z.array(z.object({
+      path: z.string(),
+      sha256: hash,
+      bytes: count,
+    }).strict()),
+  }).strict(),
+  antigravity_read_artifact: z.object({
+    taskId: id,
+    path: z.string(),
+    sha256: hash,
+    bytes: count,
+    offset: count,
+    nextOffset: count,
+    hasMore: z.boolean(),
+    encoding: z.literal('base64'),
+    content: z.string(),
+    offsetUnit: z.literal('bytes'),
   }).strict(),
 };
 

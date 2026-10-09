@@ -13,6 +13,8 @@ import { toolEnabled } from './tool-profiles.js';
 import { decisionsSchema } from './handoff.js';
 import { comparisonModelsSchema } from './comparison.js';
 import { sandboxPolicySchema, sandboxSelectionInputSchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
+import { structuredResultInputSchema } from './structured-results.js';
+import { artifactPathsSchema } from './artifacts.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -134,6 +136,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     mode: z.enum(['write', 'read-only']).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional(),
+    outputSchema: structuredResultInputSchema.optional(),
+    artifactPaths: artifactPathsSchema.optional(),
   };
   if (toolEnabled(tasks.toolProfile, 'antigravity_run')) server.registerTool('antigravity_run', {
     outputSchema: outputSchemas.antigravity_run,
@@ -303,10 +307,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
     if (includeResult !== false && result.task.deliveryMode !== 'messages') return { ...result, task: clientTask(result.task) };
-    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, ...metadata } = result.task;
+    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, outputSchema, artifactPaths, structuredResult, artifacts, ...metadata } = result.task;
     void messages; void messageCursor; void inbox; void dispatching; void sourceMessage;
+    void outputSchema; void artifactPaths; void structuredResult; void artifacts;
     return { ...result, task: result.task.deliveryMode === 'messages' ? compactTask(result.task) : metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined,
-      handoffAvailable: handoff !== undefined, roleDefinitionAvailable: roleDefinition !== undefined, includedFileCount: includedFiles?.length ?? 0 };
+      handoffAvailable: handoff !== undefined, roleDefinitionAvailable: roleDefinition !== undefined, includedFileCount: includedFiles?.length ?? 0,
+      structuredResultAvailable: result.task.structuredResult !== undefined, artifactCount: result.task.artifacts?.length };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_cancel')) server.registerTool('antigravity_cancel', {
@@ -320,6 +326,36 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     title: 'List known Antigravity sessions', description: 'List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.',
     inputSchema: {}, annotations: readOnly,
   }, safe(() => ({ sessions: tasks.sessions(), scope: 'local bridge state' })));
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_read_structured_result')) server.registerTool('antigravity_read_structured_result', {
+    outputSchema: outputSchemas.antigravity_read_structured_result,
+    title: 'Read structured result in chunks',
+    description: 'Read the independently validated structured result JSON in bounded chunks. Completed tasks only. Bind reads to contentSha256 and follow nextOffset until hasMore is false.',
+    inputSchema: { taskId: z.string().uuid(), expectedContentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
+    annotations: readOnly,
+  }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks.readStructuredResult(taskId, offset, limit, expectedContentSha256))());
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_artifacts')) server.registerTool('antigravity_artifacts', {
+    outputSchema: outputSchemas.antigravity_artifacts,
+    title: 'List recorded task artifacts',
+    description: 'List artifacts recorded for a completed task with their SHA-256 and byte sizes.',
+    inputSchema: { taskId: z.string().uuid() },
+    annotations: readOnly,
+  }, async ({ taskId }) => safe(() => tasks.listArtifacts(taskId))());
+
+  if (toolEnabled(tasks.toolProfile, 'antigravity_read_artifact')) server.registerTool('antigravity_read_artifact', {
+    outputSchema: outputSchemas.antigravity_read_artifact,
+    title: 'Read artifact in bounded chunks',
+    description: 'Read recorded artifact bytes encoded as base64 in bounded chunks. Bound reads to the recorded artifact SHA-256.',
+    inputSchema: {
+      taskId: z.string().uuid(),
+      path: z.string().min(1).max(1000),
+      expectedSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      offset: z.number().int().min(0).optional(),
+      limit: z.number().int().min(1).max(65536).optional(),
+    },
+    annotations: readOnly,
+  }, async ({ taskId, path, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path, expectedSha256, offset, limit))());
 
   return server;
 }

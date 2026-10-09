@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path13) {
-      let input2 = path13;
+    function removeDotSegments(path14) {
+      let input2 = path14;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path13 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path13 && path13 !== "/" ? path13 : void 0;
+        const path14 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path14 && path14 !== "/" ? path14 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path13) {
-  if (!path13)
+function getElementAtPath(obj, path14) {
+  if (!path14)
     return obj;
-  return path13.reduce((acc, key) => acc?.[key], obj);
+  return path14.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path13, issues) {
+function prefixIssues(path14, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path13);
+    iss.path.unshift(path14);
     return iss;
   });
 }
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path13 = []) => {
+  const processError = (error63, path14 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path13, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path14, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path14, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path14, ...issue2.path]);
       } else {
-        const fullpath = [...path13, ...issue2.path];
+        const fullpath = [...path14, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8868,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path13 = []) => {
+  const processError = (error63, path14 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path13, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path14, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path14, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path13, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path14, ...issue2.path]);
       } else {
-        const fullpath = [...path13, ...issue2.path];
+        const fullpath = [...path14, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8917,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path13 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path13) {
+  const path14 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path14) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path13 = ref.slice(1).split("/").filter(Boolean);
-  if (path13.length === 0) {
+  const path14 = ref.slice(1).split("/").filter(Boolean);
+  if (path14.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path13[0] === defsKey) {
-    const key = path13[1] === void 0 ? void 0 : decodeJSONPointerSegment(path13[1]);
+  if (path14[0] === defsKey) {
+    const key = path14[1] === void 0 ? void 0 : decodeJSONPointerSegment(path14[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28512,6 +28512,8 @@ var StdioServerTransport = class {
 
 // dist/src/cli-adapter.js
 import { spawn as spawn2 } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { lstatSync, mkdirSync, realpathSync as realpathSync2, unlinkSync, writeFileSync } from "node:fs";
 import { access as access2 } from "node:fs/promises";
 import path6 from "node:path";
 
@@ -28593,7 +28595,10 @@ var queryTools = /* @__PURE__ */ new Set([
   "antigravity_roles",
   "antigravity_get_sandbox_policy",
   "antigravity_set_delivery_mode",
-  "antigravity_send_message"
+  "antigravity_send_message",
+  "antigravity_read_structured_result",
+  "antigravity_artifacts",
+  "antigravity_read_artifact"
 ]);
 var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
 function toolEnabled(profile, name) {
@@ -29756,6 +29761,28 @@ function taskPrompt(options, maxChars) {
   validatePrompt(content, maxChars);
   return content;
 }
+function stageSchemaFile(stateDirectory, content) {
+  if (!path6.isAbsolute(stateDirectory))
+    throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage must be absolute");
+  mkdirSync(stateDirectory, { recursive: true, mode: 448 });
+  if (lstatSync(stateDirectory).isSymbolicLink())
+    throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage cannot be a link");
+  const root = realpathSync2.native(stateDirectory);
+  const identity = lstatSync(root);
+  const file3 = path6.join(root, "cli-schema-" + randomUUID() + ".json");
+  writeFileSync(file3, content, { flag: "wx", mode: 384 });
+  let cleaned = false;
+  return { file: file3, cleanup() {
+    if (cleaned)
+      return;
+    const current = lstatSync(root);
+    if (!current.isDirectory() || current.isSymbolicLink() || current.dev !== identity.dev || current.ino !== identity.ino) {
+      throw new BridgeError("SCHEMA_CLEANUP_FAILED", "Schema storage changed; private schema was preserved");
+    }
+    unlinkSync(file3);
+    cleaned = true;
+  } };
+}
 function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
@@ -29904,14 +29931,39 @@ var CliAdapter = class {
       args.push("--model", model);
     if (options.sessionId)
       args.push("--conversation", options.sessionId);
-    const contract = roleContract((options.roleDefinition ?? resolveRole(options.role ?? "implementer")).baseRole);
-    if (contract) {
+    if (!options.nativeTest && options.outputSchema !== void 0) {
       if (!this.help.includes("--json-schema"))
-        throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Structured roles require agy --json-schema");
-      args.push("--json-schema", JSON.stringify(contract.schema));
+        throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise --json-schema");
+      args.push("--json-schema", JSON.stringify(options.outputSchema));
+    } else {
+      const contract = roleContract((options.roleDefinition ?? resolveRole(options.role ?? "implementer")).baseRole);
+      if (contract) {
+        if (!this.help.includes("--json-schema"))
+          throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Structured roles require agy --json-schema");
+        args.push("--json-schema", JSON.stringify(contract.schema));
+      }
     }
     const content = taskPrompt(options, this.config.maxPromptChars);
-    const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const schemaIndex = args.indexOf("--json-schema");
+    const staged = schemaIndex >= 0 && args[schemaIndex + 1].length > 8e3 ? stageSchemaFile(this.config.stateDirectory, args[schemaIndex + 1]) : void 0;
+    if (staged)
+      args[schemaIndex + 1] = staged.file;
+    let child;
+    try {
+      child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    } catch (error62) {
+      staged?.cleanup();
+      throw error62;
+    }
+    const cleanup = () => {
+      try {
+        staged?.cleanup();
+      } catch {
+        child.schemaCleanupError = new BridgeError("SCHEMA_CLEANUP_FAILED", "Private schema cleanup failed; inspect schema storage");
+      }
+    };
+    child.once("error", cleanup);
+    child.once("close", cleanup);
     child.stdin.end(JSON.stringify({ event: "user", message: { content } }) + "\n");
     return child;
   }
@@ -30294,8 +30346,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path13, errorMaps, issueData } = params;
-  const fullPath = [...path13, ...issueData.path || []];
+  const { data, path: path14, errorMaps, issueData } = params;
+  const fullPath = [...path14, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -30410,11 +30462,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path13, key) {
+  constructor(parent, value, path14, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path13;
+    this._path = path14;
     this._key = key;
   }
   get path() {
@@ -33965,11 +34017,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path13) {
-  if (path13.length === 0) {
+function getDotPath(path14) {
+  if (path14.length === 0) {
     return "object root";
   }
-  return path13.reduce((acc, seg, index) => {
+  return path14.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -37893,7 +37945,7 @@ var EMPTY_COMPLETION_RESULT = {
 };
 
 // dist/src/messages.js
-import { createHash as createHash3, randomUUID } from "node:crypto";
+import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
 var deliveryModeSchema = external_exports.enum(["messages", "events"]);
 var MAX_MESSAGE_CHARS = 2e3;
 var MAX_TASK_MESSAGES = 100;
@@ -37915,7 +37967,7 @@ var bridgeMessageSchema = external_exports.object({
 function appendMessage(record2, kind, source, text, reference) {
   const sequence = (record2.messageCursor ?? 0) + 1;
   const message = bridgeMessageSchema.parse({
-    messageId: randomUUID(),
+    messageId: randomUUID2(),
     taskId: record2.taskId,
     sequence,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -37991,7 +38043,9 @@ function compactTask(task2) {
     discardedAt: task2.discardedAt,
     deliveryMode: task2.deliveryMode,
     ...task2.providedSkills?.length ? { providedSkillSummaries: task2.providedSkills.map((skill) => ({ name: skill.name, sha256: skill.sha256, fileCount: skill.files.length })) } : {},
-    ...task2.continuationTaskId ? { continuationTaskId: task2.continuationTaskId } : {}
+    ...task2.continuationTaskId ? { continuationTaskId: task2.continuationTaskId } : {},
+    ...task2.structuredResult ? { structuredResultSha256: task2.structuredResult.sha256 } : {},
+    ...task2.artifacts !== void 0 ? { artifactCount: task2.artifacts.length } : {}
   };
 }
 
@@ -38054,8 +38108,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path13, text } = criterion.check;
-      const content = await file3(path13);
+      const { kind, path: path14, text } = criterion.check;
+      const content = await file3(path14);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -38081,7 +38135,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
 }
 
 // dist/src/native-tests.js
-import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash5, randomUUID as randomUUID3 } from "node:crypto";
 import { appendFile, mkdir as mkdir3, readFile as readFile2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
 import path7 from "node:path";
 var testCommandSchema = external_exports.object({
@@ -38181,7 +38235,7 @@ async function nativeRunner(settings) {
 }
 async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
-  const nonce = randomUUID2();
+  const nonce = randomUUID3();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
   const absolute = path7.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
@@ -38411,10 +38465,10 @@ function compareFindings(tasks, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path13, line, quote } = opinions[0].finding;
+    const { path: path14, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path13,
+      path: path14,
       line,
       quote,
       opinions,
@@ -38777,7 +38831,13 @@ var taskRecordSchema = external_exports.object({
   roleDefinition: roleDefinitionSchema.optional(),
   continuationTaskId: id.optional(),
   parentTaskId: id.optional(),
-  providedSkillSummaries: external_exports.array(external_exports.object({ name: external_exports.string(), sha256: external_exports.string().regex(/^[a-f0-9]{64}$/), fileCount: count }).strict()).max(8).optional()
+  providedSkillSummaries: external_exports.array(external_exports.object({ name: external_exports.string(), sha256: external_exports.string().regex(/^[a-f0-9]{64}$/), fileCount: count }).strict()).max(8).optional(),
+  outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+  artifactPaths: external_exports.array(external_exports.string()).optional(),
+  structuredResult: external_exports.object({ value: external_exports.unknown(), sha256: hash2 }).strict().optional(),
+  artifacts: external_exports.array(external_exports.object({ path: external_exports.string(), sha256: hash2, bytes: count }).strict()).optional(),
+  structuredResultSha256: hash2.optional(),
+  artifactCount: count.optional()
 }).strict();
 var task = external_exports.object({ task: taskRecordSchema }).strict();
 var file2 = external_exports.object({ status: external_exports.enum(["A", "M", "D"]), path: external_exports.string() }).strict();
@@ -38937,7 +38997,9 @@ var successOutputSchemas = {
     reportAvailable: external_exports.boolean().optional(),
     includedFileCount: count.optional(),
     handoffAvailable: external_exports.boolean().optional(),
-    roleDefinitionAvailable: external_exports.boolean().optional()
+    roleDefinitionAvailable: external_exports.boolean().optional(),
+    structuredResultAvailable: external_exports.boolean().optional(),
+    artifactCount: count.optional()
   }).strict(),
   antigravity_wait: external_exports.object({
     taskId: id,
@@ -38969,6 +39031,30 @@ var successOutputSchemas = {
       continuationTaskId: id.optional(),
       error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
     }).strict()
+  }).strict(),
+  antigravity_read_structured_result: external_exports.object({
+    taskId: id,
+    ...chunkShape
+  }).strict(),
+  antigravity_artifacts: external_exports.object({
+    taskId: id,
+    artifacts: external_exports.array(external_exports.object({
+      path: external_exports.string(),
+      sha256: hash2,
+      bytes: count
+    }).strict())
+  }).strict(),
+  antigravity_read_artifact: external_exports.object({
+    taskId: id,
+    path: external_exports.string(),
+    sha256: hash2,
+    bytes: count,
+    offset: count,
+    nextOffset: count,
+    hasMore: external_exports.boolean(),
+    encoding: external_exports.literal("base64"),
+    content: external_exports.string(),
+    offsetUnit: external_exports.literal("bytes")
   }).strict()
 };
 var errorResponse = external_exports.object({ error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict() }).strict();
@@ -38981,6 +39067,642 @@ function withError(schema) {
   }).meta({ anyOf: [external_exports.toJSONSchema(schema), external_exports.toJSONSchema(errorResponse)] });
 }
 var outputSchemas = Object.fromEntries(Object.entries(successOutputSchemas).map(([name, schema]) => [name, withError(schema)]));
+
+// dist/src/structured-results.js
+import { createHash as createHash7 } from "node:crypto";
+var structuredResultInputSchema = external_exports.record(external_exports.string(), external_exports.unknown());
+var MAX_SCHEMA_BYTES = 64 * 1024;
+var MAX_SCHEMA_DEPTH = 32;
+var MAX_SCHEMA_NODES = 1e3;
+var MAX_RESULT_BYTES = 1024 * 1024;
+var MAX_RESULT_DEPTH = 32;
+var MAX_RESULT_NODES = 1e4;
+var MAX_VALIDATOR_CACHE = 100;
+var UNSAFE_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+var DRAFT7_SCHEMA_KEYWORDS = /* @__PURE__ */ new Set([
+  "$schema",
+  "$ref",
+  "$comment",
+  "title",
+  "description",
+  "default",
+  "examples",
+  "readOnly",
+  "writeOnly",
+  "type",
+  "enum",
+  "const",
+  "multipleOf",
+  "maximum",
+  "exclusiveMaximum",
+  "minimum",
+  "exclusiveMinimum",
+  "maxLength",
+  "minLength",
+  "items",
+  "additionalItems",
+  "maxItems",
+  "minItems",
+  "uniqueItems",
+  "contains",
+  "maxProperties",
+  "minProperties",
+  "required",
+  "properties",
+  "additionalProperties",
+  "definitions",
+  "$defs",
+  "dependencies",
+  "propertyNames",
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "not",
+  "format",
+  "contentMediaType",
+  "contentEncoding",
+  "if",
+  "then",
+  "else"
+]);
+var validatorCache = /* @__PURE__ */ new Map();
+var draft7MetaschemaValidator;
+function getDraft7MetaschemaValidator() {
+  if (!draft7MetaschemaValidator) {
+    const ajv = new AjvJsonSchemaValidator();
+    draft7MetaschemaValidator = ajv.getValidator({
+      $ref: "http://json-schema.org/draft-07/schema#"
+    });
+  }
+  return draft7MetaschemaValidator;
+}
+function traverseSchema(node2, depth, context, state) {
+  state.nodeCount++;
+  if (state.nodeCount > MAX_SCHEMA_NODES) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema node count exceeds limit of ${MAX_SCHEMA_NODES} nodes`);
+  }
+  if (depth > MAX_SCHEMA_DEPTH) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema depth exceeds limit of ${MAX_SCHEMA_DEPTH}`);
+  }
+  if (typeof node2 !== "object" || node2 === null) {
+    return;
+  }
+  if (state.activeStack.has(node2)) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Schema contains circular references");
+  }
+  state.activeStack.add(node2);
+  try {
+    if (Array.isArray(node2)) {
+      const childContext = context === "data" ? "data" : "schema";
+      for (const item of node2) {
+        traverseSchema(item, depth + 1, childContext, state);
+      }
+      return;
+    }
+    const obj = node2;
+    for (const key of Object.getOwnPropertyNames(obj)) {
+      if (UNSAFE_KEYS.has(key)) {
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema contains forbidden unsafe key: ${key}`);
+      }
+    }
+    for (const key of Object.keys(obj)) {
+      if (UNSAFE_KEYS.has(key)) {
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema contains forbidden unsafe key: ${key}`);
+      }
+    }
+    if (context === "schema") {
+      if (Object.prototype.hasOwnProperty.call(obj, "$id") || Object.prototype.hasOwnProperty.call(obj, "id")) {
+        const idKey = Object.prototype.hasOwnProperty.call(obj, "$id") ? "$id" : "id";
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema keyword '${idKey}' is forbidden`);
+      }
+      if ("pattern" in obj || "patternProperties" in obj) {
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", "pattern and patternProperties are unsupported to prevent regex denial of service");
+      }
+      for (const key of Object.keys(obj)) {
+        if (!DRAFT7_SCHEMA_KEYWORDS.has(key)) {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Unsupported schema keyword: ${key}`);
+        }
+      }
+      if ("$ref" in obj) {
+        const refVal = obj["$ref"];
+        if (typeof refVal !== "string") {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", "$ref must be a string");
+        }
+        if (!refVal.startsWith("#")) {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `External $ref is forbidden: ${refVal}`);
+        }
+        if (refVal.includes("://")) {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Network $ref is forbidden: ${refVal}`);
+        }
+        if (refVal === "#") {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", 'Direct recursive self-reference $ref: "#" is forbidden');
+        }
+      }
+      for (const [key, val] of Object.entries(obj)) {
+        if (key === "properties") {
+          traverseSchema(val, depth + 1, "properties-map", state);
+        } else if (key === "definitions" || key === "$defs") {
+          traverseSchema(val, depth + 1, "definitions-map", state);
+        } else if (key === "dependencies") {
+          traverseSchema(val, depth + 1, "dependencies-map", state);
+        } else if (key === "items" || key === "additionalProperties" || key === "additionalItems" || key === "allOf" || key === "anyOf" || key === "oneOf" || key === "not" || key === "if" || key === "then" || key === "else" || key === "contains" || key === "propertyNames") {
+          traverseSchema(val, depth + 1, "schema", state);
+        } else {
+          traverseSchema(val, depth + 1, "data", state);
+        }
+      }
+    } else if (context === "properties-map" || context === "definitions-map") {
+      for (const val of Object.values(obj)) {
+        traverseSchema(val, depth + 1, "schema", state);
+      }
+    } else if (context === "dependencies-map") {
+      for (const val of Object.values(obj)) {
+        if (Array.isArray(val)) {
+          traverseSchema(val, depth + 1, "data", state);
+        } else {
+          traverseSchema(val, depth + 1, "schema", state);
+        }
+      }
+    } else {
+      for (const val of Object.values(obj)) {
+        traverseSchema(val, depth + 1, "data", state);
+      }
+    }
+  } finally {
+    state.activeStack.delete(node2);
+  }
+}
+function validateOutputSchema(input2) {
+  if (typeof input2 !== "object" || input2 === null || Array.isArray(input2)) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema must be a non-null JSON object");
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(input2);
+  } catch (err) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema must be serializable to JSON: " + (err instanceof Error ? err.message : String(err)));
+  }
+  if (serialized === void 0) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema cannot be undefined");
+  }
+  const byteLength = Buffer.byteLength(serialized, "utf8");
+  if (byteLength > MAX_SCHEMA_BYTES) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema size (${byteLength} bytes) exceeds limit of ${MAX_SCHEMA_BYTES} bytes (64 KiB)`);
+  }
+  const state = { nodeCount: 0, activeStack: /* @__PURE__ */ new Set() };
+  traverseSchema(input2, 1, "schema", state);
+  const metaValidator = getDraft7MetaschemaValidator();
+  const metaOutcome = metaValidator(input2);
+  if (!metaOutcome.valid) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", metaOutcome.errorMessage || "Schema does not conform to JSON Schema Draft-07");
+  }
+  try {
+    const validator = new AjvJsonSchemaValidator();
+    validator.getValidator(input2);
+  } catch (err) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Failed to compile JSON schema offline: " + (err instanceof Error ? err.message : String(err)));
+  }
+  return JSON.parse(serialized);
+}
+function inspectJsonResult(val, depth, state) {
+  state.nodeCount++;
+  if (state.nodeCount > MAX_RESULT_NODES) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result node count exceeds limit of ${MAX_RESULT_NODES} nodes`);
+  }
+  if (depth > MAX_RESULT_DEPTH) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result tree depth exceeds limit of ${MAX_RESULT_DEPTH}`);
+  }
+  if (val === null) {
+    return;
+  }
+  if (val === void 0) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "undefined is not valid JSON");
+  }
+  if (typeof val === "number") {
+    if (!Number.isFinite(val)) {
+      throw new BridgeError("INVALID_STRUCTURED_RESULT", "NaN and Infinity are not valid JSON numbers");
+    }
+    return;
+  }
+  if (typeof val === "string" || typeof val === "boolean") {
+    return;
+  }
+  if (typeof val === "bigint" || typeof val === "symbol" || typeof val === "function") {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `${typeof val} is not valid JSON`);
+  }
+  if (typeof val !== "object") {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Invalid JSON value");
+  }
+  if (state.activeStack.has(val)) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Result contains circular references");
+  }
+  state.activeStack.add(val);
+  try {
+    if (Array.isArray(val)) {
+      for (let i = 0; i < val.length; i++) {
+        if (!(i in val) || val[i] === void 0) {
+          throw new BridgeError("INVALID_STRUCTURED_RESULT", "Sparse arrays or undefined elements are not valid JSON");
+        }
+        inspectJsonResult(val[i], depth + 1, state);
+      }
+      return;
+    }
+    const proto = Object.getPrototypeOf(val);
+    if (proto !== Object.prototype && proto !== null) {
+      throw new BridgeError("INVALID_STRUCTURED_RESULT", "Result must contain only plain JSON objects");
+    }
+    const obj = val;
+    for (const key of Object.getOwnPropertyNames(obj)) {
+      if (UNSAFE_KEYS.has(key)) {
+        throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result contains forbidden unsafe key: ${key}`);
+      }
+      const child = obj[key];
+      if (child === void 0) {
+        throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result property '${key}' has undefined value`);
+      }
+      inspectJsonResult(child, depth + 1, state);
+    }
+  } finally {
+    state.activeStack.delete(val);
+  }
+}
+function validateStructuredResult(schema, value) {
+  if (value === void 0) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result value is required and cannot be undefined");
+  }
+  inspectJsonResult(value, 1, { nodeCount: 0, activeStack: /* @__PURE__ */ new Set() });
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch (err) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result must be serializable JSON: " + (err instanceof Error ? err.message : String(err)));
+  }
+  if (serialized === void 0) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result cannot be undefined or unserializable");
+  }
+  const resultBytes = Buffer.byteLength(serialized, "utf8");
+  if (resultBytes > MAX_RESULT_BYTES) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Structured result size (${resultBytes} bytes) exceeds limit of ${MAX_RESULT_BYTES} bytes (1 MiB)`);
+  }
+  validateOutputSchema(schema);
+  const snapshot = JSON.parse(serialized);
+  const schemaHash = createHash7("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
+  let validatorFn = validatorCache.get(schemaHash);
+  if (!validatorFn) {
+    try {
+      const validator = new AjvJsonSchemaValidator();
+      validatorFn = validator.getValidator(schema);
+      if (validatorCache.size >= MAX_VALIDATOR_CACHE) {
+        const oldestKey = validatorCache.keys().next().value;
+        if (oldestKey !== void 0) {
+          validatorCache.delete(oldestKey);
+        }
+      }
+      validatorCache.set(schemaHash, validatorFn);
+    } catch (err) {
+      throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Failed to compile schema: " + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+  try {
+    const outcome = validatorFn(snapshot);
+    if (!outcome.valid) {
+      throw new BridgeError("INVALID_STRUCTURED_RESULT", outcome.errorMessage || "Structured result does not match schema");
+    }
+  } catch (err) {
+    if (err instanceof BridgeError)
+      throw err;
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result validation failed: " + (err instanceof Error ? err.message : String(err)));
+  }
+  const sha256 = createHash7("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
+  return { value: snapshot, sha256 };
+}
+
+// dist/src/artifacts.js
+import { createHash as createHash8 } from "node:crypto";
+import { createReadStream as createReadStream4 } from "node:fs";
+import { lstat as lstat5, readdir as readdir4 } from "node:fs/promises";
+import { spawn as spawn3 } from "node:child_process";
+import path9 from "node:path";
+var WINDOWS_DEVICE_NAMES2 = /* @__PURE__ */ new Set([
+  "CON",
+  "PRN",
+  "AUX",
+  "NUL",
+  "COM1",
+  "COM2",
+  "COM3",
+  "COM4",
+  "COM5",
+  "COM6",
+  "COM7",
+  "COM8",
+  "COM9",
+  "LPT1",
+  "LPT2",
+  "LPT3",
+  "LPT4",
+  "LPT5",
+  "LPT6",
+  "LPT7",
+  "LPT8",
+  "LPT9",
+  "CONIN$",
+  "CONOUT$"
+]);
+function validArtifactRelative(input2) {
+  if (typeof input2 !== "string" || !input2.trim()) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot be empty");
+  }
+  if (input2.includes(":")) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Colon and Alternate Data Streams are forbidden: " + input2);
+  }
+  if (/[\x00-\x1f\x7f]/.test(input2)) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Control characters and NUL are forbidden: " + input2);
+  }
+  const value = input2.replaceAll("\\", "/");
+  if (value.startsWith("/") || /^[A-Za-z]:/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(input2)) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path must be a relative path: " + input2);
+  }
+  if (value.endsWith("/")) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path must point to a file, not a directory: " + input2);
+  }
+  const parts = value.split("/");
+  if (parts.some((part) => !part || part === "." || part === "..")) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot contain traversal elements (. or ..): " + input2);
+  }
+  for (const part of parts) {
+    if (/[. ]$/.test(part)) {
+      throw new BridgeError("INVALID_ARTIFACT_PATH", "Path segment cannot end with a dot or space: " + input2);
+    }
+    if (/[<>"|?*]/.test(part)) {
+      throw new BridgeError("INVALID_ARTIFACT_PATH", "Invalid path characters in segment: " + input2);
+    }
+    const base = part.split(".")[0].toUpperCase();
+    if (WINDOWS_DEVICE_NAMES2.has(base)) {
+      throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot contain Windows device name: " + input2);
+    }
+    if (part.toLowerCase() === ".git") {
+      throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path cannot contain .git components: " + input2);
+    }
+    if (part.toLowerCase() === ".agents") {
+      throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path cannot contain .agents components: " + input2);
+    }
+  }
+  return value;
+}
+var artifactPathSchema = external_exports.string().min(1).max(1e3).refine((val) => {
+  try {
+    validArtifactRelative(val);
+    return true;
+  } catch {
+    return false;
+  }
+}, "Artifact path must be a valid project-relative path");
+var artifactPathsSchema = external_exports.array(artifactPathSchema).min(1).max(100).refine((paths2) => {
+  try {
+    const normalizedLower = paths2.map((p) => validArtifactRelative(p).toLowerCase());
+    return new Set(normalizedLower).size === paths2.length;
+  } catch {
+    return false;
+  }
+}, "Artifact paths must be unique (including case aliases)");
+var artifactReferenceSchema = external_exports.object({
+  path: external_exports.string().min(1).max(1e3),
+  sha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  bytes: external_exports.number().int().nonnegative()
+}).strict();
+async function git2(cwd, args, input2, allowedCodes = [0]) {
+  return new Promise((resolve, reject) => {
+    const child = spawn3("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const chunks = [];
+    let length = 0;
+    let stderr = "";
+    let overflow = false;
+    child.stdout.on("data", (chunk) => {
+      length += chunk.length;
+      if (length > 1e7) {
+        overflow = true;
+        child.kill();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (overflow)
+        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      else if (!allowedCodes.includes(code ?? -1))
+        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
+      else
+        resolve(Buffer.concat(chunks));
+    });
+    child.stdin.end(input2);
+  });
+}
+function splitNull2(bytes) {
+  return bytes.toString("utf8").split("\0").filter(Boolean);
+}
+async function verifyCopyRoot(copyDirectory) {
+  let rootStat;
+  try {
+    rootStat = await lstat5(copyDirectory);
+  } catch (err) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "Cannot access copy directory: " + (err instanceof Error ? err.message : String(err)));
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "Copy directory cannot be a symbolic link or replaced directory");
+  }
+}
+async function verifyExactDiskCase(rootDir, relativePath) {
+  const segments = relativePath.split("/");
+  let current = rootDir;
+  for (const seg of segments) {
+    let entries;
+    try {
+      entries = await readdir4(current);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
+      }
+      throw err;
+    }
+    if (!entries.includes(seg)) {
+      const lower = seg.toLowerCase();
+      const match = entries.find((e) => e.toLowerCase() === lower);
+      if (match) {
+        throw new BridgeError("INVALID_ARTIFACT_PATH", `Path case alias mismatch: requested '${seg}', disk has '${match}'`);
+      }
+      throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
+    }
+    current = path9.join(current, seg);
+  }
+  return current;
+}
+async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS) {
+  await verifyCopyRoot(project.copyDirectory);
+  const parsed = artifactPathsSchema.safeParse(paths2);
+  if (!parsed.success) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Invalid artifact paths: " + parsed.error.issues.map((i) => i.message).join("; "));
+  }
+  const normalizedPaths = paths2.map(validArtifactRelative);
+  if (project.providedSkills) {
+    for (const skill of project.providedSkills) {
+      for (const f of skill.files) {
+        for (const p of normalizedPaths) {
+          if (f.path.toLowerCase() === p.toLowerCase()) {
+            throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path refers to a provided skill file: " + p);
+          }
+        }
+      }
+    }
+  }
+  const stdinBuf = Buffer.from(normalizedPaths.join("\0") + "\0");
+  const ignoreOutput = await git2(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
+  const ignoredSet = new Set(splitNull2(ignoreOutput));
+  for (const p of normalizedPaths) {
+    if (ignoredSet.has(p)) {
+      throw new BridgeError("IGNORED_ARTIFACT_PATH", "Artifact path is ignored by repository rules: " + p);
+    }
+  }
+  let totalBytes = 0;
+  const references = [];
+  for (const relative of normalizedPaths) {
+    let filePath;
+    try {
+      filePath = await checkedPath(project.copyDirectory, relative, true);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relative);
+      }
+      throw err;
+    }
+    await verifyExactDiskCase(project.copyDirectory, relative);
+    const st = await lstat5(filePath);
+    if (!st.isFile() || st.isSymbolicLink()) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative);
+    }
+    if (st.size > limits.maxCopyBytes) {
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size exceeds copy limit of ${limits.maxCopyBytes} bytes`);
+    }
+    const hasher = createHash8("sha256");
+    let fileBytes = 0;
+    for await (const chunk of createReadStream4(filePath)) {
+      fileBytes += chunk.length;
+      totalBytes += chunk.length;
+      if (totalBytes > limits.maxCopyBytes) {
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Total artifact bytes exceed limit of ${limits.maxCopyBytes} bytes`);
+      }
+      hasher.update(chunk);
+    }
+    const sha256 = hasher.digest("hex");
+    references.push({
+      path: relative,
+      sha256,
+      bytes: fileBytes
+    });
+  }
+  return references;
+}
+async function readArtifact(project, reference, expectedSha256, offset = 0, limit = 65536, maxBytes = DEFAULT_PROJECT_LIMITS.maxCopyBytes) {
+  const parsedRef = artifactReferenceSchema.safeParse(reference);
+  if (!parsedRef.success) {
+    throw new BridgeError("INVALID_ARTIFACT_REFERENCE", "Invalid artifact reference: " + parsedRef.error.message);
+  }
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new BridgeError("INVALID_CURSOR", "offset must be a non-negative safe integer");
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 65536) {
+    throw new BridgeError("INVALID_CURSOR", "limit must be an integer between 1 and 65536");
+  }
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+    throw new BridgeError("INVALID_CURSOR", "maxBytes must be a positive integer");
+  }
+  if (offset > reference.bytes) {
+    throw new BridgeError("INVALID_CURSOR", `offset ${offset} exceeds reference bytes ${reference.bytes}`);
+  }
+  if (typeof expectedSha256 !== "string" || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    throw new BridgeError("INVALID_ARTIFACT_HASH", "expectedSha256 must be a 64-character lowercase hex string");
+  }
+  if (expectedSha256 !== reference.sha256) {
+    throw new BridgeError("CONTENT_CHANGED", "expectedSha256 does not match reference sha256");
+  }
+  await verifyCopyRoot(project.copyDirectory);
+  const relative = validArtifactRelative(reference.path);
+  let filePath;
+  try {
+    filePath = await checkedPath(project.copyDirectory, relative, true);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relative);
+    }
+    throw err;
+  }
+  await verifyExactDiskCase(project.copyDirectory, relative);
+  const st = await lstat5(filePath);
+  if (!st.isFile() || st.isSymbolicLink()) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative);
+  }
+  if (st.size > maxBytes) {
+    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size (${st.size} bytes) exceeds limit of ${maxBytes} bytes`);
+  }
+  if (st.size !== reference.bytes) {
+    throw new BridgeError("CONTENT_CHANGED", `Artifact size on disk (${st.size}) does not match reference bytes (${reference.bytes})`);
+  }
+  const windowStart = offset;
+  const windowEnd = Math.min(reference.bytes, offset + limit);
+  const windowLen = Math.max(0, windowEnd - windowStart);
+  const windowBuf = Buffer.alloc(windowLen);
+  let streamBytes = 0;
+  const hasher = createHash8("sha256");
+  const stream = createReadStream4(filePath);
+  try {
+    for await (const chunk of stream) {
+      const chunkBuf = chunk;
+      const chunkStart = streamBytes;
+      const chunkEnd = streamBytes + chunkBuf.length;
+      streamBytes = chunkEnd;
+      if (streamBytes > maxBytes) {
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact exceeded maximum byte limit (${maxBytes}) during reading`);
+      }
+      if (streamBytes > reference.bytes) {
+        throw new BridgeError("CONTENT_CHANGED", "Artifact grew beyond reference bytes during reading");
+      }
+      hasher.update(chunkBuf);
+      const overlapStart = Math.max(chunkStart, windowStart);
+      const overlapEnd = Math.min(chunkEnd, windowEnd);
+      if (overlapStart < overlapEnd) {
+        const slice = chunkBuf.subarray(overlapStart - chunkStart, overlapEnd - chunkStart);
+        slice.copy(windowBuf, overlapStart - windowStart);
+      }
+    }
+  } finally {
+    stream.destroy();
+  }
+  if (streamBytes !== reference.bytes) {
+    throw new BridgeError("CONTENT_CHANGED", `Artifact size changed during reading (expected ${reference.bytes}, observed ${streamBytes})`);
+  }
+  const actualSha256 = hasher.digest("hex");
+  if (actualSha256 !== expectedSha256) {
+    throw new BridgeError("CONTENT_CHANGED", "Artifact content on disk has changed; sha256 mismatch");
+  }
+  const content = windowBuf.toString("base64");
+  const nextOffset = windowEnd;
+  const hasMore = windowEnd < reference.bytes;
+  return {
+    path: reference.path,
+    sha256: actualSha256,
+    bytes: reference.bytes,
+    offset,
+    nextOffset,
+    hasMore,
+    encoding: "base64",
+    content,
+    offsetUnit: "bytes"
+  };
+}
 
 // dist/src/mcp-server.js
 function response(value) {
@@ -39125,7 +39847,9 @@ function createMcpServer(adapter, tasks) {
     deliveryMode: deliveryModeSchema.optional(),
     mode: external_exports.enum(["write", "read-only"]).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
-    role: configuredRoleSchema.optional()
+    role: configuredRoleSchema.optional(),
+    outputSchema: structuredResultInputSchema.optional(),
+    artifactPaths: artifactPathsSchema.optional()
   };
   if (toolEnabled(tasks.toolProfile, "antigravity_run"))
     server.registerTool("antigravity_run", {
@@ -39208,7 +39932,7 @@ function createMcpServer(adapter, tasks) {
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path13, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path13, offset, limit))());
+    }, async ({ taskId, expectedSha256, path: path14, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path14, offset, limit))());
   if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
     server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
@@ -39368,12 +40092,16 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       const result = tasks.result(taskId);
       if (includeResult !== false && result.task.deliveryMode !== "messages")
         return { ...result, task: clientTask(result.task) };
-      const { prompt, result: output2, includedFiles, report: report2, handoff: handoff2, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, ...metadata } = result.task;
+      const { prompt, result: output2, includedFiles, report: report2, handoff: handoff2, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, outputSchema, artifactPaths, structuredResult, artifacts, ...metadata } = result.task;
       void messages;
       void messageCursor;
       void inbox;
       void dispatching;
       void sourceMessage;
+      void outputSchema;
+      void artifactPaths;
+      void structuredResult;
+      void artifacts;
       return {
         ...result,
         task: result.task.deliveryMode === "messages" ? compactTask(result.task) : metadata,
@@ -39381,7 +40109,9 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
         reportAvailable: report2 !== void 0,
         handoffAvailable: handoff2 !== void 0,
         roleDefinitionAvailable: roleDefinition !== void 0,
-        includedFileCount: includedFiles?.length ?? 0
+        includedFileCount: includedFiles?.length ?? 0,
+        structuredResultAvailable: result.task.structuredResult !== void 0,
+        artifactCount: result.task.artifacts?.length
       };
     })());
   if (toolEnabled(tasks.toolProfile, "antigravity_cancel"))
@@ -39400,12 +40130,42 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
       inputSchema: {},
       annotations: readOnly
     }, safe(() => ({ sessions: tasks.sessions(), scope: "local bridge state" })));
+  if (toolEnabled(tasks.toolProfile, "antigravity_read_structured_result"))
+    server.registerTool("antigravity_read_structured_result", {
+      outputSchema: outputSchemas.antigravity_read_structured_result,
+      title: "Read structured result in chunks",
+      description: "Read the independently validated structured result JSON in bounded chunks. Completed tasks only. Bind reads to contentSha256 and follow nextOffset until hasMore is false.",
+      inputSchema: { taskId: external_exports.string().uuid(), expectedContentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
+      annotations: readOnly
+    }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks.readStructuredResult(taskId, offset, limit, expectedContentSha256))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_artifacts"))
+    server.registerTool("antigravity_artifacts", {
+      outputSchema: outputSchemas.antigravity_artifacts,
+      title: "List recorded task artifacts",
+      description: "List artifacts recorded for a completed task with their SHA-256 and byte sizes.",
+      inputSchema: { taskId: external_exports.string().uuid() },
+      annotations: readOnly
+    }, async ({ taskId }) => safe(() => tasks.listArtifacts(taskId))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_read_artifact"))
+    server.registerTool("antigravity_read_artifact", {
+      outputSchema: outputSchemas.antigravity_read_artifact,
+      title: "Read artifact in bounded chunks",
+      description: "Read recorded artifact bytes encoded as base64 in bounded chunks. Bound reads to the recorded artifact SHA-256.",
+      inputSchema: {
+        taskId: external_exports.string().uuid(),
+        path: external_exports.string().min(1).max(1e3),
+        expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+        offset: external_exports.number().int().min(0).optional(),
+        limit: external_exports.number().int().min(1).max(65536).optional()
+      },
+      annotations: readOnly
+    }, async ({ taskId, path: path14, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path14, expectedSha256, offset, limit))());
   return server;
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash10, randomUUID as randomUUID6 } from "node:crypto";
-import { spawn as spawn5 } from "node:child_process";
+import { createHash as createHash12, randomUUID as randomUUID7 } from "node:crypto";
+import { spawn as spawn6 } from "node:child_process";
 
 // dist/src/logger.js
 function logTaskEvent(taskId, type, data) {
@@ -39511,9 +40271,9 @@ var LineParser = class {
 };
 
 // dist/src/state-store.js
-import { randomUUID as randomUUID3 } from "node:crypto";
-import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import path9 from "node:path";
+import { randomUUID as randomUUID4 } from "node:crypto";
+import { lstatSync as lstatSync2, mkdirSync as mkdirSync2, readFileSync, readdirSync, renameSync, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import path10 from "node:path";
 import os4 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
@@ -39541,6 +40301,10 @@ var snapshotSchema = external_exports.object({
     messageCursor: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     roleDefinition: roleDefinitionSchema.optional(),
     providedSkills: stagedSkillsSchema.optional(),
+    outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+    artifactPaths: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100).optional(),
+    structuredResult: external_exports.object({ value: external_exports.unknown(), sha256: external_exports.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
+    artifacts: external_exports.array(external_exports.object({ path: external_exports.string().min(1).max(1e3), sha256: external_exports.string().regex(/^[a-f0-9]{64}$/), bytes: external_exports.number().int().nonnegative() }).strict()).max(100).optional(),
     continuationTaskId: external_exports.string().uuid().optional(),
     parentTaskId: external_exports.string().uuid().optional(),
     sourceMessage: external_exports.object({ taskId: external_exports.string().uuid(), messageId: external_exports.string().uuid() }).strict().optional(),
@@ -39559,7 +40323,12 @@ var snapshotSchema = external_exports.object({
       }).strict()
     }).strict()).max(20).optional()
   }).passthrough(),
-  options: external_exports.object({ prompt: external_exports.string(), workingDirectory: external_exports.string() }).passthrough(),
+  options: external_exports.object({
+    prompt: external_exports.string(),
+    workingDirectory: external_exports.string(),
+    outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
+    artifactPaths: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100).optional()
+  }).passthrough(),
   project: external_exports.object({
     sourceDirectory: external_exports.string(),
     copyDirectory: external_exports.string(),
@@ -39597,21 +40366,21 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path9.isAbsolute(directory))
+    if (!path10.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
-    mkdirSync(directory, { recursive: true, mode: 448 });
-    if (lstatSync(directory).isSymbolicLink())
+    mkdirSync2(directory, { recursive: true, mode: 448 });
+    if (lstatSync2(directory).isSymbolicLink())
       throw new BridgeError("INVALID_STATE_DIRECTORY", "State directory cannot be a link");
   }
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path9.join(this.directory, taskId + ".json");
+    return path10.join(this.directory, taskId + ".json");
   }
   loadModel() {
-    const file3 = path9.join(this.directory, "model-selection.json");
+    const file3 = path10.join(this.directory, "model-selection.json");
     try {
-      const stat3 = lstatSync(file3);
+      const stat3 = lstatSync2(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
         throw new Error("Unsafe model selection");
       return modelSelectionSchema.parse(JSON.parse(readFileSync(file3, "utf8")));
@@ -39622,9 +40391,9 @@ var StateStore = class {
     }
   }
   loadSandboxPolicy() {
-    const file3 = path9.join(this.directory, "sandbox-policy.json");
+    const file3 = path10.join(this.directory, "sandbox-policy.json");
     try {
-      const stat3 = lstatSync(file3);
+      const stat3 = lstatSync2(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > maxSandboxPolicyFileBytes)
         throw new Error("Unsafe sandbox policy");
       return parseSandboxPolicySnapshot(JSON.parse(readFileSync(file3, "utf8")));
@@ -39643,11 +40412,11 @@ var StateStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
-    const target = path9.join(this.directory, "sandbox-policy.json");
-    const temporary = target + "." + randomUUID3() + ".tmp";
+    const target = path10.join(this.directory, "sandbox-policy.json");
+    const temporary = target + "." + randomUUID4() + ".tmp";
     try {
       this.loadSandboxPolicy();
-      writeFileSync(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
+      writeFileSync2(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
       replaceStateFile(temporary, target);
     } finally {
       rmSync(temporary, { force: true });
@@ -39656,11 +40425,11 @@ var StateStore = class {
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path9.join(this.directory, "model-selection.json");
-    const temporary = target + "." + randomUUID3() + ".tmp";
+    const target = path10.join(this.directory, "model-selection.json");
+    const temporary = target + "." + randomUUID4() + ".tmp";
     try {
       this.loadModel();
-      writeFileSync(temporary, JSON.stringify(selection), { flag: "wx", mode: 384, flush: true });
+      writeFileSync2(temporary, JSON.stringify(selection), { flag: "wx", mode: 384, flush: true });
       replaceStateFile(temporary, target);
     } finally {
       rmSync(temporary, { force: true });
@@ -39669,10 +40438,10 @@ var StateStore = class {
   }
   save(task2) {
     const target = this.file(task2.record.taskId);
-    const temporary = target + "." + randomUUID3() + ".tmp";
+    const temporary = target + "." + randomUUID4() + ".tmp";
     const snapshot = { ...task2, version: 1, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     try {
-      writeFileSync(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
+      writeFileSync2(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
       replaceStateFile(temporary, target);
     } finally {
       rmSync(temporary, { force: true });
@@ -39680,8 +40449,8 @@ var StateStore = class {
   }
   load() {
     return readdirSync(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path9.join(this.directory, name);
-      if (lstatSync(file3).isSymbolicLink() || lstatSync(file3).size > 7e7)
+      const file3 = path10.join(this.directory, name);
+      if (lstatSync2(file3).isSymbolicLink() || lstatSync2(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
       try {
@@ -39689,7 +40458,7 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path9.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path10.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       const messages = data.record.messages ?? [];
@@ -39701,7 +40470,7 @@ var StateStore = class {
       }
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path9.isAbsolute(directory) || path9.relative(os4.tmpdir(), path9.dirname(directory)) !== "" || !path9.basename(directory).startsWith(prefix)) {
+          if (!path10.isAbsolute(directory) || path10.relative(os4.tmpdir(), path10.dirname(directory)) !== "" || !path10.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -39722,10 +40491,10 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path9.join(this.directory, name + ".lock");
+    const file3 = path10.join(this.directory, name + ".lock");
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        writeFileSync(file3, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
+        writeFileSync2(file3, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
         return () => rmSync(file3, { force: true });
       } catch (error62) {
         if (error62.code !== "EEXIST")
@@ -39746,9 +40515,9 @@ var StateStore = class {
 };
 
 // dist/src/chunks.js
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash9 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash7("sha256").update(text).digest("hex");
+  const sha256 = createHash9("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -39777,10 +40546,10 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 import { setTimeout as delay2 } from "node:timers/promises";
 
 // dist/src/windows-executor.js
-import { spawn as spawn4 } from "node:child_process";
-import { lstat as lstat7, mkdir as mkdir6, mkdtemp as mkdtemp2, realpath as realpath4, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
-import { randomUUID as randomUUID5 } from "node:crypto";
-import path12 from "node:path";
+import { spawn as spawn5 } from "node:child_process";
+import { lstat as lstat8, mkdir as mkdir6, mkdtemp as mkdtemp2, realpath as realpath4, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
+import { randomUUID as randomUUID6 } from "node:crypto";
+import path13 from "node:path";
 import os5 from "node:os";
 
 // dist/src/windows-helper-source.js
@@ -40747,16 +41516,16 @@ internal static class WindowsTestRunner
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
-import { createHash as createHash9 } from "node:crypto";
-import { chmod, lstat as lstat6, mkdir as mkdir5, open as open3, readdir as readdir5, unlink as unlink2 } from "node:fs/promises";
-import path11 from "node:path";
+import { createHash as createHash11 } from "node:crypto";
+import { chmod, lstat as lstat7, mkdir as mkdir5, open as open3, readdir as readdir6, unlink as unlink2 } from "node:fs/promises";
+import path12 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash8, randomUUID as randomUUID4 } from "node:crypto";
-import { spawn as spawn3 } from "node:child_process";
+import { createHash as createHash10, randomUUID as randomUUID5 } from "node:crypto";
+import { spawn as spawn4 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat5, mkdir as mkdir4, open as open2, readFile as readFile3, readdir as readdir4, rename, rm as rm3, unlink } from "node:fs/promises";
-import path10 from "node:path";
+import { lstat as lstat6, mkdir as mkdir4, open as open2, readFile as readFile3, readdir as readdir5, rename, rm as rm3, unlink } from "node:fs/promises";
+import path11 from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 // dist/src/portable-node-descriptor.js
@@ -40833,7 +41602,7 @@ function sameFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
 }
 function assetPath(root, descriptor, asset) {
-  return path10.join(root, cacheLeafName(descriptor), asset.fileName);
+  return path11.join(root, cacheLeafName(descriptor), asset.fileName);
 }
 function cacheLeafName(descriptor) {
   return descriptor.buildId + "-" + descriptor.assets.node.sha256;
@@ -40873,11 +41642,11 @@ function absoluteCacheDirectory(value) {
     if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
       fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
     }
-  } else if (!path10.isAbsolute(value)) {
+  } else if (!path11.isAbsolute(value)) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
   }
-  const absolute = path10.resolve(value);
-  if (absolute === path10.parse(absolute).root)
+  const absolute = path11.resolve(value);
+  if (absolute === path11.parse(absolute).root)
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
@@ -40888,7 +41657,7 @@ async function inspectReparsePoints(paths2) {
   let stdout = "", stdoutChars = 0, stderrChars = 0;
   let stopReason;
   const result = await new Promise((resolve) => {
-    const child = spawn3(windowsPowerShell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", reparsePointCommand], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn4(windowsPowerShell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", reparsePointCommand], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
     let spawnError = false;
     const stop = (reason) => {
       if (!stopReason) {
@@ -40930,7 +41699,7 @@ async function inspectCachePath(value, create = false) {
   await inspectReparsePoints([absolute]);
   if (create)
     await mkdir4(absolute, { recursive: true, mode: 448 });
-  const info = await lstat5(absolute).catch((error62) => {
+  const info = await lstat6(absolute).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime has not been prepared");
     throw error62;
@@ -40941,7 +41710,7 @@ async function inspectCachePath(value, create = false) {
 }
 async function regularCacheFile(file3, expectedSize) {
   await inspectReparsePoints([file3]);
-  const info = await lstat5(file3).catch((error62) => {
+  const info = await lstat6(file3).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is incomplete; run --prepare-windows-runtime");
     throw error62;
@@ -40961,7 +41730,7 @@ async function sha256File3(file3, expectedSize) {
     const opened = await handle.stat();
     if (!sameFile(opened, before))
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
-    const hash3 = createHash8("sha256");
+    const hash3 = createHash10("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
     while (offset < size) {
@@ -40986,9 +41755,9 @@ async function verifyAsset(root, descriptor, asset) {
   }
 }
 async function verifyCacheLayout(root, descriptor) {
-  const leaf = path10.join(root, cacheLeafName(descriptor));
+  const leaf = path11.join(root, cacheLeafName(descriptor));
   const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
-  const entries = await readdir4(leaf, { withFileTypes: true });
+  const entries = await readdir5(leaf, { withFileTypes: true });
   if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache build directory has an unexpected entry." + cacheRepair);
   }
@@ -40999,8 +41768,8 @@ async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableN
   const pinned = requireDescriptor(descriptor);
   const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root);
-  const leaf = path10.join(root, cacheLeafName(pinned));
-  const leafInfo = await lstat5(leaf).catch((error62) => {
+  const leaf = path11.join(root, cacheLeafName(pinned));
+  const leafInfo = await lstat6(leaf).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
     throw error62;
@@ -41050,7 +41819,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
     const file3 = await open2(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
     try {
       const reader = response2.body.getReader();
-      const hash3 = createHash8("sha256");
+      const hash3 = createHash10("sha256");
       let bytes = 0;
       for (; ; ) {
         const item = await reader.read();
@@ -41080,11 +41849,11 @@ async function downloadAsset(asset, destination, fetchImpl) {
   }
 }
 async function removeOwnedTemporary(root, temporary) {
-  if (path10.dirname(temporary) !== root || !path10.basename(temporary).startsWith(".portable-node-")) {
+  if (path11.dirname(temporary) !== root || !path11.basename(temporary).startsWith(".portable-node-")) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
   }
   await inspectReparsePoints([temporary]);
-  const info = await lstat5(temporary).catch((error62) => {
+  const info = await lstat6(temporary).catch((error62) => {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
@@ -41105,7 +41874,7 @@ function processAlive2(pid) {
 }
 async function recoverDeadPreparationLock(file3) {
   await inspectReparsePoints([file3]);
-  const before = await lstat5(file3).catch((error62) => {
+  const before = await lstat6(file3).catch((error62) => {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
@@ -41124,14 +41893,14 @@ async function recoverDeadPreparationLock(file3) {
   const pid = typeof owner === "object" && owner !== null ? owner.pid : void 0;
   if (!Number.isSafeInteger(pid) || typeof pid !== "number" || pid < 1 || processAlive2(pid))
     return false;
-  const after = await lstat5(file3).catch(() => void 0);
+  const after = await lstat6(file3).catch(() => void 0);
   if (!after || !sameFile(before, after))
     return false;
   await unlink(file3);
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
-  const file3 = path10.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  const file3 = path11.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
       const handle = await open2(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
@@ -41140,7 +41909,7 @@ async function acquirePreparationLock(root, descriptor) {
       await handle.close();
       return async () => {
         await inspectReparsePoints([file3]);
-        const current = await lstat5(file3).catch((error62) => {
+        const current = await lstat6(file3).catch((error62) => {
           if (error62.code === "ENOENT")
             return void 0;
           throw error62;
@@ -41182,7 +41951,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path10.join(root, ".portable-node-" + randomUUID4());
+  const temporary = path11.join(root, ".portable-node-" + randomUUID5());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -41194,16 +41963,16 @@ async function preparePortableNodeRuntime(options) {
     await inspectReparsePoints([temporary]);
     const fetchImpl = options.fetch ?? globalThis.fetch;
     for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
-      await downloadAsset(asset, path10.join(temporary, asset.fileName), fetchImpl);
+      await downloadAsset(asset, path11.join(temporary, asset.fileName), fetchImpl);
     }
-    const final = path10.join(root, cacheLeafName(descriptor));
+    const final = path11.join(root, cacheLeafName(descriptor));
     try {
       await rename(temporary, final);
     } catch (error62) {
       if (error62.code !== "EEXIST" && error62.code !== "EPERM")
         throw error62;
       try {
-        await lstat5(final);
+        await lstat6(final);
       } catch {
         throw error62;
       }
@@ -41253,11 +42022,11 @@ function fail2(code, message) {
   throw new BridgeError(code, message);
 }
 function canonicalKey2(file3) {
-  return path11.resolve(file3).toLocaleLowerCase("en-US");
+  return path12.resolve(file3).toLocaleLowerCase("en-US");
 }
 function isUnsafeWindowsPath(value) {
   const normalized = value.replaceAll("/", "\\");
-  const basename = path11.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const basename = path12.win32.basename(normalized).replace(/[ .]+$/u, "");
   const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
   return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename) || withoutDrive.includes(":");
 }
@@ -41269,7 +42038,7 @@ function validateWindowsCommand(command2) {
   if (normalized.split("\\").some((part) => part === "." || part === "..")) {
     fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
   }
-  if (!path11.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+  if (!path12.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
     fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
   }
 }
@@ -41279,13 +42048,13 @@ function validateLimits(limits) {
   }
 }
 async function assertSafePath(file3) {
-  const absolute = path11.resolve(file3);
-  const parsed = path11.parse(absolute);
-  const parts = path11.relative(parsed.root, absolute).split(path11.sep).filter(Boolean);
+  const absolute = path12.resolve(file3);
+  const parsed = path12.parse(absolute);
+  const parts = path12.relative(parsed.root, absolute).split(path12.sep).filter(Boolean);
   let current = parsed.root;
   for (const part of parts) {
-    current = path11.join(current, part);
-    const info = await lstat6(current);
+    current = path12.join(current, part);
+    const info = await lstat7(current);
     if (info.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
   }
@@ -41295,7 +42064,7 @@ function isSameFile(observed, expected) {
 }
 async function regularFile(file3, allowMultipleLinks = false) {
   await assertSafePath(file3);
-  const info = await lstat6(file3);
+  const info = await lstat7(file3);
   if (!info.isFile() || info.isSymbolicLink())
     fail2("UNSAFE_RUNTIME_PATH", "Runtime files must be regular files: " + file3);
   if (!allowMultipleLinks && info.nlink > 1)
@@ -41328,11 +42097,11 @@ async function readBoundedFile(file3, limit) {
   }
 }
 function commandNames(executable) {
-  const basename = path11.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename = path12.win32.basename(executable).toLocaleLowerCase("en-US");
   if (basename === "npm" || basename === "npm.cmd") {
     return { kind: "npm", names: [basename === "npm" ? executable + ".cmd" : executable] };
   }
-  const extension = path11.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path12.extname(executable).toLocaleLowerCase("en-US");
   if (extension === ".cmd" || extension === ".bat") {
     fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
   }
@@ -41343,12 +42112,12 @@ function commandNames(executable) {
 }
 async function resolveCommand(executable) {
   const requested = commandNames(executable);
-  const directories = path11.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path11.delimiter).filter((directory) => directory && path11.isAbsolute(directory));
+  const directories = path12.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path12.delimiter).filter((directory) => directory && path12.isAbsolute(directory));
   for (const directory of directories) {
     for (const name of requested.names) {
-      const candidate = path11.isAbsolute(name) ? path11.resolve(name) : path11.resolve(directory, name);
+      const candidate = path12.isAbsolute(name) ? path12.resolve(name) : path12.resolve(directory, name);
       try {
-        const info = await lstat6(candidate);
+        const info = await lstat7(candidate);
         if (info.isSymbolicLink())
           fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + candidate);
         if (!info.isFile())
@@ -41365,17 +42134,17 @@ async function resolveCommand(executable) {
   fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
 }
 function stagedPath(runtime, relative) {
-  const target = path11.resolve(runtime, ...relative);
-  const prefix = runtime.endsWith(path11.sep) ? runtime : runtime + path11.sep;
+  const target = path12.resolve(runtime, ...relative);
+  const prefix = runtime.endsWith(path12.sep) ? runtime : runtime + path12.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   return target;
 }
 async function stageDirectory(directory, state) {
-  const target = path11.resolve(directory);
+  const target = path12.resolve(directory);
   if (target === state.runtime)
     return;
-  const prefix = state.runtime.endsWith(path11.sep) ? state.runtime : state.runtime + path11.sep;
+  const prefix = state.runtime.endsWith(path12.sep) ? state.runtime : state.runtime + path12.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   const targetKey = canonicalKey2(target);
@@ -41383,7 +42152,7 @@ async function stageDirectory(directory, state) {
     return;
   if (state.targets.has(targetKey))
     fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
-  const parent = path11.dirname(target);
+  const parent = path12.dirname(target);
   if (parent === target)
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   await stageDirectory(parent, state);
@@ -41394,8 +42163,8 @@ async function stageDirectory(directory, state) {
   state.directories.add(targetKey);
 }
 async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path11.resolve(sourcePath);
-  const target = path11.resolve(targetPath);
+  const source = path12.resolve(sourcePath);
+  const target = path12.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
   const previousTarget = state.sources.get(sourceKey);
@@ -41412,7 +42181,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
     fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
   }
-  await stageDirectory(path11.dirname(target), state);
+  await stageDirectory(path12.dirname(target), state);
   const sourceHandle = await open3(source, "r");
   let targetHandle;
   let created = false;
@@ -41436,7 +42205,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
     targetHandle = await open3(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
     created = true;
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
-    const hash3 = expectedSha256 ? createHash9("sha256") : void 0;
+    const hash3 = expectedSha256 ? createHash11("sha256") : void 0;
     let offset = 0;
     while (offset < expected.size) {
       const length = Math.min(buffer.length, expected.size - offset);
@@ -41481,7 +42250,7 @@ async function hashStagedFile(file3) {
     const opened = await handle.stat();
     if (!isSameFile(opened, expected))
       fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
-    const hash3 = createHash9("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = createHash11("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
     let offset = 0;
     while (offset < expected.size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
@@ -41504,14 +42273,14 @@ async function stageNativeExecutable(source, destination, state, expectedSha256)
   }
   if (expectedSha256)
     return executable;
-  const directory = path11.dirname(source);
-  const siblings = await readdir5(directory, { withFileTypes: true });
+  const directory = path12.dirname(source);
+  const siblings = await readdir6(directory, { withFileTypes: true });
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     if (!/\.dll$/iu.test(entry.name))
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path11.join(directory, entry.name), path11.join(path11.dirname(destination), entry.name), state, true);
+    await stageFile(path12.join(directory, entry.name), path12.join(path12.dirname(destination), entry.name), state, true);
   }
   return executable;
 }
@@ -41531,13 +42300,13 @@ function npmrcContainsSecret(contents) {
 }
 async function stageNpmDirectory(source, destination, state, relative = []) {
   await stageDirectory(destination, state);
-  const entries = await readdir5(source, { withFileTypes: true });
+  const entries = await readdir6(source, { withFileTypes: true });
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     const childRelative = [...relative, entry.name];
     if (npmPathIsOmitted(childRelative))
       continue;
-    const childSource = path11.join(source, entry.name);
-    const childDestination = path11.join(destination, entry.name);
+    const childSource = path12.join(source, entry.name);
+    const childDestination = path12.join(destination, entry.name);
     if (entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
     if (entry.isDirectory()) {
@@ -41555,7 +42324,7 @@ async function stageNpmDirectory(source, destination, state, relative = []) {
   }
 }
 async function stageSystemCmd(systemRoot, runtime, state) {
-  const source = path11.join(systemRoot, "System32", "cmd.exe");
+  const source = path12.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
 async function stageNpm(launcher, runtime, state, args, portableNode) {
@@ -41563,11 +42332,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
   }
-  const nodeDirectory = path11.dirname(launcher);
-  const nodeSource = path11.join(nodeDirectory, "node.exe");
-  const npmSource = path11.join(nodeDirectory, "node_modules", "npm");
-  const manifestPath = path11.join(npmSource, "package.json");
-  const cliSource = path11.join(npmSource, "bin", "npm-cli.js");
+  const nodeDirectory = path12.dirname(launcher);
+  const nodeSource = path12.join(nodeDirectory, "node.exe");
+  const npmSource = path12.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path12.join(npmSource, "package.json");
+  const cliSource = path12.join(npmSource, "bin", "npm-cli.js");
   let manifest;
   try {
     manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
@@ -41587,11 +42356,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
   const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  if (!path11.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+  if (!path12.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
-  return { executable: node2, args: [cli, ...args], pathEntries: [path11.dirname(node2)], comspec, portableNode: portableNode?.identity };
+  return { executable: node2, args: [cli, ...args], pathEntries: [path12.dirname(node2)], comspec, portableNode: portableNode?.identity };
 }
 async function hostNodeIdentity(file3) {
   const [candidate, host] = await Promise.all([regularFile(file3), regularFile(process.execPath)]);
@@ -41612,21 +42381,21 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
   validateWindowsCommand(command2);
   validateLimits(limits);
-  const runtime = path11.resolve(runtimeDirectory);
+  const runtime = path12.resolve(runtimeDirectory);
   await assertSafePath(runtime);
-  const runtimeInfo = await lstat6(runtime);
-  if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir5(runtime)).length !== 0) {
+  const runtimeInfo = await lstat7(runtime);
+  if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir6(runtime)).length !== 0) {
     fail2("UNSAFE_RUNTIME_PATH", "Windows runtime staging requires an empty owned directory");
   }
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
-    const adjacentNode = path11.join(path11.dirname(resolved.file), "node.exe");
+    const adjacentNode = path12.join(path12.dirname(resolved.file), "node.exe");
     return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection));
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
-  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path11.basename(resolved.file)]), state, portableNode?.identity.sha256);
-  return { executable, args: [...command2.args], pathEntries: [path11.dirname(executable)], portableNode: portableNode?.identity };
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path12.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  return { executable, args: [...command2.args], pathEntries: [path12.dirname(executable)], portableNode: portableNode?.identity };
 }
 
 // dist/src/windows-executor.js
@@ -41655,10 +42424,10 @@ var libraryRuntime = (() => {
   return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
 })();
 function verifyPathMappings(result, roots) {
-  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path12.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path13.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
   const aliases = /* @__PURE__ */ new Set();
   for (const mapping of result.pathMappings) {
-    if (expected.get(mapping.kind) !== path12.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+    if (expected.get(mapping.kind) !== path13.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
     if (aliases.has(mapping.aliasRoot))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
@@ -41669,22 +42438,22 @@ function verifyPathMappings(result, roots) {
     throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
 }
 function contains2(root, target) {
-  const relative = path12.relative(root, target);
-  return relative === "" || !relative.startsWith(".." + path12.sep) && relative !== ".." && !path12.isAbsolute(relative);
+  const relative = path13.relative(root, target);
+  return relative === "" || !relative.startsWith(".." + path13.sep) && relative !== ".." && !path13.isAbsolute(relative);
 }
 function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
   const canonical = await realpath4(directory);
-  if (path12.dirname(canonical) !== temp || !path12.basename(canonical).startsWith(prefix) || (await lstat7(directory)).isSymbolicLink()) {
+  if (path13.dirname(canonical) !== temp || !path13.basename(canonical).startsWith(prefix) || (await lstat8(directory)).isSymbolicLink()) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
 }
 async function nativeProcess(executable, args, options, input2) {
   options.signal?.throwIfAborted();
-  const child = spawn4(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn5(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   options.onProcess?.(child);
   let stdout = "", stderr = "", oversized = false, stopping = false;
   const controllerOutputLimit = Math.max(1e5, Math.min(4e5, (options.sandbox?.maxOutputChars ?? 4e3) * 6 + 12e3));
@@ -41733,11 +42502,11 @@ async function nativeProcess(executable, args, options, input2) {
   }
 }
 async function compileController(temp, options) {
-  const compiler = path12.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
-  if (!(await lstat7(compiler).catch(() => void 0))?.isFile())
+  const compiler = path13.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  if (!(await lstat8(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath4(await mkdtemp2(path12.join(temp, "agy-mcp-controller-")));
-  const source = path12.join(directory, "runner.cs"), helper = path12.join(directory, "runner.exe");
+  const directory = await realpath4(await mkdtemp2(path13.join(temp, "agy-mcp-controller-")));
+  const source = path13.join(directory, "runner.cs"), helper = path13.join(directory, "runner.exe");
   try {
     await writeFile3(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
@@ -41751,7 +42520,7 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path12.join(directory, "request-" + randomUUID5() + ".json");
+  const file3 = path13.join(directory, "request-" + randomUUID6() + ".json");
   await writeFile3(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
@@ -41773,22 +42542,22 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     try {
       return await realpath4(value);
     } catch {
-      return path12.resolve(value);
+      return path13.resolve(value);
     }
   }));
   const paths2 = /* @__PURE__ */ new Map();
   const inspect = async (value, rights) => {
-    if (!path12.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+    if (!path13.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath4(value), root = path12.parse(canonical).root;
+    const canonical = await realpath4(value), root = path13.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
-    const relative = path12.relative(root, canonical).split(path12.sep).filter(Boolean);
+    const relative = path13.relative(root, canonical).split(path13.sep).filter(Boolean);
     let current = root, entries = 0;
     const walk = async (candidate) => {
-      const stat3 = await lstat7(candidate);
+      const stat3 = await lstat8(candidate);
       if (stat3.isSymbolicLink() || !stat3.isDirectory() && !stat3.isFile() || stat3.isFile() && stat3.nlink > 1) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets cannot contain links, hard links, or non-regular files");
       }
@@ -41796,12 +42565,12 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
         for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
           if (++entries > maxFiles)
             throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
-          await walk(path12.join(candidate, name));
+          await walk(path13.join(candidate, name));
         }
     };
     for (const part of relative) {
-      current = path12.join(current, part);
-      const stat3 = await lstat7(current);
+      current = path13.join(current, part);
+      const stat3 = await lstat8(current);
       if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
     }
@@ -41831,7 +42600,7 @@ async function runRecoveryWithController(stateDirectory, options) {
   }
 }
 async function recoverWindowsExecutions(stateDirectory) {
-  const effective = path12.resolve(stateDirectory);
+  const effective = path13.resolve(stateDirectory);
   await mkdir6(effective, { recursive: true, mode: 448 });
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
@@ -41845,17 +42614,17 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
   };
-  const stateDirectory = path12.resolve(options.stateDirectory ?? path12.join(os5.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path13.resolve(options.stateDirectory ?? path13.join(os5.homedir(), ".antigravity-mcp-bridge"));
   await mkdir6(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
   const temp = await realpath4(os5.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath4(await mkdtemp2(path12.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath4(await mkdtemp2(path12.join(temp, "agy-mcp-scratch-")));
+  const runtime = await realpath4(await mkdtemp2(path13.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath4(await mkdtemp2(path13.join(temp, "agy-mcp-scratch-")));
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
-    const nonce = randomUUID5(), systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const nonce = randomUUID6(), systemRoot = process.env.SystemRoot || "C:\\Windows";
     const request = {
       action: mode,
       nonce,
@@ -41875,7 +42644,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       environment: {
         SystemRoot: systemRoot,
         WINDIR: systemRoot,
-        PATH: [...staged.pathEntries, path12.join(systemRoot, "System32")].join(path12.delimiter),
+        PATH: [...staged.pathEntries, path13.join(systemRoot, "System32")].join(path13.delimiter),
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
         TEMP: scratch,
         TMP: scratch,
@@ -41883,7 +42652,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
         HOME: scratch,
         APPDATA: scratch,
         LOCALAPPDATA: scratch,
-        COMSPEC: staged.comspec ?? path12.join(systemRoot, "System32", "cmd.exe")
+        COMSPEC: staged.comspec ?? path13.join(systemRoot, "System32", "cmd.exe")
       }
     };
     const file3 = await writeRequest(controller.directory, request);
@@ -41917,7 +42686,7 @@ var TaskManager = class {
   waiting = 0;
   batching = 0;
   stopped = false;
-  inboxOwnerId = randomUUID6();
+  inboxOwnerId = randomUUID7();
   flushingInboxes = /* @__PURE__ */ new Set();
   claimingMessages = /* @__PURE__ */ new Set();
   busyProjects = /* @__PURE__ */ new Set();
@@ -41941,7 +42710,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash10("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash12("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -42032,6 +42801,7 @@ var TaskManager = class {
     return model;
   }
   async run(options) {
+    options = { ...options };
     if (profileReadOnly(this.config.toolProfile)) {
       if (options.mode === "write")
         throw new BridgeError("PROFILE_READ_ONLY", "This tool profile only permits read-only tasks");
@@ -42053,6 +42823,10 @@ var TaskManager = class {
     }
     if (options.acceptanceCriteria !== void 0)
       criteriaSchema.parse(options.acceptanceCriteria);
+    if (options.outputSchema !== void 0)
+      options.outputSchema = validateOutputSchema(options.outputSchema);
+    if (options.artifactPaths !== void 0)
+      options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.isolateWorktree === false)
@@ -42091,6 +42865,16 @@ var TaskManager = class {
         throw new BridgeError("INVALID_CRITERIA", "A resumed task retains its original acceptance criteria");
       if ((previous || contextSource) && options.skills !== void 0)
         throw new BridgeError("INVALID_SKILLS", "Resume and handoff retain supplied skills; new bundles require a new task");
+      if (previous && options.outputSchema !== void 0)
+        throw new BridgeError("INVALID_SCHEMA", "A resumed task retains its original structured output schema");
+      if (previous && options.artifactPaths !== void 0)
+        throw new BridgeError("INVALID_ARTIFACT_PATHS", "A resumed task retains its original artifact paths");
+      options.outputSchema = previous?.record.outputSchema ?? options.outputSchema;
+      options.artifactPaths = previous?.record.artifactPaths ?? options.artifactPaths;
+      if (options.outputSchema !== void 0)
+        options.outputSchema = validateOutputSchema(options.outputSchema);
+      if (options.artifactPaths !== void 0)
+        options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
       if (previous?.project)
         await verifyProvidedSkills(previous.project.copyDirectory, previous.project.providedSkills ?? []);
       options.handoff ??= previous?.record.handoff;
@@ -42102,6 +42886,8 @@ var TaskManager = class {
       const mode = options.mode ?? previous?.record.mode ?? (roleDefinition.baseRole === "implementer" ? "write" : "read-only");
       if (roleDefinition.baseRole !== "implementer" && mode !== "read-only")
         throw new BridgeError("INVALID_ROLE", "Roles based on planner and reviewer require read-only mode");
+      if (roleDefinition.baseRole !== "implementer" && options.outputSchema !== void 0)
+        throw new BridgeError("INVALID_ROLE", "Structured output schema requires an implementer base role");
       if (!["write", "read-only"].includes(mode))
         throw new BridgeError("INVALID_MODE", "mode must be write or read-only");
       if (previous && mode !== previous.record.mode)
@@ -42164,12 +42950,18 @@ var TaskManager = class {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
+      const recordOutputSchema = options.outputSchema;
+      const recordArtifactPaths = options.artifactPaths;
+      if (options.nativeTest) {
+        options.outputSchema = void 0;
+        options.artifactPaths = void 0;
+      }
       const record2 = {
         parentTaskId: options.parentTaskId,
         sourceMessage: options.sourceMessage,
         deliveryMode: options.deliveryMode,
         providedSkills: options.providedSkills,
-        taskId: randomUUID6(),
+        taskId: randomUUID7(),
         sessionId: options.sessionId,
         model,
         mode,
@@ -42184,7 +42976,9 @@ var TaskManager = class {
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : void 0,
         workingDirectory,
         status: "queued",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        outputSchema: recordOutputSchema,
+        artifactPaths: recordArtifactPaths
       };
       this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
       accepted = true;
@@ -42255,6 +43049,53 @@ var TaskManager = class {
       ...textChunk(JSON.stringify(result.task.result ?? null), offset, limit, expectedContentSha256)
     };
   }
+  readStructuredResult(taskId, offset = 0, limit = 1e4, expectedContentSha256) {
+    this.refresh();
+    const task2 = this.tasks.get(taskId);
+    if (!task2)
+      throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
+    if (task2.record.status !== "completed") {
+      throw new BridgeError("TASK_NOT_READY", "Structured result requires a completed task");
+    }
+    if (!task2.record.structuredResult) {
+      throw new BridgeError("STRUCTURED_RESULT_NOT_AVAILABLE", "No structured result recorded for this task");
+    }
+    return {
+      taskId,
+      ...textChunk(JSON.stringify(task2.record.structuredResult.value), offset, limit, expectedContentSha256)
+    };
+  }
+  listArtifacts(taskId) {
+    this.refresh();
+    const task2 = this.tasks.get(taskId);
+    if (!task2)
+      throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
+    if (task2.record.status !== "completed") {
+      throw new BridgeError("TASK_NOT_READY", "Artifacts require a completed task");
+    }
+    return {
+      taskId,
+      artifacts: task2.record.artifacts ?? []
+    };
+  }
+  async readArtifact(taskId, artifactPath, expectedSha256, offset = 0, limit = 65536) {
+    this.refresh();
+    const task2 = this.tasks.get(taskId);
+    if (!task2)
+      throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
+    if (task2.record.status !== "completed" || !task2.project || task2.record.discardedAt) {
+      throw new BridgeError("TASK_NOT_READY", "Reading artifacts requires a completed task with a retained copy");
+    }
+    const normalized = artifactPath.replaceAll("\\", "/");
+    const ref = task2.record.artifacts?.find((entry) => entry.path === normalized);
+    if (!ref) {
+      throw new BridgeError("ARTIFACT_NOT_FOUND", `Artifact not recorded: ${artifactPath}`);
+    }
+    return this.withProject(task2.project, async () => {
+      const chunk = await readArtifact(task2.project, ref, expectedSha256, offset, limit, this.config.maxCopyBytes);
+      return { taskId, ...chunk };
+    });
+  }
   async readPatch(taskId, expectedSha256, relative, offset = 0, limit = 1e4) {
     this.refresh();
     const task2 = this.tasks.get(taskId);
@@ -42316,7 +43157,7 @@ var TaskManager = class {
     if (this.config.maxRetainedTasks < models.length + 1 || this.config.maxQueuedTasks < models.length)
       throw new BridgeError("COMPARISON_LIMIT_EXCEEDED", "Retention and queue limits must accommodate all comparison members and the source");
     const source = this.status(sourceTaskId);
-    const comparison = { comparisonId: randomUUID6(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
+    const comparison = { comparisonId: randomUUID7(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
     const taskIds = [];
     this.batching++;
     try {
@@ -42501,7 +43342,7 @@ var TaskManager = class {
       const record2 = {
         deliveryMode: current.record.deliveryMode,
         providedSkills: current.project.providedSkills,
-        taskId: randomUUID6(),
+        taskId: randomUUID7(),
         sessionId: current.record.sessionId,
         model: current.record.model,
         mode: "write",
@@ -42517,7 +43358,9 @@ var TaskManager = class {
         copyDirectory: current.project.copyDirectory,
         includedFiles: current.project.includedFiles,
         status: "queued",
-        createdAt: (/* @__PURE__ */ new Date()).toISOString()
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        outputSchema: current.record.outputSchema,
+        artifactPaths: current.record.artifactPaths
       };
       const options = {
         deliveryMode: record2.deliveryMode,
@@ -42642,7 +43485,7 @@ var TaskManager = class {
       await this.requireVerification(task2, expectedSha256);
       if (!preauthorized && !await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash10("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash12("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -43120,6 +43963,8 @@ ${error62.message}`;
       stderrParser.end();
       if (task2.timer)
         clearTimeout(task2.timer);
+      if (child.schemaCleanupError)
+        throw child.schemaCleanupError;
       record2.exitCode = exitCode;
       if (native) {
         await native.cleanup();
@@ -43178,6 +44023,13 @@ ${error62.message}`;
         if (record2.mode !== "read-only")
           await previewProjectCopy(task2.project, this.config);
         record2.report = await validateRoleReport((record2.roleDefinition ?? resolveRole(record2.role ?? "implementer")).baseRole, record2.result.structured_output, task2.project.copyDirectory);
+        if (!task2.options.nativeTest && record2.outputSchema !== void 0) {
+          const rawStructured = record2.result?.structured_output;
+          record2.structuredResult = validateStructuredResult(record2.outputSchema, rawStructured);
+        }
+        if (!task2.options.nativeTest && record2.artifactPaths !== void 0) {
+          record2.artifacts = await collectArtifacts(task2.project, record2.artifactPaths, this.config);
+        }
         this.finish(task2, "completed");
       }
     } catch (error62) {
@@ -43255,7 +44107,7 @@ ${error62.message}`;
   async repairWindowsTest(task2, request, observedExitCode, timeoutSeconds) {
     if (!task2.project)
       throw new BridgeError("TASK_NOT_READY", "Windows test copy is unavailable");
-    const { nativeTest: _nativeTest, ...baseOptions } = task2.options;
+    const { nativeTest: _nativeTest, outputSchema: _outputSchema, artifactPaths: _artifactPaths, ...baseOptions } = task2.options;
     const options = {
       ...baseOptions,
       timeoutSeconds,
@@ -43482,7 +44334,7 @@ ${error62.message}`;
     task2.messageKeys ??= /* @__PURE__ */ new Set();
     for (const input2 of extractAgentMessages(text)) {
       const payload = JSON.stringify(input2);
-      const key = step + ":" + createHash10("sha256").update(payload).digest("hex");
+      const key = step + ":" + createHash12("sha256").update(payload).digest("hex");
       if (task2.messageKeys.has(key) || final && task2.record.messages?.some((message2) => message2.source === "agy-reported" && message2.kind === input2.kind && message2.text === input2.text))
         continue;
       if (task2.messageKeys.size >= 1e3) {
@@ -43526,7 +44378,7 @@ ${error62.message}`;
       if (child.exitCode !== null)
         return;
       if (process.platform === "win32" && child.pid)
-        spawn5("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+        spawn6("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
       else
         child.kill("SIGKILL");
     }, 3e3);
