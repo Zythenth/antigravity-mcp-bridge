@@ -13,6 +13,7 @@ import { toolEnabled } from './tool-profiles.js';
 import { decisionsSchema } from './handoff.js';
 import { comparisonModelsSchema } from './comparison.js';
 import { sandboxPolicySchema, sandboxSelectionInputSchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
+import { effortSchema } from './roles.js';
 import { structuredResultInputSchema } from './structured-results.js';
 import { artifactPathsSchema } from './artifacts.js';
 
@@ -136,6 +137,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     mode: z.enum(['write', 'read-only']).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional(),
+    effort: effortSchema.optional(),
     outputSchema: structuredResultInputSchema.optional(),
     artifactPaths: artifactPathsSchema.optional(),
   };
@@ -161,7 +163,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_handoff, title: 'Transfer work to another role',
     description: 'Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.',
     inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
-      prompt: z.string().min(1), role: configuredRoleSchema, model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
+      prompt: z.string().min(1), role: configuredRoleSchema, effort: effortSchema.optional(), model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
       timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
     const source = tasks.status(sourceTaskId);

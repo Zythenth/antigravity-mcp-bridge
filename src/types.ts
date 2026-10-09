@@ -2,7 +2,7 @@ import type { BridgeMessage, DeliveryMode } from './messages.js';
 import type { ProvidedSkill, StagedSkill } from './skills.js';
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
 import type { BridgeNativeTestRequest } from './native-tests.js';
-import type { RoleReport, TaskRole, RoleDefinition } from './roles.js';
+import type { RoleReport, TaskRole, RoleDefinition, Effort } from './roles.js';
 import type { UsageCounters, taskTokenUsage } from './usage.js';
 import type { HandoffContext } from './handoff.js';
 import type { Comparison } from './comparison.js';
@@ -32,6 +32,7 @@ export interface TaskRecord {
   sessionId?: string;
   pid?: number;
   model?: string;
+  effort?: Effort;
   prompt: string;
   workingDirectory: string;
   status: TaskStatus;
@@ -124,6 +125,7 @@ export interface RunOptions {
   acceptanceCriteria?: AcceptanceCriterion[];
   prompt: string;
   model?: string | null;
+  effort?: Effort;
   workingDirectory: string;
   sessionId?: string;
   timeoutSeconds?: number;

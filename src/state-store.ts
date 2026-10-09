@@ -9,7 +9,7 @@ import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import type { ProjectCopy } from './isolation.js';
 import type { BridgeEvent } from './types.js';
 import { usageCountersSchema } from './usage.js';
-import { roleDefinitionSchema } from './roles.js';
+import { roleDefinitionSchema, effortSchema } from './roles.js';
 import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
@@ -24,7 +24,7 @@ const snapshotSchema = z.object({
     usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
     lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
     deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
-    roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
+    effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
     structuredResult: z.object({ value: z.unknown(), sha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
@@ -46,7 +46,7 @@ const snapshotSchema = z.object({
       }).strict(),
     }).strict()).max(20).optional(),
   }).passthrough(),
-  options: z.object({ prompt: z.string(), workingDirectory: z.string(),
+  options: z.object({ prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
   }).passthrough(),

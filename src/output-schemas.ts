@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
-import { plannerReportSchema, reviewerReportSchema, roleSchema, builtinRoleSchema, roleDefinitionSchema } from './roles.js';
+import { plannerReportSchema, reviewerReportSchema, roleSchema, builtinRoleSchema, roleDefinitionSchema, effortSchema } from './roles.js';
 import { usageCountersSchema } from './usage.js';
 import { toolProfileSchema } from './tool-profiles.js';
 import { handoffSchema } from './handoff.js';
@@ -57,6 +57,7 @@ export const taskRecordSchema = z.object({
   continuationTaskId: id.optional(),
   parentTaskId: id.optional(),
   providedSkillSummaries: z.array(z.object({name: z.string(), sha256: z.string().regex(/^[a-f0-9]{64}$/), fileCount: count}).strict()).max(8).optional(),
+  effort: effortSchema.optional(),
   outputSchema: z.record(z.string(), z.unknown()).optional(),
   artifactPaths: z.array(z.string()).optional(),
   structuredResult: z.object({ value: z.unknown(), sha256: hash }).strict().optional(),
@@ -99,7 +100,12 @@ export const successOutputSchemas = {
   antigravity_get_model: z.object({ model: z.string().nullable() }).strict(),
   antigravity_get_sandbox_policy: sandboxPolicySnapshot,
   antigravity_roles: z.object({ roles: z.array(z.object({ name: roleSchema, baseRole: builtinRoleSchema,
-    description: z.string().nullable(), custom: z.boolean(), instructionChars: count }).strict()) }).strict(),
+    description: z.string().nullable(), custom: z.boolean(), instructionChars: count,
+    defaultModel: z.string().nullable().optional(), defaultEffort: effortSchema.optional(),
+    defaultTimeoutSeconds: z.number().int().min(1).max(86400).optional(), defaultDeliveryMode: deliveryModeSchema.optional(),
+    defaultIncludePaths: z.array(z.string()).optional(), defaultArtifactPaths: z.array(z.string()).optional(),
+    defaultSkillSummaries: z.array(z.object({ name: z.string(), sha256: hash, resourceCount: count }).strict()).optional(),
+    outputSchemaSha256: hash.optional() }).strict()) }).strict(),
   antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),
   antigravity_set_sandbox_policy: sandboxPolicySnapshot,
   antigravity_usage: z.object({

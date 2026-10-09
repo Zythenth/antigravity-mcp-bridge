@@ -14,7 +14,7 @@ import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand, type WindowsNativeTestRequest } from './native-tests.js';
 import { textChunk } from './chunks.js';
-import { roleSchema, validateRoleReport, resolveRole, listRoles } from './roles.js';
+import { roleSchema, validateRoleReport, resolveRole, listRoles, applyRoleDefaults, effortSchema } from './roles.js';
 import { aggregateUsage, normalizeUsage, taskTokenUsage } from './usage.js';
 import { profileReadOnly } from './tool-profiles.js';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -138,6 +138,13 @@ export class TaskManager {
 
   async run(options: RunOptions): Promise<TaskRecord> {
     options = { ...options };
+    const initialRoleDefinition = options.sessionId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
+    if (initialRoleDefinition) {
+      const { skills, includePaths } = options;
+      options = applyRoleDefaults(options, initialRoleDefinition);
+      if (options.contextTaskId) options = { ...options, skills, includePaths };
+    }
+    if (options.effort !== undefined) effortSchema.parse(options.effort);
     if (profileReadOnly(this.config.toolProfile)) {
       if (options.mode === 'write') throw new BridgeError('PROFILE_READ_ONLY', 'This tool profile only permits read-only tasks');
       options = { ...options, mode: 'read-only' };
@@ -158,15 +165,6 @@ export class TaskManager {
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
-    const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
-    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
-      throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
-    }
-    const model = options.model === null ? undefined : options.model ?? this.getModel();
-    if (model) {
-      const models = await this.adapter.listModels();
-      if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);
-    }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', 'Invalid conversation ID');
     const releaseRegistry = this.state.acquire('registry');
     let pendingProjectRelease: (() => void) | undefined;
@@ -198,7 +196,21 @@ export class TaskManager {
       options.handoff ??= previous?.record.handoff;
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
       const role = roleSchema.parse(options.role ?? previous?.record.role ?? 'implementer');
-      const roleDefinition = previous?.record.roleDefinition ?? resolveRole(role, this.config.customRoles);
+      const roleDefinition = previous?.record.roleDefinition ?? initialRoleDefinition ?? resolveRole(role, this.config.customRoles);
+      if (previous && options.effort !== undefined && options.effort !== previous.record.effort) {
+        throw new BridgeError('INVALID_EFFORT', 'A resumed task retains its original effort');
+      }
+      options.effort ??= previous?.record.effort;
+      const timeoutSeconds = options.timeoutSeconds ?? previous?.options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
+      if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
+        throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
+      }
+      const selectedModel = options.model !== undefined ? options.model : previous ? previous.record.model : this.getModel();
+      const model = selectedModel === null ? undefined : selectedModel;
+      if (model) {
+        const models = await this.adapter.listModels();
+        if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', 'Model is not listed by agy: ' + model);
+      }
       if (previous && role !== (previous.record.role ?? 'implementer')) throw new BridgeError('INVALID_ROLE', 'A resumed task retains its original role');
       const mode = options.mode ?? previous?.record.mode ?? (roleDefinition.baseRole === 'implementer' ? 'write' : 'read-only');
       if (roleDefinition.baseRole !== 'implementer' && mode !== 'read-only') throw new BridgeError('INVALID_ROLE', 'Roles based on planner and reviewer require read-only mode');
@@ -258,13 +270,13 @@ export class TaskManager {
         options.outputSchema = undefined;
         options.artifactPaths = undefined;
       }
-      const record: TaskRecord = { parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
+      const record: TaskRecord = { parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
         workingDirectory, status: 'queued', createdAt: new Date().toISOString(),
         outputSchema: recordOutputSchema, artifactPaths: recordArtifactPaths };
-      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
+      this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, model: model ?? null, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
       accepted = true;
       pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
@@ -550,7 +562,7 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model,
+      const record: TaskRecord = { deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
         mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
@@ -558,7 +570,7 @@ export class TaskManager {
         status: 'queued', createdAt: new Date().toISOString(),
         outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths };
       const options: RunOptions = { deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
-        model: record.model, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
+        model: record.model, effort: record.effort, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
       releaseProject = undefined;

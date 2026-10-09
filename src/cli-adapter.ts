@@ -164,6 +164,10 @@ export class CliAdapter {
       args.push('--mode', 'accept-edits');
     }
     if (model) args.push('--model', model);
+    if (options.effort !== undefined) {
+      if (!this.help.includes('--effort')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --effort');
+      args.push('--effort', options.effort);
+    }
     if (options.sessionId) args.push('--conversation', options.sessionId);
     if (!options.nativeTest && options.outputSchema !== undefined) {
       if (!this.help.includes('--json-schema')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --json-schema');

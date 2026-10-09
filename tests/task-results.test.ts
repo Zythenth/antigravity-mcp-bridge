@@ -306,14 +306,15 @@ else {
  fs.writeFileSync(${JSON.stringify(receipt)},JSON.stringify({value,body,args}));
  console.log(JSON.stringify({event:'result',result:{status:'SUCCESS'}}));
 }`);
-      const cfg = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
+      const suppliedStateDir = process.platform === 'win32' ? stateDir.replace(/^[A-Z]:/, drive => drive.toLowerCase()) : stateDir;
+      const cfg = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: suppliedStateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
       const actual = new CliAdapter(cfg, [script]); await actual.discover();
       const schema = { type: 'object', description: 'x'.repeat(40000) };
       const child = actual.spawnTask({ prompt: 'public fixture', workingDirectory: repoDir, outputSchema: schema }, undefined, repoDir);
       await new Promise(resolve => child.once('close', resolve));
       const result = JSON.parse(await fs.promises.readFile(receipt, 'utf8'));
       assert.deepEqual(result.body, schema);
-      assert.ok(result.value.startsWith(stateDir + path.sep));
+      assert.equal(path.dirname(result.value), fs.realpathSync.native(suppliedStateDir));
       assert.equal(fs.existsSync(result.value), false);
       assert.ok(result.args.join(' ').length < 32767);
     } finally {

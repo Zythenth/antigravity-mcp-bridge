@@ -28511,11 +28511,11 @@ var StdioServerTransport = class {
 };
 
 // dist/src/cli-adapter.js
-import { spawn as spawn2 } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { spawn as spawn3 } from "node:child_process";
+import { randomUUID as randomUUID2 } from "node:crypto";
 import { lstatSync, mkdirSync, realpathSync as realpathSync2, unlinkSync, writeFileSync } from "node:fs";
 import { access as access2 } from "node:fs/promises";
-import path6 from "node:path";
+import path7 from "node:path";
 
 // dist/src/types.js
 var BridgeError = class extends Error {
@@ -28528,6 +28528,7 @@ var BridgeError = class extends Error {
 };
 
 // dist/src/roles.js
+import { createHash as createHash6 } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 
 // dist/src/isolation.js
@@ -29596,35 +29597,988 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
   return preview;
 }
 
+// dist/src/messages.js
+import { createHash as createHash3, randomUUID } from "node:crypto";
+var deliveryModeSchema = external_exports.enum(["messages", "events"]);
+var MAX_MESSAGE_CHARS = 2e3;
+var MAX_TASK_MESSAGES = 100;
+var agentMessageInputSchema = external_exports.object({
+  kind: external_exports.enum(["message", "question", "blocker"]),
+  text: external_exports.string().min(1).max(MAX_MESSAGE_CHARS)
+}).strict();
+var bridgeMessageSchema = external_exports.object({
+  messageId: external_exports.string().uuid(),
+  taskId: external_exports.string().uuid(),
+  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  timestamp: external_exports.string().datetime(),
+  source: external_exports.enum(["agy-reported", "bridge"]),
+  kind: external_exports.enum(["message", "question", "blocker", "final", "error"]),
+  text: external_exports.string().min(1).max(MAX_MESSAGE_CHARS),
+  model: external_exports.string().nullable(),
+  reference: external_exports.object({ tool: external_exports.literal("antigravity_read_result"), taskId: external_exports.string().uuid(), contentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) }).strict().optional()
+}).strict();
+function appendMessage(record2, kind, source, text, reference) {
+  const sequence = (record2.messageCursor ?? 0) + 1;
+  const message = bridgeMessageSchema.parse({
+    messageId: randomUUID(),
+    taskId: record2.taskId,
+    sequence,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    kind,
+    source,
+    text: text.slice(0, MAX_MESSAGE_CHARS),
+    model: record2.model ?? null,
+    ...reference ? { reference } : {}
+  });
+  record2.messageCursor = sequence;
+  record2.messages = [...record2.messages ?? [], message].slice(-MAX_TASK_MESSAGES);
+  return message;
+}
+function readMessages(record2, after = 0, limit = 25) {
+  if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > 50)
+    throw new Error("Invalid message cursor or page size");
+  const retained = record2.messages ?? [];
+  const oldestAvailable = retained[0]?.sequence ?? (record2.messageCursor ?? 0) + 1;
+  const messages = retained.filter((message) => message.sequence > after).slice(0, limit);
+  return { messages, nextCursor: messages.at(-1)?.sequence ?? after, oldestAvailable, truncated: after < oldestAvailable - 1 };
+}
+function extractAgentMessages(text) {
+  const messages = [];
+  const bounded = text.slice(0, 1024 * 1024);
+  for (const match of bounded.matchAll(/<antigravity-message>([\s\S]*?)<\/antigravity-message>/g)) {
+    if (messages.length >= 1001)
+      break;
+    if (match[1].length > 4096)
+      continue;
+    try {
+      const parsed = agentMessageInputSchema.safeParse(JSON.parse(match[1]));
+      if (parsed.success)
+        messages.push(parsed.data);
+    } catch {
+    }
+  }
+  return messages;
+}
+function clientTask(task2) {
+  if (task2.deliveryMode === "messages")
+    return compactTask(task2);
+  const { messages, messageCursor, inbox, dispatching, sourceMessage, ...metadata } = task2;
+  void messages;
+  void messageCursor;
+  void inbox;
+  void dispatching;
+  void sourceMessage;
+  return metadata;
+}
+function resultReference(record2) {
+  return {
+    tool: "antigravity_read_result",
+    taskId: record2.taskId,
+    contentSha256: createHash3("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
+  };
+}
+function compactTask(task2) {
+  return {
+    taskId: task2.taskId,
+    workingDirectory: task2.workingDirectory,
+    status: task2.status,
+    createdAt: task2.createdAt,
+    sessionId: task2.sessionId,
+    model: task2.model,
+    effort: task2.effort,
+    mode: task2.mode,
+    role: task2.role,
+    startedAt: task2.startedAt,
+    completedAt: task2.completedAt,
+    exitCode: task2.exitCode,
+    error: task2.error,
+    tokenUsage: task2.tokenUsage,
+    integratedAt: task2.integratedAt,
+    discardedAt: task2.discardedAt,
+    deliveryMode: task2.deliveryMode,
+    ...task2.providedSkills?.length ? { providedSkillSummaries: task2.providedSkills.map((skill) => ({ name: skill.name, sha256: skill.sha256, fileCount: skill.files.length })) } : {},
+    ...task2.continuationTaskId ? { continuationTaskId: task2.continuationTaskId } : {},
+    ...task2.structuredResult ? { structuredResultSha256: task2.structuredResult.sha256 } : {},
+    ...task2.artifacts !== void 0 ? { artifactCount: task2.artifacts.length } : {}
+  };
+}
+
+// dist/src/artifacts.js
+import { createHash as createHash4 } from "node:crypto";
+import { createReadStream as createReadStream3 } from "node:fs";
+import { lstat as lstat3, readdir as readdir3 } from "node:fs/promises";
+import { spawn as spawn2 } from "node:child_process";
+import path5 from "node:path";
+var WINDOWS_DEVICE_NAMES2 = /* @__PURE__ */ new Set([
+  "CON",
+  "PRN",
+  "AUX",
+  "NUL",
+  "COM1",
+  "COM2",
+  "COM3",
+  "COM4",
+  "COM5",
+  "COM6",
+  "COM7",
+  "COM8",
+  "COM9",
+  "LPT1",
+  "LPT2",
+  "LPT3",
+  "LPT4",
+  "LPT5",
+  "LPT6",
+  "LPT7",
+  "LPT8",
+  "LPT9",
+  "CONIN$",
+  "CONOUT$"
+]);
+function validArtifactRelative(input2) {
+  if (typeof input2 !== "string" || !input2.trim()) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot be empty");
+  }
+  if (input2.includes(":")) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Colon and Alternate Data Streams are forbidden: " + input2);
+  }
+  if (/[\x00-\x1f\x7f]/.test(input2)) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Control characters and NUL are forbidden: " + input2);
+  }
+  const value = input2.replaceAll("\\", "/");
+  if (value.startsWith("/") || /^[A-Za-z]:/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(input2)) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path must be a relative path: " + input2);
+  }
+  if (value.endsWith("/")) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path must point to a file, not a directory: " + input2);
+  }
+  const parts = value.split("/");
+  if (parts.some((part) => !part || part === "." || part === "..")) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot contain traversal elements (. or ..): " + input2);
+  }
+  for (const part of parts) {
+    if (/[. ]$/.test(part)) {
+      throw new BridgeError("INVALID_ARTIFACT_PATH", "Path segment cannot end with a dot or space: " + input2);
+    }
+    if (/[<>"|?*]/.test(part)) {
+      throw new BridgeError("INVALID_ARTIFACT_PATH", "Invalid path characters in segment: " + input2);
+    }
+    const base = part.split(".")[0].toUpperCase();
+    if (WINDOWS_DEVICE_NAMES2.has(base)) {
+      throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot contain Windows device name: " + input2);
+    }
+    if (part.toLowerCase() === ".git") {
+      throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path cannot contain .git components: " + input2);
+    }
+    if (part.toLowerCase() === ".agents") {
+      throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path cannot contain .agents components: " + input2);
+    }
+  }
+  return value;
+}
+var artifactPathSchema = external_exports.string().min(1).max(1e3).refine((val) => {
+  try {
+    validArtifactRelative(val);
+    return true;
+  } catch {
+    return false;
+  }
+}, "Artifact path must be a valid project-relative path");
+var artifactPathsSchema = external_exports.array(artifactPathSchema).min(1).max(100).refine((paths2) => {
+  try {
+    const normalizedLower = paths2.map((p) => validArtifactRelative(p).toLowerCase());
+    return new Set(normalizedLower).size === paths2.length;
+  } catch {
+    return false;
+  }
+}, "Artifact paths must be unique (including case aliases)");
+var artifactReferenceSchema = external_exports.object({
+  path: external_exports.string().min(1).max(1e3),
+  sha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  bytes: external_exports.number().int().nonnegative()
+}).strict();
+async function git2(cwd, args, input2, allowedCodes = [0]) {
+  return new Promise((resolve, reject) => {
+    const child = spawn2("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const chunks = [];
+    let length = 0;
+    let stderr = "";
+    let overflow = false;
+    child.stdout.on("data", (chunk) => {
+      length += chunk.length;
+      if (length > 1e7) {
+        overflow = true;
+        child.kill();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (overflow)
+        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      else if (!allowedCodes.includes(code ?? -1))
+        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
+      else
+        resolve(Buffer.concat(chunks));
+    });
+    child.stdin.end(input2);
+  });
+}
+function splitNull2(bytes) {
+  return bytes.toString("utf8").split("\0").filter(Boolean);
+}
+async function verifyCopyRoot(copyDirectory) {
+  let rootStat;
+  try {
+    rootStat = await lstat3(copyDirectory);
+  } catch (err) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "Cannot access copy directory: " + (err instanceof Error ? err.message : String(err)));
+  }
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "Copy directory cannot be a symbolic link or replaced directory");
+  }
+}
+async function verifyExactDiskCase(rootDir, relativePath) {
+  const segments = relativePath.split("/");
+  let current = rootDir;
+  for (const seg of segments) {
+    let entries;
+    try {
+      entries = await readdir3(current);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
+      }
+      throw err;
+    }
+    if (!entries.includes(seg)) {
+      const lower = seg.toLowerCase();
+      const match = entries.find((e) => e.toLowerCase() === lower);
+      if (match) {
+        throw new BridgeError("INVALID_ARTIFACT_PATH", `Path case alias mismatch: requested '${seg}', disk has '${match}'`);
+      }
+      throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
+    }
+    current = path5.join(current, seg);
+  }
+  return current;
+}
+async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS) {
+  await verifyCopyRoot(project.copyDirectory);
+  const parsed = artifactPathsSchema.safeParse(paths2);
+  if (!parsed.success) {
+    throw new BridgeError("INVALID_ARTIFACT_PATH", "Invalid artifact paths: " + parsed.error.issues.map((i) => i.message).join("; "));
+  }
+  const normalizedPaths = paths2.map(validArtifactRelative);
+  if (project.providedSkills) {
+    for (const skill of project.providedSkills) {
+      for (const f of skill.files) {
+        for (const p of normalizedPaths) {
+          if (f.path.toLowerCase() === p.toLowerCase()) {
+            throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path refers to a provided skill file: " + p);
+          }
+        }
+      }
+    }
+  }
+  const stdinBuf = Buffer.from(normalizedPaths.join("\0") + "\0");
+  const ignoreOutput = await git2(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
+  const ignoredSet = new Set(splitNull2(ignoreOutput));
+  for (const p of normalizedPaths) {
+    if (ignoredSet.has(p)) {
+      throw new BridgeError("IGNORED_ARTIFACT_PATH", "Artifact path is ignored by repository rules: " + p);
+    }
+  }
+  let totalBytes = 0;
+  const references = [];
+  for (const relative of normalizedPaths) {
+    let filePath;
+    try {
+      filePath = await checkedPath(project.copyDirectory, relative, true);
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relative);
+      }
+      throw err;
+    }
+    await verifyExactDiskCase(project.copyDirectory, relative);
+    const st = await lstat3(filePath);
+    if (!st.isFile() || st.isSymbolicLink()) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative);
+    }
+    if (st.size > limits.maxCopyBytes) {
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size exceeds copy limit of ${limits.maxCopyBytes} bytes`);
+    }
+    const hasher = createHash4("sha256");
+    let fileBytes = 0;
+    for await (const chunk of createReadStream3(filePath)) {
+      fileBytes += chunk.length;
+      totalBytes += chunk.length;
+      if (totalBytes > limits.maxCopyBytes) {
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Total artifact bytes exceed limit of ${limits.maxCopyBytes} bytes`);
+      }
+      hasher.update(chunk);
+    }
+    const sha256 = hasher.digest("hex");
+    references.push({
+      path: relative,
+      sha256,
+      bytes: fileBytes
+    });
+  }
+  return references;
+}
+async function readArtifact(project, reference, expectedSha256, offset = 0, limit = 65536, maxBytes = DEFAULT_PROJECT_LIMITS.maxCopyBytes) {
+  const parsedRef = artifactReferenceSchema.safeParse(reference);
+  if (!parsedRef.success) {
+    throw new BridgeError("INVALID_ARTIFACT_REFERENCE", "Invalid artifact reference: " + parsedRef.error.message);
+  }
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new BridgeError("INVALID_CURSOR", "offset must be a non-negative safe integer");
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 65536) {
+    throw new BridgeError("INVALID_CURSOR", "limit must be an integer between 1 and 65536");
+  }
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+    throw new BridgeError("INVALID_CURSOR", "maxBytes must be a positive integer");
+  }
+  if (offset > reference.bytes) {
+    throw new BridgeError("INVALID_CURSOR", `offset ${offset} exceeds reference bytes ${reference.bytes}`);
+  }
+  if (typeof expectedSha256 !== "string" || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    throw new BridgeError("INVALID_ARTIFACT_HASH", "expectedSha256 must be a 64-character lowercase hex string");
+  }
+  if (expectedSha256 !== reference.sha256) {
+    throw new BridgeError("CONTENT_CHANGED", "expectedSha256 does not match reference sha256");
+  }
+  await verifyCopyRoot(project.copyDirectory);
+  const relative = validArtifactRelative(reference.path);
+  let filePath;
+  try {
+    filePath = await checkedPath(project.copyDirectory, relative, true);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relative);
+    }
+    throw err;
+  }
+  await verifyExactDiskCase(project.copyDirectory, relative);
+  const st = await lstat3(filePath);
+  if (!st.isFile() || st.isSymbolicLink()) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative);
+  }
+  if (st.size > maxBytes) {
+    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size (${st.size} bytes) exceeds limit of ${maxBytes} bytes`);
+  }
+  if (st.size !== reference.bytes) {
+    throw new BridgeError("CONTENT_CHANGED", `Artifact size on disk (${st.size}) does not match reference bytes (${reference.bytes})`);
+  }
+  const windowStart = offset;
+  const windowEnd = Math.min(reference.bytes, offset + limit);
+  const windowLen = Math.max(0, windowEnd - windowStart);
+  const windowBuf = Buffer.alloc(windowLen);
+  let streamBytes = 0;
+  const hasher = createHash4("sha256");
+  const stream = createReadStream3(filePath);
+  try {
+    for await (const chunk of stream) {
+      const chunkBuf = chunk;
+      const chunkStart = streamBytes;
+      const chunkEnd = streamBytes + chunkBuf.length;
+      streamBytes = chunkEnd;
+      if (streamBytes > maxBytes) {
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact exceeded maximum byte limit (${maxBytes}) during reading`);
+      }
+      if (streamBytes > reference.bytes) {
+        throw new BridgeError("CONTENT_CHANGED", "Artifact grew beyond reference bytes during reading");
+      }
+      hasher.update(chunkBuf);
+      const overlapStart = Math.max(chunkStart, windowStart);
+      const overlapEnd = Math.min(chunkEnd, windowEnd);
+      if (overlapStart < overlapEnd) {
+        const slice = chunkBuf.subarray(overlapStart - chunkStart, overlapEnd - chunkStart);
+        slice.copy(windowBuf, overlapStart - windowStart);
+      }
+    }
+  } finally {
+    stream.destroy();
+  }
+  if (streamBytes !== reference.bytes) {
+    throw new BridgeError("CONTENT_CHANGED", `Artifact size changed during reading (expected ${reference.bytes}, observed ${streamBytes})`);
+  }
+  const actualSha256 = hasher.digest("hex");
+  if (actualSha256 !== expectedSha256) {
+    throw new BridgeError("CONTENT_CHANGED", "Artifact content on disk has changed; sha256 mismatch");
+  }
+  const content = windowBuf.toString("base64");
+  const nextOffset = windowEnd;
+  const hasMore = windowEnd < reference.bytes;
+  return {
+    path: reference.path,
+    sha256: actualSha256,
+    bytes: reference.bytes,
+    offset,
+    nextOffset,
+    hasMore,
+    encoding: "base64",
+    content,
+    offsetUnit: "bytes"
+  };
+}
+
+// dist/src/structured-results.js
+import { createHash as createHash5 } from "node:crypto";
+
+// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+var import_ajv = __toESM(require_ajv(), 1);
+var import_ajv_formats = __toESM(require_dist(), 1);
+function createDefaultAjvInstance() {
+  const ajv = new import_ajv.default({
+    strict: false,
+    validateFormats: true,
+    validateSchema: false,
+    allErrors: true
+  });
+  const addFormats = import_ajv_formats.default;
+  addFormats(ajv);
+  return ajv;
+}
+var AjvJsonSchemaValidator = class {
+  /**
+   * Create an AJV validator
+   *
+   * @param ajv - Optional pre-configured AJV instance. If not provided, a default instance will be created.
+   *
+   * @example
+   * ```typescript
+   * // Use default configuration (recommended for most cases)
+   * import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+   * const validator = new AjvJsonSchemaValidator();
+   *
+   * // Or provide custom AJV instance for advanced configuration
+   * import { Ajv } from 'ajv';
+   * import addFormats from 'ajv-formats';
+   *
+   * const ajv = new Ajv({ validateFormats: true });
+   * addFormats(ajv);
+   * const validator = new AjvJsonSchemaValidator(ajv);
+   * ```
+   */
+  constructor(ajv) {
+    this._ajv = ajv ?? createDefaultAjvInstance();
+  }
+  /**
+   * Create a validator for the given JSON Schema
+   *
+   * The validator is compiled once and can be reused multiple times.
+   * If the schema has an $id, it will be cached by AJV automatically.
+   *
+   * @param schema - Standard JSON Schema object
+   * @returns A validator function that validates input data
+   */
+  getValidator(schema) {
+    const ajvValidator = "$id" in schema && typeof schema.$id === "string" ? this._ajv.getSchema(schema.$id) ?? this._ajv.compile(schema) : this._ajv.compile(schema);
+    return (input2) => {
+      const valid = ajvValidator(input2);
+      if (valid) {
+        return {
+          valid: true,
+          data: input2,
+          errorMessage: void 0
+        };
+      } else {
+        return {
+          valid: false,
+          data: void 0,
+          errorMessage: this._ajv.errorsText(ajvValidator.errors)
+        };
+      }
+    };
+  }
+};
+
+// dist/src/structured-results.js
+var structuredResultInputSchema = external_exports.record(external_exports.string(), external_exports.unknown());
+var MAX_SCHEMA_BYTES = 64 * 1024;
+var MAX_SCHEMA_DEPTH = 32;
+var MAX_SCHEMA_NODES = 1e3;
+var MAX_RESULT_BYTES = 1024 * 1024;
+var MAX_RESULT_DEPTH = 32;
+var MAX_RESULT_NODES = 1e4;
+var MAX_VALIDATOR_CACHE = 100;
+var UNSAFE_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
+var DRAFT7_SCHEMA_KEYWORDS = /* @__PURE__ */ new Set([
+  "$schema",
+  "$ref",
+  "$comment",
+  "title",
+  "description",
+  "default",
+  "examples",
+  "readOnly",
+  "writeOnly",
+  "type",
+  "enum",
+  "const",
+  "multipleOf",
+  "maximum",
+  "exclusiveMaximum",
+  "minimum",
+  "exclusiveMinimum",
+  "maxLength",
+  "minLength",
+  "items",
+  "additionalItems",
+  "maxItems",
+  "minItems",
+  "uniqueItems",
+  "contains",
+  "maxProperties",
+  "minProperties",
+  "required",
+  "properties",
+  "additionalProperties",
+  "definitions",
+  "$defs",
+  "dependencies",
+  "propertyNames",
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "not",
+  "format",
+  "contentMediaType",
+  "contentEncoding",
+  "if",
+  "then",
+  "else"
+]);
+var validatorCache = /* @__PURE__ */ new Map();
+var draft7MetaschemaValidator;
+function getDraft7MetaschemaValidator() {
+  if (!draft7MetaschemaValidator) {
+    const ajv = new AjvJsonSchemaValidator();
+    draft7MetaschemaValidator = ajv.getValidator({
+      $ref: "http://json-schema.org/draft-07/schema#"
+    });
+  }
+  return draft7MetaschemaValidator;
+}
+function traverseSchema(node2, depth, context, state) {
+  state.nodeCount++;
+  if (state.nodeCount > MAX_SCHEMA_NODES) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema node count exceeds limit of ${MAX_SCHEMA_NODES} nodes`);
+  }
+  if (depth > MAX_SCHEMA_DEPTH) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema depth exceeds limit of ${MAX_SCHEMA_DEPTH}`);
+  }
+  if (typeof node2 !== "object" || node2 === null) {
+    return;
+  }
+  if (state.activeStack.has(node2)) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Schema contains circular references");
+  }
+  state.activeStack.add(node2);
+  try {
+    if (Array.isArray(node2)) {
+      const childContext = context === "data" ? "data" : "schema";
+      for (const item of node2) {
+        traverseSchema(item, depth + 1, childContext, state);
+      }
+      return;
+    }
+    const obj = node2;
+    for (const key of Object.getOwnPropertyNames(obj)) {
+      if (UNSAFE_KEYS.has(key)) {
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema contains forbidden unsafe key: ${key}`);
+      }
+    }
+    for (const key of Object.keys(obj)) {
+      if (UNSAFE_KEYS.has(key)) {
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema contains forbidden unsafe key: ${key}`);
+      }
+    }
+    if (context === "schema") {
+      if (Object.prototype.hasOwnProperty.call(obj, "$id") || Object.prototype.hasOwnProperty.call(obj, "id")) {
+        const idKey = Object.prototype.hasOwnProperty.call(obj, "$id") ? "$id" : "id";
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema keyword '${idKey}' is forbidden`);
+      }
+      if ("pattern" in obj || "patternProperties" in obj) {
+        throw new BridgeError("INVALID_OUTPUT_SCHEMA", "pattern and patternProperties are unsupported to prevent regex denial of service");
+      }
+      for (const key of Object.keys(obj)) {
+        if (!DRAFT7_SCHEMA_KEYWORDS.has(key)) {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Unsupported schema keyword: ${key}`);
+        }
+      }
+      if ("$ref" in obj) {
+        const refVal = obj["$ref"];
+        if (typeof refVal !== "string") {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", "$ref must be a string");
+        }
+        if (!refVal.startsWith("#")) {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `External $ref is forbidden: ${refVal}`);
+        }
+        if (refVal.includes("://")) {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Network $ref is forbidden: ${refVal}`);
+        }
+        if (refVal === "#") {
+          throw new BridgeError("INVALID_OUTPUT_SCHEMA", 'Direct recursive self-reference $ref: "#" is forbidden');
+        }
+      }
+      for (const [key, val] of Object.entries(obj)) {
+        if (key === "properties") {
+          traverseSchema(val, depth + 1, "properties-map", state);
+        } else if (key === "definitions" || key === "$defs") {
+          traverseSchema(val, depth + 1, "definitions-map", state);
+        } else if (key === "dependencies") {
+          traverseSchema(val, depth + 1, "dependencies-map", state);
+        } else if (key === "items" || key === "additionalProperties" || key === "additionalItems" || key === "allOf" || key === "anyOf" || key === "oneOf" || key === "not" || key === "if" || key === "then" || key === "else" || key === "contains" || key === "propertyNames") {
+          traverseSchema(val, depth + 1, "schema", state);
+        } else {
+          traverseSchema(val, depth + 1, "data", state);
+        }
+      }
+    } else if (context === "properties-map" || context === "definitions-map") {
+      for (const val of Object.values(obj)) {
+        traverseSchema(val, depth + 1, "schema", state);
+      }
+    } else if (context === "dependencies-map") {
+      for (const val of Object.values(obj)) {
+        if (Array.isArray(val)) {
+          traverseSchema(val, depth + 1, "data", state);
+        } else {
+          traverseSchema(val, depth + 1, "schema", state);
+        }
+      }
+    } else {
+      for (const val of Object.values(obj)) {
+        traverseSchema(val, depth + 1, "data", state);
+      }
+    }
+  } finally {
+    state.activeStack.delete(node2);
+  }
+}
+function validateOutputSchema(input2) {
+  if (typeof input2 !== "object" || input2 === null || Array.isArray(input2)) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema must be a non-null JSON object");
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(input2);
+  } catch (err) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema must be serializable to JSON: " + (err instanceof Error ? err.message : String(err)));
+  }
+  if (serialized === void 0) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema cannot be undefined");
+  }
+  const byteLength = Buffer.byteLength(serialized, "utf8");
+  if (byteLength > MAX_SCHEMA_BYTES) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema size (${byteLength} bytes) exceeds limit of ${MAX_SCHEMA_BYTES} bytes (64 KiB)`);
+  }
+  const state = { nodeCount: 0, activeStack: /* @__PURE__ */ new Set() };
+  traverseSchema(input2, 1, "schema", state);
+  const metaValidator = getDraft7MetaschemaValidator();
+  const metaOutcome = metaValidator(input2);
+  if (!metaOutcome.valid) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", metaOutcome.errorMessage || "Schema does not conform to JSON Schema Draft-07");
+  }
+  try {
+    const validator = new AjvJsonSchemaValidator();
+    validator.getValidator(input2);
+  } catch (err) {
+    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Failed to compile JSON schema offline: " + (err instanceof Error ? err.message : String(err)));
+  }
+  return JSON.parse(serialized);
+}
+function inspectJsonResult(val, depth, state) {
+  state.nodeCount++;
+  if (state.nodeCount > MAX_RESULT_NODES) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result node count exceeds limit of ${MAX_RESULT_NODES} nodes`);
+  }
+  if (depth > MAX_RESULT_DEPTH) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result tree depth exceeds limit of ${MAX_RESULT_DEPTH}`);
+  }
+  if (val === null) {
+    return;
+  }
+  if (val === void 0) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "undefined is not valid JSON");
+  }
+  if (typeof val === "number") {
+    if (!Number.isFinite(val)) {
+      throw new BridgeError("INVALID_STRUCTURED_RESULT", "NaN and Infinity are not valid JSON numbers");
+    }
+    return;
+  }
+  if (typeof val === "string" || typeof val === "boolean") {
+    return;
+  }
+  if (typeof val === "bigint" || typeof val === "symbol" || typeof val === "function") {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `${typeof val} is not valid JSON`);
+  }
+  if (typeof val !== "object") {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Invalid JSON value");
+  }
+  if (state.activeStack.has(val)) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Result contains circular references");
+  }
+  state.activeStack.add(val);
+  try {
+    if (Array.isArray(val)) {
+      for (let i = 0; i < val.length; i++) {
+        if (!(i in val) || val[i] === void 0) {
+          throw new BridgeError("INVALID_STRUCTURED_RESULT", "Sparse arrays or undefined elements are not valid JSON");
+        }
+        inspectJsonResult(val[i], depth + 1, state);
+      }
+      return;
+    }
+    const proto = Object.getPrototypeOf(val);
+    if (proto !== Object.prototype && proto !== null) {
+      throw new BridgeError("INVALID_STRUCTURED_RESULT", "Result must contain only plain JSON objects");
+    }
+    const obj = val;
+    for (const key of Object.getOwnPropertyNames(obj)) {
+      if (UNSAFE_KEYS.has(key)) {
+        throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result contains forbidden unsafe key: ${key}`);
+      }
+      const child = obj[key];
+      if (child === void 0) {
+        throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result property '${key}' has undefined value`);
+      }
+      inspectJsonResult(child, depth + 1, state);
+    }
+  } finally {
+    state.activeStack.delete(val);
+  }
+}
+function validateStructuredResult(schema, value) {
+  if (value === void 0) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result value is required and cannot be undefined");
+  }
+  inspectJsonResult(value, 1, { nodeCount: 0, activeStack: /* @__PURE__ */ new Set() });
+  let serialized;
+  try {
+    serialized = JSON.stringify(value);
+  } catch (err) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result must be serializable JSON: " + (err instanceof Error ? err.message : String(err)));
+  }
+  if (serialized === void 0) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result cannot be undefined or unserializable");
+  }
+  const resultBytes = Buffer.byteLength(serialized, "utf8");
+  if (resultBytes > MAX_RESULT_BYTES) {
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Structured result size (${resultBytes} bytes) exceeds limit of ${MAX_RESULT_BYTES} bytes (1 MiB)`);
+  }
+  validateOutputSchema(schema);
+  const snapshot = JSON.parse(serialized);
+  const schemaHash = createHash5("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
+  let validatorFn = validatorCache.get(schemaHash);
+  if (!validatorFn) {
+    try {
+      const validator = new AjvJsonSchemaValidator();
+      validatorFn = validator.getValidator(schema);
+      if (validatorCache.size >= MAX_VALIDATOR_CACHE) {
+        const oldestKey = validatorCache.keys().next().value;
+        if (oldestKey !== void 0) {
+          validatorCache.delete(oldestKey);
+        }
+      }
+      validatorCache.set(schemaHash, validatorFn);
+    } catch (err) {
+      throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Failed to compile schema: " + (err instanceof Error ? err.message : String(err)));
+    }
+  }
+  try {
+    const outcome = validatorFn(snapshot);
+    if (!outcome.valid) {
+      throw new BridgeError("INVALID_STRUCTURED_RESULT", outcome.errorMessage || "Structured result does not match schema");
+    }
+  } catch (err) {
+    if (err instanceof BridgeError)
+      throw err;
+    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result validation failed: " + (err instanceof Error ? err.message : String(err)));
+  }
+  const sha256 = createHash5("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
+  return { value: snapshot, sha256 };
+}
+
 // dist/src/roles.js
+function validIncludePath(input2) {
+  if (typeof input2 !== "string" || !input2.trim()) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Include path cannot be empty");
+  }
+  if (input2.includes(":")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Colon and Alternate Data Streams are forbidden: " + input2);
+  }
+  if (/[\x00-\x1f\x7f]/.test(input2)) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Control characters and NUL are forbidden: " + input2);
+  }
+  const value = input2.replaceAll("\\", "/").replace(/\/+$/, "");
+  if (!value || value.startsWith("/") || /^[A-Za-z]:/.test(input2) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(input2)) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Include path must be a relative project path: " + input2);
+  }
+  const parts = value.split("/");
+  if (parts.some((part) => !part || part === "." || part === "..")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Include path cannot contain empty segments or traversal elements (. or ..): " + input2);
+  }
+  for (const part of parts) {
+    if (/[. ]$/.test(part)) {
+      throw new BridgeError("INVALID_INCLUDE_PATH", "Path segment cannot end with a dot or space: " + input2);
+    }
+    if (/[<>"|?*]/.test(part)) {
+      throw new BridgeError("INVALID_INCLUDE_PATH", "Invalid path characters in segment: " + input2);
+    }
+    if (isWindowsDeviceName(part)) {
+      throw new BridgeError("INVALID_INCLUDE_PATH", "Include path cannot contain Windows device name: " + input2);
+    }
+    if (part.toLowerCase() === ".git") {
+      throw new BridgeError("UNSAFE_INCLUDE_PATH", "Include path cannot contain .git components: " + input2);
+    }
+    if (part.toLowerCase() === ".agents") {
+      throw new BridgeError("UNSAFE_INCLUDE_PATH", "Include path cannot contain .agents components: " + input2);
+    }
+  }
+  return value;
+}
+var includePathSchema = external_exports.string().min(1).max(1e3).refine((val) => {
+  try {
+    validIncludePath(val);
+    return true;
+  } catch {
+    return false;
+  }
+}, "includePaths must contain bounded relative project paths");
+var includePathsSchema = external_exports.array(includePathSchema).min(1).max(100).refine((paths2) => {
+  try {
+    const normalizedLower = paths2.map((p) => validIncludePath(p).toLowerCase());
+    return new Set(normalizedLower).size === paths2.length;
+  } catch {
+    return false;
+  }
+}, "includePaths must be unique (including case aliases)");
+function computeSkillBundlesBytes(skills) {
+  return skills.reduce((sum2, skill) => sum2 + Buffer.byteLength(skill.content, "utf8") + (skill.resources ?? []).reduce((n, file3) => n + Buffer.byteLength(file3.content, "utf8"), 0), 0);
+}
+var effortSchema = external_exports.enum(["low", "medium", "high", "xhigh", "max"]);
+var profileSkillsSchema = external_exports.lazy(() => providedSkillsSchema.refine((skills) => computeSkillBundlesBytes(skills) <= MAX_TOTAL_BUNDLES_BYTES, "Supplied skills exceed the 1 MiB text budget").refine((skills) => new Set(skills.map((s) => s.name.toLowerCase())).size === skills.length, "Skill names must be unique"));
+var profileOutputSchema = external_exports.record(external_exports.string(), external_exports.unknown()).superRefine((schema, ctx) => {
+  try {
+    validateOutputSchema(schema);
+  } catch (err) {
+    ctx.addIssue({
+      code: "custom",
+      message: err instanceof Error ? err.message : String(err)
+    });
+  }
+});
+var profileDefaultsSchema = external_exports.object({
+  model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable().optional(),
+  effort: effortSchema.optional(),
+  skills: profileSkillsSchema.optional(),
+  includePaths: includePathsSchema.optional(),
+  outputSchema: profileOutputSchema.optional(),
+  artifactPaths: external_exports.lazy(() => artifactPathsSchema).optional(),
+  deliveryMode: deliveryModeSchema.optional(),
+  timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
+}).strict();
 var builtinRoleSchema = external_exports.enum(["implementer", "planner", "reviewer"]);
 var roleSchema = external_exports.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
 var roleDefinitionSchema = external_exports.object({
   name: roleSchema,
   baseRole: builtinRoleSchema,
   instruction: external_exports.string().max(8e3),
-  description: external_exports.string().min(1).max(500).optional()
-}).strict();
+  description: external_exports.string().min(1).max(500).optional(),
+  defaults: profileDefaultsSchema.optional()
+}).strict().superRefine((role, ctx) => {
+  if (role.baseRole !== "implementer" && role.defaults?.outputSchema !== void 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Roles based on planner and reviewer cannot configure custom outputSchema",
+      path: ["defaults", "outputSchema"]
+    });
+  }
+});
 var customRolesSchema = external_exports.array(roleDefinitionSchema.refine((role) => !builtinRoleSchema.safeParse(role.name).success && Boolean(role.instruction.trim()), "Custom roles cannot replace built-in names and require instructions")).max(20).refine((roles) => new Set(roles.map((role) => role.name)).size === roles.length, "Custom role names must be unique");
 var builtinDefinitions = [
   { name: "implementer", baseRole: "implementer", instruction: "", description: "Implement requested changes in the isolated copy." },
   { name: "planner", baseRole: "planner", instruction: "", description: "Plan requested work in read-only mode with a structured report." },
   { name: "reviewer", baseRole: "reviewer", instruction: "", description: "Review files in read-only mode with checked citations." }
 ];
+function hashJsonSchema(schema) {
+  return createHash6("sha256").update(JSON.stringify(schema)).digest("hex");
+}
+function hashSkillBundle(skill) {
+  return createHash6("sha256").update(JSON.stringify(skill)).digest("hex");
+}
 function resolveRole(name, customRoles = []) {
   const role = [...builtinDefinitions, ...customRoles].find((role2) => role2.name === name);
   if (!role)
     throw new BridgeError("INVALID_ROLE", "Role is not configured: " + name);
-  return { ...role };
+  return {
+    ...role,
+    ...role.defaults !== void 0 ? { defaults: structuredClone(role.defaults) } : {}
+  };
 }
-function listRoles(customRoles) {
-  return [...builtinDefinitions, ...customRoles].map((role) => ({
-    name: role.name,
-    baseRole: role.baseRole,
-    description: role.description ?? null,
-    custom: !builtinRoleSchema.safeParse(role.name).success,
-    instructionChars: role.instruction.length
-  }));
+function listRoles(customRoles = []) {
+  return [...builtinDefinitions, ...customRoles].map((role) => {
+    const listing = {
+      name: role.name,
+      baseRole: role.baseRole,
+      description: role.description ?? null,
+      custom: !builtinRoleSchema.safeParse(role.name).success,
+      instructionChars: role.instruction.length
+    };
+    if (role.defaults) {
+      if (role.defaults.model !== void 0) {
+        listing.defaultModel = role.defaults.model;
+      }
+      if (role.defaults.effort !== void 0) {
+        listing.defaultEffort = role.defaults.effort;
+      }
+      if (role.defaults.timeoutSeconds !== void 0) {
+        listing.defaultTimeoutSeconds = role.defaults.timeoutSeconds;
+      }
+      if (role.defaults.deliveryMode !== void 0) {
+        listing.defaultDeliveryMode = role.defaults.deliveryMode;
+      }
+      if (role.defaults.includePaths !== void 0) {
+        listing.defaultIncludePaths = [...role.defaults.includePaths];
+      }
+      if (role.defaults.artifactPaths !== void 0) {
+        listing.defaultArtifactPaths = [...role.defaults.artifactPaths];
+      }
+      if (role.defaults.skills !== void 0) {
+        listing.defaultSkillSummaries = role.defaults.skills.map((skill) => ({
+          name: skill.name,
+          sha256: hashSkillBundle(skill),
+          resourceCount: skill.resources?.length ?? 0
+        }));
+      }
+      if (role.defaults.outputSchema !== void 0) {
+        listing.outputSchemaSha256 = hashJsonSchema(role.defaults.outputSchema);
+      }
+    }
+    return listing;
+  });
+}
+function applyRoleDefaults(options, definition) {
+  if (definition.baseRole !== "implementer" && (options.outputSchema !== void 0 || definition.defaults?.outputSchema !== void 0)) {
+    throw new BridgeError("INVALID_ROLE", "Structured output schema requires an implementer base role");
+  }
+  const result = structuredClone(options);
+  for (const key of ["model", "effort", "skills", "includePaths", "outputSchema", "artifactPaths", "deliveryMode", "timeoutSeconds"]) {
+    if (result[key] === void 0 && definition.defaults?.[key] !== void 0) {
+      Object.assign(result, { [key]: structuredClone(definition.defaults[key]) });
+    }
+  }
+  return result;
 }
 var plannerReportSchema = external_exports.object({
   summary: external_exports.string().min(1).max(4e3),
@@ -29689,14 +30643,14 @@ async function validateRoleReport(role, raw, copyDirectory) {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access, lstat as lstat3, realpath as realpath2, stat as stat2 } from "node:fs/promises";
-import path5 from "node:path";
+import { access, lstat as lstat4, realpath as realpath2, stat as stat2 } from "node:fs/promises";
+import path6 from "node:path";
 function within(root, candidate) {
-  const relative = path5.relative(root, candidate);
-  return relative === "" || relative !== ".." && !relative.startsWith(`..${path5.sep}`) && !path5.isAbsolute(relative);
+  const relative = path6.relative(root, candidate);
+  return relative === "" || relative !== ".." && !relative.startsWith(`..${path6.sep}`) && !path6.isAbsolute(relative);
 }
 async function validateWorkingDirectory(input2, forbidden) {
-  if (!path5.isAbsolute(input2))
+  if (!path6.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
     const directory = await realpath2(input2);
@@ -29704,7 +30658,7 @@ async function validateWorkingDirectory(input2, forbidden) {
       throw new Error("not a directory");
     await access(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath2(excluded).catch(() => path5.resolve(excluded));
+      const resolved = await realpath2(excluded).catch(() => path6.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -29716,22 +30670,22 @@ async function validateWorkingDirectory(input2, forbidden) {
   }
 }
 async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
-  let existing = path5.resolve(cacheDirectory);
+  let existing = path6.resolve(cacheDirectory);
   const missing = [];
   try {
     for (; ; ) {
       try {
-        await lstat3(existing);
+        await lstat4(existing);
         break;
       } catch (error62) {
-        const parent = path5.dirname(existing);
+        const parent = path6.dirname(existing);
         if (error62.code !== "ENOENT" || parent === existing)
           throw error62;
-        missing.unshift(path5.basename(existing));
+        missing.unshift(path6.basename(existing));
         existing = parent;
       }
     }
-    const cache = path5.join(await realpath2(existing), ...missing);
+    const cache = path6.join(await realpath2(existing), ...missing);
     if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
       throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
     }
@@ -29762,14 +30716,14 @@ function taskPrompt(options, maxChars) {
   return content;
 }
 function stageSchemaFile(stateDirectory, content) {
-  if (!path6.isAbsolute(stateDirectory))
+  if (!path7.isAbsolute(stateDirectory))
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage must be absolute");
   mkdirSync(stateDirectory, { recursive: true, mode: 448 });
   if (lstatSync(stateDirectory).isSymbolicLink())
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage cannot be a link");
   const root = realpathSync2.native(stateDirectory);
   const identity = lstatSync(root);
-  const file3 = path6.join(root, "cli-schema-" + randomUUID() + ".json");
+  const file3 = path7.join(root, "cli-schema-" + randomUUID2() + ".json");
   writeFileSync(file3, content, { flag: "wx", mode: 384 });
   let cleaned = false;
   return { file: file3, cleanup() {
@@ -29787,14 +30741,14 @@ function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
 async function resolveExecutable(command2) {
-  if (path6.isAbsolute(command2))
-    return path6.resolve(command2);
+  if (path7.isAbsolute(command2))
+    return path7.resolve(command2);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
-  for (const directory of (process.env.PATH || "").split(path6.delimiter)) {
+  for (const directory of (process.env.PATH || "").split(path7.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path6.join(directory, command2 + extension);
+      const candidate = path7.join(directory, command2 + extension);
       try {
         await access2(candidate);
         return candidate;
@@ -29822,7 +30776,7 @@ var CliAdapter = class {
   }
   probe(args, timeoutMs = 1e4) {
     return new Promise((resolve, reject) => {
-      const child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      const child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       let stdout = "", stderr = "";
       const timer = setTimeout(() => child.kill(), timeoutMs);
       child.stdout.on("data", (chunk) => {
@@ -29929,6 +30883,11 @@ var CliAdapter = class {
     }
     if (model)
       args.push("--model", model);
+    if (options.effort !== void 0) {
+      if (!this.help.includes("--effort"))
+        throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", "Installed agy does not advertise --effort");
+      args.push("--effort", options.effort);
+    }
     if (options.sessionId)
       args.push("--conversation", options.sessionId);
     if (!options.nativeTest && options.outputSchema !== void 0) {
@@ -29950,7 +30909,7 @@ var CliAdapter = class {
       args[schemaIndex + 1] = staged.file;
     let child;
     try {
-      child = spawn2(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     } catch (error62) {
       staged?.cleanup();
       throw error62;
@@ -36378,74 +37337,6 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
-var import_ajv = __toESM(require_ajv(), 1);
-var import_ajv_formats = __toESM(require_dist(), 1);
-function createDefaultAjvInstance() {
-  const ajv = new import_ajv.default({
-    strict: false,
-    validateFormats: true,
-    validateSchema: false,
-    allErrors: true
-  });
-  const addFormats = import_ajv_formats.default;
-  addFormats(ajv);
-  return ajv;
-}
-var AjvJsonSchemaValidator = class {
-  /**
-   * Create an AJV validator
-   *
-   * @param ajv - Optional pre-configured AJV instance. If not provided, a default instance will be created.
-   *
-   * @example
-   * ```typescript
-   * // Use default configuration (recommended for most cases)
-   * import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
-   * const validator = new AjvJsonSchemaValidator();
-   *
-   * // Or provide custom AJV instance for advanced configuration
-   * import { Ajv } from 'ajv';
-   * import addFormats from 'ajv-formats';
-   *
-   * const ajv = new Ajv({ validateFormats: true });
-   * addFormats(ajv);
-   * const validator = new AjvJsonSchemaValidator(ajv);
-   * ```
-   */
-  constructor(ajv) {
-    this._ajv = ajv ?? createDefaultAjvInstance();
-  }
-  /**
-   * Create a validator for the given JSON Schema
-   *
-   * The validator is compiled once and can be reused multiple times.
-   * If the schema has an $id, it will be cached by AJV automatically.
-   *
-   * @param schema - Standard JSON Schema object
-   * @returns A validator function that validates input data
-   */
-  getValidator(schema) {
-    const ajvValidator = "$id" in schema && typeof schema.$id === "string" ? this._ajv.getSchema(schema.$id) ?? this._ajv.compile(schema) : this._ajv.compile(schema);
-    return (input2) => {
-      const valid = ajvValidator(input2);
-      if (valid) {
-        return {
-          valid: true,
-          data: input2,
-          errorMessage: void 0
-        };
-      } else {
-        return {
-          valid: false,
-          data: void 0,
-          errorMessage: this._ajv.errorsText(ajvValidator.errors)
-        };
-      }
-    };
-  }
-};
-
 // node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
@@ -37944,114 +38835,9 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// dist/src/messages.js
-import { createHash as createHash3, randomUUID as randomUUID2 } from "node:crypto";
-var deliveryModeSchema = external_exports.enum(["messages", "events"]);
-var MAX_MESSAGE_CHARS = 2e3;
-var MAX_TASK_MESSAGES = 100;
-var agentMessageInputSchema = external_exports.object({
-  kind: external_exports.enum(["message", "question", "blocker"]),
-  text: external_exports.string().min(1).max(MAX_MESSAGE_CHARS)
-}).strict();
-var bridgeMessageSchema = external_exports.object({
-  messageId: external_exports.string().uuid(),
-  taskId: external_exports.string().uuid(),
-  sequence: external_exports.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  timestamp: external_exports.string().datetime(),
-  source: external_exports.enum(["agy-reported", "bridge"]),
-  kind: external_exports.enum(["message", "question", "blocker", "final", "error"]),
-  text: external_exports.string().min(1).max(MAX_MESSAGE_CHARS),
-  model: external_exports.string().nullable(),
-  reference: external_exports.object({ tool: external_exports.literal("antigravity_read_result"), taskId: external_exports.string().uuid(), contentSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) }).strict().optional()
-}).strict();
-function appendMessage(record2, kind, source, text, reference) {
-  const sequence = (record2.messageCursor ?? 0) + 1;
-  const message = bridgeMessageSchema.parse({
-    messageId: randomUUID2(),
-    taskId: record2.taskId,
-    sequence,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    kind,
-    source,
-    text: text.slice(0, MAX_MESSAGE_CHARS),
-    model: record2.model ?? null,
-    ...reference ? { reference } : {}
-  });
-  record2.messageCursor = sequence;
-  record2.messages = [...record2.messages ?? [], message].slice(-MAX_TASK_MESSAGES);
-  return message;
-}
-function readMessages(record2, after = 0, limit = 25) {
-  if (!Number.isSafeInteger(after) || after < 0 || !Number.isInteger(limit) || limit < 1 || limit > 50)
-    throw new Error("Invalid message cursor or page size");
-  const retained = record2.messages ?? [];
-  const oldestAvailable = retained[0]?.sequence ?? (record2.messageCursor ?? 0) + 1;
-  const messages = retained.filter((message) => message.sequence > after).slice(0, limit);
-  return { messages, nextCursor: messages.at(-1)?.sequence ?? after, oldestAvailable, truncated: after < oldestAvailable - 1 };
-}
-function extractAgentMessages(text) {
-  const messages = [];
-  const bounded = text.slice(0, 1024 * 1024);
-  for (const match of bounded.matchAll(/<antigravity-message>([\s\S]*?)<\/antigravity-message>/g)) {
-    if (messages.length >= 1001)
-      break;
-    if (match[1].length > 4096)
-      continue;
-    try {
-      const parsed = agentMessageInputSchema.safeParse(JSON.parse(match[1]));
-      if (parsed.success)
-        messages.push(parsed.data);
-    } catch {
-    }
-  }
-  return messages;
-}
-function clientTask(task2) {
-  if (task2.deliveryMode === "messages")
-    return compactTask(task2);
-  const { messages, messageCursor, inbox, dispatching, sourceMessage, ...metadata } = task2;
-  void messages;
-  void messageCursor;
-  void inbox;
-  void dispatching;
-  void sourceMessage;
-  return metadata;
-}
-function resultReference(record2) {
-  return {
-    tool: "antigravity_read_result",
-    taskId: record2.taskId,
-    contentSha256: createHash3("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
-  };
-}
-function compactTask(task2) {
-  return {
-    taskId: task2.taskId,
-    workingDirectory: task2.workingDirectory,
-    status: task2.status,
-    createdAt: task2.createdAt,
-    sessionId: task2.sessionId,
-    model: task2.model,
-    mode: task2.mode,
-    role: task2.role,
-    startedAt: task2.startedAt,
-    completedAt: task2.completedAt,
-    exitCode: task2.exitCode,
-    error: task2.error,
-    tokenUsage: task2.tokenUsage,
-    integratedAt: task2.integratedAt,
-    discardedAt: task2.discardedAt,
-    deliveryMode: task2.deliveryMode,
-    ...task2.providedSkills?.length ? { providedSkillSummaries: task2.providedSkills.map((skill) => ({ name: skill.name, sha256: skill.sha256, fileCount: skill.files.length })) } : {},
-    ...task2.continuationTaskId ? { continuationTaskId: task2.continuationTaskId } : {},
-    ...task2.structuredResult ? { structuredResultSha256: task2.structuredResult.sha256 } : {},
-    ...task2.artifacts !== void 0 ? { artifactCount: task2.artifacts.length } : {}
-  };
-}
-
 // dist/src/verification.js
-import { createHash as createHash4 } from "node:crypto";
-import { createReadStream as createReadStream3 } from "node:fs";
+import { createHash as createHash7 } from "node:crypto";
+import { createReadStream as createReadStream4 } from "node:fs";
 var criterionSchema = external_exports.object({
   id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
   description: external_exports.string().min(1).max(2e3),
@@ -38086,14 +38872,14 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
     try {
       const chunks = [];
       let length = 0;
-      for await (const chunk of createReadStream3(await checkedPath(project.copyDirectory, relative, true))) {
+      for await (const chunk of createReadStream4(await checkedPath(project.copyDirectory, relative, true))) {
         length += chunk.length;
         if (length > 1e7)
           throw new BridgeError("VERIFICATION_TOO_LARGE", "Verification file exceeds 10 MB");
         chunks.push(chunk);
       }
       const buffer = Buffer.concat(chunks);
-      fileHashes[relative] = createHash4("sha256").update(buffer).digest("hex");
+      fileHashes[relative] = createHash7("sha256").update(buffer).digest("hex");
       contents.set(relative, buffer);
       return buffer;
     } catch (error62) {
@@ -38135,9 +38921,9 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
 }
 
 // dist/src/native-tests.js
-import { createHash as createHash5, randomUUID as randomUUID3 } from "node:crypto";
+import { createHash as createHash8, randomUUID as randomUUID3 } from "node:crypto";
 import { appendFile, mkdir as mkdir3, readFile as readFile2, rm as rm2, writeFile as writeFile2 } from "node:fs/promises";
-import path7 from "node:path";
+import path8 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
   args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
@@ -38237,11 +39023,11 @@ async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID3();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path7.join(project.copyDirectory, file3);
+  const absolute = path8.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash3 = createHash5("sha256").update(script).digest("hex");
-  const exclude = path7.join(project.gitDirectory, "info", "exclude");
-  await mkdir3(path7.dirname(exclude), { recursive: true });
+  const hash3 = createHash8("sha256").update(script).digest("hex");
+  const exclude = path8.join(project.gitDirectory, "info", "exclude");
+  await mkdir3(path8.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
   await writeFile2(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
@@ -38479,10 +39265,10 @@ function compareFindings(tasks, models) {
 }
 
 // dist/src/sandbox-policy.js
-import { createHash as createHash6 } from "node:crypto";
-import { lstat as lstat4, readdir as readdir3, realpath as realpath3 } from "node:fs/promises";
+import { createHash as createHash9 } from "node:crypto";
+import { lstat as lstat5, readdir as readdir4, realpath as realpath3 } from "node:fs/promises";
 import os3 from "node:os";
-import path8 from "node:path";
+import path9 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
 var persistedPolicySchema = external_exports.object({
   readRoots: paths,
@@ -38530,8 +39316,8 @@ function comparePaths(left, right) {
   return 0;
 }
 function contains(root, target) {
-  const relative = path8.relative(pathKey(root), pathKey(target));
-  return relative === "" || !relative.startsWith(".." + path8.sep) && relative !== ".." && !path8.isAbsolute(relative);
+  const relative = path9.relative(pathKey(root), pathKey(target));
+  return relative === "" || !relative.startsWith(".." + path9.sep) && relative !== ".." && !path9.isAbsolute(relative);
 }
 function overlaps(left, right) {
   return contains(left, right) || contains(right, left);
@@ -38570,7 +39356,7 @@ function requireNormalizedPolicy(value) {
 }
 function sandboxPolicyDigest(policy) {
   const normalized = requireNormalizedPolicy(policy);
-  return createHash6("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
+  return createHash9("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
 }
 function parseSandboxPolicySnapshot(value) {
   const snapshot = external_exports.object({
@@ -38597,20 +39383,20 @@ function localAbsolutePath(value) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
       }
     }
-  } else if (!path8.isAbsolute(value) || value.startsWith("//")) {
+  } else if (!path9.isAbsolute(value) || value.startsWith("//")) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
   }
-  return path8.resolve(value);
+  return path9.resolve(value);
 }
 async function inspectExistingPath(absolute) {
-  const root = path8.parse(absolute).root;
-  const parts = path8.relative(root, absolute).split(path8.sep).filter(Boolean);
+  const root = path9.parse(absolute).root;
+  const parts = path9.relative(root, absolute).split(path9.sep).filter(Boolean);
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path8.join(current, parts[index]);
+    current = path9.join(current, parts[index]);
     let info;
     try {
-      info = await lstat4(current);
+      info = await lstat5(current);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must already exist");
@@ -38627,7 +39413,7 @@ async function inspectExistingPath(absolute) {
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a sandbox permission target");
   }
-  const final = await lstat4(canonical).catch(() => void 0);
+  const final = await lstat5(canonical).catch(() => void 0);
   if (!final || final.isSymbolicLink() || !final.isDirectory() && !final.isFile() || final.isFile() && final.nlink > 1) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must resolve to regular files or directories");
   }
@@ -38638,15 +39424,15 @@ async function inspectDirectoryGrant(directory, limits) {
   const visit2 = async (current) => {
     let children;
     try {
-      children = await readdir3(current);
+      children = await readdir4(current);
     } catch {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
     for (const name of children) {
-      const child = path8.join(current, name);
+      const child = path9.join(current, name);
       let info;
       try {
-        info = await lstat4(child);
+        info = await lstat5(child);
       } catch {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox directory grants cannot change during validation");
       }
@@ -38673,14 +39459,14 @@ async function inspectSandboxGrant(value) {
 }
 async function canonicalProtectedPath(value) {
   const absolute = localAbsolutePath(value);
-  const root = path8.parse(absolute).root;
-  const parts = path8.relative(root, absolute).split(path8.sep).filter(Boolean);
+  const root = path9.parse(absolute).root;
+  const parts = path9.relative(root, absolute).split(path9.sep).filter(Boolean);
   let current = root, firstMissing = parts.length;
   for (let index = 0; index < parts.length; index++) {
-    const next = path8.join(current, parts[index]);
+    const next = path9.join(current, parts[index]);
     let info;
     try {
-      info = await lstat4(next);
+      info = await lstat5(next);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         firstMissing = index;
@@ -38699,13 +39485,13 @@ async function canonicalProtectedPath(value) {
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
-  return path8.join(canonical, ...parts.slice(firstMissing));
+  return path9.join(canonical, ...parts.slice(firstMissing));
 }
 async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
   return Promise.all([
     stateDirectory,
     ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
-    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path8.join(os3.homedir(), name)),
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path9.join(os3.homedir(), name)),
     ...forbidden
   ].map(canonicalProtectedPath));
 }
@@ -38713,7 +39499,7 @@ async function canonicalPaths(values, protectedRoots, limits) {
   const temporary = await canonicalProtectedPath(os3.tmpdir());
   const canonical = await Promise.all(values.map(async (value) => {
     const target = await inspectSandboxGrant(value);
-    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path8.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path9.sep).some((part) => ownedTemporaryDirectory.test(part))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
     }
     if (target.directory)
@@ -38832,6 +39618,7 @@ var taskRecordSchema = external_exports.object({
   continuationTaskId: id.optional(),
   parentTaskId: id.optional(),
   providedSkillSummaries: external_exports.array(external_exports.object({ name: external_exports.string(), sha256: external_exports.string().regex(/^[a-f0-9]{64}$/), fileCount: count }).strict()).max(8).optional(),
+  effort: effortSchema.optional(),
   outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
   artifactPaths: external_exports.array(external_exports.string()).optional(),
   structuredResult: external_exports.object({ value: external_exports.unknown(), sha256: hash2 }).strict().optional(),
@@ -38906,7 +39693,15 @@ var successOutputSchemas = {
     baseRole: builtinRoleSchema,
     description: external_exports.string().nullable(),
     custom: external_exports.boolean(),
-    instructionChars: count
+    instructionChars: count,
+    defaultModel: external_exports.string().nullable().optional(),
+    defaultEffort: effortSchema.optional(),
+    defaultTimeoutSeconds: external_exports.number().int().min(1).max(86400).optional(),
+    defaultDeliveryMode: deliveryModeSchema.optional(),
+    defaultIncludePaths: external_exports.array(external_exports.string()).optional(),
+    defaultArtifactPaths: external_exports.array(external_exports.string()).optional(),
+    defaultSkillSummaries: external_exports.array(external_exports.object({ name: external_exports.string(), sha256: hash2, resourceCount: count }).strict()).optional(),
+    outputSchemaSha256: hash2.optional()
   }).strict()) }).strict(),
   antigravity_set_model: external_exports.object({ model: external_exports.string().nullable() }).strict(),
   antigravity_set_sandbox_policy: sandboxPolicySnapshot,
@@ -39068,642 +39863,6 @@ function withError(schema) {
 }
 var outputSchemas = Object.fromEntries(Object.entries(successOutputSchemas).map(([name, schema]) => [name, withError(schema)]));
 
-// dist/src/structured-results.js
-import { createHash as createHash7 } from "node:crypto";
-var structuredResultInputSchema = external_exports.record(external_exports.string(), external_exports.unknown());
-var MAX_SCHEMA_BYTES = 64 * 1024;
-var MAX_SCHEMA_DEPTH = 32;
-var MAX_SCHEMA_NODES = 1e3;
-var MAX_RESULT_BYTES = 1024 * 1024;
-var MAX_RESULT_DEPTH = 32;
-var MAX_RESULT_NODES = 1e4;
-var MAX_VALIDATOR_CACHE = 100;
-var UNSAFE_KEYS = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
-var DRAFT7_SCHEMA_KEYWORDS = /* @__PURE__ */ new Set([
-  "$schema",
-  "$ref",
-  "$comment",
-  "title",
-  "description",
-  "default",
-  "examples",
-  "readOnly",
-  "writeOnly",
-  "type",
-  "enum",
-  "const",
-  "multipleOf",
-  "maximum",
-  "exclusiveMaximum",
-  "minimum",
-  "exclusiveMinimum",
-  "maxLength",
-  "minLength",
-  "items",
-  "additionalItems",
-  "maxItems",
-  "minItems",
-  "uniqueItems",
-  "contains",
-  "maxProperties",
-  "minProperties",
-  "required",
-  "properties",
-  "additionalProperties",
-  "definitions",
-  "$defs",
-  "dependencies",
-  "propertyNames",
-  "allOf",
-  "anyOf",
-  "oneOf",
-  "not",
-  "format",
-  "contentMediaType",
-  "contentEncoding",
-  "if",
-  "then",
-  "else"
-]);
-var validatorCache = /* @__PURE__ */ new Map();
-var draft7MetaschemaValidator;
-function getDraft7MetaschemaValidator() {
-  if (!draft7MetaschemaValidator) {
-    const ajv = new AjvJsonSchemaValidator();
-    draft7MetaschemaValidator = ajv.getValidator({
-      $ref: "http://json-schema.org/draft-07/schema#"
-    });
-  }
-  return draft7MetaschemaValidator;
-}
-function traverseSchema(node2, depth, context, state) {
-  state.nodeCount++;
-  if (state.nodeCount > MAX_SCHEMA_NODES) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema node count exceeds limit of ${MAX_SCHEMA_NODES} nodes`);
-  }
-  if (depth > MAX_SCHEMA_DEPTH) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema depth exceeds limit of ${MAX_SCHEMA_DEPTH}`);
-  }
-  if (typeof node2 !== "object" || node2 === null) {
-    return;
-  }
-  if (state.activeStack.has(node2)) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Schema contains circular references");
-  }
-  state.activeStack.add(node2);
-  try {
-    if (Array.isArray(node2)) {
-      const childContext = context === "data" ? "data" : "schema";
-      for (const item of node2) {
-        traverseSchema(item, depth + 1, childContext, state);
-      }
-      return;
-    }
-    const obj = node2;
-    for (const key of Object.getOwnPropertyNames(obj)) {
-      if (UNSAFE_KEYS.has(key)) {
-        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema contains forbidden unsafe key: ${key}`);
-      }
-    }
-    for (const key of Object.keys(obj)) {
-      if (UNSAFE_KEYS.has(key)) {
-        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema contains forbidden unsafe key: ${key}`);
-      }
-    }
-    if (context === "schema") {
-      if (Object.prototype.hasOwnProperty.call(obj, "$id") || Object.prototype.hasOwnProperty.call(obj, "id")) {
-        const idKey = Object.prototype.hasOwnProperty.call(obj, "$id") ? "$id" : "id";
-        throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema keyword '${idKey}' is forbidden`);
-      }
-      if ("pattern" in obj || "patternProperties" in obj) {
-        throw new BridgeError("INVALID_OUTPUT_SCHEMA", "pattern and patternProperties are unsupported to prevent regex denial of service");
-      }
-      for (const key of Object.keys(obj)) {
-        if (!DRAFT7_SCHEMA_KEYWORDS.has(key)) {
-          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Unsupported schema keyword: ${key}`);
-        }
-      }
-      if ("$ref" in obj) {
-        const refVal = obj["$ref"];
-        if (typeof refVal !== "string") {
-          throw new BridgeError("INVALID_OUTPUT_SCHEMA", "$ref must be a string");
-        }
-        if (!refVal.startsWith("#")) {
-          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `External $ref is forbidden: ${refVal}`);
-        }
-        if (refVal.includes("://")) {
-          throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Network $ref is forbidden: ${refVal}`);
-        }
-        if (refVal === "#") {
-          throw new BridgeError("INVALID_OUTPUT_SCHEMA", 'Direct recursive self-reference $ref: "#" is forbidden');
-        }
-      }
-      for (const [key, val] of Object.entries(obj)) {
-        if (key === "properties") {
-          traverseSchema(val, depth + 1, "properties-map", state);
-        } else if (key === "definitions" || key === "$defs") {
-          traverseSchema(val, depth + 1, "definitions-map", state);
-        } else if (key === "dependencies") {
-          traverseSchema(val, depth + 1, "dependencies-map", state);
-        } else if (key === "items" || key === "additionalProperties" || key === "additionalItems" || key === "allOf" || key === "anyOf" || key === "oneOf" || key === "not" || key === "if" || key === "then" || key === "else" || key === "contains" || key === "propertyNames") {
-          traverseSchema(val, depth + 1, "schema", state);
-        } else {
-          traverseSchema(val, depth + 1, "data", state);
-        }
-      }
-    } else if (context === "properties-map" || context === "definitions-map") {
-      for (const val of Object.values(obj)) {
-        traverseSchema(val, depth + 1, "schema", state);
-      }
-    } else if (context === "dependencies-map") {
-      for (const val of Object.values(obj)) {
-        if (Array.isArray(val)) {
-          traverseSchema(val, depth + 1, "data", state);
-        } else {
-          traverseSchema(val, depth + 1, "schema", state);
-        }
-      }
-    } else {
-      for (const val of Object.values(obj)) {
-        traverseSchema(val, depth + 1, "data", state);
-      }
-    }
-  } finally {
-    state.activeStack.delete(node2);
-  }
-}
-function validateOutputSchema(input2) {
-  if (typeof input2 !== "object" || input2 === null || Array.isArray(input2)) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema must be a non-null JSON object");
-  }
-  let serialized;
-  try {
-    serialized = JSON.stringify(input2);
-  } catch (err) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema must be serializable to JSON: " + (err instanceof Error ? err.message : String(err)));
-  }
-  if (serialized === void 0) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Output schema cannot be undefined");
-  }
-  const byteLength = Buffer.byteLength(serialized, "utf8");
-  if (byteLength > MAX_SCHEMA_BYTES) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", `Schema size (${byteLength} bytes) exceeds limit of ${MAX_SCHEMA_BYTES} bytes (64 KiB)`);
-  }
-  const state = { nodeCount: 0, activeStack: /* @__PURE__ */ new Set() };
-  traverseSchema(input2, 1, "schema", state);
-  const metaValidator = getDraft7MetaschemaValidator();
-  const metaOutcome = metaValidator(input2);
-  if (!metaOutcome.valid) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", metaOutcome.errorMessage || "Schema does not conform to JSON Schema Draft-07");
-  }
-  try {
-    const validator = new AjvJsonSchemaValidator();
-    validator.getValidator(input2);
-  } catch (err) {
-    throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Failed to compile JSON schema offline: " + (err instanceof Error ? err.message : String(err)));
-  }
-  return JSON.parse(serialized);
-}
-function inspectJsonResult(val, depth, state) {
-  state.nodeCount++;
-  if (state.nodeCount > MAX_RESULT_NODES) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result node count exceeds limit of ${MAX_RESULT_NODES} nodes`);
-  }
-  if (depth > MAX_RESULT_DEPTH) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result tree depth exceeds limit of ${MAX_RESULT_DEPTH}`);
-  }
-  if (val === null) {
-    return;
-  }
-  if (val === void 0) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "undefined is not valid JSON");
-  }
-  if (typeof val === "number") {
-    if (!Number.isFinite(val)) {
-      throw new BridgeError("INVALID_STRUCTURED_RESULT", "NaN and Infinity are not valid JSON numbers");
-    }
-    return;
-  }
-  if (typeof val === "string" || typeof val === "boolean") {
-    return;
-  }
-  if (typeof val === "bigint" || typeof val === "symbol" || typeof val === "function") {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", `${typeof val} is not valid JSON`);
-  }
-  if (typeof val !== "object") {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Invalid JSON value");
-  }
-  if (state.activeStack.has(val)) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Result contains circular references");
-  }
-  state.activeStack.add(val);
-  try {
-    if (Array.isArray(val)) {
-      for (let i = 0; i < val.length; i++) {
-        if (!(i in val) || val[i] === void 0) {
-          throw new BridgeError("INVALID_STRUCTURED_RESULT", "Sparse arrays or undefined elements are not valid JSON");
-        }
-        inspectJsonResult(val[i], depth + 1, state);
-      }
-      return;
-    }
-    const proto = Object.getPrototypeOf(val);
-    if (proto !== Object.prototype && proto !== null) {
-      throw new BridgeError("INVALID_STRUCTURED_RESULT", "Result must contain only plain JSON objects");
-    }
-    const obj = val;
-    for (const key of Object.getOwnPropertyNames(obj)) {
-      if (UNSAFE_KEYS.has(key)) {
-        throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result contains forbidden unsafe key: ${key}`);
-      }
-      const child = obj[key];
-      if (child === void 0) {
-        throw new BridgeError("INVALID_STRUCTURED_RESULT", `Result property '${key}' has undefined value`);
-      }
-      inspectJsonResult(child, depth + 1, state);
-    }
-  } finally {
-    state.activeStack.delete(val);
-  }
-}
-function validateStructuredResult(schema, value) {
-  if (value === void 0) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result value is required and cannot be undefined");
-  }
-  inspectJsonResult(value, 1, { nodeCount: 0, activeStack: /* @__PURE__ */ new Set() });
-  let serialized;
-  try {
-    serialized = JSON.stringify(value);
-  } catch (err) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result must be serializable JSON: " + (err instanceof Error ? err.message : String(err)));
-  }
-  if (serialized === void 0) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result cannot be undefined or unserializable");
-  }
-  const resultBytes = Buffer.byteLength(serialized, "utf8");
-  if (resultBytes > MAX_RESULT_BYTES) {
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", `Structured result size (${resultBytes} bytes) exceeds limit of ${MAX_RESULT_BYTES} bytes (1 MiB)`);
-  }
-  validateOutputSchema(schema);
-  const snapshot = JSON.parse(serialized);
-  const schemaHash = createHash7("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
-  let validatorFn = validatorCache.get(schemaHash);
-  if (!validatorFn) {
-    try {
-      const validator = new AjvJsonSchemaValidator();
-      validatorFn = validator.getValidator(schema);
-      if (validatorCache.size >= MAX_VALIDATOR_CACHE) {
-        const oldestKey = validatorCache.keys().next().value;
-        if (oldestKey !== void 0) {
-          validatorCache.delete(oldestKey);
-        }
-      }
-      validatorCache.set(schemaHash, validatorFn);
-    } catch (err) {
-      throw new BridgeError("INVALID_OUTPUT_SCHEMA", "Failed to compile schema: " + (err instanceof Error ? err.message : String(err)));
-    }
-  }
-  try {
-    const outcome = validatorFn(snapshot);
-    if (!outcome.valid) {
-      throw new BridgeError("INVALID_STRUCTURED_RESULT", outcome.errorMessage || "Structured result does not match schema");
-    }
-  } catch (err) {
-    if (err instanceof BridgeError)
-      throw err;
-    throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result validation failed: " + (err instanceof Error ? err.message : String(err)));
-  }
-  const sha256 = createHash7("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
-  return { value: snapshot, sha256 };
-}
-
-// dist/src/artifacts.js
-import { createHash as createHash8 } from "node:crypto";
-import { createReadStream as createReadStream4 } from "node:fs";
-import { lstat as lstat5, readdir as readdir4 } from "node:fs/promises";
-import { spawn as spawn3 } from "node:child_process";
-import path9 from "node:path";
-var WINDOWS_DEVICE_NAMES2 = /* @__PURE__ */ new Set([
-  "CON",
-  "PRN",
-  "AUX",
-  "NUL",
-  "COM1",
-  "COM2",
-  "COM3",
-  "COM4",
-  "COM5",
-  "COM6",
-  "COM7",
-  "COM8",
-  "COM9",
-  "LPT1",
-  "LPT2",
-  "LPT3",
-  "LPT4",
-  "LPT5",
-  "LPT6",
-  "LPT7",
-  "LPT8",
-  "LPT9",
-  "CONIN$",
-  "CONOUT$"
-]);
-function validArtifactRelative(input2) {
-  if (typeof input2 !== "string" || !input2.trim()) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot be empty");
-  }
-  if (input2.includes(":")) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Colon and Alternate Data Streams are forbidden: " + input2);
-  }
-  if (/[\x00-\x1f\x7f]/.test(input2)) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Control characters and NUL are forbidden: " + input2);
-  }
-  const value = input2.replaceAll("\\", "/");
-  if (value.startsWith("/") || /^[A-Za-z]:/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(input2)) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path must be a relative path: " + input2);
-  }
-  if (value.endsWith("/")) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path must point to a file, not a directory: " + input2);
-  }
-  const parts = value.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..")) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot contain traversal elements (. or ..): " + input2);
-  }
-  for (const part of parts) {
-    if (/[. ]$/.test(part)) {
-      throw new BridgeError("INVALID_ARTIFACT_PATH", "Path segment cannot end with a dot or space: " + input2);
-    }
-    if (/[<>"|?*]/.test(part)) {
-      throw new BridgeError("INVALID_ARTIFACT_PATH", "Invalid path characters in segment: " + input2);
-    }
-    const base = part.split(".")[0].toUpperCase();
-    if (WINDOWS_DEVICE_NAMES2.has(base)) {
-      throw new BridgeError("INVALID_ARTIFACT_PATH", "Artifact path cannot contain Windows device name: " + input2);
-    }
-    if (part.toLowerCase() === ".git") {
-      throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path cannot contain .git components: " + input2);
-    }
-    if (part.toLowerCase() === ".agents") {
-      throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path cannot contain .agents components: " + input2);
-    }
-  }
-  return value;
-}
-var artifactPathSchema = external_exports.string().min(1).max(1e3).refine((val) => {
-  try {
-    validArtifactRelative(val);
-    return true;
-  } catch {
-    return false;
-  }
-}, "Artifact path must be a valid project-relative path");
-var artifactPathsSchema = external_exports.array(artifactPathSchema).min(1).max(100).refine((paths2) => {
-  try {
-    const normalizedLower = paths2.map((p) => validArtifactRelative(p).toLowerCase());
-    return new Set(normalizedLower).size === paths2.length;
-  } catch {
-    return false;
-  }
-}, "Artifact paths must be unique (including case aliases)");
-var artifactReferenceSchema = external_exports.object({
-  path: external_exports.string().min(1).max(1e3),
-  sha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
-  bytes: external_exports.number().int().nonnegative()
-}).strict();
-async function git2(cwd, args, input2, allowedCodes = [0]) {
-  return new Promise((resolve, reject) => {
-    const child = spawn3("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    const chunks = [];
-    let length = 0;
-    let stderr = "";
-    let overflow = false;
-    child.stdout.on("data", (chunk) => {
-      length += chunk.length;
-      if (length > 1e7) {
-        overflow = true;
-        child.kill();
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
-    });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (overflow)
-        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      else if (!allowedCodes.includes(code ?? -1))
-        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
-      else
-        resolve(Buffer.concat(chunks));
-    });
-    child.stdin.end(input2);
-  });
-}
-function splitNull2(bytes) {
-  return bytes.toString("utf8").split("\0").filter(Boolean);
-}
-async function verifyCopyRoot(copyDirectory) {
-  let rootStat;
-  try {
-    rootStat = await lstat5(copyDirectory);
-  } catch (err) {
-    throw new BridgeError("UNSAFE_PROJECT_PATH", "Cannot access copy directory: " + (err instanceof Error ? err.message : String(err)));
-  }
-  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
-    throw new BridgeError("UNSAFE_PROJECT_PATH", "Copy directory cannot be a symbolic link or replaced directory");
-  }
-}
-async function verifyExactDiskCase(rootDir, relativePath) {
-  const segments = relativePath.split("/");
-  let current = rootDir;
-  for (const seg of segments) {
-    let entries;
-    try {
-      entries = await readdir4(current);
-    } catch (err) {
-      if (err.code === "ENOENT") {
-        throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
-      }
-      throw err;
-    }
-    if (!entries.includes(seg)) {
-      const lower = seg.toLowerCase();
-      const match = entries.find((e) => e.toLowerCase() === lower);
-      if (match) {
-        throw new BridgeError("INVALID_ARTIFACT_PATH", `Path case alias mismatch: requested '${seg}', disk has '${match}'`);
-      }
-      throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
-    }
-    current = path9.join(current, seg);
-  }
-  return current;
-}
-async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS) {
-  await verifyCopyRoot(project.copyDirectory);
-  const parsed = artifactPathsSchema.safeParse(paths2);
-  if (!parsed.success) {
-    throw new BridgeError("INVALID_ARTIFACT_PATH", "Invalid artifact paths: " + parsed.error.issues.map((i) => i.message).join("; "));
-  }
-  const normalizedPaths = paths2.map(validArtifactRelative);
-  if (project.providedSkills) {
-    for (const skill of project.providedSkills) {
-      for (const f of skill.files) {
-        for (const p of normalizedPaths) {
-          if (f.path.toLowerCase() === p.toLowerCase()) {
-            throw new BridgeError("UNSAFE_ARTIFACT_PATH", "Artifact path refers to a provided skill file: " + p);
-          }
-        }
-      }
-    }
-  }
-  const stdinBuf = Buffer.from(normalizedPaths.join("\0") + "\0");
-  const ignoreOutput = await git2(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
-  const ignoredSet = new Set(splitNull2(ignoreOutput));
-  for (const p of normalizedPaths) {
-    if (ignoredSet.has(p)) {
-      throw new BridgeError("IGNORED_ARTIFACT_PATH", "Artifact path is ignored by repository rules: " + p);
-    }
-  }
-  let totalBytes = 0;
-  const references = [];
-  for (const relative of normalizedPaths) {
-    let filePath;
-    try {
-      filePath = await checkedPath(project.copyDirectory, relative, true);
-    } catch (err) {
-      if (err.code === "ENOENT") {
-        throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relative);
-      }
-      throw err;
-    }
-    await verifyExactDiskCase(project.copyDirectory, relative);
-    const st = await lstat5(filePath);
-    if (!st.isFile() || st.isSymbolicLink()) {
-      throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative);
-    }
-    if (st.size > limits.maxCopyBytes) {
-      throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size exceeds copy limit of ${limits.maxCopyBytes} bytes`);
-    }
-    const hasher = createHash8("sha256");
-    let fileBytes = 0;
-    for await (const chunk of createReadStream4(filePath)) {
-      fileBytes += chunk.length;
-      totalBytes += chunk.length;
-      if (totalBytes > limits.maxCopyBytes) {
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Total artifact bytes exceed limit of ${limits.maxCopyBytes} bytes`);
-      }
-      hasher.update(chunk);
-    }
-    const sha256 = hasher.digest("hex");
-    references.push({
-      path: relative,
-      sha256,
-      bytes: fileBytes
-    });
-  }
-  return references;
-}
-async function readArtifact(project, reference, expectedSha256, offset = 0, limit = 65536, maxBytes = DEFAULT_PROJECT_LIMITS.maxCopyBytes) {
-  const parsedRef = artifactReferenceSchema.safeParse(reference);
-  if (!parsedRef.success) {
-    throw new BridgeError("INVALID_ARTIFACT_REFERENCE", "Invalid artifact reference: " + parsedRef.error.message);
-  }
-  if (!Number.isSafeInteger(offset) || offset < 0) {
-    throw new BridgeError("INVALID_CURSOR", "offset must be a non-negative safe integer");
-  }
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 65536) {
-    throw new BridgeError("INVALID_CURSOR", "limit must be an integer between 1 and 65536");
-  }
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
-    throw new BridgeError("INVALID_CURSOR", "maxBytes must be a positive integer");
-  }
-  if (offset > reference.bytes) {
-    throw new BridgeError("INVALID_CURSOR", `offset ${offset} exceeds reference bytes ${reference.bytes}`);
-  }
-  if (typeof expectedSha256 !== "string" || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
-    throw new BridgeError("INVALID_ARTIFACT_HASH", "expectedSha256 must be a 64-character lowercase hex string");
-  }
-  if (expectedSha256 !== reference.sha256) {
-    throw new BridgeError("CONTENT_CHANGED", "expectedSha256 does not match reference sha256");
-  }
-  await verifyCopyRoot(project.copyDirectory);
-  const relative = validArtifactRelative(reference.path);
-  let filePath;
-  try {
-    filePath = await checkedPath(project.copyDirectory, relative, true);
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relative);
-    }
-    throw err;
-  }
-  await verifyExactDiskCase(project.copyDirectory, relative);
-  const st = await lstat5(filePath);
-  if (!st.isFile() || st.isSymbolicLink()) {
-    throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative);
-  }
-  if (st.size > maxBytes) {
-    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size (${st.size} bytes) exceeds limit of ${maxBytes} bytes`);
-  }
-  if (st.size !== reference.bytes) {
-    throw new BridgeError("CONTENT_CHANGED", `Artifact size on disk (${st.size}) does not match reference bytes (${reference.bytes})`);
-  }
-  const windowStart = offset;
-  const windowEnd = Math.min(reference.bytes, offset + limit);
-  const windowLen = Math.max(0, windowEnd - windowStart);
-  const windowBuf = Buffer.alloc(windowLen);
-  let streamBytes = 0;
-  const hasher = createHash8("sha256");
-  const stream = createReadStream4(filePath);
-  try {
-    for await (const chunk of stream) {
-      const chunkBuf = chunk;
-      const chunkStart = streamBytes;
-      const chunkEnd = streamBytes + chunkBuf.length;
-      streamBytes = chunkEnd;
-      if (streamBytes > maxBytes) {
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact exceeded maximum byte limit (${maxBytes}) during reading`);
-      }
-      if (streamBytes > reference.bytes) {
-        throw new BridgeError("CONTENT_CHANGED", "Artifact grew beyond reference bytes during reading");
-      }
-      hasher.update(chunkBuf);
-      const overlapStart = Math.max(chunkStart, windowStart);
-      const overlapEnd = Math.min(chunkEnd, windowEnd);
-      if (overlapStart < overlapEnd) {
-        const slice = chunkBuf.subarray(overlapStart - chunkStart, overlapEnd - chunkStart);
-        slice.copy(windowBuf, overlapStart - windowStart);
-      }
-    }
-  } finally {
-    stream.destroy();
-  }
-  if (streamBytes !== reference.bytes) {
-    throw new BridgeError("CONTENT_CHANGED", `Artifact size changed during reading (expected ${reference.bytes}, observed ${streamBytes})`);
-  }
-  const actualSha256 = hasher.digest("hex");
-  if (actualSha256 !== expectedSha256) {
-    throw new BridgeError("CONTENT_CHANGED", "Artifact content on disk has changed; sha256 mismatch");
-  }
-  const content = windowBuf.toString("base64");
-  const nextOffset = windowEnd;
-  const hasMore = windowEnd < reference.bytes;
-  return {
-    path: reference.path,
-    sha256: actualSha256,
-    bytes: reference.bytes,
-    offset,
-    nextOffset,
-    hasMore,
-    encoding: "base64",
-    content,
-    offsetUnit: "bytes"
-  };
-}
-
 // dist/src/mcp-server.js
 function response(value) {
   const structuredContent = value && typeof value === "object" && !Array.isArray(value) ? value : { value };
@@ -39848,6 +40007,7 @@ function createMcpServer(adapter, tasks) {
     mode: external_exports.enum(["write", "read-only"]).optional(),
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional(),
+    effort: effortSchema.optional(),
     outputSchema: structuredResultInputSchema.optional(),
     artifactPaths: artifactPathsSchema.optional()
   };
@@ -39885,6 +40045,7 @@ function createMcpServer(adapter, tasks) {
         expectedContextSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
         prompt: external_exports.string().min(1),
         role: configuredRoleSchema,
+        effort: effortSchema.optional(),
         model: external_exports.string().min(1).max(128).nullable().optional(),
         decisions: decisionsSchema.optional(),
         timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
@@ -40164,7 +40325,7 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
 }
 
 // dist/src/task-manager.js
-import { createHash as createHash12, randomUUID as randomUUID7 } from "node:crypto";
+import { createHash as createHash13, randomUUID as randomUUID7 } from "node:crypto";
 import { spawn as spawn6 } from "node:child_process";
 
 // dist/src/logger.js
@@ -40299,6 +40460,7 @@ var snapshotSchema = external_exports.object({
     deliveryMode: deliveryModeSchema.optional(),
     messages: external_exports.array(bridgeMessageSchema).max(100).optional(),
     messageCursor: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    effort: effortSchema.optional(),
     roleDefinition: roleDefinitionSchema.optional(),
     providedSkills: stagedSkillsSchema.optional(),
     outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
@@ -40326,6 +40488,8 @@ var snapshotSchema = external_exports.object({
   options: external_exports.object({
     prompt: external_exports.string(),
     workingDirectory: external_exports.string(),
+    effort: effortSchema.optional(),
+    roleDefinition: roleDefinitionSchema.optional(),
     outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
     artifactPaths: external_exports.array(external_exports.string().min(1).max(1e3)).min(1).max(100).optional()
   }).passthrough(),
@@ -40515,9 +40679,9 @@ var StateStore = class {
 };
 
 // dist/src/chunks.js
-import { createHash as createHash9 } from "node:crypto";
+import { createHash as createHash10 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash9("sha256").update(text).digest("hex");
+  const sha256 = createHash10("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -41516,12 +41680,12 @@ internal static class WindowsTestRunner
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
-import { createHash as createHash11 } from "node:crypto";
+import { createHash as createHash12 } from "node:crypto";
 import { chmod, lstat as lstat7, mkdir as mkdir5, open as open3, readdir as readdir6, unlink as unlink2 } from "node:fs/promises";
 import path12 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash10, randomUUID as randomUUID5 } from "node:crypto";
+import { createHash as createHash11, randomUUID as randomUUID5 } from "node:crypto";
 import { spawn as spawn4 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
 import { lstat as lstat6, mkdir as mkdir4, open as open2, readFile as readFile3, readdir as readdir5, rename, rm as rm3, unlink } from "node:fs/promises";
@@ -41730,7 +41894,7 @@ async function sha256File3(file3, expectedSize) {
     const opened = await handle.stat();
     if (!sameFile(opened, before))
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
-    const hash3 = createHash10("sha256");
+    const hash3 = createHash11("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
     while (offset < size) {
@@ -41819,7 +41983,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
     const file3 = await open2(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
     try {
       const reader = response2.body.getReader();
-      const hash3 = createHash10("sha256");
+      const hash3 = createHash11("sha256");
       let bytes = 0;
       for (; ; ) {
         const item = await reader.read();
@@ -42205,7 +42369,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
     targetHandle = await open3(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
     created = true;
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
-    const hash3 = expectedSha256 ? createHash11("sha256") : void 0;
+    const hash3 = expectedSha256 ? createHash12("sha256") : void 0;
     let offset = 0;
     while (offset < expected.size) {
       const length = Math.min(buffer.length, expected.size - offset);
@@ -42250,7 +42414,7 @@ async function hashStagedFile(file3) {
     const opened = await handle.stat();
     if (!isSameFile(opened, expected))
       fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
-    const hash3 = createHash11("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = createHash12("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
     let offset = 0;
     while (offset < expected.size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
@@ -42710,7 +42874,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash12("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash13("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -42802,6 +42966,15 @@ var TaskManager = class {
   }
   async run(options) {
     options = { ...options };
+    const initialRoleDefinition = options.sessionId ? void 0 : resolveRole(options.role ?? "implementer", this.config.customRoles);
+    if (initialRoleDefinition) {
+      const { skills, includePaths } = options;
+      options = applyRoleDefaults(options, initialRoleDefinition);
+      if (options.contextTaskId)
+        options = { ...options, skills, includePaths };
+    }
+    if (options.effort !== void 0)
+      effortSchema.parse(options.effort);
     if (profileReadOnly(this.config.toolProfile)) {
       if (options.mode === "write")
         throw new BridgeError("PROFILE_READ_ONLY", "This tool profile only permits read-only tasks");
@@ -42831,16 +43004,6 @@ var TaskManager = class {
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.isolateWorktree === false)
       throw new BridgeError("ISOLATION_REQUIRED", "Direct execution in the source project is disabled");
-    const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
-    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
-      throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
-    }
-    const model = options.model === null ? void 0 : options.model ?? this.getModel();
-    if (model) {
-      const models = await this.adapter.listModels();
-      if (!models.some((item) => item.id === model))
-        throw new BridgeError("MODEL_NOT_AVAILABLE", `Model is not listed by agy: ${model}`);
-    }
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId))
       throw new BridgeError("INVALID_SESSION", "Invalid conversation ID");
     const releaseRegistry = this.state.acquire("registry");
@@ -42880,7 +43043,22 @@ var TaskManager = class {
       options.handoff ??= previous?.record.handoff;
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
       const role = roleSchema.parse(options.role ?? previous?.record.role ?? "implementer");
-      const roleDefinition = previous?.record.roleDefinition ?? resolveRole(role, this.config.customRoles);
+      const roleDefinition = previous?.record.roleDefinition ?? initialRoleDefinition ?? resolveRole(role, this.config.customRoles);
+      if (previous && options.effort !== void 0 && options.effort !== previous.record.effort) {
+        throw new BridgeError("INVALID_EFFORT", "A resumed task retains its original effort");
+      }
+      options.effort ??= previous?.record.effort;
+      const timeoutSeconds = options.timeoutSeconds ?? previous?.options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
+      if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
+        throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
+      }
+      const selectedModel = options.model !== void 0 ? options.model : previous ? previous.record.model : this.getModel();
+      const model = selectedModel === null ? void 0 : selectedModel;
+      if (model) {
+        const models = await this.adapter.listModels();
+        if (!models.some((item) => item.id === model))
+          throw new BridgeError("MODEL_NOT_AVAILABLE", "Model is not listed by agy: " + model);
+      }
       if (previous && role !== (previous.record.role ?? "implementer"))
         throw new BridgeError("INVALID_ROLE", "A resumed task retains its original role");
       const mode = options.mode ?? previous?.record.mode ?? (roleDefinition.baseRole === "implementer" ? "write" : "read-only");
@@ -42964,6 +43142,7 @@ var TaskManager = class {
         taskId: randomUUID7(),
         sessionId: options.sessionId,
         model,
+        effort: options.effort,
         mode,
         role,
         roleDefinition,
@@ -42980,7 +43159,7 @@ var TaskManager = class {
         outputSchema: recordOutputSchema,
         artifactPaths: recordArtifactPaths
       };
-      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
+      this.tasks.set(record2.taskId, { record: record2, ownerPid: process.pid, owned: true, options: { ...options, model: model ?? null, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
       accepted = true;
       pendingProjectRelease = void 0;
       this.queue.push(record2.taskId);
@@ -43345,6 +43524,7 @@ var TaskManager = class {
         taskId: randomUUID7(),
         sessionId: current.record.sessionId,
         model: current.record.model,
+        effort: current.record.effort,
         mode: "write",
         role: current.record.role,
         roleDefinition: current.record.roleDefinition,
@@ -43369,6 +43549,7 @@ var TaskManager = class {
         workingDirectory: record2.workingDirectory,
         sessionId: record2.sessionId,
         model: record2.model,
+        effort: record2.effort,
         timeoutSeconds,
         mode: "write",
         role: record2.role,
@@ -43485,7 +43666,7 @@ var TaskManager = class {
       await this.requireVerification(task2, expectedSha256);
       if (!preauthorized && !await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash12("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash13("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -44334,7 +44515,7 @@ ${error62.message}`;
     task2.messageKeys ??= /* @__PURE__ */ new Set();
     for (const input2 of extractAgentMessages(text)) {
       const payload = JSON.stringify(input2);
-      const key = step + ":" + createHash12("sha256").update(payload).digest("hex");
+      const key = step + ":" + createHash13("sha256").update(payload).digest("hex");
       if (task2.messageKeys.has(key) || final && task2.record.messages?.some((message2) => message2.source === "agy-reported" && message2.kind === input2.kind && message2.text === input2.text))
         continue;
       if (task2.messageKeys.size >= 1e3) {
