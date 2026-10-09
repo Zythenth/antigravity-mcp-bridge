@@ -11,6 +11,7 @@ import { CliAdapter } from '../src/cli-adapter.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy } from '../src/isolation.js';
+import { preauthorizedIntegrationRoots } from '../src/integration-policy.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { clientTask } from '../src/messages.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
@@ -283,7 +284,8 @@ test('project preauthorization skips only the repeated form and keeps hash, revi
     await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
     const preview = await f.tasks.preview(id);
     await assert.rejects(f.tasks.integrate(id, preview.sha256), { code: 'APPROVAL_REQUIRED' });
-    const authorized = new TaskManager(f.adapter, { ...f.config, preauthorizedIntegrationRoots: [process.platform === 'win32' ? f.source.toLowerCase() : f.source] }); f.managers.push(authorized);
+    const authorized = new TaskManager(f.adapter, { ...f.config, preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(JSON.stringify([f.source])) }); f.managers.push(authorized);
+    assert.equal(authorized.integrationPreauthorized(id), true);
     await assert.rejects(authorized.integrate(id, '0'.repeat(64)), { code: 'REVIEW_CHANGED' });
     await assert.rejects(authorized.integrate(id, preview.sha256), { code: 'VERIFICATION_REQUIRED' });
     await authorized.verify(id, preview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'changed', explanation: 'Observed fixture content' }]);
