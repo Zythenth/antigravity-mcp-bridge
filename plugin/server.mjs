@@ -240007,7 +240007,7 @@ function preauthorizedIntegrationRoots(value) {
     throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
   }
   return [...new Set(roots.map((root) => {
-    const canonical = realpathSync(root);
+    const canonical = realpathSync.native(root);
     if (!statSync(canonical).isDirectory() || canonical === path.parse(canonical).root)
       throw new Error("Preauthorization requires a project directory, not a volume root");
     return process.platform === "win32" ? canonical.toLowerCase() : canonical;
