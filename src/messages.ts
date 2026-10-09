@@ -52,8 +52,8 @@ export function extractAgentMessages(text: string): z.infer<typeof agentMessageI
 
 export function clientTask(task: TaskRecord): TaskRecord | CompactTask {
   if (task.deliveryMode === 'messages') return compactTask(task);
-  const { messages, messageCursor, ...metadata } = task;
-  void messages; void messageCursor;
+  const { messages, messageCursor, inbox, dispatching, sourceMessage, ...metadata } = task;
+  void messages; void messageCursor; void inbox; void dispatching; void sourceMessage;
   return metadata;
 }
 
@@ -62,11 +62,12 @@ export function resultReference(record: Pick<TaskRecord, 'taskId' | 'result'>): 
     contentSha256: createHash('sha256').update(JSON.stringify(record.result ?? null)).digest('hex') };
 }
 
-export type CompactTask = Pick<TaskRecord, 'taskId' | 'workingDirectory' | 'status' | 'createdAt' | 'sessionId' | 'model' | 'mode' | 'role' | 'startedAt' | 'completedAt' | 'exitCode' | 'error' | 'tokenUsage' | 'integratedAt' | 'discardedAt' | 'deliveryMode'>;
+export type CompactTask = Pick<TaskRecord, 'taskId' | 'workingDirectory' | 'status' | 'createdAt' | 'sessionId' | 'model' | 'mode' | 'role' | 'startedAt' | 'completedAt' | 'exitCode' | 'error' | 'tokenUsage' | 'integratedAt' | 'discardedAt' | 'deliveryMode' | 'continuationTaskId'>;
 
 export function compactTask(task: TaskRecord): CompactTask {
   return { taskId: task.taskId, workingDirectory: task.workingDirectory, status: task.status, createdAt: task.createdAt,
     sessionId: task.sessionId, model: task.model, mode: task.mode, role: task.role, startedAt: task.startedAt, completedAt: task.completedAt,
     exitCode: task.exitCode, error: task.error, tokenUsage: task.tokenUsage,
-    integratedAt: task.integratedAt, discardedAt: task.discardedAt, deliveryMode: task.deliveryMode };
+    integratedAt: task.integratedAt, discardedAt: task.discardedAt, deliveryMode: task.deliveryMode,
+    ...(task.continuationTaskId ? { continuationTaskId: task.continuationTaskId } : {}) };
 }

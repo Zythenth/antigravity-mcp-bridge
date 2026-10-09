@@ -117,10 +117,10 @@ Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
 | Valor | Ferramentas no código-fonte 0.6.1 | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 31 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 21 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 24 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 31 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 33 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 23 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 26 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 33 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a confirmação de integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -164,6 +164,14 @@ Use `deliveryMode: "messages"` em `antigravity_run` para receber perguntas públ
 Cada mensagem inclui origem, modelo informado, ID, sequência e data; cada texto tem no máximo 2.000 caracteres. Até 100 mensagens são retidas por tarefa e as páginas indicam perdas de mensagens antigas. O resultado final aponta para `antigravity_read_result`, com o hash correspondente. As mensagens do modelo continuam sendo relatos, sem comprovar testes nem autorizar integração.
 
 Omitir a opção conserva `events`, com o histórico de eventos existente. `antigravity_events` continua disponível para uma consulta detalhada explícita. `antigravity_set_delivery_mode` muda a entrega de uma tarefa; reinicie o cursor em `after: 0` após trocar de modo. Passe também `cursorMode` com o modo do cursor anterior: se a interface trocar a entrega, a espera reinicia em zero e informa `cursorReset: true`. A retomada herda a escolha, que não altera permissões ou papéis.
+
+## Mensagens para a sessão
+
+Use `antigravity_send_message({taskId, messageId, text})` para enviar até 2.000 caracteres; `messageId` é um UUID escolhido pelo cliente. Repetir o mesmo ID e texto retorna o recibo existente. Outro texto com o mesmo ID é recusado. Até 20 inputs ficam retidos por tarefa.
+
+Se o turno estiver ativo, o recibo fica `queued`. Após sua conclusão, o bridge retoma a sessão oficial na mesma cópia e processa os inputs em sequência. `sent` indica aceitação do novo turno pelo bridge, sem provar que o modelo leu a mensagem. Falhas e cancelamento ficam explícitos; um envio interrompido sem evidência de aceitação não é repetido automaticamente.
+
+Acompanhe `continuationTaskId` com um novo cursor em zero. `continuationPending: true` em `antigravity_wait` indica inputs aguardando despacho; o término do turno anterior não encerra toda a conversa. Retomadas preservam seleção, skills, papel, modo e critérios. Mensagens não concedem permissões nem aprovam integração; solicitações de controle do agy continuam indisponíveis.
 
 ## Skills fornecidas pelo cliente
 
@@ -214,6 +222,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_roles` | Lista os papéis nativos e personalizados configurados |
 | `antigravity_get_sandbox_policy` | Lê a política global normalizada, seus limites e o hash atual |
 | `antigravity_set_sandbox_policy` | Solicita ao cliente MCP a confirmação humana para substituir a política global com comparação do hash anterior |
+| `antigravity_send_message` | Enfileira texto do chamador com recibo idempotente e continuação oficial da sessão |
 | `antigravity_run` | Inicia uma tarefa e retorna o `taskId` |
 | `antigravity_list_project_files` | Lista os arquivos elegíveis para a cópia |
 | `antigravity_preview` | Mostra A/M/D, totais de linhas, estatísticas por arquivo, patch, hash e testes relatados |

@@ -25,6 +25,22 @@ const snapshotSchema = z.object({
     lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
     deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
+    continuationTaskId: z.string().uuid().optional(), parentTaskId: z.string().uuid().optional(),
+    sourceMessage: z.object({ taskId: z.string().uuid(), messageId: z.string().uuid() }).strict().optional(),
+    dispatching: z.object({ messageId: z.string().uuid(), continuationTaskId: z.string().uuid().optional(), ownerId: z.string().uuid().optional() }).strict().optional(),
+    inbox: z.array(z.object({
+      messageId: z.string().uuid(),
+      taskId: z.string().uuid(),
+      text: z.string().min(1).max(2000),
+      receivedAt: z.string().datetime(),
+      receipt: z.object({
+        messageId: z.string().uuid(),
+        taskId: z.string().uuid(),
+        state: z.enum(['queued', 'sent', 'failed', 'cancelled']),
+        continuationTaskId: z.string().uuid().optional(),
+        error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+      }).strict(),
+    }).strict()).max(20).optional(),
   }).passthrough(),
   options: z.object({ prompt: z.string(), workingDirectory: z.string() }).passthrough(),
   project: z.object({ sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),
@@ -153,6 +169,12 @@ export class StateStore {
       const messages = data.record.messages ?? [];
       if (messages.some((message, index) => message.taskId !== data.record.taskId || message.sequence > (data.record.messageCursor ?? 0) ||
         (index > 0 && messages[index - 1]!.sequence >= message.sequence))) throw new BridgeError('INVALID_STATE', 'Persisted messages do not match task identity or cursor');
+      const inbox = data.record.inbox ?? [];
+      if (new Set(inbox.map(item => item.messageId.toLowerCase())).size !== inbox.length ||
+        inbox.some(item => item.taskId !== data.record.taskId || item.receipt.taskId !== data.record.taskId || item.receipt.messageId !== item.messageId) ||
+        (data.record.dispatching && !inbox.some(item => item.messageId === data.record.dispatching!.messageId && item.receipt.state === 'queued'))) {
+        throw new BridgeError('INVALID_STATE', 'Persisted inbox does not match task identity');
+      }
       if (data.project) {
         for (const [directory, prefix] of [[data.project.copyDirectory, 'agy-mcp-copy-'], [data.project.gitDirectory, 'agy-mcp-baseline-']]) {
           if (!path.isAbsolute(directory!) || path.relative(os.tmpdir(), path.dirname(directory!)) !== '' || !path.basename(directory!).startsWith(prefix!)) {

@@ -7,7 +7,7 @@ import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
 import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
-import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
+import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
@@ -35,6 +35,9 @@ export class TaskManager {
   private waiting = 0;
   private batching = 0;
   private stopped = false;
+  private readonly inboxOwnerId = randomUUID();
+  private readonly flushingInboxes = new Set<string>();
+  private readonly claimingMessages = new Set<string>();
   private readonly busyProjects = new Set<ProjectCopy>();
   private readonly state: StateStore;
   private readonly nativeRecovery: Promise<void>;
@@ -46,6 +49,7 @@ export class TaskManager {
     this.nativeRecovery = (config.testExecutor === 'windows-lpac' ? recoverWindowsExecutions(config.stateDirectory) : Promise.resolve())
       .catch(error => { this.nativeRecoveryError = error; });
     this.refresh();
+    this.recoverInboxClaims();
   }
 
   private persist(taskId: string): void {
@@ -168,7 +172,7 @@ export class TaskManager {
         throw new BridgeError('INVALID_CONTEXT', 'Context requires a completed, retained, non-integrated task in the same project; use a new session');
       }
       const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
-        task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project) : undefined;
+        task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project && !(task.record.error?.code === 'STATE_PERSISTENCE_FAILED' && !task.record.startedAt)) : undefined;
       if (options.sessionId && (!previous || (previous.record.status !== 'completed' && previous.record.error?.code !== 'TEST_FAILED') || previous.record.integratedAt)) {
         throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
       }
@@ -224,7 +228,7 @@ export class TaskManager {
       taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
       pendingProjectRelease = previous?.project || contextProject ? this.state.acquire(this.projectLock((previous?.project ?? contextProject)!)) : undefined;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
-        const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status) && task !== contextSource);
+        const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status) && task !== contextSource && !this.hasPendingInbox(task.record) && !(options.sourceMessage && task === previous));
         if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
         if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
           await this.discard(oldestFinished.record.taskId);
@@ -233,7 +237,7 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
+      const record: TaskRecord = { parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
@@ -242,7 +246,18 @@ export class TaskManager {
       accepted = true;
       pendingProjectRelease = undefined;
       this.queue.push(record.taskId);
-      this.events.append(record.taskId, 'task.queued', { workingDirectory, model });
+      try { this.events.append(record.taskId, 'task.queued', { workingDirectory, model }); }
+      catch (error) {
+        // No provider was started: roll back this rejected queue entry before any later pump can execute it.
+        const index = this.queue.indexOf(record.taskId);
+        if (index >= 0) this.queue.splice(index, 1);
+        const rejected = this.tasks.get(record.taskId)!;
+        rejected.record.status = 'failed'; rejected.record.completedAt = new Date().toISOString();
+        rejected.record.error = { code: 'STATE_PERSISTENCE_FAILED', message: 'The task could not be durably accepted; no provider was started' };
+        rejected.releaseProject?.(); rejected.releaseProject = undefined;
+        try { this.persist(record.taskId); } catch { /* retain in memory and never pump this failed entry */ }
+        throw error;
+      }
       if (!this.batching) this.pump();
       return { ...record };
     } finally { pendingProjectRelease?.(); releaseRegistry(); if (contextProject && !accepted) await discardProjectCopy(contextProject); }
@@ -457,7 +472,7 @@ export class TaskManager {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) throw new BridgeError('QUEUE_FULL', 'Task queue is full');
       releaseProject = this.state.acquire(this.projectLock(current.project));
       if (this.tasks.size >= this.config.maxRetainedTasks) {
-        const oldestFinished = [...this.tasks.values()].find(candidate => terminal.has(candidate.record.status) && candidate !== current) ?? current;
+        const oldestFinished = [...this.tasks.values()].find(candidate => terminal.has(candidate.record.status) && candidate !== current && !this.hasPendingInbox(candidate.record)) ?? (this.hasPendingInbox(current.record) ? undefined : current);
         if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');
         if (oldestFinished !== current && oldestFinished.project && ![...this.tasks.values()].some(other => other !== oldestFinished && other.project === oldestFinished.project)) {
           await this.discard(oldestFinished.record.taskId);
@@ -508,7 +523,7 @@ export class TaskManager {
     this.busyProjects.add(project);
     let release: (() => void) | undefined;
     try { release = this.state.acquire(this.projectLock(project)); return await operation(); }
-    finally { release?.(); this.busyProjects.delete(project); }
+    finally { release?.(); this.busyProjects.delete(project); this.scheduleInbox(project.copyDirectory); }
   }
 
   async discard(taskId: string): Promise<TaskRecord> {
@@ -519,6 +534,7 @@ export class TaskManager {
     if (task.project) {
       const project = task.project;
       await this.withProject(project, async () => {
+        this.failPendingInbox(project.copyDirectory, task, 'cancelled', 'COPY_DISCARDED');
         await discardProjectCopy(project);
         for (const related of this.tasks.values()) if (related.project === project) {
           related.project = undefined;
@@ -578,6 +594,184 @@ export class TaskManager {
     });
   }
 
+  private hasPendingInbox(record: TaskRecord): boolean {
+    return Boolean(record.dispatching || record.inbox?.some(item => item.receipt.state === 'queued'));
+  }
+
+  private inboxReceipt(item: CallerInboxItem): CallerMessageReceipt {
+    return { ...item.receipt, ...(item.receipt.error ? { error: { ...item.receipt.error } } : {}) };
+  }
+
+  inbox(taskId: string) {
+    this.status(taskId);
+    const task = this.tasks.get(taskId)!;
+    if (task.project) this.scheduleInbox(task.project.copyDirectory);
+    return (task.record.inbox ?? []).map(item => ({
+      messageId: item.messageId, taskId, text: item.text, receivedAt: item.receivedAt, receipt: this.inboxReceipt(item),
+    }));
+  }
+
+  async sendMessage(taskId: string, messageId: string, text: string) {
+    if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(messageId) || !text.trim() || text.length > 2000) {
+      throw new BridgeError('INVALID_MESSAGE', 'Provide a UUID and between 1 and 2000 characters of caller text');
+    }
+    messageId = messageId.toLowerCase();
+    const release = this.state.acquire('registry');
+    let directory: string | undefined;
+    try {
+      this.refresh();
+      this.recoverInboxClaims(true);
+      const task = this.tasks.get(taskId);
+      if (!task) throw new BridgeError('TASK_NOT_FOUND', 'Unknown task: ' + taskId);
+      const existing = task.record.inbox?.find(item => item.messageId === messageId);
+      if (existing && existing.text !== text) throw new BridgeError('MESSAGE_ID_CONFLICT', 'This message ID already identifies different text');
+      if (existing && existing.receipt.state !== 'queued') return { receipt: this.inboxReceipt(existing) };
+      if (!task.owned && !terminal.has(task.record.status)) throw new BridgeError('TASK_OWNED_BY_OTHER_SERVER', 'Send through the bridge that owns the running task');
+      if (task.record.integratedAt || task.record.discardedAt || (!task.project && terminal.has(task.record.status))) {
+        throw new BridgeError('INVALID_MESSAGE_TARGET', 'This task no longer retains a conversation copy');
+      }
+      if (!existing) {
+        if ((task.record.inbox?.length ?? 0) >= 20) throw new BridgeError('INBOX_FULL', 'At most 20 caller messages can be retained on one task');
+        const item: CallerInboxItem = { messageId, taskId, text, receivedAt: new Date().toISOString(), receipt: { messageId, taskId, state: 'queued' } };
+        task.record.inbox = [...(task.record.inbox ?? []), item];
+        this.events.append(taskId, 'caller.message-queued', { messageId });
+      }
+      directory = task.project?.copyDirectory;
+      if (terminal.has(task.record.status) && task.record.status !== 'completed') {
+        this.failPendingInbox(directory, task, task.record.status === 'cancelled' ? 'cancelled' : 'failed', 'TASK_NOT_COMPLETED');
+      }
+    } finally { release(); }
+    if (directory) await this.flushInbox(directory);
+    this.refresh();
+    const item = this.tasks.get(taskId)?.record.inbox?.find(entry => entry.messageId === messageId);
+    if (!item) throw new BridgeError('TASK_NOT_FOUND', 'Caller message target was removed');
+    return { receipt: this.inboxReceipt(item) };
+  }
+
+  private failPendingInbox(directory: string | undefined, current: InternalTask, state: 'failed' | 'cancelled', code: string): void {
+    const related = directory ? [...this.tasks.values()].filter(task => task.project?.copyDirectory === directory) : [current];
+    for (const task of related) {
+      let changed = false;
+      for (const item of task.record.inbox ?? []) if (item.receipt.state === 'queued' && task.record.dispatching?.messageId !== item.messageId) {
+        item.receipt = { messageId: item.messageId, taskId: task.record.taskId, state, error: { code, message: 'The conversation ended before this input was dispatched' } };
+        changed = true;
+      }
+      if (changed) this.events.append(task.record.taskId, 'caller.messages-stopped', { state, code });
+    }
+  }
+
+  private recoverInboxClaims(locked = false): void {
+    if (!locked) {
+      let release: (() => void) | undefined;
+      try { release = this.state.acquire('registry'); this.refresh(); this.recoverInboxClaims(true); }
+      catch (error) { if (!(error instanceof BridgeError && error.code === 'STATE_BUSY')) throw error; }
+      finally { release?.(); }
+      return;
+    }
+    for (const task of this.tasks.values()) {
+      const claim = task.record.dispatching;
+      if (!claim || this.claimingMessages.has(task.record.taskId) || (processAlive(task.ownerPid) && (task.ownerPid !== process.pid || claim.ownerId !== this.inboxOwnerId))) continue;
+      const item = task.record.inbox?.find(entry => entry.messageId === claim.messageId);
+      const continuation = [...this.tasks.values()].find(candidate => candidate.record.sourceMessage?.taskId === task.record.taskId && candidate.record.sourceMessage.messageId === claim.messageId);
+      if (item) {
+        item.receipt = continuation && continuation.record.error?.code !== 'STATE_PERSISTENCE_FAILED' ? { messageId: item.messageId, taskId: task.record.taskId, state: 'sent', continuationTaskId: continuation.record.taskId }
+          : { messageId: item.messageId, taskId: task.record.taskId, state: 'failed', error: { code: 'DISPATCH_INTERRUPTED', message: 'Dispatch was interrupted without a retained continuation; it will not be replayed' } };
+        if (continuation?.record.parentTaskId) {
+          const parent = this.tasks.get(continuation.record.parentTaskId);
+          if (parent) { parent.record.continuationTaskId = continuation.record.taskId; this.persist(parent.record.taskId); }
+        }
+      }
+      delete task.record.dispatching;
+      this.events.append(task.record.taskId, 'caller.dispatch-recovered', { messageId: claim.messageId, state: item?.receipt.state ?? 'failed' });
+    }
+  }
+
+  private continuationState(taskId: string) {
+    const task = this.tasks.get(taskId)!;
+    const directory = task.project?.copyDirectory;
+    const related = directory ? [...this.tasks.values()].filter(candidate => candidate.project?.copyDirectory === directory) : [task];
+    const continuationPending = related.some(candidate => this.hasPendingInbox(candidate.record));
+    if (directory && continuationPending && terminal.has(task.record.status)) this.scheduleInbox(directory);
+    return { ...(task.record.continuationTaskId ? { continuationTaskId: task.record.continuationTaskId } : {}), continuationPending };
+  }
+
+  private scheduleInbox(directory: string): void {
+    if (this.stopped || this.flushingInboxes.has(directory)) return;
+    void this.flushInbox(directory).catch(error => process.stderr.write('Caller inbox dispatch failed: ' + (error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED') + '\n'));
+  }
+
+  private async flushInbox(directory: string): Promise<void> {
+    if (this.stopped || this.flushingInboxes.has(directory)) return;
+    this.flushingInboxes.add(directory);
+    let target: InternalTask | undefined;
+    let latest: InternalTask | undefined;
+    let item: CallerInboxItem | undefined;
+    let sent = false;
+    try {
+      const release = this.state.acquire('registry');
+      try {
+        this.refresh();
+        this.recoverInboxClaims(true);
+        const related = [...this.tasks.values()].filter(task => task.project?.copyDirectory === directory);
+        latest = related.filter(task => !(task.record.error?.code === 'STATE_PERSISTENCE_FAILED' && !task.record.startedAt)).at(-1);
+        if (!latest || !terminal.has(latest.record.status) || latest.owned || this.busyProjects.has(latest.project!)) return;
+        if (latest.record.status !== 'completed' || latest.record.integratedAt || latest.record.discardedAt || !latest.record.sessionId) {
+          this.failPendingInbox(directory, latest, 'failed', 'INVALID_MESSAGE_TARGET'); return;
+        }
+        if (related.some(task => task.record.dispatching)) return;
+        const queued = related.flatMap(task => (task.record.inbox ?? []).filter(entry => entry.receipt.state === 'queued').map(entry => ({ task, entry })));
+        queued.sort((a, b) => a.entry.receivedAt.localeCompare(b.entry.receivedAt));
+        const first = queued[0]; if (!first) return;
+        target = first.task; item = first.entry;
+        target.ownerPid = process.pid;
+        target.record.dispatching = { messageId: item.messageId, ownerId: this.inboxOwnerId };
+        this.claimingMessages.add(target.record.taskId);
+        this.events.append(target.record.taskId, 'caller.message-dispatching', { messageId: item.messageId });
+      } finally { release(); }
+      try {
+        const continuation = await this.run({ workingDirectory: latest!.record.workingDirectory, sessionId: latest!.record.sessionId,
+          prompt: item!.text, mode: latest!.record.mode, role: latest!.record.role, model: latest!.record.model ?? null,
+          deliveryMode: latest!.record.deliveryMode, timeoutSeconds: latest!.options.timeoutSeconds,
+          parentTaskId: latest!.record.taskId, sourceMessage: { taskId: target!.record.taskId, messageId: item!.messageId } });
+        const finish = this.state.acquire('registry');
+        try {
+          this.refresh();
+          target = this.tasks.get(target!.record.taskId)!;
+          item = target.record.inbox!.find(entry => entry.messageId === item!.messageId)!;
+          item.receipt = { messageId: item.messageId, taskId: target.record.taskId, state: 'sent', continuationTaskId: continuation.taskId };
+          const parent = this.tasks.get(latest!.record.taskId);
+          if (parent) { parent.record.continuationTaskId = continuation.taskId; this.persist(parent.record.taskId); }
+          delete target.record.dispatching;
+          this.events.append(target.record.taskId, 'caller.message-sent', { messageId: item.messageId, continuationTaskId: continuation.taskId });
+          sent = true;
+        } finally { finish(); }
+      } catch (error) {
+        const finish = this.state.acquire('registry');
+        try {
+          this.refresh();
+          target = this.tasks.get(target!.record.taskId);
+          item = target?.record.inbox?.find(entry => entry.messageId === item!.messageId);
+          if (!target || !item) return;
+          const accepted = [...this.tasks.values()].find(task => task.record.sourceMessage?.taskId === target!.record.taskId && task.record.sourceMessage.messageId === item!.messageId);
+          if (accepted && accepted.record.error?.code !== 'STATE_PERSISTENCE_FAILED') {
+            item.receipt = { messageId: item.messageId, taskId: target.record.taskId, state: 'sent', continuationTaskId: accepted.record.taskId };
+          } else if (!accepted && error instanceof BridgeError && error.code === 'STATE_BUSY') {
+            // run refused before accepting a continuation; this known-unsent input may be tried again by an explicit call or after a scoped lock releases.
+          } else item.receipt = { messageId: item.messageId, taskId: target.record.taskId, state: 'failed', error: { code: error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED', message: 'The continuation was not accepted' } };
+          delete target.record.dispatching;
+          this.events.append(target.record.taskId, 'caller.message-dispatch-ended', { messageId: item.messageId, state: item.receipt.state });
+        } finally { finish(); }
+      }
+    } catch (error) {
+      if (!(error instanceof BridgeError && error.code === 'STATE_BUSY')) throw error;
+    } finally {
+      if (target) this.claimingMessages.delete(target.record.taskId);
+      this.flushingInboxes.delete(directory);
+      if (sent && !this.stopped) queueMicrotask(() => this.scheduleInbox(directory));
+    }
+  }
+
   setDeliveryMode(taskId: string, mode: DeliveryMode) {
     const deliveryMode = deliveryModeSchema.parse(mode);
     const release = this.state.acquire('registry');
@@ -613,12 +807,13 @@ export class TaskManager {
       while (true) {
         if (signal?.aborted) throw new BridgeError('WAIT_CANCELLED', 'Waiting was cancelled; the task continues');
         const task = this.status(taskId);
+        const continuation = this.continuationState(taskId);
         if (deliveryMode === 'messages') {
           const messages = readMessages(task, after);
           const ready = terminal.has(task.status);
-          if (messages.messages.length || ready || Date.now() >= deadline) return {
+          if (messages.messages.length || (ready && (!continuation.continuationPending || continuation.continuationTaskId)) || Date.now() >= deadline) return {
             taskId, status: task.status, ready, timedOut: !ready && !messages.messages.length,
-            deliveryMode, cursorReset, ...messages, tokenUsage: task.tokenUsage,
+            deliveryMode, cursorReset, ...continuation, ...messages, tokenUsage: task.tokenUsage,
           };
           await delay(Math.min(250, Math.max(1, deadline - Date.now())), undefined, { signal });
           continue;
@@ -627,7 +822,7 @@ export class TaskManager {
         for (const event of page.events) { await onEvent?.(event); cursor = event.sequence; }
         const ready = terminal.has(task.status);
         if (ready || Date.now() >= deadline) return {
-          taskId, status: task.status, ready, timedOut: !ready, deliveryMode, cursorReset,
+          taskId, status: task.status, ready, timedOut: !ready, deliveryMode, cursorReset, ...continuation,
           ...this.events.read(taskId, after, 1000), tokenUsage: task.tokenUsage,
         };
         await delay(Math.min(250, Math.max(1, deadline - Date.now())), undefined, { signal });
@@ -659,6 +854,7 @@ export class TaskManager {
       task.record.status = 'cancelled';
       task.record.error = { code: 'TASK_CANCELLED', message: 'Task cancelled before execution' };
       task.record.completedAt = new Date().toISOString();
+      this.failPendingInbox(task.project?.copyDirectory, task, 'cancelled', 'TASK_CANCELLED');
       appendMessage(task.record, 'error', 'bridge', 'Task cancelled before execution');
       this.events.append(taskId, 'task.cancelled', {});
       task.owned = false;
@@ -683,7 +879,7 @@ export class TaskManager {
       const task = this.tasks.get(this.queue.shift()!);
       if (!task || task.record.status !== 'queued') continue;
       this.active++;
-      task.completion = this.execute(task).finally(() => { task.releaseProject?.(); task.releaseProject = undefined; task.owned = false; this.active--; this.pump(); });
+      task.completion = this.execute(task).finally(() => { task.releaseProject?.(); task.releaseProject = undefined; task.owned = false; this.active--; this.pump(); if (task.project) this.scheduleInbox(task.project.copyDirectory); });
     }
   }
 
@@ -1069,6 +1265,7 @@ export class TaskManager {
     if (status === 'timeout') code = 'TASK_TIMEOUT';
     if (status === 'cancelled') code = 'TASK_CANCELLED';
     if (code) task.record.error = { code, message: message || code };
+    if (status !== 'completed') this.failPendingInbox(task.project?.copyDirectory, task, status === 'cancelled' ? 'cancelled' : 'failed', code ?? 'TASK_NOT_COMPLETED');
     const output = task.record.result as { response?: unknown } | undefined;
     const reported = typeof output?.response === 'string' && output.response.trim() ? output.response : task.record.report?.data.summary;
     const text = typeof reported === 'string' && reported.trim() ? reported.replace(/<antigravity-message>[\s\S]*?<\/antigravity-message>/g, '').trim() || 'Execution ended; inspect the referenced result.' : 'Execution ended with status ' + status + '; inspect the current verification and tests.';

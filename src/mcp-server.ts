@@ -251,6 +251,13 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: {}, annotations: { ...action, openWorldHint: false },
   }, safe(() => tasks.cleanup()));
 
+  if (toolEnabled(tasks.toolProfile, 'antigravity_send_message')) server.registerTool('antigravity_send_message', {
+    outputSchema: outputSchemas.antigravity_send_message,
+    title: 'Send a caller message to an agy session', description: 'Queue bounded caller text for the retained conversation. A running turn finishes first; then the bridge starts an official session continuation. Sent means the bridge accepted that new task, not proof the model read it. Cannot approve permissions or integration.',
+    inputSchema: { taskId: z.string().uuid(), messageId: z.string().uuid(), text: z.string().min(1).max(2000) },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  }, async ({ taskId, messageId, text }) => safe(() => tasks.sendMessage(taskId, messageId, text))());
+
   if (toolEnabled(tasks.toolProfile, 'antigravity_set_delivery_mode')) server.registerTool('antigravity_set_delivery_mode', {
     outputSchema: outputSchemas.antigravity_set_delivery_mode,
     title: 'Choose delivery to the caller', description: 'Select compact public messages or legacy full events. This changes local task metadata, not agy permissions. Cursors belong to their delivery mode; restart after zero when switching.',
@@ -296,8 +303,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
     if (includeResult !== false && result.task.deliveryMode !== 'messages') return { ...result, task: clientTask(result.task) };
-    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, ...metadata } = result.task;
-    void messages; void messageCursor;
+    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, ...metadata } = result.task;
+    void messages; void messageCursor; void inbox; void dispatching; void sourceMessage;
     return { ...result, task: result.task.deliveryMode === 'messages' ? compactTask(result.task) : metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined,
       handoffAvailable: handoff !== undefined, roleDefinitionAvailable: roleDefinition !== undefined, includedFileCount: includedFiles?.length ?? 0 };
   })());

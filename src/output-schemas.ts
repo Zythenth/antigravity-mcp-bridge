@@ -54,6 +54,8 @@ export const taskRecordSchema = z.object({
   handoff: handoffSchema.optional(),
   comparison: comparisonSchema.optional(),
   roleDefinition: roleDefinitionSchema.optional(),
+  continuationTaskId: id.optional(),
+  parentTaskId: id.optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -144,6 +146,7 @@ export const successOutputSchemas = {
     taskId: id, status, ready: z.boolean(), timedOut: z.boolean(), tokenUsage: tokenUsage.optional(),
     deliveryMode: deliveryModeSchema.optional(), cursorReset: z.boolean().optional(), messages: z.array(bridgeMessageSchema).max(50).optional(),
     events: z.array(z.object({ taskId: id, sequence: z.number().int().positive(), timestamp, type: z.string(), data: z.unknown(), raw: z.unknown().optional() }).strict()).optional(),
+    continuationTaskId: id.optional(), continuationPending: z.boolean().optional(),
     nextCursor: count, oldestAvailable: z.number().int().positive(), truncated: z.boolean(),
   }).strict().refine(value => value.deliveryMode === 'messages' ? Array.isArray(value.messages) && value.events === undefined : Array.isArray(value.events) && value.messages === undefined, 'Delivery mode must match its payload')
     .meta({ anyOf: [{ properties: { deliveryMode: { const: 'messages' } }, required: ['deliveryMode', 'messages'], not: { required: ['events'] } },
@@ -151,6 +154,15 @@ export const successOutputSchemas = {
   antigravity_set_delivery_mode: z.object({ taskId: id, deliveryMode: deliveryModeSchema }).strict(),
   antigravity_cancel: task,
   antigravity_sessions: z.object({ sessions: z.array(z.object({ sessionId: z.string(), taskIds: z.array(id) }).strict()), scope: z.literal('local bridge state') }).strict(),
+  antigravity_send_message: z.object({
+    receipt: z.object({
+      messageId: id,
+      taskId: id,
+      state: z.enum(['queued', 'sent', 'failed', 'cancelled']),
+      continuationTaskId: id.optional(),
+      error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+    }).strict(),
+  }).strict(),
 };
 
 const errorResponse = z.object({ error: z.object({ code: z.string(), message: z.string() }).strict() }).strict();

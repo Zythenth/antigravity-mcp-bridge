@@ -57,6 +57,29 @@ export interface TaskRecord {
   tokenUsage?: ReturnType<typeof taskTokenUsage>;
   handoff?: HandoffContext;
   comparison?: Comparison;
+  continuationTaskId?: string;
+  parentTaskId?: string;
+  sourceMessage?: { taskId: string; messageId: string };
+  inbox?: CallerInboxItem[];
+  dispatching?: { messageId: string; continuationTaskId?: string; ownerId?: string };
+}
+
+export type CallerReceiptState = 'queued' | 'sent' | 'failed' | 'cancelled';
+
+export interface CallerMessageReceipt {
+  messageId: string;
+  taskId: string;
+  state: CallerReceiptState;
+  continuationTaskId?: string;
+  error?: { code: string; message: string };
+}
+
+export interface CallerInboxItem {
+  messageId: string;
+  taskId: string;
+  text: string;
+  receivedAt: string;
+  receipt: CallerMessageReceipt;
 }
 
 export interface TestEvidence {
@@ -100,6 +123,8 @@ export interface RunOptions {
   isolateWorktree?: boolean;
   includePaths?: string[];
   mode?: 'write' | 'read-only';
+  parentTaskId?: string;
+  sourceMessage?: { taskId: string; messageId: string };
 }
 
 export class BridgeError extends Error {
