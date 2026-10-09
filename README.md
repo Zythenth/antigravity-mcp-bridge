@@ -20,7 +20,9 @@ O bridge foi testado com `agy` 1.2.16 e `@modelcontextprotocol/sdk` 1.30.1. As t
 
 ## Versões disponíveis
 
-Este código corresponde à **0.6.1**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída. Os exemplos npx abaixo selecionam a 0.6.1.
+Este código corresponde à **0.7.1**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída. Os exemplos npx abaixo selecionam a 0.7.1.
+
+A 0.7.1 preserva entrega compacta, mensagens por sessão, skills selecionadas, execução simultânea e autorização prévia de integração, além das correções do Windows.
 
 A 0.6.1 inclui executor Windows do bridge, permissões de sandbox controladas por ferramentas MCP e um runtime Node portátil opcional para LPAC. O runtime está publicado em um Release imutável; prepare-o explicitamente antes de usar o modo portátil.
 
@@ -30,14 +32,14 @@ A 0.5.1 inclui perfis, espera com progresso, transferência entre papéis, compa
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.6.1, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.7.1, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.6.1"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.7.1"]
     }
   }
 }
@@ -75,10 +77,10 @@ No Windows x64, prepare explicitamente o runtime antes de usar o modo portátil:
 node plugin/server.mjs --prepare-windows-runtime
 ```
 
-Para preparar o runtime pelo pacote npm 0.6.1:
+Para preparar o runtime pelo pacote npm 0.7.1:
 
 ```powershell
-npx --yes antigravity-mcp-bridge@0.6.1 --prepare-windows-runtime
+npx --yes antigravity-mcp-bridge@0.7.1 --prepare-windows-runtime
 ```
 
 O status retorna JSON com `requestedMode`, `supported`, `ready`, `buildId`, `nodeVersion`, `libuvVersion`, `sha256` e, quando necessário, `error`. Uma consulta sem suporte, sem cache ou com cache inválido continua sendo uma consulta bem-sucedida; uma falha de preparação retorna exit code 1. Preparação baixa somente os arquivos declarados do GitHub Release, confere tamanho e SHA-256 e instala o cache privado de forma atômica. Inicialização, saúde e testes não baixam arquivos. Cache ausente no modo portátil exige `--prepare-windows-runtime`, sem voltar silenciosamente ao Node do sistema. Cache corrompido, alterado ou inseguro é recusado também pela preparação, que não o repara nem remove automaticamente. Antes de preparar novamente, uma pessoa deve inspecionar o caminho e remover manualmente somente o cache do build afetado; depois, executar `--prepare-windows-runtime`.
