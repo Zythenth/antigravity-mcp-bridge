@@ -207,7 +207,9 @@ export class ProjectMemoryStore {
 
     this.limits = Object.freeze({ maxEntries, maxBytes, maxEntryBytes });
 
-    mkdirSync(this.stateDirectory, { recursive: true, mode: 0o700 });
+    verifySafeDirectory(this.stateDirectory, 'INVALID_STATE_DIRECTORY');
+    try { mkdirSync(this.stateDirectory, { recursive: true, mode: 0o700 }); }
+    catch { throw new BridgeError('INVALID_STATE_DIRECTORY', 'Memory storage must be an accessible directory'); }
     const stat = lstatSync(this.stateDirectory, { bigint: true });
     if (stat.isSymbolicLink()) {
       throw new BridgeError('INVALID_STATE_DIRECTORY', 'State directory cannot be a link');
@@ -224,7 +226,9 @@ export class ProjectMemoryStore {
     }
 
     this.memoryDirectory = path.join(this.stateDirectory, 'project-memory');
-    mkdirSync(this.memoryDirectory, { recursive: true, mode: 0o700 });
+    verifySafeDirectory(this.memoryDirectory, 'INVALID_STATE_DIRECTORY');
+    try { mkdirSync(this.memoryDirectory, { recursive: true, mode: 0o700 }); }
+    catch { throw new BridgeError('INVALID_STATE_DIRECTORY', 'Memory storage must be an accessible directory'); }
     const memStat = lstatSync(this.memoryDirectory, { bigint: true });
     if (memStat.isSymbolicLink() || !memStat.isDirectory()) {
       throw new BridgeError('INVALID_STATE_DIRECTORY', 'Memory directory cannot be a link');

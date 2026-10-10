@@ -900,3 +900,15 @@ test('concurrent stale-lock recovery cannot remove a new writer lock', async () 
     await safeCleanup(root);
   }
 });
+
+test('memory construction rejects unsafe ancestors before creating directories', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'pm-test-construction-'));
+  try {
+    const outside = path.join(root, 'outside'), alias = path.join(root, 'alias'), regular = path.join(root, 'regular');
+    await mkdir(outside); await writeFile(regular, 'fixture');
+    assert.throws(() => new ProjectMemoryStore(regular), { code: 'INVALID_STATE_DIRECTORY' });
+    await symlink(outside, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.throws(() => new ProjectMemoryStore(path.join(alias, 'new-state')), { code: 'INVALID_STATE_DIRECTORY' });
+    assert.equal(existsSync(path.join(outside, 'new-state')), false);
+  } finally { await safeCleanup(root); }
+});
