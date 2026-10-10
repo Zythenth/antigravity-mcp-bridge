@@ -3,7 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, rm, writeFile, symlink } from 'node:fs/promises';
-import { existsSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { existsSync, realpathSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,7 +43,7 @@ test('ProjectMemoryStore persists, reloads, and validates memory snapshots and s
     assert.equal(snapshot.specialist, 'planner');
     assert.equal(snapshot.text, 'Architectural overview of system components');
     assert.ok(/^[a-f0-9]{64}$/.test(snapshot.projectId));
-    assert.equal(snapshot.projectId, computeProjectId(projDir));
+    assert.equal(snapshot.projectId, computeProjectId(realpathSync.native(projDir)));
     assert.ok(/^[a-f0-9]{64}$/.test(snapshot.sha256));
     assert.equal(snapshot.sha256, computeMemorySha256(snapshot.projectId, 'planner', snapshot.text));
     assert.ok(!Number.isNaN(Date.parse(snapshot.updatedAt)));
@@ -804,7 +804,7 @@ test('dangling links and inaccessible storage do not become absence', async (t) 
   try {
     await mkdir(projDir, { recursive: true });
     const store = new ProjectMemoryStore(stateDir);
-    const projectId = computeProjectId(projDir);
+    const projectId = computeProjectId(realpathSync.native(projDir));
     const projectMemoryDir = path.join(stateDir, 'project-memory', projectId);
     await mkdir(projectMemoryDir, { recursive: true });
 
