@@ -158,6 +158,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ workingDirectory, specialist, expectedSha256 }) => safe(() => tasks.removeMemory(workingDirectory, specialist, expectedSha256))());
 
   const groupIdInput = { groupId: z.string().uuid() };
+  if (toolEnabled(tasks.toolProfile, 'antigravity_peer_receipts')) server.registerTool('antigravity_peer_receipts', {
+    outputSchema: outputSchemas.antigravity_peer_receipts, title: 'Inspect compact peer delivery receipts',
+    description: 'Read a bounded snapshot page of public agy peer-message delivery metadata and hashes. Bodies stay in private state. queued waits for a turn; sent means a continuation was accepted, not that the model read or approved anything. Re-read a page to inspect changed receipt states.',
+    inputSchema: { ...groupIdInput, after: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(), limit: z.number().int().min(1).max(20).optional() }, annotations: readOnly,
+  }, async ({ groupId, after, limit }) => safe(() => tasks.groups.peerReceipts(groupId, after, limit))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_create')) server.registerTool('antigravity_group_create', {
     outputSchema: outputSchemas.antigravity_group_create, title: 'Create a dependency group',
     description: 'Persist a bounded group with configured specialist owners and dependencies. Use a stable client-generated UUID; repeating the same definition returns the existing group, a different definition is rejected. No model starts until group_start.',
@@ -383,8 +388,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
     if (includeResult !== false && result.task.deliveryMode !== 'messages') return { ...result, task: clientTask(result.task) };
-    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, outputSchema, artifactPaths, structuredResult, artifacts, ...metadata } = result.task;
-    void messages; void messageCursor; void inbox; void dispatching; void sourceMessage;
+    const { prompt, result: output, includedFiles, report, handoff, roleDefinition, messages, messageCursor, inbox, dispatching, sourceMessage, peerRequests, peerRequestsTruncated, outputSchema, artifactPaths, structuredResult, artifacts, ...metadata } = result.task;
+    void messages; void messageCursor; void inbox; void dispatching; void sourceMessage; void peerRequests; void peerRequestsTruncated;
     void outputSchema; void artifactPaths; void structuredResult; void artifacts;
     return { ...result, task: result.task.deliveryMode === 'messages' ? compactTask(result.task) : metadata, resultAvailable: output !== undefined, reportAvailable: report !== undefined,
       handoffAvailable: handoff !== undefined, roleDefinitionAvailable: roleDefinition !== undefined, includedFileCount: includedFiles?.length ?? 0,

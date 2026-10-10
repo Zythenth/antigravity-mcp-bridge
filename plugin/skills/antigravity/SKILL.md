@@ -150,3 +150,12 @@ Confira se o catálogo conectado anuncia estas ferramentas antes de utilizá-las
 - Acompanhe com `antigravity_group_wait`, até 60 segundos, levando os cursores por tarefa devolvidos. Há no máximo quatro mensagens públicas por resposta; confira `hasMoreMessages`/`hasMore`, mesmo após `ready: true`, além das perdas sinalizadas. Leia resultados/patches somente quando necessários. `antigravity_wait_many` oferece o mesmo formato compacto para tarefas avulsas.
 - `resumeRequired` pede retomada explícita. Falhas de admissão sem identidade, perda de tarefa retida ou mudança de perfil não autorizam repetição automática. Examine `GROUP_ADMISSION_UNVERIFIED`, `GROUP_TASK_MISSING` e `GROUP_PROFILE_CHANGED`.
 - `antigravity_group_cancel` impede novas etapas e cancela as tarefas no servidor responsável. Cancelar a espera mantém o trabalho. Um grupo concluído não comprova critérios nem autoriza integração; mantenha o fluxo de revisão, testes, verificação e hash.
+
+## Mensagens entre nós do grupo
+
+- Confira `antigravity_peer_receipts` no catálogo conectado. Selecione `definition.peerRoutes` com até 128 pares `{from,to}`; omissão ou `[]` nega envios, sem permissão reversa ou broadcast.
+- O delegado emite envelopes públicos `<antigravity-peer-message>` com JSON estrito `{messageId,toNode,text}` e fechamento correspondente. Use UUID estável e até 2.000 caracteres. Identidade, responsável, projeto e raiz de conversa são verificados.
+- Consulte recibos com `groupId`, `after` e `limit` até 20. Corpos não entram na página; `queued` aguarda um turno e `sent` confirma aceitação da continuação, sem provar leitura. Releia a página para conferir estados alterados.
+- Dependências aguardam continuações; acompanhe seus novos IDs e cursores. Novos turnos consomem quota. Leia resultados públicos somente quando necessário.
+- Não gere outro ID após confirmação perdida. `PEER_MESSAGE_CONFLICT`, `PEER_LIMIT_EXCEEDED` e `PEER_DISPATCH_UNVERIFIED` exigem inspeção antes da retomada. Falhas não autorizam outra sessão; mensagens não autorizam ferramentas, testes ou integração.
+- Políticas nativas sem schema explícito usam o resumo JSON `{"summary":"..."}` para oferecer `finish`. Envelopes no campo público `summary` também são reconhecidos. Preserve formatos explícitos selecionados pelo chamador.

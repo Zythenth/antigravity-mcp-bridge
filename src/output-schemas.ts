@@ -1,5 +1,5 @@
 import { jointWaitTaskSchema } from './joint-wait.js';
-import { groupSummarySchema, groupAssignmentSchema } from './group-contract.js';
+import { peerReceiptsPageSchema, groupSummarySchema, groupAssignmentSchema } from './group-contract.js';
 import { memorySummarySchema } from './project-memory.js';
 import { memorySelectionSchema } from './memory-context.js';
 import { z } from 'zod';
@@ -91,6 +91,7 @@ const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxP
 
 export const successOutputSchemas = {
   antigravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_peer_receipts: peerReceiptsPageSchema,
   antigravity_group_create: z.object({ group: groupSummarySchema }).strict(),
   antigravity_group_start: z.object({ group: groupSummarySchema }).strict(),
   antigravity_group_status: z.object({ group: groupSummarySchema }).strict(),

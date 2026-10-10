@@ -3,7 +3,8 @@
 ## Em desenvolvimento
 
 - Recuperação serializada de locks do estado, com identidade de arquivo, token de posse e liberação idempotente.
-- Contratos de rotas e envelopes de mensagens entre agentes, com varredura limitada; a ligação ao coordenador está em desenvolvimento.
+- Mensagens direcionadas entre nós, recibos compactos e continuação idempotente pelo CLI; dependências aguardam turnos adicionais e cancelamento inclui continuações.
+- Formato de resumo JSON para disponibilizar a conclusão guardada em tarefas com política nativa sem schema explícito.
 
 - Grupos com responsáveis e dependências, admissão persistida, retomada explícita e espera conjunta com cursores e mensagens limitadas.
 

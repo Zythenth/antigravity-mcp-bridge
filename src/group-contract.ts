@@ -3,6 +3,14 @@ import { createHash } from 'node:crypto';
 import { profileDefaultsSchema, roleSchema } from './roles.js';
 import { criteriaSchema } from './verification.js';
 import { validateGroupGraph, GroupNodeStatus } from './task-groups.js';
+import {
+  peerRoutesSchema,
+  validatePeerRoutes,
+  nodeKeySchema,
+  peerMessageTextSchema,
+} from './peer-messages.js';
+
+export { peerRoutesSchema };
 
 export const groupAdmissionSchema = z.object({
   groupId: z.string().uuid(), nodeKey: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/), owner: roleSchema,
@@ -22,9 +30,24 @@ export const groupDefinitionSchema = z.object({
     key: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/), owner: roleSchema,
     dependsOn: z.array(z.string()).max(31), task: groupTaskInputSchema,
   }).strict()).min(1).max(32),
+  peerRoutes: peerRoutesSchema.optional(),
 }).strict().superRefine((definition, ctx) => {
   try { validateGroupGraph({ nodes: definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) }); }
   catch { ctx.addIssue({ code: 'custom', message: 'Invalid group dependency graph' }); }
+  if (definition.peerRoutes !== undefined) {
+    try {
+      validatePeerRoutes(
+        { nodes: definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) },
+        definition.peerRoutes
+      );
+    } catch (err: unknown) {
+      ctx.addIssue({
+        code: 'custom',
+        message: err instanceof Error ? err.message : 'Invalid peer routes',
+        path: ['peerRoutes'],
+      });
+    }
+  }
   if (Buffer.byteLength(JSON.stringify(definition), 'utf8') > 4 * 1024 * 1024) ctx.addIssue({ code: 'custom', message: 'Group definition exceeds 4 MiB' });
 });
 export type GroupDefinition = z.infer<typeof groupDefinitionSchema>;
@@ -36,6 +59,70 @@ export const groupNodeRecordSchema = z.object({
   state: z.lazy(() => GroupNodeStatus), taskId: z.string().uuid().optional(),
   error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
 }).strict();
+
+export const peerDeliveryStateSchema = z.enum(['pending', 'queued', 'sent', 'failed', 'cancelled']);
+export type PeerDeliveryState = z.infer<typeof peerDeliveryStateSchema>;
+
+export const peerDeliverySchema = z.object({
+  sourceTaskId: z.string().uuid(),
+  sourceNode: nodeKeySchema,
+  messageId: z.string().uuid(),
+  toNode: nodeKeySchema,
+  text: peerMessageTextSchema,
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  transportId: z.string().uuid(),
+  targetTaskId: z.string().uuid().optional(),
+  state: peerDeliveryStateSchema,
+  continuationTaskId: z.string().uuid().optional(),
+  error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+}).strict().superRefine((delivery, ctx) => {
+  if (typeof delivery.text === 'string') {
+    const expectedSha256 = createHash('sha256').update(delivery.text, 'utf8').digest('hex');
+    if (delivery.sha256 !== expectedSha256) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'sha256 must match SHA256 of UTF8 text',
+        path: ['sha256'],
+      });
+    }
+  }
+  if ((delivery.state === 'queued' || delivery.state === 'sent') && !delivery.targetTaskId) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `State "${delivery.state}" requires targetTaskId`,
+      path: ['targetTaskId'],
+    });
+  }
+  if (delivery.state === 'sent' && !delivery.continuationTaskId) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'State "sent" requires continuationTaskId',
+      path: ['continuationTaskId'],
+    });
+  }
+});
+export type PeerDelivery = z.infer<typeof peerDeliverySchema>;
+
+export const peerReceiptSchema = z.object({
+  messageId: z.string().uuid(),
+  sourceTaskId: z.string().uuid(),
+  fromNode: nodeKeySchema,
+  toNode: nodeKeySchema,
+  state: peerDeliveryStateSchema,
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  continuationTaskId: z.string().uuid().optional(),
+  error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+  source: z.literal('agy-reported'),
+}).strict();
+export type PeerReceipt = z.infer<typeof peerReceiptSchema>;
+
+export const peerReceiptsPageSchema = z.object({
+  receipts: z.array(peerReceiptSchema).max(20),
+  nextCursor: z.number().int().nonnegative().safe(),
+  hasMore: z.boolean(),
+}).strict();
+export type PeerReceiptsPage = z.infer<typeof peerReceiptsPageSchema>;
+
 export const groupRecordSchema = z.object({
   version: z.literal(1), groupId: z.string().uuid(), definitionSha256: z.string().regex(/^[a-f0-9]{64}$/),
   definition: groupDefinitionSchema, profiles: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)),
@@ -43,7 +130,38 @@ export const groupRecordSchema = z.object({
   createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
   ownerPid: z.number().int().positive().optional(), ownerId: z.string().uuid().optional(),
   error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
-}).strict();
+  peerDeliveries: z.array(peerDeliverySchema).max(100).optional(),
+}).strict().superRefine((record, ctx) => {
+  if (record.peerDeliveries !== undefined) {
+    const seenLogical = new Set<string>();
+    const seenTransport = new Set<string>();
+    for (let i = 0; i < record.peerDeliveries.length; i++) {
+      const delivery = record.peerDeliveries[i]!;
+      if (typeof delivery.sourceTaskId === 'string' && typeof delivery.messageId === 'string') {
+        const logicalKey = `${delivery.sourceTaskId.toLowerCase()}:${delivery.messageId.toLowerCase()}`;
+        if (seenLogical.has(logicalKey)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Duplicate peer delivery logical ID: ${delivery.sourceTaskId}:${delivery.messageId}`,
+            path: ['peerDeliveries', i],
+          });
+        }
+        seenLogical.add(logicalKey);
+      }
+      if (typeof delivery.transportId === 'string') {
+        const transportKey = delivery.transportId.toLowerCase();
+        if (seenTransport.has(transportKey)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `Duplicate peer delivery transport ID: ${delivery.transportId}`,
+            path: ['peerDeliveries', i],
+          });
+        }
+        seenTransport.add(transportKey);
+      }
+    }
+  }
+});
 export type GroupRecord = z.infer<typeof groupRecordSchema>;
 export const groupSummarySchema = z.object({
   groupId: z.string().uuid(), definitionSha256: z.string().regex(/^[a-f0-9]{64}$/),

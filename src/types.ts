@@ -1,3 +1,4 @@
+import type { PeerMessageInput, PeerOrigin, PeerContext } from './peer-messages.js';
 import type { GroupAdmission, GroupAssignment } from './group-contract.js';
 import type { MemorySnapshot, MemorySummary } from './project-memory.js';
 import type { MemorySelection } from './memory-context.js';
@@ -28,6 +29,8 @@ export interface BridgeEvent {
 }
 
 export interface TaskRecord {
+  peerRequests?: PeerMessageInput[];
+  peerRequestsTruncated?: boolean;
   group?: GroupAssignment;
   memory?: MemorySummary[];
   deliveryMode?: DeliveryMode;
@@ -91,6 +94,7 @@ export interface CallerMessageReceipt {
 }
 
 export interface CallerInboxItem {
+  peerOrigin?: PeerOrigin;
   messageId: string;
   taskId: string;
   text: string;
@@ -119,6 +123,8 @@ export interface TestEvidence {
 }
 
 export interface RunOptions extends AgentPolicySelection {
+  peerContext?: PeerContext;
+  peerOrigin?: PeerOrigin;
   groupAdmission?: GroupAdmission;
   group?: GroupAssignment;
   memory?: MemorySelection;

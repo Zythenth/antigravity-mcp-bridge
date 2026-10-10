@@ -157,3 +157,15 @@ export function extractPeerMessages(text: string): { messages: PeerMessageInput[
   }
   return { messages, truncated };
 }
+
+
+export const peerOriginSchema = z.object({
+  groupId: z.string().uuid(), fromNode: nodeKeySchema,
+  sourceTaskId: z.string().uuid(), messageId: z.string().uuid(),
+}).strict();
+export type PeerOrigin = z.infer<typeof peerOriginSchema>;
+export const peerContextSchema = z.object({
+  groupId: z.string().uuid(), nodeKey: nodeKeySchema,
+  targets: z.array(nodeKeySchema).max(31).refine(values => new Set(values).size === values.length),
+}).strict();
+export type PeerContext = z.infer<typeof peerContextSchema>;

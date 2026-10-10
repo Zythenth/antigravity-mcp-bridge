@@ -1,3 +1,5 @@
+import { extractPeerMessages, peerOriginSchema, peerContextSchema, isPeerRouteAllowed, type PeerOrigin } from './peer-messages.js';
+import { GroupStore } from './group-store.js';
 import { jointWaitPage, waitTargetsSchema } from './joint-wait.js';
 import { groupAdmissionSchema, type GroupAdmission } from './group-contract.js';
 import { GroupManager } from './group-manager.js';
@@ -202,6 +204,12 @@ export class TaskManager {
   async run(options: RunOptions): Promise<TaskRecord> {
     options = { ...options };
     delete options.group;
+    if (!options.groupAdmission) delete options.peerContext;
+    else if (options.peerContext) {
+      options.peerContext = peerContextSchema.parse(options.peerContext);
+      if (options.peerContext.groupId.toLowerCase() !== options.groupAdmission.groupId.toLowerCase() || options.peerContext.nodeKey !== options.groupAdmission.nodeKey) throw new BridgeError('INVALID_GROUP', 'Peer context differs from group admission');
+    }
+    if (!options.sourceMessage) delete options.peerOrigin;
     if (options.groupAdmission && options.sessionId) throw new BridgeError('INVALID_GROUP', 'Group admission starts a new session');
     delete options.memorySnapshots; // Internal snapshots are resolved only by the bridge.
     const initialRoleDefinition = options.sessionId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
@@ -264,6 +272,8 @@ export class TaskManager {
       if (options.sessionId && (!previous || (previous.record.status !== 'completed' && previous.record.error?.code !== 'TEST_FAILED') || previous.record.integratedAt)) {
         throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
       }
+      if (previous?.record.group) options.parentTaskId = previous.record.taskId;
+      if (previous?.record.group && new GroupStore(this.config.stateDirectory).read(previous.record.group.groupId).state !== 'running') throw new BridgeError('GROUP_CLOSED', 'Start or resume the group coordinator before another conversation turn');
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
       if (previous && !previous.record.agentPolicy && this.config.enforceAgentPolicy) throw new BridgeError('AGENT_POLICY_CHANGED', 'This legacy session has no enforced policy; start a new task under the configured human ceiling');
       if (previous && (options.allowedTools !== undefined || options.mcpServers !== undefined)) throw new BridgeError('INVALID_AGENT_POLICY', 'Resume retains its original tool policy; use a new task to select different tools');
@@ -293,6 +303,15 @@ export class TaskManager {
       if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
       if (previous?.project) await verifyProvidedSkills(previous.project.copyDirectory, previous.project.providedSkills ?? []);
       options.handoff ??= previous?.record.handoff;
+      if (previous) options.peerContext = structuredClone(previous.options.peerContext);
+      if (options.peerOrigin) {
+        options.peerOrigin = peerOriginSchema.parse(options.peerOrigin);
+        const item = this.tasks.get(options.sourceMessage!.taskId)?.record.inbox?.find(item => item.messageId === options.sourceMessage!.messageId);
+        if (!previous?.record.group || JSON.stringify(item?.peerOrigin) !== JSON.stringify(options.peerOrigin) ||
+            options.peerOrigin.groupId.toLowerCase() !== previous.record.group.groupId.toLowerCase() || item?.text !== options.prompt) {
+          throw new BridgeError('INVALID_PEER_MESSAGE', 'Peer continuation does not match its persisted input');
+        }
+      }
       const acceptanceCriteria = previous?.record.acceptanceCriteria ?? options.acceptanceCriteria ?? contextSource?.record.acceptanceCriteria;
       const role = roleSchema.parse(options.role ?? previous?.record.role ?? 'implementer');
       const roleDefinition = previous?.record.roleDefinition ?? initialRoleDefinition ?? resolveRole(role, this.config.customRoles);
@@ -810,12 +829,16 @@ export class TaskManager {
     }));
   }
 
-  async sendMessage(taskId: string, messageId: string, text: string) {
+  async sendMessage(taskId: string, messageId: string, text: string, peerOrigin?: PeerOrigin) {
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(messageId) || !text.trim() || text.length > 2000) {
       throw new BridgeError('INVALID_MESSAGE', 'Provide a UUID and between 1 and 2000 characters of caller text');
     }
     messageId = messageId.toLowerCase();
+    if (peerOrigin) {
+      peerOrigin = peerOriginSchema.parse(peerOrigin);
+      peerOrigin = { ...peerOrigin, groupId: peerOrigin.groupId.toLowerCase(), sourceTaskId: peerOrigin.sourceTaskId.toLowerCase(), messageId: peerOrigin.messageId.toLowerCase() };
+    }
     const release = this.state.acquire('registry');
     let directory: string | undefined;
     try {
@@ -824,7 +847,8 @@ export class TaskManager {
       const task = this.tasks.get(taskId);
       if (!task) throw new BridgeError('TASK_NOT_FOUND', 'Unknown task: ' + taskId);
       const existing = task.record.inbox?.find(item => item.messageId === messageId);
-      if (existing && existing.text !== text) throw new BridgeError('MESSAGE_ID_CONFLICT', 'This message ID already identifies different text');
+      if (existing && (existing.text !== text || JSON.stringify(existing.peerOrigin) !== JSON.stringify(peerOrigin))) throw new BridgeError('MESSAGE_ID_CONFLICT', 'This message ID already identifies different text or origin');
+      if (peerOrigin && (!existing || existing.receipt.state === 'queued')) this.assertPeerInput(task.record, text, peerOrigin);
       if (existing && existing.receipt.state !== 'queued') return { receipt: this.inboxReceipt(existing) };
       if (!task.owned && !terminal.has(task.record.status)) throw new BridgeError('TASK_OWNED_BY_OTHER_SERVER', 'Send through the bridge that owns the running task');
       if (task.record.integratedAt || task.record.discardedAt || (!task.project && terminal.has(task.record.status))) {
@@ -832,7 +856,7 @@ export class TaskManager {
       }
       if (!existing) {
         if ((task.record.inbox?.length ?? 0) >= 20) throw new BridgeError('INBOX_FULL', 'At most 20 caller messages can be retained on one task');
-        const item: CallerInboxItem = { messageId, taskId, text, receivedAt: new Date().toISOString(), receipt: { messageId, taskId, state: 'queued' } };
+        const item: CallerInboxItem = { messageId, taskId, text, ...(peerOrigin ? { peerOrigin } : {}), receivedAt: new Date().toISOString(), receipt: { messageId, taskId, state: 'queued' } };
         task.record.inbox = [...(task.record.inbox ?? []), item];
         this.events.append(taskId, 'caller.message-queued', { messageId });
       }
@@ -846,6 +870,27 @@ export class TaskManager {
     const item = this.tasks.get(taskId)?.record.inbox?.find(entry => entry.messageId === messageId);
     if (!item) throw new BridgeError('TASK_NOT_FOUND', 'Caller message target was removed');
     return { receipt: this.inboxReceipt(item) };
+  }
+
+  private assertPeerInput(target: TaskRecord, text: string, origin: PeerOrigin): void {
+    const sender = this.tasks.get(origin.sourceTaskId)?.record;
+    const group = new GroupStore(this.config.stateDirectory).read(origin.groupId);
+    const check = (task: TaskRecord | undefined, key: string): task is TaskRecord => {
+      if (!task?.group) return false;
+      const root = this.tasks.get(task.group.rootTaskId)?.record;
+      return task.group.groupId.toLowerCase() === group.groupId.toLowerCase() && task.group.nodeKey === key &&
+        task.group.definitionSha256 === group.definitionSha256 && task.workingDirectory === group.definition.workingDirectory &&
+        task.group.owner === group.definition.jobs.find(job => job.key === key)?.owner && task.role === task.group.owner &&
+        !!root?.group && root.group.rootTaskId.toLowerCase() === root.taskId.toLowerCase() &&
+        root.group.groupId.toLowerCase() === group.groupId.toLowerCase() && root.group.nodeKey === key &&
+        root.group.definitionSha256 === group.definitionSha256 && root.group.owner === task.group.owner && root.role === task.role && root.workingDirectory === task.workingDirectory;
+    };
+    const routes = (group.definition as typeof group.definition & { peerRoutes?: Array<{ from: string; to: string }> }).peerRoutes ?? [];
+    if (group.state !== 'running' || !check(sender, origin.fromNode) || !target.group || !check(target, target.group.nodeKey) ||
+        !isPeerRouteAllowed({ nodes: group.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) }, routes, origin.fromNode, target.group.nodeKey) ||
+        !sender!.peerRequests?.some(input => input.messageId.toLowerCase() === origin.messageId && input.toNode === target.group!.nodeKey && input.text === text)) {
+      throw new BridgeError('INVALID_PEER_MESSAGE', 'Peer input is outside the selected route, project, membership or public request');
+    }
   }
 
   private failPendingInbox(directory: string | undefined, current: InternalTask, state: 'failed' | 'cancelled', code: string): void {
@@ -930,7 +975,7 @@ export class TaskManager {
       } finally { release(); }
       try {
         const continuation = await this.run({ workingDirectory: latest!.record.workingDirectory, sessionId: latest!.record.sessionId,
-          prompt: item!.text, mode: latest!.record.mode, role: latest!.record.role, model: latest!.record.model ?? null,
+          prompt: item!.text, peerOrigin: item!.peerOrigin, mode: latest!.record.mode, role: latest!.record.role, model: latest!.record.model ?? null,
           deliveryMode: latest!.record.deliveryMode, timeoutSeconds: latest!.options.timeoutSeconds,
           parentTaskId: latest!.record.taskId, sourceMessage: { taskId: target!.record.taskId, messageId: item!.messageId } });
         const finish = this.state.acquire('registry');
@@ -1460,6 +1505,7 @@ export class TaskManager {
           const delta = step.text_delta.slice(0, room);
           if (delta.length < step.text_delta.length && !task.messageBufferLimited) {
             task.messageBufferLimited = true;
+            if (record.group) record.peerRequestsTruncated = true;
             appendMessage(record, 'blocker', 'bridge', 'The public message buffer reached its limit; inspect retained history and the full result for omitted details.');
             this.events.append(record.taskId, 'message.truncated', { limitChars: 1024 * 1024 });
           }
@@ -1467,7 +1513,7 @@ export class TaskManager {
           const text = (task.publicResponses.get(index) ?? '') + delta;
           task.publicResponses.set(index, text);
           this.captureMessages(task, text, String(index));
-        }
+        } else if (record.group) record.peerRequestsTruncated = true;
       }
       this.events.append(record.taskId, type, step, raw);
       if (step.usage !== undefined) record.usage = step.usage;
@@ -1481,11 +1527,25 @@ export class TaskManager {
         record.lastObservedCliUsage = normalizeUsage(result.usage);
       }
       if (typeof result.response === 'string') this.captureMessages(task, result.response, 'final', true);
+      const structured = result.structured_output;
+      if (structured && typeof structured === 'object' && typeof (structured as { summary?: unknown }).summary === 'string') this.captureMessages(task, (structured as { summary: string }).summary, 'structured-final', true);
       this.events.append(record.taskId, 'agy.result', result, raw);
     } else this.events.append(record.taskId, 'agy.event', raw, raw);
   }
 
   private captureMessages(task: InternalTask, text: string, step: string, final = false): void {
+    if (task.record.group) {
+      const peers = extractPeerMessages(text);
+      let changed = false;
+      for (const input of peers.messages) {
+        const normalized = { ...input, messageId: input.messageId.toLowerCase() };
+        if (task.record.peerRequests?.some(old => old.messageId === normalized.messageId && old.toNode === normalized.toNode && old.text === normalized.text)) continue;
+        if ((task.record.peerRequests?.length ?? 0) >= 20) { task.record.peerRequestsTruncated = true; break; }
+        task.record.peerRequests = [...(task.record.peerRequests ?? []), normalized]; changed = true;
+      }
+      if (peers.truncated) task.record.peerRequestsTruncated = true;
+      if (changed || task.record.peerRequestsTruncated) this.events.append(task.record.taskId, 'peer.requests-observed', { count: task.record.peerRequests?.length ?? 0, truncated: task.record.peerRequestsTruncated ?? false });
+    }
     task.messageKeys ??= new Set();
     for (const input of extractAgentMessages(text)) {
       const payload = JSON.stringify(input);
@@ -1513,10 +1573,11 @@ export class TaskManager {
     if (status === 'cancelled') code = 'TASK_CANCELLED';
     if (code) task.record.error = { code, message: message || code };
     if (status !== 'completed') this.failPendingInbox(task.project?.copyDirectory, task, status === 'cancelled' ? 'cancelled' : 'failed', code ?? 'TASK_NOT_COMPLETED');
-    const output = task.record.result as { response?: unknown } | undefined;
-    const reported = typeof output?.response === 'string' && output.response.trim() ? output.response : task.record.report?.data.summary;
-    const text = typeof reported === 'string' && reported.trim() ? reported.replace(/<antigravity-message>[\s\S]*?<\/antigravity-message>/g, '').trim() || 'Execution ended; inspect the referenced result.' : 'Execution ended with status ' + status + '; inspect the current verification and tests.';
-    const source = status === 'completed' && typeof reported === 'string' && task.record.usageProvenance !== 'local-executor' ? 'agy-reported' : 'bridge';
+    const output = task.record.result as { response?: unknown; structured_output?: { summary?: unknown } } | undefined;
+    const reported = typeof output?.structured_output?.summary === 'string' ? output.structured_output.summary : typeof output?.response === 'string' && output.response.trim() ? output.response : task.record.report?.data.summary;
+    const hasPeerEnvelope = typeof reported === 'string' && reported.includes('<antigravity-peer-message>');
+    const text = hasPeerEnvelope ? 'Peer messages retained by the coordinator; inspect the referenced result for the final response.' : typeof reported === 'string' && reported.trim() ? reported.replace(/<antigravity-message>[\s\S]*?<\/antigravity-message>/g, '').trim() || 'Execution ended; inspect the referenced result.' : 'Execution ended with status ' + status + '; inspect the current verification and tests.';
+    const source = !hasPeerEnvelope && status === 'completed' && typeof reported === 'string' && task.record.usageProvenance !== 'local-executor' ? 'agy-reported' : 'bridge';
     appendMessage(task.record, status === 'completed' ? 'final' : 'error', source,
       status === 'completed' ? text : (task.record.error?.code ?? status) + ': ' + (task.record.error?.message ?? text), resultReference(task.record));
     this.events.append(task.record.taskId, `task.${status}`, task.record.error || { exitCode: task.record.exitCode });

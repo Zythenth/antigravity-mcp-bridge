@@ -16,11 +16,11 @@ O bridge não acessa endpoints privados, cookies ou arquivos de autenticação. 
 - [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/overview/) instalado e disponível no `PATH`. Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
 - Autenticação concluída no `agy` interativo. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
-O bridge foi testado com `agy` 1.2.16 e `@modelcontextprotocol/sdk` 1.30.1. As tarefas delegadas exigem que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. No Windows, `antigravity_test` usa por padrão o executor local do bridge em AppContainer/LPAC; nos demais sistemas, usa o sandbox oficial do `agy`.
+O bridge foi validado com `agy` 1.3.2 e `@modelcontextprotocol/sdk` 1.30.1. As tarefas delegadas exigem que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. No Windows, `antigravity_test` usa por padrão o executor local do bridge em AppContainer/LPAC; nos demais sistemas, usa o sandbox oficial do `agy`.
 
 ## Versões disponíveis
 
-Este código corresponde à **0.7.1**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída. Os exemplos npx abaixo selecionam a 0.7.1.
+Os exemplos de instalação selecionam a **0.7.1**; recursos marcados como presentes no código atual estão em desenvolvimento para a próxima publicação. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída. Os exemplos npx abaixo selecionam a 0.7.1.
 
 A 0.7.1 preserva entrega compacta, mensagens por sessão, skills selecionadas, execução simultânea e autorização prévia de integração, além das correções do Windows.
 
@@ -234,6 +234,7 @@ As ferramentas desta seção estão no código atual. O cliente cria um grupo co
 | `antigravity_group_wait` | Espera mensagens públicas ou término do grupo |
 | `antigravity_group_cancel` | Impede novos nós e cancela tarefas no servidor responsável |
 | `antigravity_wait_many` | Espera de 1 a 32 tarefas avulsas com cursores independentes |
+| `antigravity_peer_receipts` | Recibos compactos das mensagens entre nós |
 
 Exemplo de `definition` para `antigravity_group_create`:
 
@@ -257,6 +258,20 @@ Os grupos usam entrega `messages`. Cada nó aplica hooks da política nativa den
 Após reiniciar o servidor, `resumeRequired` informa a necessidade de retomada explícita. O coordenador recupera IDs já aceitos e não repete nós concluídos. Se uma admissão interrompida não tiver identidade verificável, retorna `GROUP_ADMISSION_UNVERIFIED`; não inicia outra execução silenciosamente. Alterar o perfil de um responsável pausa novas admissões com `GROUP_PROFILE_CHANGED`. Tarefas removidas pela retenção retornam erro, sem repetição.
 
 O estado `completed` informa o término das execuções. Integração continua exigindo revisão, testes, verificação atual e hash por tarefa. Os registros de grupo ficam no estado privado até remoção local; descarte as cópias antes de apagar registros, conforme [Privacidade](PRIVACY.md).
+
+### Mensagens entre nós
+
+O chamador seleciona rotas direcionadas em `definition.peerRoutes`, por exemplo `[{"from":"inspect","to":"check"}]`. Omissão ou `[]` nega envios. Não há direção inversa ou broadcast implícitos. Limites: 128 rotas, 20 mensagens por nó de origem durante o grupo e 100 por grupo.
+
+O delegado recebe os destinos permitidos e emite uma resposta pública `<antigravity-peer-message>{"messageId":"<uuid-estável>","toNode":"check","text":"descoberta"}</antigravity-peer-message>`. O texto tem até 2.000 caracteres. O servidor verifica responsável, raiz de conversa, projeto e definição; a entrada chega ao destinatário como dados sem autorizar ferramentas ou integração.
+
+A entrega aguarda a admissão do destinatário e o fim do turno ativo, usando a continuação oficial do CLI. Cada novo turno pode consumir quota. `queued` informa espera; `sent` informa aceitação da continuação, sem comprovar leitura pelo modelo. Dependências aguardam os turnos adicionais, e a espera conjunta acompanha o turno mais recente.
+
+`antigravity_peer_receipts` recebe `groupId`, `after` e `limit` de 1 a 20. Os recibos trazem origem `agy-reported`, destinos, estado e SHA-256; corpos e IDs internos de transporte ficam fora da página. O cursor pagina um retrato: releia a página para conferir estados alterados. Resultados públicos do destinatário podem reproduzir dados recebidos e permanecem disponíveis pelos leitores normais.
+
+Mesmo ID e conteúdo preservam a identidade. Conteúdo conflitante pausa com `PEER_MESSAGE_CONFLICT`; limites e truncamento pausam com `PEER_LIMIT_EXCEEDED`. Confirmação ambígua exige inspeção e retomada explícita, reutilizando o ID persistido. Rota negada ou destinatário encerrado produz falha sem outra sessão. O cancelamento alcança continuações ativas; grupos encerrados recusam novos turnos.
+
+Em tarefas de implementação com política nativa e sem schema de saída explícito, o bridge oferece o formato JSON `{"summary":"..."}` para disponibilizar a chamada guardada `finish`. Schemas explícitos e contratos de outros papéis são preservados. Envelopes no campo público `summary` também são reconhecidos; isso não expõe raciocínio privado.
 
 ## Memória privada por projeto e especialista
 

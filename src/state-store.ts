@@ -1,3 +1,4 @@
+import { peerMessageInputSchema, peerOriginSchema, peerContextSchema } from './peer-messages.js';
 import { groupAssignmentSchema } from './group-contract.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
 import { computeProjectId, memorySummarySchema } from './project-memory.js';
@@ -31,6 +32,8 @@ const snapshotSchema = z.object({
     deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
     agentPolicyReceipt: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), decisionCount: z.number().int().nonnegative(), deniedCount: z.number().int().nonnegative() }).strict().optional(),
+    peerRequests: z.array(z.lazy(() => peerMessageInputSchema)).max(20).optional(),
+    peerRequestsTruncated: z.boolean().optional(),
     group: z.lazy(() => groupAssignmentSchema).optional(),
     memory: z.array(z.lazy(() => memorySummarySchema)).max(8).optional(),
     agentPolicy: resolvedAgentPolicySchema.optional(),
@@ -42,6 +45,7 @@ const snapshotSchema = z.object({
     sourceMessage: z.object({ taskId: z.string().uuid(), messageId: z.string().uuid() }).strict().optional(),
     dispatching: z.object({ messageId: z.string().uuid(), continuationTaskId: z.string().uuid().optional(), ownerId: z.string().uuid().optional() }).strict().optional(),
     inbox: z.array(z.object({
+      peerOrigin: z.lazy(() => peerOriginSchema).optional(),
       messageId: z.string().uuid(),
       taskId: z.string().uuid(),
       text: z.string().min(1).max(2000),
@@ -55,7 +59,7 @@ const snapshotSchema = z.object({
       }).strict(),
     }).strict()).max(20).optional(),
   }).passthrough(),
-  options: z.object({ group: z.lazy(() => groupAssignmentSchema).optional(), memory: z.lazy(() => memorySelectionSchema).optional(), memorySnapshots: z.lazy(() => memorySnapshotsSchema).optional(), allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(), agentPolicy: resolvedAgentPolicySchema.optional(), prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
+  options: z.object({ peerContext: z.lazy(() => peerContextSchema).optional(), peerOrigin: z.lazy(() => peerOriginSchema).optional(), group: z.lazy(() => groupAssignmentSchema).optional(), memory: z.lazy(() => memorySelectionSchema).optional(), memorySnapshots: z.lazy(() => memorySnapshotsSchema).optional(), allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(), agentPolicy: resolvedAgentPolicySchema.optional(), prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
   }).passthrough(),
@@ -192,6 +196,10 @@ export class StateStore {
         throw new BridgeError('INVALID_STATE', 'Persisted inbox does not match task identity');
       }
       if (JSON.stringify(data.record.group) !== JSON.stringify(data.options.group)) throw new BridgeError('INVALID_STATE', 'Persisted group assignment differs from task options');
+      if ((data.record.peerRequests || data.options.peerContext || data.options.peerOrigin) && !data.record.group) throw new BridgeError('INVALID_STATE', 'Peer state requires group membership');
+      if (data.options.peerContext && (data.options.peerContext.groupId.toLowerCase() !== data.record.group!.groupId.toLowerCase() ||
+          data.options.peerContext.nodeKey !== data.record.group!.nodeKey)) throw new BridgeError('INVALID_STATE', 'Peer context differs from task group');
+      if (data.options.peerOrigin && (!data.record.sourceMessage || data.options.peerOrigin.groupId.toLowerCase() !== data.record.group!.groupId.toLowerCase())) throw new BridgeError('INVALID_STATE', 'Peer input differs from its continuation');
       const snapshots = data.options.memorySnapshots;
       if (snapshots?.some(entry => entry.projectId !== computeProjectId(data.record.workingDirectory)) ||
           JSON.stringify(data.record.memory) !== JSON.stringify(summarizeMemory(snapshots)) ||
