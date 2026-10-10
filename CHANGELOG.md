@@ -2,6 +2,10 @@
 
 ## Em desenvolvimento
 
+- Workflows com intermediários JSON privados, síntese final, herança explícita de arquivos, checkpoints verificáveis e retomada sem repetir trabalho concluído.
+- Hooks por etapa para critérios reais, revisão fundamentada e testes observados, com bloqueio de evidências pendentes ou inválidas.
+- Orçamento por grupo com contadores observados, diferenças de sessão e bloqueio de novas chamadas quando faltam dados ou o teto é atingido.
+
 - Recuperação serializada de locks do estado, com identidade de arquivo, token de posse e liberação idempotente.
 - Mensagens direcionadas entre nós, recibos compactos e continuação idempotente pelo CLI; dependências aguardam turnos adicionais e cancelamento inclui continuações.
 - Formato de resumo JSON para disponibilizar a conclusão guardada em tarefas com política nativa sem schema explícito.

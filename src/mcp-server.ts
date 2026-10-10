@@ -158,6 +158,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
   }, async ({ workingDirectory, specialist, expectedSha256 }) => safe(() => tasks.removeMemory(workingDirectory, specialist, expectedSha256))());
 
   const groupIdInput = { groupId: z.string().uuid() };
+  if (toolEnabled(tasks.toolProfile, 'antigravity_workflow_result')) server.registerTool('antigravity_workflow_result', {
+    outputSchema: outputSchemas.antigravity_workflow_result, title: 'Read the validated workflow synthesis',
+    description: 'Revalidate retained workflow checkpoints and return only the final public summary and hashed result reference. Intermediate outputs remain private. Completion does not authorize integration.',
+    inputSchema: groupIdInput, annotations: readOnly,
+  }, async ({ groupId }) => safe(() => tasks.groups.workflowResult(groupId))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_peer_receipts')) server.registerTool('antigravity_peer_receipts', {
     outputSchema: outputSchemas.antigravity_peer_receipts, title: 'Inspect compact peer delivery receipts',
     description: 'Read a bounded snapshot page of public agy peer-message delivery metadata and hashes. Bodies stay in private state. queued waits for a turn; sent means a continuation was accepted, not that the model read or approved anything. Re-read a page to inspect changed receipt states.',

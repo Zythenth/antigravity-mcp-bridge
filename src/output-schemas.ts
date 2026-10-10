@@ -91,6 +91,8 @@ const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxP
 
 export const successOutputSchemas = {
   antigravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_workflow_result: z.object({ groupId: id, finalNode: z.string(), taskId: id, outputSha256: hash, summary: z.string().max(2000).optional(),
+    reference: z.object({ tool: z.literal('antigravity_read_result'), taskId: id, contentSha256: hash }).strict() }).strict(),
   antigravity_peer_receipts: peerReceiptsPageSchema,
   antigravity_group_create: z.object({ group: groupSummarySchema }).strict(),
   antigravity_group_start: z.object({ group: groupSummarySchema }).strict(),

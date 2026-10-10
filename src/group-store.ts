@@ -1,3 +1,4 @@
+import { workflowCheckpointSha256 } from './workflows.js';
 import { lstatSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -37,6 +38,7 @@ export class GroupStore {
       if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 5 * 1024 * 1024) throw Error('Unsafe group file');
       const record = groupRecordSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
       if (record.groupId.toLowerCase() !== groupId.toLowerCase() || record.definitionSha256 !== groupDefinitionSha256(record.definition)) throw Error('Group identity or definition changed');
+      for (const node of Object.values(record.nodes)) if (node.checkpoint && node.checkpoint.sha256 !== workflowCheckpointSha256(node.checkpoint.data)) throw Error('Workflow checkpoint identity changed');
       const keys = record.definition.jobs.map(job => job.key);
       if (Object.keys(record.profiles).length !== keys.length || keys.some(key => !Object.hasOwn(record.profiles, key))) throw Error('Group profiles mismatch');
       groupReadiness({ nodes: record.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) },

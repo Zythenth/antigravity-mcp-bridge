@@ -235,6 +235,7 @@ As ferramentas desta seção estão no código atual. O cliente cria um grupo co
 | `antigravity_group_cancel` | Impede novos nós e cancela tarefas no servidor responsável |
 | `antigravity_wait_many` | Espera de 1 a 32 tarefas avulsas com cursores independentes |
 | `antigravity_peer_receipts` | Recibos compactos das mensagens entre nós |
+| `antigravity_workflow_result` | Síntese final e referência após revalidar checkpoints |
 
 Exemplo de `definition` para `antigravity_group_create`:
 
@@ -244,9 +245,11 @@ Exemplo de `definition` para `antigravity_group_create`:
   "title": "Inspeção sequencial",
   "jobs": [
     { "key": "inspect", "owner": "implementer", "dependsOn": [],
-      "task": { "prompt": "Inspecione os arquivos selecionados.", "mode": "read-only" } },
+      "task": { "prompt": "Inspecione os arquivos selecionados.", "mode": "read-only",
+        "acceptanceCriteria": [{ "id": "inspection", "description": "Inspeção fundamentada nos arquivos selecionados" }] } },
     { "key": "check", "owner": "implementer", "dependsOn": ["inspect"],
-      "task": { "prompt": "Confira os requisitos da tarefa.", "mode": "read-only" } }
+      "task": { "prompt": "Confira os requisitos da tarefa.", "mode": "read-only",
+        "acceptanceCriteria": [{ "id": "requirements", "description": "Conferência fundamentada dos requisitos" }] } }
   ]
 }
 ```
@@ -258,6 +261,38 @@ Os grupos usam entrega `messages`. Cada nó aplica hooks da política nativa den
 Após reiniciar o servidor, `resumeRequired` informa a necessidade de retomada explícita. O coordenador recupera IDs já aceitos e não repete nós concluídos. Se uma admissão interrompida não tiver identidade verificável, retorna `GROUP_ADMISSION_UNVERIFIED`; não inicia outra execução silenciosamente. Alterar o perfil de um responsável pausa novas admissões com `GROUP_PROFILE_CHANGED`. Tarefas removidas pela retenção retornam erro, sem repetição.
 
 O estado `completed` informa o término das execuções. Integração continua exigindo revisão, testes, verificação atual e hash por tarefa. Os registros de grupo ficam no estado privado até remoção local; descarte as cópias antes de apagar registros, conforme [Privacidade](PRIVACY.md).
+
+### Workflows e checkpoints
+
+Acrescente `workflow` à definição do grupo:
+
+```json
+{
+  "finalNode": "check",
+  "hooks": {
+    "inspect": { "requireReview": true }
+  },
+  "fileSources": { "check": "inspect" }
+}
+```
+
+O nó final precisa depender, direta ou indiretamente, de todos os outros nós. Cada etapa exige `acceptanceCriteria`. O servidor verifica as condições de arquivo antes de liberar dependentes. Critérios sem uma verificação automática exigem revisão com citações conferidas nos arquivos reais. `requireReview` exige essa revisão mesmo com verificações automáticas; `requireTests` exige evidência observada de execução, vinculada ao patch e à árvore atuais. Registros `client-reported` não satisfazem esse hook. Testes diretos exigem uma etapa de escrita baseada em `implementer` e um executor compatível; a falta dessa capacidade não autoriza execução no host.
+
+Os resultados JSON e artefatos permanecem no estado privado. Etapas de implementação sem formato explícito usam `{"summary":"..."}`; formatos dos perfis e contratos de outros papéis são preservados. Os predecessores fornecem JSON validado e hashes ao próximo nó; a síntese final recebe os intermediários concluídos. O contexto tem até 64 KiB UTF-8. Excesso retorna `WORKFLOW_CONTEXT_TOO_LARGE`, sem truncamento silencioso ou estimativa de tokens.
+
+`fileSources` escolhe uma dependência direta como base dos arquivos de uma etapa. O servidor confere seu checkpoint e cria outra cópia. Outros predecessores fornecem dados; não há mescla automática de arquivos. A seleção de arquivos e skills da base é preservada: omita `includePaths` e `skills` no destino. As regras existentes de transferência de memória continuam válidas; `memory: []` permite não herdar snapshots.
+
+Checkpoints guardam hashes da árvore, patch, resultado, artefatos e validação. Saídas com revisão ou testes pendentes são retidas e pausam o grupo. Depois da verificação, retome com `antigravity_group_start` e o mesmo hash de definição. O servidor revalida os dados e não repete a chamada já concluída. Alterações em arquivos ou resultados retornam `WORKFLOW_CHECKPOINT_CHANGED`; identidades perdidas não autorizam repetição. Novas mensagens não podem alterar uma etapa já checkpointada.
+
+`antigravity_group_wait` mantém os intermediários fora da resposta, preservando perguntas, bloqueios e erros públicos. `antigravity_workflow_result` revalida os checkpoints e entrega somente a síntese pública final e uma referência com hash. Uma execução posterior com falha impede disponibilizar uma síntese como atualmente validada. Essas verificações cobrem as condições declaradas; a integração mantém seus próprios testes, revisão e confirmação ou autorização prévia.
+
+### Orçamento observado por grupo
+
+Use `"budget": {"maxTotalTokens": 100000}` na definição. Sem esse campo, o comportamento existente é preservado. Com teto configurado, o grupo aguarda os contadores do turno atual antes de admitir outro. O controle inclui continuações, mensagens entre nós e reparos com modelo; retomadas contam a diferença da sessão e execuções locais sem modelo têm consumo conhecido zero.
+
+O status informa `observedTotalTokens`, subtotal conhecido, tarefas sem medição, margem e estado do orçamento. Contadores ausentes ou identidades retidas perdidas bloqueiam novas chamadas com `GROUP_USAGE_UNAVAILABLE`; atingir o teto pausa com `GROUP_BUDGET_EXCEEDED`. O teto faz parte da definição imutável do grupo.
+
+Esse controle impede novas admissões conforme consumo observado. Um turno já aceito pode ultrapassar o teto; o CLI não oferece previsão exata de tokens ou preço antecipado. Não há substituição de dados ausentes por estimativas.
 
 ### Mensagens entre nós
 

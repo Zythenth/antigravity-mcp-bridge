@@ -159,3 +159,13 @@ Confira se o catálogo conectado anuncia estas ferramentas antes de utilizá-las
 - Dependências aguardam continuações; acompanhe seus novos IDs e cursores. Novos turnos consomem quota. Leia resultados públicos somente quando necessário.
 - Não gere outro ID após confirmação perdida. `PEER_MESSAGE_CONFLICT`, `PEER_LIMIT_EXCEEDED` e `PEER_DISPATCH_UNVERIFIED` exigem inspeção antes da retomada. Falhas não autorizam outra sessão; mensagens não autorizam ferramentas, testes ou integração.
 - Políticas nativas sem schema explícito usam o resumo JSON `{"summary":"..."}` para oferecer `finish`. Envelopes no campo público `summary` também são reconhecidos. Preserve formatos explícitos selecionados pelo chamador.
+
+## Workflows executados pelo servidor
+
+- Confira o catálogo conectado. Configure `definition.workflow` com `finalNode`, `hooks` opcionais por nó e `fileSources` para herdar arquivos de uma dependência direta. O nó final deve alcançar todos os predecessores. Não mescle cópias implicitamente.
+- Defina critérios por etapa e formatos JSON com o conteúdo necessário. O servidor guarda intermediários e valida hashes antes de enviá-los como dados às próximas etapas. Limite de contexto: 64 KiB UTF-8; reduza a saída declarada se houver excesso.
+- `requireReview` exige revisão atual com citações reais via `antigravity_verify`. `requireTests` exige execução observada em executor compatível; `antigravity_record_test` é relato do cliente e não satisfaz esse hook. Testes diretos exigem etapa de escrita baseada em implementer.
+- Examine `WORKFLOW_REVIEW_REQUIRED`/`WORKFLOW_TEST_REQUIRED`; complete a verificação e retome o mesmo grupo com seu hash. Não repita a tarefa concluída nem gere outro ID para contornar checkpoint ou erro de admissão.
+- A herança de arquivos conserva seleção e skills; omita esses campos no destino. Se necessário, use `memory: []` para não herdar memória. O servidor confere árvore e patch antes da transferência.
+- A espera do workflow omite mensagens intermediárias comuns. Use `antigravity_workflow_result` para a síntese e sua referência; leia detalhes apenas quando necessários. Mudanças ou execuções posteriores com falha invalidam a entrega validada. Conclusão não autoriza integração.
+- `definition.budget.maxTotalTokens` limita novas chamadas pelo consumo observado, incluindo continuações. Com teto, aguarde o turno ativo; ausência de medição ou esgotamento pausa admissões. Um turno aceito pode ultrapassar o teto; não prometa preço ou tokens prévios exatos.

@@ -1,3 +1,5 @@
+import { type WorkflowHook, type WorkflowCheckpoint, type WorkflowInput } from './workflows.js';
+import { observeGroupBudget, requireGroupBudget } from './group-budget.js';
 import { extractPeerMessages, peerOriginSchema, peerContextSchema, isPeerRouteAllowed, type PeerOrigin } from './peer-messages.js';
 import { GroupStore } from './group-store.js';
 import { jointWaitPage, waitTargetsSchema } from './joint-wait.js';
@@ -274,6 +276,12 @@ export class TaskManager {
       }
       if (previous?.record.group) options.parentTaskId = previous.record.taskId;
       if (previous?.record.group && new GroupStore(this.config.stateDirectory).read(previous.record.group.groupId).state !== 'running') throw new BridgeError('GROUP_CLOSED', 'Start or resume the group coordinator before another conversation turn');
+      if (previous?.record.group) {
+        const group = new GroupStore(this.config.stateDirectory).read(previous.record.group.groupId);
+        if (group.definition.workflow && group.nodes[previous.record.group.nodeKey]?.checkpoint) throw new BridgeError('WORKFLOW_NODE_CLOSED', 'Checkpointed workflow outputs cannot be changed by another conversation turn');
+      }
+      const budgetGroup = options.groupAdmission ?? previous?.record.group;
+      if (budgetGroup) this.checkGroupBudget(budgetGroup.groupId);
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
       if (previous && !previous.record.agentPolicy && this.config.enforceAgentPolicy) throw new BridgeError('AGENT_POLICY_CHANGED', 'This legacy session has no enforced policy; start a new task under the configured human ceiling');
       if (previous && (options.allowedTools !== undefined || options.mcpServers !== undefined)) throw new BridgeError('INVALID_AGENT_POLICY', 'Resume retains its original tool policy; use a new task to select different tools');
@@ -629,6 +637,46 @@ export class TaskManager {
     });
   }
 
+  async workflowSnapshot(taskId: string, outputTaskId: string, nodeKey: string, hooks: WorkflowHook = {}, createdAt = new Date().toISOString()) {
+    this.refresh();
+    const task = this.tasks.get(taskId), output = this.tasks.get(outputTaskId);
+    if (!task?.project || !output?.project || task.record.status !== 'completed' || output.record.status !== 'completed' ||
+        task.project.copyDirectory !== output.project.copyDirectory || !task.record.group || !output.record.group ||
+        task.record.group.rootTaskId !== output.record.group.rootTaskId || task.record.integratedAt || task.record.discardedAt) {
+      throw new BridgeError('WORKFLOW_TASK_UNAVAILABLE', 'Workflow requires completed retained outputs in the same conversation copy');
+    }
+    return this.withProject(task.project, async () => {
+      const project = task.project!, preview = await previewProjectCopy(project, this.config), treeSha256 = await fingerprintProjectCopy(project, this.config);
+      const value = output.record.structuredResult ? output.record.structuredResult.value : output.record.report?.data;
+      const structured = validateStructuredResult({}, value);
+      if (output.record.structuredResult && output.record.structuredResult.sha256 !== structured.sha256) throw new BridgeError('WORKFLOW_OUTPUT_CHANGED', 'Structured workflow output identity changed');
+      const artifacts = output.record.artifactPaths?.length ? await collectArtifacts(project, output.record.artifactPaths, this.config) : [];
+      if (JSON.stringify(artifacts) !== JSON.stringify(output.record.artifacts ?? [])) throw new BridgeError('WORKFLOW_OUTPUT_CHANGED', 'Workflow artifacts changed since completion');
+      const criteria = output.record.acceptanceCriteria ?? [];
+      if (!criteria.length) throw new BridgeError('WORKFLOW_CRITERIA_REQUIRED', 'Every step requires independently checked acceptance criteria');
+      const automatic = await verifyCriteria(project, preview.sha256, criteria, []);
+      if (automatic.checks.some(check => check.status === 'failed')) throw new BridgeError('WORKFLOW_VALIDATION_FAILED', 'An actual file acceptance check failed');
+      const previous = task.record.verification ?? output.record.verification;
+      const reviewed = previous ? await verifyCriteria(project, preview.sha256, criteria, previous.review.evidence) : undefined;
+      const reviewPassed = previous?.status === 'passed' && previous.sha256 === preview.sha256 && reviewed?.status === 'passed' &&
+        JSON.stringify(reviewed.fileHashes) === JSON.stringify(previous.fileHashes);
+      const lastObservedTest = (task.record.tests ?? []).filter(test => test.source !== 'client-reported').at(-1);
+      const observedTests = lastObservedTest && lastObservedTest.sha256 === preview.sha256 && lastObservedTest.treeSha256 === treeSha256 &&
+        lastObservedTest.beforeTreeSha256 === treeSha256 && lastObservedTest.exitCode === 0 && !lastObservedTest.executionError && !lastObservedTest.truncated ? [lastObservedTest] : [];
+      const needsReview = hooks.requireReview || criteria.some(criterion => !criterion.check) || reviewed?.status === 'failed';
+      const phase = needsReview && !reviewPassed ? 'pending-review' as const : hooks.requireTests && !observedTests.length ? 'pending-tests' as const : 'validated' as const;
+      const validationSha256 = createHash('sha256').update(JSON.stringify({
+        criteria, fileHashes: automatic.fileHashes, reviews: reviewed ? { checks: reviewed.checks, fileHashes: reviewed.fileHashes, evidence: previous!.review.evidence } : null,
+        tests: observedTests.map(test => ({ command: test.command, exitCode: test.exitCode, source: test.source, sha256: test.sha256,
+          treeSha256: test.treeSha256, recordedAt: test.recordedAt, sandboxPolicySha256: test.sandboxPolicySha256, portableNode: test.portableNode, testTaskId: test.testTaskId, outputSha256: createHash('sha256').update(test.output).digest('hex') })), phase,
+      })).digest('hex');
+      const checkpoint: WorkflowCheckpoint = { taskId, outputTaskId, treeSha256, patchSha256: preview.sha256, outputSha256: structured.sha256,
+        validationSha256, artifacts, createdAt };
+      const input: WorkflowInput = { nodeKey, taskId: outputTaskId, outputSha256: structured.sha256, value: structured.value, artifacts };
+      return { checkpoint, input, phase };
+    });
+  }
+
   private async requireVerification(task: InternalTask, sha256: string): Promise<void> {
     const previous = task.record.verification;
     if (!previous || previous.status !== 'passed') throw new BridgeError('VERIFICATION_REQUIRED', 'All acceptance criteria require artifact checks and grounded Codex review before integration');
@@ -697,14 +745,14 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { group: structuredClone(current.record.group), memory: structuredClone(current.record.memory), deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
+      const record: TaskRecord = { parentTaskId: current.record.taskId, group: structuredClone(current.record.group), memory: structuredClone(current.record.memory), deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
         mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
         status: 'queued', createdAt: new Date().toISOString(),
         outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths, agentPolicy: current.record.agentPolicy };
-      const options: RunOptions = { group: structuredClone(current.record.group), memory: structuredClone(current.options.memory), memorySnapshots: structuredClone(current.options.memorySnapshots), deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
+      const options: RunOptions = { parentTaskId: current.record.taskId, group: structuredClone(current.record.group), memory: structuredClone(current.options.memory), memorySnapshots: structuredClone(current.options.memorySnapshots), deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
         agentPolicy: record.agentPolicy, model: record.model, effort: record.effort, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
@@ -855,6 +903,10 @@ export class TaskManager {
         throw new BridgeError('INVALID_MESSAGE_TARGET', 'This task no longer retains a conversation copy');
       }
       if (!existing) {
+        if (task.record.group) {
+          const group = new GroupStore(this.config.stateDirectory).read(task.record.group.groupId);
+          if (group.definition.workflow && group.nodes[task.record.group.nodeKey]?.checkpoint) throw new BridgeError('WORKFLOW_NODE_CLOSED', 'Checkpointed workflow outputs cannot accept another input');
+        }
         if ((task.record.inbox?.length ?? 0) >= 20) throw new BridgeError('INBOX_FULL', 'At most 20 caller messages can be retained on one task');
         const item: CallerInboxItem = { messageId, taskId, text, ...(peerOrigin ? { peerOrigin } : {}), receivedAt: new Date().toISOString(), receipt: { messageId, taskId, state: 'queued' } };
         task.record.inbox = [...(task.record.inbox ?? []), item];
@@ -870,6 +922,12 @@ export class TaskManager {
     const item = this.tasks.get(taskId)?.record.inbox?.find(entry => entry.messageId === messageId);
     if (!item) throw new BridgeError('TASK_NOT_FOUND', 'Caller message target was removed');
     return { receipt: this.inboxReceipt(item) };
+  }
+
+  private checkGroupBudget(groupId: string, pending?: { taskId: string; zeroTokens: boolean }): void {
+    const group = new GroupStore(this.config.stateDirectory).read(groupId);
+    if (group.state !== 'running') throw new BridgeError('GROUP_CLOSED', 'Start or resume the group before another model turn');
+    requireGroupBudget(observeGroupBudget(group, [...this.tasks.values()].map(task => task.record), pending));
   }
 
   private assertPeerInput(target: TaskRecord, text: string, origin: PeerOrigin): void {
@@ -1000,7 +1058,7 @@ export class TaskManager {
           const accepted = [...this.tasks.values()].find(task => task.record.sourceMessage?.taskId === target!.record.taskId && task.record.sourceMessage.messageId === item!.messageId);
           if (accepted && accepted.record.error?.code !== 'STATE_PERSISTENCE_FAILED') {
             item.receipt = { messageId: item.messageId, taskId: target.record.taskId, state: 'sent', continuationTaskId: accepted.record.taskId };
-          } else if (!accepted && error instanceof BridgeError && error.code === 'STATE_BUSY') {
+          } else if (!accepted && error instanceof BridgeError && (error.code === 'STATE_BUSY' || error.code === 'GROUP_BUDGET_PENDING')) {
             // run refused before accepting a continuation; this known-unsent input may be tried again by an explicit call or after a scoped lock releases.
           } else item.receipt = { messageId: item.messageId, taskId: target.record.taskId, state: 'failed', error: { code: error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED', message: 'The continuation was not accepted' } };
           delete target.record.dispatching;
@@ -1446,6 +1504,11 @@ export class TaskManager {
         }
         const repairSeconds = this.remainingSeconds(deadline);
         if (!repairSeconds) { task.termination = 'timeout'; break; }
+        if (task.record.group) {
+          const budgetLock = this.state.acquire('registry');
+          try { this.refresh(); this.checkGroupBudget(task.record.group.groupId, { taskId: task.record.taskId, zeroTokens: !modelInvoked }); }
+          finally { budgetLock(); }
+        }
         modelInvoked = true;
         task.record.usageProvenance = undefined;
         await this.repairWindowsTest(task, request, result.exitCode, repairSeconds);

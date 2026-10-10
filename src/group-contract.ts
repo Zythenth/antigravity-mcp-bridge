@@ -1,3 +1,5 @@
+import { workflowOptionsSchema, workflowCheckpointSchema, validateWorkflowOptions } from './workflows.js';
+import { groupBudgetSchema, groupBudgetStatusSchema } from './group-budget.js';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { profileDefaultsSchema, roleSchema } from './roles.js';
@@ -31,6 +33,8 @@ export const groupDefinitionSchema = z.object({
     dependsOn: z.array(z.string()).max(31), task: groupTaskInputSchema,
   }).strict()).min(1).max(32),
   peerRoutes: peerRoutesSchema.optional(),
+  budget: groupBudgetSchema.optional(),
+  workflow: workflowOptionsSchema.optional(),
 }).strict().superRefine((definition, ctx) => {
   try { validateGroupGraph({ nodes: definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) }); }
   catch { ctx.addIssue({ code: 'custom', message: 'Invalid group dependency graph' }); }
@@ -48,6 +52,11 @@ export const groupDefinitionSchema = z.object({
       });
     }
   }
+  if (definition.workflow) {
+    try { validateWorkflowOptions({ nodes: definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) }, definition.workflow); }
+    catch { ctx.addIssue({ code: 'custom', message: 'Invalid workflow synthesis graph or hooks' }); }
+    if (definition.jobs.some(job => !job.task.acceptanceCriteria?.length)) ctx.addIssue({ code: 'custom', message: 'Every workflow step requires acceptance criteria' });
+  }
   if (Buffer.byteLength(JSON.stringify(definition), 'utf8') > 4 * 1024 * 1024) ctx.addIssue({ code: 'custom', message: 'Group definition exceeds 4 MiB' });
 });
 export type GroupDefinition = z.infer<typeof groupDefinitionSchema>;
@@ -56,6 +65,8 @@ export function groupDefinitionSha256(definition: GroupDefinition): string {
 }
 export const groupStateSchema = z.enum(['created', 'running', 'paused', 'completed', 'failed', 'cancelled']);
 export const groupNodeRecordSchema = z.object({
+  inputSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  checkpoint: z.object({ data: z.lazy(() => workflowCheckpointSchema), sha256: z.string().regex(/^[a-f0-9]{64}$/), phase: z.enum(['validated','pending-review','pending-tests']) }).strict().optional(),
   state: z.lazy(() => GroupNodeStatus), taskId: z.string().uuid().optional(),
   error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
 }).strict();
@@ -164,19 +175,31 @@ export const groupRecordSchema = z.object({
 });
 export type GroupRecord = z.infer<typeof groupRecordSchema>;
 export const groupSummarySchema = z.object({
+  budget: groupBudgetStatusSchema.optional(),
+  workflow: z.object({ finalNode: z.string(), fileSources: z.record(z.string(), z.string()).optional() }).strict().optional(),
   groupId: z.string().uuid(), definitionSha256: z.string().regex(/^[a-f0-9]{64}$/),
   workingDirectory: z.string(), title: z.string(), state: groupStateSchema,
   createdAt: z.string().datetime(), updatedAt: z.string().datetime(), resumeRequired: z.boolean(),
   error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
   nodes: z.array(z.object({
-    key: z.string(), owner: roleSchema, dependsOn: z.array(z.string()), ...groupNodeRecordSchema.shape,
+    key: z.string(), owner: roleSchema, dependsOn: z.array(z.string()),
+    state: z.lazy(() => GroupNodeStatus), taskId: z.string().uuid().optional(),
+    error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+    inputSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    checkpoint: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), phase: z.enum(['validated','pending-review','pending-tests']),
+      taskId: z.string().uuid(), outputSha256: z.string().regex(/^[a-f0-9]{64}$/), artifactCount: z.number().int().nonnegative() }).strict().optional(),
   }).strict()).max(32),
 }).strict();
 export function summarizeGroup(record: GroupRecord, resumeRequired = record.state === 'paused') {
   return groupSummarySchema.parse({
     groupId: record.groupId, definitionSha256: record.definitionSha256,
+    ...(record.definition.workflow ? { workflow: { finalNode: record.definition.workflow.finalNode, ...(record.definition.workflow.fileSources ? { fileSources: record.definition.workflow.fileSources } : {}) } } : {}),
     workingDirectory: record.definition.workingDirectory, title: record.definition.title, state: record.state,
     createdAt: record.createdAt, updatedAt: record.updatedAt, resumeRequired, error: record.error,
-    nodes: record.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn, ...record.nodes[key]! })),
+    nodes: record.definition.jobs.map(({ key, owner, dependsOn }) => {
+      const { checkpoint, ...node } = record.nodes[key]!;
+      return { key, owner, dependsOn, ...node, ...(checkpoint ? { checkpoint: { sha256: checkpoint.sha256, phase: checkpoint.phase,
+        taskId: checkpoint.data.taskId, outputSha256: checkpoint.data.outputSha256, artifactCount: checkpoint.data.artifacts.length } } : {}) };
+    }),
   });
 }

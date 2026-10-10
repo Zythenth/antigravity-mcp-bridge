@@ -16,10 +16,10 @@ import { discardProjectCopy } from '../src/isolation.js';
 import type { RunOptions } from '../src/types.js';
 
 class HeldAdapter extends CliAdapter {
-  calls: Array<{ key: string; options: RunOptions; finish: (response?: string, structured?: unknown) => void; emit: (value: unknown) => void }> = [];
+  calls: Array<{ key: string; options: RunOptions; finish: (response?: string, structured?: unknown, usage?: unknown) => void; emit: (value: unknown) => void }> = [];
   override spawnTask(options: RunOptions, _model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {
     const child = new EventEmitter() as ChildProcessWithoutNullStreams, stdout = new PassThrough(), sessionId = options.sessionId ?? randomUUID();
-    const finish = (response = 'Public result reference.', structured?: unknown) => {
+    const finish = (response = 'Public result reference.', structured?: unknown, usage?: unknown) => {
       if (child.exitCode !== null) return;
       if (options.agentPolicy) {
         const hook = spawnSync(process.execPath, ['bridge-execution-hook.mjs'], { cwd: path.join(cwd, '.agents'), windowsHide: true, encoding: 'utf8',
@@ -27,7 +27,7 @@ class HeldAdapter extends CliAdapter {
         assert.equal(hook.status, 0, hook.stderr); assert.equal(JSON.parse(hook.stdout).decision, 'allow');
       }
       stdout.write(JSON.stringify({ event: 'result', result: { status: 'SUCCESS', response, ...(structured === undefined ? {} : { structured_output: structured }),
-        usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 } } }) + '\n');
+        usage: usage === undefined ? { input_tokens: 8, output_tokens: 2, total_tokens: 10 } : usage } }) + '\n');
       stdout.end(); Object.assign(child, { exitCode: 0 }); child.emit('close', 0);
     };
     Object.assign(child, { stdin: new PassThrough(), stdout, stderr: new PassThrough(), exitCode: null, killed: false,
@@ -62,9 +62,10 @@ import { taskPrompt } from '../src/cli-adapter.js';
 const envelope = (input: unknown) => '<antigravity-peer-message>' + JSON.stringify(input) + '</antigravity-peer-message>';
 test('only public response envelopes become bounded private requests; chunks and final duplicates are stable', async () => {
   await fixture(async ({ source, tasks, adapter, config }) => {
-    const groupId = randomUUID(), messageId = randomUUID();
+    const { groupId, definitionSha256 } = await captureAdmission(source, tasks, config);
+    const messageId = randomUUID();
     const task = await tasks.runInGroup({ workingDirectory: source, prompt: 'Read source', mode: 'read-only', deliveryMode: 'messages',
-      peerContext: { groupId, nodeKey: 'a', targets: ['b'] } }, { groupId, nodeKey: 'a', owner: 'implementer', definitionSha256: 'a'.repeat(64) });
+      peerContext: { groupId, nodeKey: 'a', targets: ['b'] } }, { groupId, nodeKey: 'a', owner: 'implementer', definitionSha256 });
     await until(() => adapter.calls.length === 1);
     const input = { messageId, toNode: 'b', text: 'PEER_PRIVATE_BODY Example </antigravity-peer-message>' }, text = envelope(input);
     const call = adapter.calls[0]!;
@@ -86,10 +87,11 @@ test('only public response envelopes become bounded private requests; chunks and
   });
 });
 test('conflicting IDs remain observable and overflow is explicit instead of unbounded forwarding', async () => {
-  await fixture(async ({ source, tasks, adapter }) => {
-    const groupId = randomUUID(), id = randomUUID();
+  await fixture(async ({ source, tasks, adapter, config }) => {
+    const { groupId, definitionSha256 } = await captureAdmission(source, tasks, config);
+    const id = randomUUID();
     const task = await tasks.runInGroup({ workingDirectory: source, prompt: 'Read', mode: 'read-only' },
-      { groupId, nodeKey: 'a', owner: 'implementer', definitionSha256: 'a'.repeat(64) });
+      { groupId, nodeKey: 'a', owner: 'implementer', definitionSha256 });
     await until(() => adapter.calls.length === 1);
     const values = [{ messageId: id, toNode: 'b', text: 'first' }, { messageId: id, toNode: 'b', text: 'conflict' },
       ...Array.from({ length: 20 }, (_, index) => ({ messageId: randomUUID(), toNode: 'b', text: 'entry' + index }))];
@@ -242,7 +244,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../src/mcp-server.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
 test('receipt MCP contract is available in all four profiles with no peer body or model start', async () => {
-  for (const [profile, count] of [['full',49],['query',35],['review',38],['implementation',49]] as const) {
+  for (const [profile, count] of [['full',50],['query',36],['review',39],['implementation',50]] as const) {
     await fixture(async ({ source, tasks, adapter, config }) => {
       config.toolProfile = profile;
       const group = await tasks.groups.create(randomUUID(), peerDefinition(source));
@@ -282,5 +284,60 @@ test('actual CLI adapter offers guarded finish schema by default and preserves e
       if (expected) { assert.ok(index >= 0); assert.deepEqual(JSON.parse(args[index + 1]!), expected); }
       else assert.equal(index, -1);
     }
+  });
+});
+
+async function captureAdmission(source: string, tasks: TaskManager, config: Config) {
+  const group = await tasks.groups.create(randomUUID(), peerDefinition(source));
+  const store = new GroupStore(config.stateDirectory), release = store.state.acquire('group-' + group.groupId);
+  try { const record = store.read(group.groupId); record.state = 'running'; record.nodes.a!.state = 'starting'; store.write(record); }
+  finally { release(); }
+  return group;
+}
+import { observeGroupBudget } from '../src/group-budget.js';
+test('observed budget serializes admissions and stops future nodes after the threshold is consumed', async () => {
+  await fixture(async ({ source, tasks, adapter }) => {
+    const input = peerDefinition(source); input.budget = { maxTotalTokens: 15 };
+    input.jobs.push({ key: 'join', owner: 'implementer', dependsOn: ['a','b'], task: { prompt: 'join', mode: 'read-only' } });
+    const group = await tasks.groups.create(randomUUID(), input); tasks.groups.start(group.groupId, group.definitionSha256);
+    await until(() => adapter.calls.length === 1); await delay(150); assert.equal(adapter.calls.length, 1);
+    assert.equal(tasks.groups.status(group.groupId).budget!.state, 'waiting');
+    adapter.calls[0]!.finish(); await until(() => adapter.calls.length === 2); adapter.calls[1]!.finish();
+    await until(() => tasks.groups.status(group.groupId).state === 'paused');
+    const status = tasks.groups.status(group.groupId);
+    assert.equal(status.error!.code, 'GROUP_BUDGET_EXCEEDED');
+    assert.equal(status.budget!.observedTotalTokens, 20); assert.equal(status.budget!.remainingTokens, 0);
+    assert.equal(adapter.calls.length, 2);
+  });
+});
+test('a completed task with missing counters blocks further group admission instead of counting zero', async () => {
+  await fixture(async ({ source, tasks, adapter }) => {
+    const input = peerDefinition(source); input.budget = { maxTotalTokens: 100 };
+    const group = await tasks.groups.create(randomUUID(), input); tasks.groups.start(group.groupId, group.definitionSha256);
+    await until(() => adapter.calls.length === 1); adapter.calls[0]!.finish(undefined, undefined, null);
+    await until(() => tasks.groups.status(group.groupId).state === 'paused');
+    const status = tasks.groups.status(group.groupId);
+    assert.equal(status.error!.code, 'GROUP_USAGE_UNAVAILABLE');
+    assert.equal(status.budget!.observedTotalTokens, null); assert.equal(status.budget!.unmeasuredTaskCount, 1);
+    assert.equal(adapter.calls.length, 1);
+  });
+});
+test('peer continuations count session deltas once; missing retained identities cannot reset a budget', async () => {
+  await fixture(async ({ source, tasks, adapter, config }) => {
+    const input = peerDefinition(source); input.budget = { maxTotalTokens: 40 };
+    const group = await tasks.groups.create(randomUUID(), input); tasks.groups.start(group.groupId, group.definitionSha256);
+    await until(() => adapter.calls.length === 1);
+    adapter.calls[0]!.finish(envelope({ messageId: randomUUID(), toNode: 'b', text: 'within observed budget' }));
+    await until(() => adapter.calls.length === 2); adapter.calls[1]!.finish();
+    await until(() => adapter.calls.length === 3);
+    adapter.calls[2]!.finish(undefined, undefined, { input_tokens: 16, output_tokens: 4, total_tokens: 20 });
+    await until(() => tasks.groups.status(group.groupId).state === 'completed');
+    assert.equal(tasks.groups.status(group.groupId).budget!.observedTotalTokens, 30);
+    const record = new GroupStore(config.stateDirectory).read(group.groupId), retained = tasks.list();
+    const withoutFirst = retained.filter(task => task.taskId !== record.nodes.a!.taskId);
+    const lost = observeGroupBudget(record, withoutFirst)!;
+    assert.equal(lost.state, 'unavailable'); assert.equal(lost.observedTotalTokens, null); assert.ok(lost.unmeasuredTaskCount > 0);
+    const forged = retained.map(task => ({ ...task, workingDirectory: task.workingDirectory + '-other' }));
+    assert.throws(() => observeGroupBudget(record, forged), { code: 'INVALID_STATE' });
   });
 });
