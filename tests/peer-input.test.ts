@@ -3,7 +3,7 @@ import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { execFileSync, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, realpath } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -43,7 +43,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
   const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', MAX_CONCURRENT_TASKS: '2',
     BRIDGE_CUSTOM_ROLES: JSON.stringify([{ name: 'tester', baseRole: 'implementer', instruction: 'PRIVATE_PROFILE_INSTRUCTION', defaults: { effort: 'high' } }]) });
   const adapter = new HeldAdapter(config), tasks = new TaskManager(adapter, config), managers = [tasks];
-  try { await body({ root, source, config, tasks, adapter, managers }); }
+  try { await body({ root, source: await realpath(source), config, tasks, adapter, managers }); }
   finally {
     for (const manager of managers) await manager.shutdown();
     for (const project of new Map(new StateStore(config.stateDirectory).load().flatMap(item => item.project ? [[item.project.copyDirectory, item.project] as const] : [])).values()) await discardProjectCopy(project);
