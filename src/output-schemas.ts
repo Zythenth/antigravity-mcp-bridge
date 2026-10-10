@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolvedAgentPolicySchema, nativeToolsSchema, mcpSelectionSchema, mcpCatalogToolSchema } from './agent-policy.js';
 import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { criterionSchema, reviewEvidenceSchema } from './verification.js';
@@ -64,6 +65,8 @@ export const taskRecordSchema = z.object({
   artifacts: z.array(z.object({ path: z.string(), sha256: hash, bytes: count }).strict()).optional(),
   structuredResultSha256: hash.optional(),
   artifactCount: count.optional(),
+  agentPolicy: resolvedAgentPolicySchema.optional(),
+  agentPolicyReceipt: z.object({ sha256: hash, decisionCount: count, deniedCount: count }).strict().optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -97,6 +100,7 @@ export const successOutputSchemas = {
       nodeVersion: z.string(), libuvVersion: z.string(), sha256: hash.nullable(), error: z.object({ code: z.string(), message: z.string() }).strict().optional() }).strict().optional(),
   }).strict(),
   antigravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
+  antigravity_get_agent_policy: z.object({ allowedTools: nativeToolsSchema, mcpServers: z.array(z.object({ id: z.string(), description: z.string().nullable(), nativeServerName: z.string(), tools: z.array(mcpCatalogToolSchema) }).strict()).max(20) }).strict(),
   antigravity_get_model: z.object({ model: z.string().nullable() }).strict(),
   antigravity_get_sandbox_policy: sandboxPolicySnapshot,
   antigravity_roles: z.object({ roles: z.array(z.object({ name: roleSchema, baseRole: builtinRoleSchema,
@@ -105,6 +109,7 @@ export const successOutputSchemas = {
     defaultTimeoutSeconds: z.number().int().min(1).max(86400).optional(), defaultDeliveryMode: deliveryModeSchema.optional(),
     defaultIncludePaths: z.array(z.string()).optional(), defaultArtifactPaths: z.array(z.string()).optional(),
     defaultSkillSummaries: z.array(z.object({ name: z.string(), sha256: hash, resourceCount: count }).strict()).optional(),
+    defaultAllowedTools: nativeToolsSchema.optional(), defaultMcpServers: mcpSelectionSchema.optional(),
     outputSchemaSha256: hash.optional() }).strict()) }).strict(),
   antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),
   antigravity_set_sandbox_policy: sandboxPolicySnapshot,

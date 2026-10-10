@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## Em desenvolvimento
+
+- Resultados JSON validados, artefatos com SHA-256 e leitura paginada.
+- Padrões persistentes por especialista para modelo, esforço, skills, arquivos, resultado e ferramentas.
+- Catálogo MCP confiável e ferramentas selecionadas por tarefa, com hooks nativos, recibos vinculados à conversa e controles preservados em retomadas e handoffs.
+- Diagnóstico explícito da falta de permissão MCP no modo headless e proteção da configuração auxiliar nos testes Windows LPAC.
+
 ## 0.7.1
 
 - Remove o painel MCP Apps e seus recursos de aparência, mantendo entrega compacta, mensagens por sessão, skills selecionadas, concorrência e autorização prévia de integração.

@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { readExecutionPolicyReceipt } from './execution-policy.js';
+import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolicy } from './agent-policy.js';
 import { integrationPreauthorized } from './integration-policy.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
@@ -6,7 +8,7 @@ import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } f
 import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory } from './validation.js';
@@ -136,6 +138,21 @@ export class TaskManager {
     return model;
   }
 
+  private checkAgentPolicySnapshot(saved: ResolvedAgentPolicy): ResolvedAgentPolicy {
+    const current = resolveAgentPolicy({ allowedTools: saved.nativeTools, mcpServers: saved.mcpServers.map(server => ({ serverId: server.serverId, tools: server.tools })) }, this.config.allowedAgyTools, this.config.mcpCatalog, saved.mode, '28c48913-763e-4ced-aee4-3fe6f0dd25eb');
+    if (current.sha256 !== saved.sha256) throw new BridgeError('AGENT_POLICY_CHANGED', 'The human-configured tool catalog or ceiling changed; start a new task');
+    return structuredClone(saved);
+  }
+
+  agentPolicyCatalog() {
+    const namespace = '28c48913-763e-4ced-aee4-3fe6f0dd25eb';
+    return { allowedTools: [...this.config.allowedAgyTools], mcpServers: this.config.mcpCatalog.map(entry => ({
+      id: entry.id, description: entry.description ?? null,
+      nativeServerName: entry.nativeServerName ?? 'bridge_' + namespace.replaceAll('-', '') + '_' + entry.id.replaceAll('-', '_'),
+      tools: structuredClone(entry.tools),
+    })) };
+  }
+
   async run(options: RunOptions): Promise<TaskRecord> {
     options = { ...options };
     const initialRoleDefinition = options.sessionId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
@@ -183,6 +200,8 @@ export class TaskManager {
         throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
       }
       if (previous?.project && this.busyProjects.has(previous.project)) throw new BridgeError('TASK_NOT_READY', 'The copy is being reviewed or removed');
+      if (previous && !previous.record.agentPolicy && this.config.enforceAgentPolicy) throw new BridgeError('AGENT_POLICY_CHANGED', 'This legacy session has no enforced policy; start a new task under the configured human ceiling');
+      if (previous && (options.allowedTools !== undefined || options.mcpServers !== undefined)) throw new BridgeError('INVALID_AGENT_POLICY', 'Resume retains its original tool policy; use a new task to select different tools');
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
       if ((previous || contextSource) && options.skills !== undefined) throw new BridgeError('INVALID_SKILLS', 'Resume and handoff retain supplied skills; new bundles require a new task');
@@ -216,6 +235,19 @@ export class TaskManager {
       if (roleDefinition.baseRole !== 'implementer' && mode !== 'read-only') throw new BridgeError('INVALID_ROLE', 'Roles based on planner and reviewer require read-only mode');
       if (roleDefinition.baseRole !== 'implementer' && options.outputSchema !== undefined) throw new BridgeError('INVALID_ROLE', 'Structured output schema requires an implementer base role');
       if (!['write', 'read-only'].includes(mode)) throw new BridgeError('INVALID_MODE', 'mode must be write or read-only');
+      if (previous?.record.agentPolicy) {
+        options.agentPolicy = this.checkAgentPolicySnapshot(previous.record.agentPolicy);
+      } else if (options.allowedTools !== undefined || options.mcpServers !== undefined) {
+        const selection = agentPolicySelectionSchema.parse({ allowedTools: options.allowedTools, mcpServers: options.mcpServers });
+        options.agentPolicy = resolveAgentPolicy(selection, this.config.allowedAgyTools, this.config.mcpCatalog, mode, '28c48913-763e-4ced-aee4-3fe6f0dd25eb');
+      } else if (contextSource?.record.agentPolicy) {
+        const source = contextSource.record.agentPolicy;
+        options.agentPolicy = resolveAgentPolicy({ allowedTools: source.nativeTools.filter(tool => mode !== 'read-only' || ['finish', 'view_file'].includes(tool)),
+          mcpServers: source.mcpServers.flatMap(server => { const tools = server.tools.filter(name => mode !== 'read-only' || this.config.mcpCatalog.find(entry => entry.id === server.serverId)?.tools.some(tool => tool.name === name && tool.readOnly)); return tools.length ? [{ serverId: server.serverId, tools }] : []; }) },
+          this.config.allowedAgyTools, this.config.mcpCatalog, mode, '28c48913-763e-4ced-aee4-3fe6f0dd25eb');
+      } else if (this.config.enforceAgentPolicy) {
+        options.agentPolicy = resolveAgentPolicy({}, this.config.allowedAgyTools, this.config.mcpCatalog, mode, '28c48913-763e-4ced-aee4-3fe6f0dd25eb');
+      } else delete options.agentPolicy;
       if (previous && mode !== previous.record.mode) throw new BridgeError('INVALID_MODE', 'A resumed task must retain its original mode');
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) {
         throw new BridgeError('QUEUE_FULL', 'Task queue is full');
@@ -275,7 +307,7 @@ export class TaskManager {
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
         workingDirectory, status: 'queued', createdAt: new Date().toISOString(),
-        outputSchema: recordOutputSchema, artifactPaths: recordArtifactPaths };
+        outputSchema: recordOutputSchema, artifactPaths: recordArtifactPaths, agentPolicy: options.agentPolicy };
       this.tasks.set(record.taskId, { record, ownerPid: process.pid, owned: true, options: { ...options, model: model ?? null, role, acceptanceCriteria, workingDirectory, timeoutSeconds, mode }, project: previous?.project ?? contextProject, releaseProject: pendingProjectRelease });
       accepted = true;
       pendingProjectRelease = undefined;
@@ -521,6 +553,7 @@ export class TaskManager {
     const preview = await this.preview(taskId);
     if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before starting tests');
     if (this.config.testExecutor === 'windows-lpac') return this.queueWindowsTest(taskId, task, expectedSha256, command, retries, timeoutSeconds, sandbox);
+    if (task.agentPolicy) throw new BridgeError('POLICY_TEST_EXECUTOR_UNAVAILABLE', 'Tasks with an enforced tool policy require the bridge Windows LPAC executor for direct tests; native terminal access is not granted by this policy');
     if (sandbox !== undefined) throw new BridgeError('SANDBOX_PERMISSIONS_UNSUPPORTED', 'Per-test sandbox permissions require the Windows LPAC executor');
     return this.run({ prompt: 'Run the requested tests in the native sandbox.', workingDirectory: task.workingDirectory, sessionId: task.sessionId,
       model: task.model, timeoutSeconds, nativeTest: { ...command, expectedSha256, maxAttempts: retries + 1 } });
@@ -568,9 +601,9 @@ export class TaskManager {
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
         status: 'queued', createdAt: new Date().toISOString(),
-        outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths };
+        outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths, agentPolicy: current.record.agentPolicy };
       const options: RunOptions = { deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
-        model: record.model, effort: record.effort, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
+        agentPolicy: record.agentPolicy, model: record.model, effort: record.effort, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
       releaseProject = undefined;
@@ -982,12 +1015,15 @@ export class TaskManager {
     this.events.append(record.taskId, 'task.started', {});
     let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
     let readOnlyBaseline: Map<string, string> | undefined;
+    let policyReceiptOffset = 0;
     try {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
         this.events.append(record.taskId, 'copy.created', { copyDirectory: project.copyDirectory });
-      }, this.config, task.options.skills);
-      await verifyProvidedSkills(task.project.copyDirectory, task.project.providedSkills ?? []);
+      }, this.config, task.options.skills, task.options.agentPolicy ? { policy: task.options.agentPolicy, catalog: this.config.mcpCatalog, stateDirectory: this.config.stateDirectory, executionId: record.taskId } : undefined);
+      if (task.options.agentPolicy && !task.project.executionPolicy) await stageProjectExecutionPolicy(task.project, { policy: task.options.agentPolicy, catalog: this.config.mcpCatalog, stateDirectory: this.config.stateDirectory, executionId: record.taskId }, this.config);
+      await verifyManagedCopy(task.project);
+      if (task.project.executionPolicy?.policy.sha256 !== task.options.agentPolicy?.sha256) throw new BridgeError('AGENT_POLICY_CHANGED', 'Copy policy does not match the task snapshot');
       record.providedSkills = task.project.providedSkills;
       task.options.providedSkills = task.project.providedSkills;
       delete task.options.skills;
@@ -1009,6 +1045,7 @@ export class TaskManager {
           maxCopyFiles: this.config.maxCopyFiles, maxCopyBytes: this.config.maxCopyBytes });
         task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: new Set() };
       }
+      if (task.project.executionPolicy) policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset;
       const child = this.adapter.spawnTask(native ? { ...task.options, prompt: native.prompt } : task.options, record.model, task.project.copyDirectory);
       task.child = child;
       record.pid = child.pid;
@@ -1074,6 +1111,12 @@ export class TaskManager {
         const message = (record.result as { error?: string } | undefined)?.error || `agy exited with code ${exitCode}`;
         this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
       } else {
+        if (task.project.executionPolicy) {
+          await verifyManagedCopy(task.project);
+          const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory, policyReceiptOffset, record.sessionId);
+          if (!record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'No new guarded finish was observed for this conversation');
+          record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
+        }
         if (record.mode !== 'read-only') await previewProjectCopy(task.project, this.config);
         record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
           (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
@@ -1157,6 +1200,9 @@ export class TaskManager {
       prompt: 'The bridge observed this exact test command exit with code ' + observedExitCode + ': ' +
         JSON.stringify({ executable: request.executable, args: request.args }) +
         '. Make only relevant fixes in the isolated copy. Do not run tests, change the command, weaken assertions, alter sandbox permissions, or change bridge configuration. Stop after the repair so the bridge can rerun the same command.' };
+    if (task.record.agentPolicy) options.agentPolicy = this.checkAgentPolicySnapshot(task.record.agentPolicy);
+    await verifyManagedCopy(task.project);
+    const receiptOffset = task.project.executionPolicy ? (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset : 0;
     task.record.result = undefined;
     task.record.usage = undefined;
     const child = this.adapter.spawnTask(options, task.record.model, task.project.copyDirectory);
@@ -1189,6 +1235,12 @@ export class TaskManager {
     if (exitCode !== 0 || !task.record.result || (task.record.result as { status?: string }).status !== 'SUCCESS') {
       const message = (task.record.result as { error?: string } | undefined)?.error || `agy repair exited with code ${exitCode}`;
       throw new BridgeError('AGY_PROCESS_FAILED', message);
+    }
+    if (task.project.executionPolicy) {
+      await verifyManagedCopy(task.project);
+      const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory, receiptOffset, task.record.sessionId);
+      if (!task.record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'Repair did not produce a new guarded finish');
+      task.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
     }
   }
 

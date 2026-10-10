@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { nativeToolsSchema, nativeToolSchema, mcpCatalogSchema, type NativeTool, type McpCatalogEntry } from './agent-policy.js';
 import { preauthorizedIntegrationRoots } from './integration-policy.js';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
@@ -21,6 +22,9 @@ export interface Config extends ProjectLimits {
   toolProfile: ToolProfile;
   preauthorizedIntegrationRoots: string[];
   customRoles: RoleDefinition[];
+  allowedAgyTools: NativeTool[];
+  enforceAgentPolicy: boolean;
+  mcpCatalog: McpCatalogEntry[];
   agyPath: string;
   defaultModel?: string;
   maxConcurrentTasks: number;
@@ -75,6 +79,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),
+    enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== undefined || env.BRIDGE_MCP_CATALOG !== undefined,
+    allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
+    mcpCatalog: mcpCatalogSchema.parse(JSON.parse(env.BRIDGE_MCP_CATALOG ?? '[]')),
     agyPath: env.AGY_PATH || 'agy',
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),

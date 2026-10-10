@@ -117,12 +117,12 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Ferramentas no código-fonte 0.7.1 | Catálogo e execução |
+| Valor | Ferramentas no código atual | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 33 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 23 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 26 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 33 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 37 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 27 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 30 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 37 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -222,6 +222,25 @@ $env:BRIDGE_CUSTOM_ROLES = '[{"name":"security-review","baseRole":"reviewer","de
 
 As bases `planner` e `reviewer` conservam modo de leitura, contratos JSON e conferência de citações. `implementer` conserva o fluxo de escrita na cópia e as mesmas exigências de verificação e confirmação para integração. Instruções personalizadas não dão permissões extras e entram no limite total do prompt. A definição usada é salva com a tarefa; a retomada mantém instruções e base originais, mesmo após mudar a configuração. Para trocar de papel, crie uma nova tarefa ou faça handoff.
 
+## Controles por especialista e tarefa
+
+Os controles desta seção estão no código atual do repositório. O pacote npm 0.7.1 conserva o catálogo publicado anteriormente.
+
+Papéis personalizados aceitam `defaults` com `model`, `effort`, `skills`, `includePaths`, `outputSchema`, `artifactPaths`, `deliveryMode`, `timeoutSeconds`, `allowedTools` e `mcpServers`. Argumentos explícitos substituem cada campo completo, sem mesclar listas; `model: null` mantém Auto. A retomada conserva o snapshot original. Schemas de resultado personalizados exigem base `implementer`; os outros papéis mantêm seus contratos próprios.
+
+A pessoa usuária configura no ambiente do servidor:
+
+- `BRIDGE_ALLOWED_AGY_TOOLS`: array JSON que limita as ferramentas nativas. Valores aceitos: `view_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content` e `finish`. A finalização permanece implícita. Um teto configurado é aplicado mesmo quando o chamador omite seletores.
+- `BRIDGE_MCP_CATALOG`: até 20 servidores confiáveis, cada um com `id`, transporte e `tools: [{name, readOnly}]`. O transporte é `command` absoluto com `args/env/cwd` opcionais, ou `serverUrl` HTTPS/HTTP de loopback com `headers` opcionais. `nativeServerName` permite um alias nativo estável definido pela pessoa usuária.
+
+Consulte `antigravity_get_agent_policy` antes de escolher `allowedTools` e `mcpServers: [{serverId, tools}]` em `antigravity_run` ou `antigravity_handoff`. O catálogo público mostra apenas IDs, aliases, descrições e ferramentas; transportes e credenciais não entram no prompt nem na política devolvida. Listas vazias selecionam somente a finalização e nenhum MCP. Sem configuração global nem seletores, tarefas antigas conservam o comportamento anterior. Uma sessão antiga sem controles exige nova tarefa depois de configurar um teto global.
+
+Os hooks nativos restringem arquivos à cópia, bloqueiam ferramentas não escolhidas e impedem alterações da configuração auxiliar. Leituras em `.agents` são limitadas aos arquivos de skills explicitamente fornecidos. Helpers são conferidos por hash e ficam fora dos patches. A finalização precisa de recibo novo vinculado à política e à conversa; uma finalização anterior não valida a retomada. O handoff cria seus próprios controles e recibos, conservando a seleção e reduzindo ferramentas incompatíveis com leitura.
+
+O agy também exige uma autorização nativa `mcp(alias/ferramenta)` em suas configurações. O bridge não concede essa autorização nem altera configurações globais; a ausência aparece como `AGY_MCP_PERMISSION_REQUIRED`. Servidores stdio são programas confiáveis executados no host: os hooks controlam chamadas do modelo, sem isolar a implementação interna desses serviços.
+
+No Windows, testes pelo executor LPAC continuam disponíveis. A configuração MCP auxiliar mantém uma DACL protegida e não recebe acesso do processo de teste. A seleção de ferramentas não concede terminal: o executor legado `BRIDGE_TEST_EXECUTOR=agy` recusa testes diretos de tarefas com essa política usando `POLICY_TEST_EXECUTOR_UNAVAILABLE`.
+
 ## Ferramentas
 
 Todas as ferramentas publicam `outputSchema` com campos e tipos de suas respostas estruturadas. O contrato contempla sucesso e `error: { code, message }`. O SDK confere os campos obrigatórios antes de entregar respostas de sucesso; clientes também podem validar o JSON recebido. Dados brutos do CLI continuam com tipo aberto porque seu formato pertence ao provedor. O contrato não transforma uma alegação do modelo em prova de execução.
@@ -233,6 +252,7 @@ Todas as ferramentas publicam `outputSchema` com campos e tipos de suas resposta
 | `antigravity_get_model` / `antigravity_set_model` | Consulta ou persiste o modelo padrão; `null` seleciona Auto |
 | `antigravity_context` / `antigravity_handoff` | Inspeciona e transfere plano, decisões, critérios e evidências para outro papel em cópia independente |
 | `antigravity_compare` / `antigravity_comparison` | Solicita pareceres de 2 a 4 modelos e reúne achados, divergências, falhas e uso observado |
+| `antigravity_get_agent_policy` | Lista limites nativos e IDs/ferramentas MCP configurados, sem transportes ou credenciais |
 | `antigravity_roles` | Lista os papéis nativos e personalizados configurados |
 | `antigravity_get_sandbox_policy` | Lê a política global normalizada, seus limites e o hash atual |
 | `antigravity_set_sandbox_policy` | Solicita ao cliente MCP a confirmação humana para substituir a política global com comparação do hash anterior |

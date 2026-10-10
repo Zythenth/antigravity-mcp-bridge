@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 import { checkedPath } from './isolation.js';
 import { BridgeError, type RunOptions } from './types.js';
+import { nativeToolsSchema, mcpSelectionSchema, type AgentPolicySelection } from './agent-policy.js';
 import { deliveryModeSchema, type DeliveryMode } from './messages.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, isWindowsDeviceName, type ProvidedSkill } from './skills.js';
 import { artifactPathsSchema } from './artifacts.js';
@@ -108,6 +109,8 @@ export const profileOutputSchema = z.record(z.string(), z.unknown())
 export const profileDefaultsSchema = z.object({
   model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable().optional(),
   effort: effortSchema.optional(),
+  allowedTools: nativeToolsSchema.optional(),
+  mcpServers: mcpSelectionSchema.optional(),
   skills: profileSkillsSchema.optional(),
   includePaths: includePathsSchema.optional(),
   outputSchema: profileOutputSchema.optional(),
@@ -179,6 +182,8 @@ export interface RoleListing {
   defaultDeliveryMode?: DeliveryMode;
   defaultIncludePaths?: string[];
   defaultArtifactPaths?: string[];
+  defaultAllowedTools?: AgentPolicySelection['allowedTools'];
+  defaultMcpServers?: AgentPolicySelection['mcpServers'];
   defaultSkillSummaries?: Array<{ name: string; sha256: string; resourceCount: number }>;
   outputSchemaSha256?: string;
 }
@@ -202,6 +207,8 @@ export function listRoles(customRoles: RoleDefinition[] = []): RoleListing[] {
       instructionChars: role.instruction.length,
     };
     if (role.defaults) {
+      if (role.defaults.allowedTools !== undefined) listing.defaultAllowedTools = structuredClone(role.defaults.allowedTools);
+      if (role.defaults.mcpServers !== undefined) listing.defaultMcpServers = structuredClone(role.defaults.mcpServers);
       if (role.defaults.model !== undefined) {
         listing.defaultModel = role.defaults.model;
       }
@@ -240,7 +247,7 @@ export function applyRoleDefaults(options: RunOptions, definition: RoleDefinitio
     throw new BridgeError('INVALID_ROLE', 'Structured output schema requires an implementer base role');
   }
   const result = structuredClone(options);
-  for (const key of ['model', 'effort', 'skills', 'includePaths', 'outputSchema', 'artifactPaths', 'deliveryMode', 'timeoutSeconds'] as const) {
+  for (const key of ['model', 'effort', 'skills', 'includePaths', 'outputSchema', 'artifactPaths', 'deliveryMode', 'timeoutSeconds', 'allowedTools', 'mcpServers'] as const) {
     if (result[key] === undefined && definition.defaults?.[key] !== undefined) {
       Object.assign(result, { [key]: structuredClone(definition.defaults[key]) });
     }

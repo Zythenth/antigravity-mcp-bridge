@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
+import { stagedExecutionPolicySchema } from './execution-policy.js';
+import { resolvedAgentPolicySchema, nativeToolsSchema, mcpSelectionSchema } from './agent-policy.js';
 import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
@@ -25,6 +27,8 @@ const snapshotSchema = z.object({
     lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
     deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
+    agentPolicyReceipt: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), decisionCount: z.number().int().nonnegative(), deniedCount: z.number().int().nonnegative() }).strict().optional(),
+    agentPolicy: resolvedAgentPolicySchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
     structuredResult: z.object({ value: z.unknown(), sha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
@@ -46,11 +50,11 @@ const snapshotSchema = z.object({
       }).strict(),
     }).strict()).max(20).optional(),
   }).passthrough(),
-  options: z.object({ prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
+  options: z.object({ allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(), agentPolicy: resolvedAgentPolicySchema.optional(), prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
   }).passthrough(),
-  project: z.object({ sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),
+  project: z.object({ executionPolicy: stagedExecutionPolicySchema.optional(), executionStateDirectory: z.string().optional(), sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),
     baseline: z.array(z.tuple([z.string(), z.string().regex(/^[a-f0-9]{64}$/)])), includedFiles: z.array(z.string()), providedSkills: stagedSkillsSchema.optional(),
   }).optional(),
   events: z.array(z.object({ taskId: z.string().uuid(), sequence: z.number().int().positive(), timestamp: z.string(), type: z.string(), data: z.unknown(), raw: z.unknown().optional() })),
@@ -182,7 +186,9 @@ export class StateStore {
         (data.record.dispatching && !inbox.some(item => item.messageId === data.record.dispatching!.messageId && item.receipt.state === 'queued'))) {
         throw new BridgeError('INVALID_STATE', 'Persisted inbox does not match task identity');
       }
+      if (data.record.agentPolicy?.sha256 !== data.options.agentPolicy?.sha256) throw new BridgeError('INVALID_STATE', 'Persisted task tool policies disagree');
       if (data.project) {
+        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || (data.project.executionStateDirectory && path.relative(realpathSync.native(data.project.executionStateDirectory), realpathSync.native(this.directory)) !== '') || (data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)) throw new BridgeError('INVALID_STATE', 'Persisted execution policy differs from task or private storage');
         for (const [directory, prefix] of [[data.project.copyDirectory, 'agy-mcp-copy-'], [data.project.gitDirectory, 'agy-mcp-baseline-']]) {
           if (!path.isAbsolute(directory!) || path.relative(os.tmpdir(), path.dirname(directory!)) !== '' || !path.basename(directory!).startsWith(prefix!)) {
             throw new BridgeError('INVALID_STATE', 'Persisted copy is outside bridge temporary storage');

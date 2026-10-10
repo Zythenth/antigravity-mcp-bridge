@@ -9,6 +9,7 @@ import type { Comparison } from './comparison.js';
 import type { SandboxSelection } from './sandbox-policy.js';
 import type { PortableNodeIdentity } from './portable-node.js';
 import type { ArtifactReference } from './artifacts.js';
+import type { AgentPolicySelection, ResolvedAgentPolicy } from './agent-policy.js';
 
 export type { ArtifactReference } from './artifacts.js';
 
@@ -70,6 +71,8 @@ export interface TaskRecord {
   artifactPaths?: string[];
   structuredResult?: { value: unknown; sha256: string };
   artifacts?: ArtifactReference[];
+  agentPolicy?: ResolvedAgentPolicy;
+  agentPolicyReceipt?: { sha256: string; decisionCount: number; deniedCount: number };
 }
 
 export type CallerReceiptState = 'queued' | 'sent' | 'failed' | 'cancelled';
@@ -110,7 +113,8 @@ export interface TestEvidence {
   portableNode?: PortableNodeIdentity;
 }
 
-export interface RunOptions {
+export interface RunOptions extends AgentPolicySelection {
+  agentPolicy?: ResolvedAgentPolicy;
   deliveryMode?: DeliveryMode;
   skills?: readonly ProvidedSkill[];
   providedSkills?: readonly StagedSkill[];

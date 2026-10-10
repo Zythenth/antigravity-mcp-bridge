@@ -193,7 +193,7 @@ describe('Task results and artifacts runtime', () => {
 
     const toolList = await client.listTools();
     const names = toolList.tools.map(t => t.name);
-    assert.equal(names.length, 36);
+    assert.equal(names.length, 37);
     assert.ok(names.includes('antigravity_read_structured_result'));
     assert.ok(names.includes('antigravity_artifacts'));
     assert.ok(names.includes('antigravity_read_artifact'));

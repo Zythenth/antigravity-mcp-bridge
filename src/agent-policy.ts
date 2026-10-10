@@ -115,6 +115,7 @@ export const mcpCatalogEntrySchema = z
   .object({
     id: z.string().regex(serverIdRegex),
     description: z.string().max(500).optional(),
+    nativeServerName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/).optional(),
     command: z
       .string()
       .max(4000)
@@ -217,6 +218,18 @@ export interface ResolvedAgentPolicy {
   catalogSha256: string;
   sha256: string;
 }
+
+export const resolvedAgentPolicySchema = z.object({
+  mode: z.enum(['write', 'read-only']), nativeTools: nativeToolsSchema,
+  mcpServers: z.array(z.object({ serverId: z.string().regex(serverIdRegex), serverName: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/), tools: z.array(z.string().regex(toolNameRegex)).min(1).max(100) }).strict()).max(20),
+  catalogSha256: z.string().regex(/^[a-f0-9]{64}$/), sha256: z.string().regex(/^[a-f0-9]{64}$/),
+}).strict().superRefine((policy, ctx) => {
+  const { mode, nativeTools, mcpServers, catalogSha256 } = policy;
+  const expected = crypto.createHash('sha256').update(JSON.stringify({ mode, nativeTools, mcpServers, catalogSha256 })).digest('hex');
+  if (policy.sha256 !== expected || !nativeTools.includes('finish') || new Set(mcpServers.map(s => s.serverId)).size !== mcpServers.length || new Set(mcpServers.map(s => s.serverName)).size !== mcpServers.length || mcpServers.some(s => new Set(s.tools).size !== s.tools.length) || (mode === 'read-only' && nativeTools.some(tool => !['finish', 'view_file'].includes(tool)))) {
+    ctx.addIssue({ code: 'custom', message: 'Invalid resolved policy identity or tool selection' });
+  }
+});
 
 // --- Policy Resolution Constants ---
 
@@ -363,7 +376,8 @@ export function resolveAgentPolicy(
 
       const cleanNs = namespace.replace(/-/g, '').toLowerCase();
       const cleanServerId = sel.serverId.replace(/-/g, '_');
-      const serverName = `bridge_${cleanNs}_${cleanServerId}`;
+      const serverName = entry.nativeServerName ?? `bridge_${cleanNs}_${cleanServerId}`;
+      if (resolvedMcpServers.some(server => server.serverName === serverName)) throw new BridgeError('POLICY_NOT_ALLOWED', 'Selected MCP server aliases must be unique');
 
       resolvedMcpServers.push({
         serverId: sel.serverId,
@@ -475,7 +489,9 @@ function isStrictJsonObject(val: object): boolean {
 export function authorizeMcpTool(policy: ResolvedAgentPolicy, args: unknown): boolean {
   try {
     if (!policy || !Array.isArray(policy.mcpServers) || typeof args !== 'object' || args === null || Array.isArray(args)) return false;
-    const keys = Object.keys(args);
+    const keys = Object.keys(args).filter(key => key !== 'toolAction' && key !== 'toolSummary');
+    const metadata = args as Record<string, unknown>;
+    if (!['toolAction', 'toolSummary'].every(key => metadata[key] === undefined || (typeof metadata[key] === 'string' && metadata[key].length <= 2000))) return false;
     if (keys.length !== 3 || !keys.includes('ServerName') || !keys.includes('ToolName') || !keys.includes('Arguments') || !isStrictJsonObject(args)) return false;
     const raw = args as Record<string, unknown>;
     if (typeof raw.ServerName !== 'string' || typeof raw.ToolName !== 'string' || typeof raw.Arguments !== 'object' || raw.Arguments === null || Array.isArray(raw.Arguments)) return false;

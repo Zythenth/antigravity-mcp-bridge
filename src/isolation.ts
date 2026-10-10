@@ -6,11 +6,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
 import { BridgeError } from './types.js';
+import { stageExecutionPolicy, verifyExecutionPolicy, discardExecutionPolicy, EXECUTION_POLICY_PATHS, type StagedExecutionPolicy } from './execution-policy.js';
+import type { ResolvedAgentPolicy, McpCatalogEntry } from './agent-policy.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
 
 const maxGitOutput = 10_000_000;
 
+export interface ExecutionPolicyRequest { policy: ResolvedAgentPolicy; catalog: McpCatalogEntry[]; stateDirectory: string; executionId: string }
+
 export interface ProjectCopy {
+  executionPolicy?: StagedExecutionPolicy;
+  executionStateDirectory?: string;
   providedSkills?: readonly StagedSkill[];
   sourceDirectory: string;
   copyDirectory: string;
@@ -27,6 +33,28 @@ export interface ChangePreview {
   sha256: string;
   sourceDirectory: string;
   copyDirectory: string;
+}
+
+export async function verifyManagedCopy(project: ProjectCopy): Promise<void> {
+  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  if (project.executionPolicy) {
+    if (!project.executionStateDirectory) throw new BridgeError('INVALID_AGENT_POLICY', 'Execution policy state binding is missing');
+    await verifyExecutionPolicy(project.copyDirectory, project.executionPolicy, project.executionStateDirectory);
+  }
+}
+
+function executionExclusions(project: ProjectCopy): string[] {
+  return project.executionPolicy ? EXECUTION_POLICY_PATHS.map(file => ':(exclude,literal)' + file) : [];
+}
+
+export async function stageProjectExecutionPolicy(project: ProjectCopy, request: ExecutionPolicyRequest, limits: ProjectLimits): Promise<void> {
+  if (project.executionPolicy) throw new BridgeError('INVALID_AGENT_POLICY', 'The copy already has an execution policy');
+  const snapshot = await snapshotCopyFiles(project, limits);
+  let bytes = 0;
+  for (const file of snapshot.keys()) bytes += (await lstat(await checkedPath(project.copyDirectory, file, true))).size;
+  project.executionPolicy = await stageExecutionPolicy(project.copyDirectory, { ...request, skillFiles: (project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)) },
+    { ...limits, maxCopyFiles: limits.maxCopyFiles - snapshot.size, maxCopyBytes: limits.maxCopyBytes - bytes });
+  project.executionStateDirectory = request.stateDirectory;
 }
 
 export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
@@ -47,6 +75,10 @@ export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
     if (info && (!info.isDirectory() || info.isSymbolicLink())) throw new BridgeError('UNSAFE_PROJECT_PATH', 'Refusing to delete a replaced copy directory');
   }
   for (const [directory] of targets) await rm(path.resolve(directory!), { recursive: true, force: true });
+  if (project.executionPolicy) {
+    if (!project.executionStateDirectory) throw new BridgeError('INVALID_AGENT_POLICY', 'Private execution storage binding is missing');
+    await discardExecutionPolicy(project.executionPolicy, project.executionStateDirectory);
+  }
 }
 
 async function git(cwd: string, args: string[], input?: Buffer, allowedCodes = [0]): Promise<Buffer> {
@@ -125,7 +157,7 @@ export async function listProjectFiles(sourceDirectory: string): Promise<string[
   return candidates.filter(file => !ignored.has(file) && !file.split('/').includes('.git')).sort();
 }
 
-export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, skills: readonly ProvidedSkill[] = []): Promise<ProjectCopy> {
+export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, skills: readonly ProvidedSkill[] = [], execution?: ExecutionPolicyRequest): Promise<ProjectCopy> {
   const candidates = await listProjectFiles(sourceDirectory);
   let selected = candidates;
   if (includePaths !== undefined) {
@@ -165,9 +197,10 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
     const staged = await stageProvidedSkills(copyDirectory, skills, { ...limits, maxCopyFiles: limits.maxCopyFiles - selected.length, maxCopyBytes: limits.maxCopyBytes - totalBytes });
     if (staged.length) project.providedSkills = staged;
     await verifyProvidedSkills(copyDirectory, staged);
+    if (execution) await stageProjectExecutionPolicy(project, execution, limits);
     await git(copyDirectory, ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
     const scope = ['--git-dir=' + gitDirectory, '--work-tree=' + copyDirectory];
-    await git(copyDirectory, [...scope, 'add', '-A', '-f', '--', '.']);
+    await git(copyDirectory, [...scope, 'add', '-A', '-f', '--', '.', ...executionExclusions(project)]);
     await git(copyDirectory, [...scope,
       '-c', 'user.name=Bridge Snapshot',
       '-c', 'user.email=bridge@invalid.local',
@@ -187,9 +220,9 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
 }
 
 export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
-  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  await verifyManagedCopy(project);
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
-  await git(project.copyDirectory, [...scope, 'add', '-A', '--', '.']);
+  await git(project.copyDirectory, [...scope, 'add', '-A', '--', '.', ...executionExclusions(project)]);
   const names = splitNull(await git(project.copyDirectory,
     [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--name-status', '--no-renames', '-z', 'HEAD']));
   if (names.length / 2 > limits.maxChangedFiles) throw new BridgeError('CHANGE_LIMIT_EXCEEDED', `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
@@ -222,8 +255,8 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
   };
 }
 
-export async function verifyReadOnlyCopy(project: ProjectCopy, baseline = new Map([...project.baseline, ...(project.providedSkills ?? []).flatMap(skill => skill.files.map(file => [file.path, file.sha256] as [string, string]))])): Promise<void> {
-  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+export async function verifyReadOnlyCopy(project: ProjectCopy, baseline = new Map([...project.baseline, ...(project.providedSkills ?? []).flatMap(skill => skill.files.map(file => [file.path, file.sha256] as [string, string])), ...(project.executionPolicy?.files ?? []).map(file => [file.path, file.sha256] as [string, string])] )): Promise<void> {
+  await verifyManagedCopy(project);
   const seen = new Set<string>();
   async function visit(directory: string, prefix = ''): Promise<void> {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -250,7 +283,7 @@ export async function readProjectPatch(project: ProjectCopy, relative: string): 
 }
 
 export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLimits): Promise<Map<string, string>> {
-  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  await verifyManagedCopy(project);
   const hashes = new Map<string, string>();
   let bytes = 0;
   async function visit(directory: string, prefix = ''): Promise<void> {
@@ -270,7 +303,7 @@ export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLim
 }
 
 export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimits): Promise<ProjectCopy> {
-  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)));
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
@@ -282,10 +315,10 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
   }
   const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
   const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
-  const fork: ProjectCopy = { ...project, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
+  const fork: ProjectCopy = { ...project, executionPolicy: undefined, executionStateDirectory: undefined, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
   try {
     let bytes = 0;
-    for (const relative of candidates.filter(file => !ignored.has(file) || managed.has(file))) {
+    for (const relative of candidates.filter(file => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some(managedPath => managedPath === file)) && (!ignored.has(file) || managed.has(file)))) {
       let source: string;
       try { source = await checkedPath(project.copyDirectory, relative, true); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
@@ -304,7 +337,7 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
 }
 
 export async function fingerprintProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<string> {
-  await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
+  await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)));
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))].sort();
@@ -312,7 +345,7 @@ export async function fingerprintProjectCopy(project: ProjectCopy, limits: Proje
     [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], Buffer.from(candidates.join('\0') + '\0'), [0, 1])) : []);
   const digest = createHash('sha256');
   let count = 0, bytes = 0;
-  for (const relative of candidates.filter(file => !ignored.has(file) || managed.has(file))) {
+  for (const relative of candidates.filter(file => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some(managedPath => managedPath === file)) && (!ignored.has(file) || managed.has(file)))) {
     let file;
     try { file = await checkedPath(project.copyDirectory, relative, true); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }

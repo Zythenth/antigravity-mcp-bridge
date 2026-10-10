@@ -16,6 +16,7 @@ import { sandboxPolicySchema, sandboxSelectionInputSchema, type SandboxPolicySna
 import { effortSchema } from './roles.js';
 import { structuredResultInputSchema } from './structured-results.js';
 import { artifactPathsSchema } from './artifacts.js';
+import { nativeToolsSchema, mcpSelectionSchema } from './agent-policy.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -124,6 +125,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: {}, annotations: readOnly,
   }, safe(() => ({ roles: tasks.roles() })));
 
+  if (toolEnabled(tasks.toolProfile, 'antigravity_get_agent_policy')) server.registerTool('antigravity_get_agent_policy', {
+    outputSchema: outputSchemas.antigravity_get_agent_policy, title: 'List delegated tool ceilings',
+    description: 'Read human-configured native tool ceilings and trusted MCP IDs/tools. Select allowedTools and mcpServers per task; credentials and transports are private. MCP also requires a native agy allow-rule for the exact server/tool. The bridge does not grant it or modify global settings.',
+    inputSchema: {}, annotations: readOnly,
+  }, safe(() => tasks.agentPolicyCatalog()));
+
   const runSchema = {
     prompt: z.string().min(1),
     model: z.string().min(1).max(128).nullable().optional(),
@@ -138,6 +145,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     acceptanceCriteria: criteriaSchema.optional(),
     role: configuredRoleSchema.optional(),
     effort: effortSchema.optional(),
+    allowedTools: nativeToolsSchema.optional(),
+    mcpServers: mcpSelectionSchema.optional(),
     outputSchema: structuredResultInputSchema.optional(),
     artifactPaths: artifactPathsSchema.optional(),
   };
@@ -163,6 +172,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_handoff, title: 'Transfer work to another role',
     description: 'Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.',
     inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(),
       prompt: z.string().min(1), role: configuredRoleSchema, effort: effortSchema.optional(), model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
       timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
