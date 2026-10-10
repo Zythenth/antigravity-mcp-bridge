@@ -20,7 +20,9 @@ O bridge foi validado com `agy` 1.3.2 e `@modelcontextprotocol/sdk` 1.30.1. As t
 
 ## Versões disponíveis
 
-Os exemplos de instalação selecionam a **0.7.1**; recursos marcados como presentes no código atual estão em desenvolvimento para a próxima publicação. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída. Os exemplos npx abaixo selecionam a 0.7.1.
+Os exemplos de instalação selecionam a **0.8.0**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída.
+
+A 0.8.0 acrescenta workflows no servidor, checkpoints, hooks de validação, memória privada, perfis completos, seleção de MCPs e ferramentas por tarefa, responsáveis e dependências, mensagens entre nós, espera conjunta, resultados JSON, artefatos com hashes e orçamento por consumo observado.
 
 A 0.7.1 preserva entrega compacta, mensagens por sessão, skills selecionadas, execução simultânea e autorização prévia de integração, além das correções do Windows.
 
@@ -32,14 +34,14 @@ A 0.5.1 inclui perfis, espera com progresso, transferência entre papéis, compa
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.7.1, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.8.0, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.7.1"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.8.0"]
     }
   }
 }
@@ -77,10 +79,10 @@ No Windows x64, prepare explicitamente o runtime antes de usar o modo portátil:
 node plugin/server.mjs --prepare-windows-runtime
 ```
 
-Para preparar o runtime pelo pacote npm 0.7.1:
+Para preparar o runtime pelo pacote npm 0.8.0:
 
 ```powershell
-npx --yes antigravity-mcp-bridge@0.7.1 --prepare-windows-runtime
+npx --yes antigravity-mcp-bridge@0.8.0 --prepare-windows-runtime
 ```
 
 O status retorna JSON com `requestedMode`, `supported`, `ready`, `buildId`, `nodeVersion`, `libuvVersion`, `sha256` e, quando necessário, `error`. Uma consulta sem suporte, sem cache ou com cache inválido continua sendo uma consulta bem-sucedida; uma falha de preparação retorna exit code 1. Preparação baixa somente os arquivos declarados do GitHub Release, confere tamanho e SHA-256 e instala o cache privado de forma atômica. Inicialização, saúde e testes não baixam arquivos. Cache ausente no modo portátil exige `--prepare-windows-runtime`, sem voltar silenciosamente ao Node do sistema. Cache corrompido, alterado ou inseguro é recusado também pela preparação, que não o repara nem remove automaticamente. Antes de preparar novamente, uma pessoa deve inspecionar o caminho e remover manualmente somente o cache do build afetado; depois, executar `--prepare-windows-runtime`.
@@ -117,12 +119,12 @@ Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **u
 
 Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
-| Valor | Ferramentas no código atual | Catálogo e execução |
+| Valor | Ferramentas | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 48 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 34 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 37 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 48 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 50 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 36 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 39 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 50 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -224,7 +226,7 @@ As bases `planner` e `reviewer` conservam modo de leitura, contratos JSON e conf
 
 ## Grupos de tarefas e espera conjunta
 
-As ferramentas desta seção estão no código atual. O cliente cria um grupo com UUID estável, raiz Git, título e até 32 tarefas. Cada tarefa tem uma chave única, `owner` com um papel configurado, `dependsOn` e as opções de execução em `task`. Dependências desconhecidas, duplicadas, ciclos e definições maiores que 4 MiB são recusados. Há até 100 grupos retidos.
+O cliente cria um grupo com UUID estável, raiz Git, título e até 32 tarefas. Cada tarefa tem uma chave única, `owner` com um papel configurado, `dependsOn` e as opções de execução em `task`. Dependências desconhecidas, duplicadas, ciclos e definições maiores que 4 MiB são recusados. Há até 100 grupos retidos.
 
 | Ferramenta | Uso |
 | --- | --- |
@@ -310,7 +312,7 @@ Em tarefas de implementação com política nativa e sem schema de saída explí
 
 ## Memória privada por projeto e especialista
 
-Disponível no código atual; a publicação npm permanece na versão 0.7.1 durante o desenvolvimento. A memória fica no estado privado do servidor, separada pela raiz Git canônica e pelo identificador do especialista. Nenhum arquivo do projeto é importado automaticamente.
+A memória fica no estado privado do servidor, separada pela raiz Git canônica e pelo identificador do especialista. Nenhum arquivo do projeto é importado automaticamente.
 
 | Ferramenta | Uso |
 | --- | --- |
@@ -334,8 +336,6 @@ Os padrões globais são 100 entradas, 1 MiB de texto e 64 KiB por entrada, medi
 Remover uma entrada não apaga os snapshots já guardados nas tarefas retidas. O descarte da cópia também preserva esses registros. Consulte [Privacidade](PRIVACY.md) para apagar o estado local; o bridge não oferece criptografia própria.
 
 ## Controles por especialista e tarefa
-
-Os controles desta seção estão no código atual do repositório. O pacote npm 0.7.1 conserva o catálogo publicado anteriormente.
 
 Papéis personalizados aceitam `defaults` com `model`, `effort`, `skills`, `includePaths`, `outputSchema`, `artifactPaths`, `deliveryMode`, `timeoutSeconds`, `allowedTools`, `mcpServers` e `memory`. Argumentos explícitos substituem cada campo completo, sem mesclar listas; `model: null` mantém Auto. A retomada conserva o snapshot original. Schemas de resultado personalizados exigem base `implementer`; os outros papéis mantêm seus contratos próprios.
 

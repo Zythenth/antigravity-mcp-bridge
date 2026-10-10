@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## Em desenvolvimento
+## 0.8.0
 
 - Workflows com intermediários JSON privados, síntese final, herança explícita de arquivos, checkpoints verificáveis e retomada sem repetir trabalho concluído.
 - Hooks por etapa para critérios reais, revisão fundamentada e testes observados, com bloqueio de evidências pendentes ou inválidas.
