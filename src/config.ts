@@ -35,6 +35,9 @@ export interface Config extends ProjectLimits {
   maxPromptChars: number;
   copyRetentionHours: number;
   stateDirectory: string;
+  memoryMaxEntries: number;
+  memoryMaxBytes: number;
+  memoryMaxEntryBytes: number;
   forbiddenDirectories: string[];
   testExecutor: TestExecutor;
   windowsNodeRuntime: WindowsNodeRuntime;
@@ -75,6 +78,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (defaultModel !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
     throw new Error('BRIDGE_DEFAULT_MODEL must be an exact model ID');
   }
+  const memoryMaxEntries = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRIES, 100, 10000);
+  const memoryMaxBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_BYTES, 1024 * 1024, 64 * 1024 * 1024);
+  const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
+  if (memoryMaxEntryBytes > memoryMaxBytes) throw new Error('BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES');
   return {
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
@@ -92,6 +99,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 50000, 1000000),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
     stateDirectory: env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge'),
+    memoryMaxEntries,
+    memoryMaxBytes,
+    memoryMaxEntryBytes,
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1000000),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1000000),

@@ -1,3 +1,5 @@
+import { memorySummarySchema } from './project-memory.js';
+import { memorySelectionSchema } from './memory-context.js';
 import { z } from 'zod';
 import { resolvedAgentPolicySchema, nativeToolsSchema, mcpSelectionSchema, mcpCatalogToolSchema } from './agent-policy.js';
 import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
@@ -40,6 +42,7 @@ const report = z.discriminatedUnion('role', [
   z.object({ role: z.literal('reviewer'), source: z.literal('agy-reported'), data: reviewerReportSchema, citationsChecked: z.literal(true) }).strict(),
 ]);
 export const taskRecordSchema = z.object({
+  memory: z.array(z.lazy(() => memorySummarySchema)).max(8).optional(),
   deliveryMode: deliveryModeSchema.optional(),
   providedSkills: stagedSkillsSchema.optional(),
   taskId: id, workingDirectory: z.string(), status, createdAt: timestamp,
@@ -84,6 +87,10 @@ const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model:
 const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxPolicySchema, sha256: hash }).strict();
 
 export const successOutputSchemas = {
+  antigravity_memory_list: z.object({ memories: z.array(memorySummarySchema), limits: z.object({ maxEntries: count, maxBytes: count, maxEntryBytes: count }).strict() }).strict(),
+  antigravity_memory_read: z.object({ memory: memorySummarySchema, ...chunkShape }).strict(),
+  antigravity_memory_write: z.object({ memory: memorySummarySchema }).strict(),
+  antigravity_memory_remove: z.object({ removed: z.literal(true) }).strict(),
   antigravity_health: z.object({
     toolProfile: toolProfileSchema.optional(),
     installed: z.boolean(), path: z.string(), version: z.string().optional(), authenticated: z.boolean().nullable(),
@@ -109,6 +116,7 @@ export const successOutputSchemas = {
     defaultTimeoutSeconds: z.number().int().min(1).max(86400).optional(), defaultDeliveryMode: deliveryModeSchema.optional(),
     defaultIncludePaths: z.array(z.string()).optional(), defaultArtifactPaths: z.array(z.string()).optional(),
     defaultSkillSummaries: z.array(z.object({ name: z.string(), sha256: hash, resourceCount: count }).strict()).optional(),
+    defaultMemory: z.lazy(() => memorySelectionSchema).optional(),
     defaultAllowedTools: nativeToolsSchema.optional(), defaultMcpServers: mcpSelectionSchema.optional(),
     outputSchemaSha256: hash.optional() }).strict()) }).strict(),
   antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),

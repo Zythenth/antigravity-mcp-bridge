@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const toolProfileSchema = z.enum(['full', 'query', 'review', 'implementation']);
 export type ToolProfile = z.infer<typeof toolProfileSchema>;
 const queryTools = new Set([
+  'antigravity_memory_list', 'antigravity_memory_read',
   'antigravity_health', 'antigravity_get_agent_policy', 'antigravity_list_models', 'antigravity_get_model', 'antigravity_usage',
   'antigravity_list_project_files', 'antigravity_run', 'antigravity_resume', 'antigravity_status',
   'antigravity_tasks', 'antigravity_events', 'antigravity_result', 'antigravity_read_result',

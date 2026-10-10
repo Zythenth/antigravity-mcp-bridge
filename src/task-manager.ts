@@ -1,3 +1,6 @@
+import { ProjectMemoryStore, type MemorySnapshot } from './project-memory.js';
+import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
+import { validateProjectRoot } from './isolation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { readExecutionPolicyReceipt } from './execution-policy.js';
 import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolicy } from './agent-policy.js';
@@ -45,6 +48,7 @@ export class TaskManager {
   private readonly claimingMessages = new Set<string>();
   private readonly busyProjects = new Set<ProjectCopy>();
   private readonly state: StateStore;
+  private memoryStore?: ProjectMemoryStore;
   private readonly nativeRecovery: Promise<void>;
   private nativeRecoveryError: unknown;
 
@@ -153,14 +157,52 @@ export class TaskManager {
     })) };
   }
 
+  private projectMemory(): ProjectMemoryStore {
+    return this.memoryStore ??= new ProjectMemoryStore(this.config.stateDirectory, {
+      maxEntries: this.config.memoryMaxEntries, maxBytes: this.config.memoryMaxBytes, maxEntryBytes: this.config.memoryMaxEntryBytes,
+    });
+  }
+
+  private async memoryProject(workingDirectory: string): Promise<string> {
+    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
+    await validateProjectRoot(directory);
+    return directory;
+  }
+
+  async listMemory(workingDirectory: string) {
+    const directory = await this.memoryProject(workingDirectory), store = this.projectMemory();
+    return { memories: await store.list(directory), limits: store.limits };
+  }
+
+  async readMemory(workingDirectory: string, specialist: string, expectedSha256: string, offset = 0, limit = 10000) {
+    const entry = await this.projectMemory().read(await this.memoryProject(workingDirectory), specialist);
+    if (!entry) throw new BridgeError('MEMORY_NOT_FOUND', 'Selected memory does not exist');
+    if (entry.sha256 !== expectedSha256) throw new BridgeError('MEMORY_CHANGED', 'Reload memory metadata before reading the current version');
+    return { memory: summarizeMemory([entry])![0]!, ...textChunk(entry.text, offset, limit) };
+  }
+
+  async writeMemory(workingDirectory: string, specialist: string, text: string, expectedSha256: string | null) {
+    if (profileReadOnly(this.config.toolProfile)) throw new BridgeError('PROFILE_READ_ONLY', 'This profile cannot change private memory');
+    const entry = await this.projectMemory().write(await this.memoryProject(workingDirectory), specialist, { text, expectedSha256 });
+    return { memory: summarizeMemory([entry])![0]! };
+  }
+
+  async removeMemory(workingDirectory: string, specialist: string, expectedSha256: string) {
+    if (profileReadOnly(this.config.toolProfile)) throw new BridgeError('PROFILE_READ_ONLY', 'This profile cannot remove private memory');
+    return this.projectMemory().remove(await this.memoryProject(workingDirectory), specialist, expectedSha256);
+  }
+
   async run(options: RunOptions): Promise<TaskRecord> {
     options = { ...options };
+    delete options.memorySnapshots; // Internal snapshots are resolved only by the bridge.
     const initialRoleDefinition = options.sessionId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
     if (initialRoleDefinition) {
-      const { skills, includePaths } = options;
+      const { skills, includePaths, memory } = options;
       options = applyRoleDefaults(options, initialRoleDefinition);
-      if (options.contextTaskId) options = { ...options, skills, includePaths };
+      if (options.contextTaskId) options = { ...options, skills, includePaths, memory };
     }
+    if (options.memory !== undefined) options.memory = memorySelectionSchema.parse(options.memory);
     if (options.effort !== undefined) effortSchema.parse(options.effort);
     if (profileReadOnly(this.config.toolProfile)) {
       if (options.mode === 'write') throw new BridgeError('PROFILE_READ_ONLY', 'This tool profile only permits read-only tasks');
@@ -207,6 +249,21 @@ export class TaskManager {
       if ((previous || contextSource) && options.skills !== undefined) throw new BridgeError('INVALID_SKILLS', 'Resume and handoff retain supplied skills; new bundles require a new task');
       if (previous && options.outputSchema !== undefined) throw new BridgeError('INVALID_SCHEMA', 'A resumed task retains its original structured output schema');
       if (previous && options.artifactPaths !== undefined) throw new BridgeError('INVALID_ARTIFACT_PATHS', 'A resumed task retains its original artifact paths');
+      if (previous && options.memory !== undefined) throw new BridgeError('INVALID_MEMORY_SELECTION', 'Resume retains its original private memory snapshots; start a new task to select different memory');
+      if (previous || (contextSource && options.memory === undefined)) {
+        options.memorySnapshots = structuredClone((previous ?? contextSource)!.options.memorySnapshots);
+      } else if (options.memory !== undefined) {
+        await validateProjectRoot(workingDirectory);
+        const snapshots: MemorySnapshot[] = [];
+        for (const selection of options.memory) {
+          const entry = await this.projectMemory().read(workingDirectory, selection.specialist);
+          if (!entry) throw new BridgeError('MEMORY_NOT_FOUND', 'Selected memory does not exist: ' + selection.specialist);
+          if (entry.sha256 !== selection.sha256) throw new BridgeError('MEMORY_CHANGED', 'Selected private memory changed; review its current content before dispatch');
+          snapshots.push(entry);
+        }
+        options.memorySnapshots = memorySnapshotsSchema.parse(snapshots);
+      }
+      options.memory = options.memorySnapshots?.map(({ specialist, sha256 }) => ({ specialist, sha256 }));
       options.outputSchema = previous?.record.outputSchema ?? options.outputSchema;
       options.artifactPaths = previous?.record.artifactPaths ?? options.artifactPaths;
       if (options.outputSchema !== undefined) options.outputSchema = validateOutputSchema(options.outputSchema);
@@ -302,7 +359,7 @@ export class TaskManager {
         options.outputSchema = undefined;
         options.artifactPaths = undefined;
       }
-      const record: TaskRecord = { parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
+      const record: TaskRecord = { memory: summarizeMemory(options.memorySnapshots), parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
@@ -595,14 +652,14 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
+      const record: TaskRecord = { memory: structuredClone(current.record.memory), deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
         mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
         status: 'queued', createdAt: new Date().toISOString(),
         outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths, agentPolicy: current.record.agentPolicy };
-      const options: RunOptions = { deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
+      const options: RunOptions = { memory: structuredClone(current.options.memory), memorySnapshots: structuredClone(current.options.memorySnapshots), deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
         agentPolicy: record.agentPolicy, model: record.model, effort: record.effort, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });

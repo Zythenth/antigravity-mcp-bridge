@@ -2,6 +2,8 @@
 
 ## Em desenvolvimento
 
+- Memória privada por projeto e especialista, com seleção explícita, snapshots por tarefa, comparação de hashes e leitores paginados.
+
 - Resultados JSON validados, artefatos com SHA-256 e leitura paginada.
 - Padrões persistentes por especialista para modelo, esforço, skills, arquivos, resultado e ferramentas.
 - Catálogo MCP confiável e ferramentas selecionadas por tarefa, com hooks nativos, recibos vinculados à conversa e controles preservados em retomadas e handoffs.

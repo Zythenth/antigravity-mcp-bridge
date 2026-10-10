@@ -1,3 +1,4 @@
+import { memorySelectionSchema } from './memory-context.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { clientTask, compactTask, deliveryModeSchema } from './messages.js';
@@ -131,6 +132,29 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     inputSchema: {}, annotations: readOnly,
   }, safe(() => tasks.agentPolicyCatalog()));
 
+  const memoryInput = { workingDirectory: z.string().min(1), specialist: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/) };
+  const memoryHash = z.string().regex(/^[a-f0-9]{64}$/);
+  if (toolEnabled(tasks.toolProfile, 'antigravity_memory_list')) server.registerTool('antigravity_memory_list', {
+    outputSchema: outputSchemas.antigravity_memory_list, title: 'List private project memory',
+    description: 'List private specialist memory metadata and limits for this exact Git root. No stored text is returned or imported automatically.',
+    inputSchema: { workingDirectory: memoryInput.workingDirectory }, annotations: readOnly,
+  }, async ({ workingDirectory }) => safe(() => tasks.listMemory(workingDirectory))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_memory_read')) server.registerTool('antigravity_memory_read', {
+    outputSchema: outputSchemas.antigravity_memory_read, title: 'Read private memory in chunks',
+    description: 'Read the selected memory version as revisable data. Use its sha256 from memory_list for every chunk; contentSha256 identifies text only.',
+    inputSchema: { ...memoryInput, expectedSha256: memoryHash, offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(2).max(50000).optional() }, annotations: readOnly,
+  }, async ({ workingDirectory, specialist, expectedSha256, offset, limit }) => safe(() => tasks.readMemory(workingDirectory, specialist, expectedSha256, offset, limit))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_memory_write')) server.registerTool('antigravity_memory_write', {
+    outputSchema: outputSchemas.antigravity_memory_write, title: 'Write reviewed private memory',
+    description: 'Store caller-reviewed memory outside the project. Null expectedSha256 creates only; replacing existing content requires its current hash. Does not send text to agy.',
+    inputSchema: { ...memoryInput, text: z.string().min(1).max(1024 * 1024), expectedSha256: memoryHash.nullable() }, annotations: action,
+  }, async ({ workingDirectory, specialist, text, expectedSha256 }) => safe(() => tasks.writeMemory(workingDirectory, specialist, text, expectedSha256))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_memory_remove')) server.registerTool('antigravity_memory_remove', {
+    outputSchema: outputSchemas.antigravity_memory_remove, title: 'Remove private memory',
+    description: 'Remove exactly the reviewed memory version. Existing task snapshots remain immutable until their retained task state is removed.',
+    inputSchema: { ...memoryInput, expectedSha256: memoryHash }, annotations: action,
+  }, async ({ workingDirectory, specialist, expectedSha256 }) => safe(() => tasks.removeMemory(workingDirectory, specialist, expectedSha256))());
+
   const runSchema = {
     prompt: z.string().min(1),
     model: z.string().min(1).max(128).nullable().optional(),
@@ -139,6 +163,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
     isolateWorktree: z.boolean().optional(),
     includePaths: z.array(z.string().min(1)).min(1).optional(),
+    memory: memorySelectionSchema.optional(),
     skills: providedSkillsSchema.optional(),
     deliveryMode: deliveryModeSchema.optional(),
     mode: z.enum(['write', 'read-only']).optional(),
@@ -172,7 +197,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_handoff, title: 'Transfer work to another role',
     description: 'Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.',
     inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
-      allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(),
+      memory: memorySelectionSchema.optional(), allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(),
       prompt: z.string().min(1), role: configuredRoleSchema, effort: effortSchema.optional(), model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
       timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
   }, async ({ sourceTaskId, ...args }) => safe(async () => {

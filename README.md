@@ -119,10 +119,10 @@ Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
 | Valor | Ferramentas no código atual | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 37 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 27 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 30 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 37 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 41 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 29 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 32 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 41 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -222,11 +222,36 @@ $env:BRIDGE_CUSTOM_ROLES = '[{"name":"security-review","baseRole":"reviewer","de
 
 As bases `planner` e `reviewer` conservam modo de leitura, contratos JSON e conferência de citações. `implementer` conserva o fluxo de escrita na cópia e as mesmas exigências de verificação e confirmação para integração. Instruções personalizadas não dão permissões extras e entram no limite total do prompt. A definição usada é salva com a tarefa; a retomada mantém instruções e base originais, mesmo após mudar a configuração. Para trocar de papel, crie uma nova tarefa ou faça handoff.
 
+## Memória privada por projeto e especialista
+
+Disponível no código atual; a publicação npm permanece na versão 0.7.1 durante o desenvolvimento. A memória fica no estado privado do servidor, separada pela raiz Git canônica e pelo identificador do especialista. Nenhum arquivo do projeto é importado automaticamente.
+
+| Ferramenta | Uso |
+| --- | --- |
+| `antigravity_memory_list` | Metadados, hashes, bytes e limites; não devolve o texto |
+| `antigravity_memory_read` | Texto em partes, vinculado a `expectedSha256`; siga `nextOffset` |
+| `antigravity_memory_write` | Grava texto revisado pelo chamador; `expectedSha256: null` cria, hash atual substitui |
+| `antigravity_memory_remove` | Remove somente a versão correspondente ao hash informado |
+
+Exemplo de seleção em `antigravity_run`, depois de ler e conferir a memória:
+
+```json
+{ "memory": [{ "specialist": "reviewer", "sha256": "<hash-atual-de-64-caracteres>" }] }
+```
+
+O chamador escolhe até oito entradas. O texto selecionado é enviado ao CLI como dados revisáveis, dentro do limite total do prompt; ele não concede permissões nem substitui as instruções da tarefa. Os retornos de tarefas incluem somente os metadados da memória, inclusive na entrega compacta. O conteúdo não é preparado como arquivo auxiliar nem integrado ao projeto.
+
+`memory` também pode ser um padrão explícito de especialista. Uma lista vazia substitui esse padrão. A retomada conserva os snapshots originais, mesmo após substituir ou remover a memória armazenada; fornecer `memory` outra vez numa retomada é recusado. Handoffs herdam o snapshot por padrão e permitem uma seleção explícita diferente ou `memory: []`.
+
+Os padrões globais são 100 entradas, 1 MiB de texto e 64 KiB por entrada, medidos em UTF-8. Escritas usam comparação de hash e lock entre processos; versões divergentes retornam `MEMORY_CHANGED`. Links, junções de armazenamento, arquivos corrompidos e hashes inconsistentes são recusados. Perfis `query` e `review` permitem somente listar e ler.
+
+Remover uma entrada não apaga os snapshots já guardados nas tarefas retidas. O descarte da cópia também preserva esses registros. Consulte [Privacidade](PRIVACY.md) para apagar o estado local; o bridge não oferece criptografia própria.
+
 ## Controles por especialista e tarefa
 
 Os controles desta seção estão no código atual do repositório. O pacote npm 0.7.1 conserva o catálogo publicado anteriormente.
 
-Papéis personalizados aceitam `defaults` com `model`, `effort`, `skills`, `includePaths`, `outputSchema`, `artifactPaths`, `deliveryMode`, `timeoutSeconds`, `allowedTools` e `mcpServers`. Argumentos explícitos substituem cada campo completo, sem mesclar listas; `model: null` mantém Auto. A retomada conserva o snapshot original. Schemas de resultado personalizados exigem base `implementer`; os outros papéis mantêm seus contratos próprios.
+Papéis personalizados aceitam `defaults` com `model`, `effort`, `skills`, `includePaths`, `outputSchema`, `artifactPaths`, `deliveryMode`, `timeoutSeconds`, `allowedTools`, `mcpServers` e `memory`. Argumentos explícitos substituem cada campo completo, sem mesclar listas; `model: null` mantém Auto. A retomada conserva o snapshot original. Schemas de resultado personalizados exigem base `implementer`; os outros papéis mantêm seus contratos próprios.
 
 A pessoa usuária configura no ambiente do servidor:
 
@@ -413,6 +438,9 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `MAX_RETAINED_TASKS` | `100` | Tarefas persistidas retidas |
 | `DEFAULT_TIMEOUT_SECONDS` | `1800` | Prazo máximo por execução |
 | `EVENT_BUFFER_SIZE` | `2000` | Eventos mantidos em memória |
+| `BRIDGE_MEMORY_MAX_ENTRIES` | `100` | Entradas privadas globais; até 10.000 |
+| `BRIDGE_MEMORY_MAX_BYTES` | `1048576` | Texto privado global em UTF-8; até 64 MiB |
+| `BRIDGE_MEMORY_MAX_ENTRY_BYTES` | `65536` | Texto por entrada; até 1 MiB, sem exceder o limite global |
 | `BRIDGE_STATE_DIRECTORY` | `~/.antigravity-mcp-bridge` | Diretório privado de tarefas e sessões |
 | `BRIDGE_DEFAULT_MODEL` | vazio | Modelo inicial, usado quando não há preferência salva |
 | `MAX_COPY_FILES` | `10000` | Máximo de arquivos selecionados para a cópia |

@@ -143,13 +143,17 @@ async function sha256File(file: string): Promise<string> {
   return digest.digest('hex');
 }
 
-export async function listProjectFiles(sourceDirectory: string): Promise<string[]> {
+export async function validateProjectRoot(sourceDirectory: string): Promise<void> {
   let top: string;
   try { top = (await git(sourceDirectory, ['rev-parse', '--show-toplevel'])).toString('utf8').trim(); }
   catch { throw new BridgeError('ISOLATION_REQUIRES_GIT', 'Isolated copies require a Git repository'); }
   if (path.relative(await realpath(top), await realpath(sourceDirectory)) !== '') {
     throw new BridgeError('INVALID_WORKING_DIRECTORY', 'workingDirectory must be the Git repository root');
   }
+}
+
+export async function listProjectFiles(sourceDirectory: string): Promise<string[]> {
+  await validateProjectRoot(sourceDirectory);
   const candidates = [...new Set(splitNull(await git(sourceDirectory, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
   if (!candidates.length) return [];
   const ignored = new Set(splitNull(await git(sourceDirectory,

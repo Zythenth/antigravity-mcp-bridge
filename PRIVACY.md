@@ -18,9 +18,13 @@ O bridge não lê diretamente cookies, tokens nem arquivos de autenticação. A 
 - A preparação explícita do runtime portátil Windows consulta o GitHub Release para baixar seus arquivos declarados. Essa etapa não envia arquivos do projeto, prompts nem dados de tarefas ao GitHub. Ela não altera o fluxo normal do `agy`, que continua sujeito à conta, ao modelo e às políticas do Google descritos acima.
 - O cache privado do runtime é mantido para reutilização depois de reinicializações normais. A persistência depois de reinicialização física ainda não foi verificada.
 
+A memória por projeto e especialista é armazenada em `project-memory/` dentro do estado privado. Somente entradas explicitamente selecionadas pelo chamador são enviadas ao CLI. As tarefas retêm snapshots do texto selecionado para permitir retomadas consistentes; listar memórias e consultar tarefas devolve metadados, e a leitura de texto usa uma ferramenta separada.
+
 ## Remoção
 
 `antigravity_discard` remove a cópia e o baseline, incluindo tarefas retomadas que compartilham esses diretórios. Ele preserva os registros locais de tarefa, resultados e eventos. A remoção local não apaga históricos mantidos pelo Google, pelo CLI ou pelo cliente MCP.
+
+`antigravity_memory_remove` apaga a versão atual de uma entrada mediante seu hash. Snapshots já associados a tarefas continuam presentes nos respectivos registros, e a remoção local não apaga o conteúdo já enviado ao CLI ou ao Google.
 
 Para apagar registros persistidos, encerre os servidores do bridge que usam o diretório de estado e remova os arquivos JSON das tarefas desejadas, ou todo o diretório de estado. Isso perde os IDs e a possibilidade de recuperar essas sessões pelo bridge. Descarte as cópias antes de remover os registros para evitar deixar diretórios temporários sem referência.
 

@@ -1,3 +1,5 @@
+import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
+import { computeProjectId, memorySummarySchema } from './project-memory.js';
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -28,6 +30,7 @@ const snapshotSchema = z.object({
     deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
     agentPolicyReceipt: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), decisionCount: z.number().int().nonnegative(), deniedCount: z.number().int().nonnegative() }).strict().optional(),
+    memory: z.array(z.lazy(() => memorySummarySchema)).max(8).optional(),
     agentPolicy: resolvedAgentPolicySchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
@@ -50,7 +53,7 @@ const snapshotSchema = z.object({
       }).strict(),
     }).strict()).max(20).optional(),
   }).passthrough(),
-  options: z.object({ allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(), agentPolicy: resolvedAgentPolicySchema.optional(), prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
+  options: z.object({ memory: z.lazy(() => memorySelectionSchema).optional(), memorySnapshots: z.lazy(() => memorySnapshotsSchema).optional(), allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(), agentPolicy: resolvedAgentPolicySchema.optional(), prompt: z.string(), workingDirectory: z.string(), effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(),
     outputSchema: z.record(z.string(), z.unknown()).optional(),
     artifactPaths: z.array(z.string().min(1).max(1000)).min(1).max(100).optional(),
   }).passthrough(),
@@ -185,6 +188,12 @@ export class StateStore {
         inbox.some(item => item.taskId !== data.record.taskId || item.receipt.taskId !== data.record.taskId || item.receipt.messageId !== item.messageId) ||
         (data.record.dispatching && !inbox.some(item => item.messageId === data.record.dispatching!.messageId && item.receipt.state === 'queued'))) {
         throw new BridgeError('INVALID_STATE', 'Persisted inbox does not match task identity');
+      }
+      const snapshots = data.options.memorySnapshots;
+      if (snapshots?.some(entry => entry.projectId !== computeProjectId(data.record.workingDirectory)) ||
+          JSON.stringify(data.record.memory) !== JSON.stringify(summarizeMemory(snapshots)) ||
+          JSON.stringify(data.options.memory) !== JSON.stringify(snapshots?.map(({ specialist, sha256 }) => ({ specialist, sha256 })))) {
+        throw new BridgeError('INVALID_STATE', 'Persisted private memory differs from its project, hashes or metadata');
       }
       if (data.record.agentPolicy?.sha256 !== data.options.agentPolicy?.sha256) throw new BridgeError('INVALID_STATE', 'Persisted task tool policies disagree');
       if (data.project) {

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
+import { memorySelectionSchema, type MemorySelection } from './memory-context.js';
 import { z } from 'zod';
 import { checkedPath } from './isolation.js';
 import { BridgeError, type RunOptions } from './types.js';
@@ -107,6 +108,7 @@ export const profileOutputSchema = z.record(z.string(), z.unknown())
   });
 
 export const profileDefaultsSchema = z.object({
+  memory: z.lazy(() => memorySelectionSchema).optional(),
   model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable().optional(),
   effort: effortSchema.optional(),
   allowedTools: nativeToolsSchema.optional(),
@@ -182,6 +184,7 @@ export interface RoleListing {
   defaultDeliveryMode?: DeliveryMode;
   defaultIncludePaths?: string[];
   defaultArtifactPaths?: string[];
+  defaultMemory?: MemorySelection;
   defaultAllowedTools?: AgentPolicySelection['allowedTools'];
   defaultMcpServers?: AgentPolicySelection['mcpServers'];
   defaultSkillSummaries?: Array<{ name: string; sha256: string; resourceCount: number }>;
@@ -207,6 +210,7 @@ export function listRoles(customRoles: RoleDefinition[] = []): RoleListing[] {
       instructionChars: role.instruction.length,
     };
     if (role.defaults) {
+      if (role.defaults.memory !== undefined) listing.defaultMemory = structuredClone(role.defaults.memory);
       if (role.defaults.allowedTools !== undefined) listing.defaultAllowedTools = structuredClone(role.defaults.allowedTools);
       if (role.defaults.mcpServers !== undefined) listing.defaultMcpServers = structuredClone(role.defaults.mcpServers);
       if (role.defaults.model !== undefined) {
@@ -247,7 +251,7 @@ export function applyRoleDefaults(options: RunOptions, definition: RoleDefinitio
     throw new BridgeError('INVALID_ROLE', 'Structured output schema requires an implementer base role');
   }
   const result = structuredClone(options);
-  for (const key of ['model', 'effort', 'skills', 'includePaths', 'outputSchema', 'artifactPaths', 'deliveryMode', 'timeoutSeconds', 'allowedTools', 'mcpServers'] as const) {
+  for (const key of ['memory', 'model', 'effort', 'skills', 'includePaths', 'outputSchema', 'artifactPaths', 'deliveryMode', 'timeoutSeconds', 'allowedTools', 'mcpServers'] as const) {
     if (result[key] === undefined && definition.defaults?.[key] !== undefined) {
       Object.assign(result, { [key]: structuredClone(definition.defaults[key]) });
     }

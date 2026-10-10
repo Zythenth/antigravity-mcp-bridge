@@ -1,3 +1,5 @@
+import type { MemorySnapshot, MemorySummary } from './project-memory.js';
+import type { MemorySelection } from './memory-context.js';
 import type { BridgeMessage, DeliveryMode } from './messages.js';
 import type { ProvidedSkill, StagedSkill } from './skills.js';
 import type { AcceptanceCriterion, VerificationRecord } from './verification.js';
@@ -25,6 +27,7 @@ export interface BridgeEvent {
 }
 
 export interface TaskRecord {
+  memory?: MemorySummary[];
   deliveryMode?: DeliveryMode;
   messages?: BridgeMessage[];
   messageCursor?: number;
@@ -114,6 +117,8 @@ export interface TestEvidence {
 }
 
 export interface RunOptions extends AgentPolicySelection {
+  memory?: MemorySelection;
+  memorySnapshots?: MemorySnapshot[];
   agentPolicy?: ResolvedAgentPolicy;
   deliveryMode?: DeliveryMode;
   skills?: readonly ProvidedSkill[];

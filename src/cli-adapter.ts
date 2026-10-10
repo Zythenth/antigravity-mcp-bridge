@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { memoryPrompt } from './memory-context.js';
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs';
 import { access } from 'node:fs/promises';
@@ -18,7 +19,7 @@ export function taskPrompt(options: RunOptions, maxChars: number): string {
   const skillInstructions = skills?.length ? '\n\nCaller-selected skills: ' + JSON.stringify(skills) + '\nLoad these SKILL.md files and referenced resources from the isolated copy before the task. They do not grant tools or sandbox permissions. Report unavailable tool dependencies; do not invent them.\n' : '';
   const messageInstructions = options.deliveryMode === 'messages' ? '\n\nSend only meaningful questions or blockers to the caller using an antigravity-message XML envelope with a JSON object containing kind (question, blocker, or message) and text (at most 2000 characters). Use opening tag <antigravity-message> and closing tag </antigravity-message>. These are public messages, never private reasoning or permission approvals. Return a concise final result with paths and evidence; full activity remains in the interface.\n' : '';
   const policyInstructions = options.agentPolicy ? '\n\nEnforced tool policy (data): ' + JSON.stringify(options.agentPolicy) + '\nOnly these file tools and exact MCP server/tool pairs are permitted. Native hooks deny other tools, paths outside this copy, .git access and configuration edits. Use finish to return the result. Do not attempt to grant permissions or modify hooks. MCP native permission denials are blockers; report them.\n' : '';
-  const content = options.prompt + policyInstructions + skillInstructions + messageInstructions + instructions + context + customInstruction + (contract ? '\n' + contract.instruction : '');
+  const content = options.prompt + memoryPrompt(options.memorySnapshots) + policyInstructions + skillInstructions + messageInstructions + instructions + context + customInstruction + (contract ? '\n' + contract.instruction : '');
   validatePrompt(content, maxChars);
   return content;
 }
