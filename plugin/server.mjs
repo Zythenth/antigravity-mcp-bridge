@@ -43147,26 +43147,80 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path13.join(this.directory, name + ".lock");
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const file3 = path13.join(this.directory, name + ".lock"), token = randomUUID5();
+    const root = lstatSync3(this.directory, { bigint: true });
+    const busy = () => new BridgeError("STATE_BUSY", "Another operation owns this task or copy, or its lock cannot be verified");
+    const checkRoot = () => {
+      const current = lstatSync3(this.directory, { bigint: true });
+      if (current.isSymbolicLink() || !current.isDirectory() || current.dev !== root.dev || current.ino !== root.ino) {
+        throw new BridgeError("INVALID_STATE", "Private state storage identity changed");
+      }
+    };
+    const inspect = (target) => {
       try {
-        writeFileSync3(file3, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 384 });
-        return () => rmSync2(file3, { force: true });
+        const stat3 = lstatSync3(target, { bigint: true });
+        if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.size < 1n || stat3.size > 1024n)
+          throw busy();
+        const data = JSON.parse(readFileSync2(target, "utf8"));
+        if (!data || typeof data !== "object" || Array.isArray(data) || typeof data.pid !== "number" || !Number.isSafeInteger(data.pid) || data.pid < 1 || data.token !== void 0 && (typeof data.token !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(data.token)))
+          throw busy();
+        return { stat: stat3, pid: data.pid, token: data.token };
+      } catch {
+        throw busy();
+      }
+    };
+    const removeOwned2 = (target, owned) => {
+      checkRoot();
+      const current = inspect(target);
+      if (current.stat.dev !== owned.stat.dev || current.stat.ino !== owned.stat.ino || current.pid !== owned.pid || current.token !== owned.token)
+        throw busy();
+      rmSync2(target);
+    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      checkRoot();
+      let created = false;
+      try {
+        writeFileSync3(file3, JSON.stringify({ pid: process.pid, token }), { flag: "wx", mode: 384, flush: true });
+        created = true;
       } catch (error62) {
         if (error62.code !== "EEXIST")
           throw error62;
-        let pid;
-        try {
-          pid = JSON.parse(readFileSync2(file3, "utf8")).pid;
-        } catch {
-        }
-        if (typeof pid !== "number" || !Number.isSafeInteger(pid) || pid < 1 || processAlive2(pid)) {
-          throw new BridgeError("STATE_BUSY", "Another bridge operation owns this task or copy");
-        }
+      }
+      if (created) {
+        const owned = inspect(file3);
+        if (owned.pid !== process.pid || owned.token !== token)
+          throw busy();
+        let released = false;
+        return () => {
+          if (released)
+            return;
+          removeOwned2(file3, owned);
+          released = true;
+        };
+      }
+      const observed = inspect(file3);
+      if (processAlive2(observed.pid))
+        throw busy();
+      const gate = file3 + ".recovery", gateToken = randomUUID5();
+      try {
+        writeFileSync3(gate, JSON.stringify({ pid: process.pid, token: gateToken }), { flag: "wx", mode: 384, flush: true });
+      } catch {
+        throw busy();
+      }
+      const ownedGate = inspect(gate);
+      if (ownedGate.pid !== process.pid || ownedGate.token !== gateToken)
+        throw busy();
+      try {
+        checkRoot();
+        const current = inspect(file3);
+        if (current.stat.dev !== observed.stat.dev || current.stat.ino !== observed.stat.ino || current.pid !== observed.pid || current.token !== observed.token || processAlive2(current.pid))
+          throw busy();
         rmSync2(file3);
+      } finally {
+        removeOwned2(gate, ownedGate);
       }
     }
-    throw new BridgeError("STATE_BUSY", "Could not acquire bridge state lock");
+    throw busy();
   }
 };
 

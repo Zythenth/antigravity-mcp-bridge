@@ -2,6 +2,9 @@
 
 ## Em desenvolvimento
 
+- Recuperação serializada de locks do estado, com identidade de arquivo, token de posse e liberação idempotente.
+- Contratos de rotas e envelopes de mensagens entre agentes, com varredura limitada; a ligação ao coordenador está em desenvolvimento.
+
 - Grupos com responsáveis e dependências, admissão persistida, retomada explícita e espera conjunta com cursores e mensagens limitadas.
 
 - Memória privada por projeto e especialista, com seleção explícita, snapshots por tarefa, comparação de hashes e leitores paginados.

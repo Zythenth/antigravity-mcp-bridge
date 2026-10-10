@@ -407,6 +407,8 @@ As verificações automáticas demonstram apenas as condições declaradas; a co
 
 O bridge exige suporte aos formatos `stream-json` e a `--sandbox`, conferidos na descoberta do CLI. A versão verificada neste projeto é `agy` 1.3.2. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
 
+Locks do estado privado conferem a identidade do arquivo e um token de posse antes da liberação. A recuperação de um proprietário confirmado como encerrado é serializada entre processos. Locks incompletos, arquivos substituídos e uma recuperação interrompida permanecem protegidos para inspeção local, com `STATE_BUSY`; a liberação repetida de um lock já encerrado é idempotente.
+
 ### Modelo padrão
 
 Defina `BRIDGE_DEFAULT_MODEL` com um ID devolvido por `agy models` para o padrão inicial. `antigravity_set_model` grava a preferência no estado privado, compartilhada por servidores que usam o mesmo diretório. A prioridade é: `model` da tarefa, preferência salva, variável de ambiente e padrão do agy. A seleção é conferida contra a lista atual antes de executar; IDs indisponíveis causam `MODEL_NOT_AVAILABLE`.

@@ -217,21 +217,64 @@ export class StateStore {
 
   acquire(name: string): () => void {
     if (!/^[a-zA-Z0-9-]+$/.test(name)) throw new BridgeError('INVALID_STATE', 'Invalid lock name');
-    const file = path.join(this.directory, name + '.lock');
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const file = path.join(this.directory, name + '.lock'), token = randomUUID();
+    const root = lstatSync(this.directory, { bigint: true });
+    const busy = () => new BridgeError('STATE_BUSY', 'Another operation owns this task or copy, or its lock cannot be verified');
+    const checkRoot = () => {
+      const current = lstatSync(this.directory, { bigint: true });
+      if (current.isSymbolicLink() || !current.isDirectory() || current.dev !== root.dev || current.ino !== root.ino) {
+        throw new BridgeError('INVALID_STATE', 'Private state storage identity changed');
+      }
+    };
+    const inspect = (target: string) => {
       try {
-        writeFileSync(file, JSON.stringify({ pid: process.pid }), { flag: 'wx', mode: 0o600 });
-        return () => rmSync(file, { force: true });
+        const stat = lstatSync(target, { bigint: true });
+        if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1n || stat.size < 1n || stat.size > 1024n) throw busy();
+        const data = JSON.parse(readFileSync(target, 'utf8')) as { pid?: unknown; token?: unknown } | null;
+        if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.pid !== 'number' ||
+            !Number.isSafeInteger(data.pid) || data.pid < 1 ||
+            (data.token !== undefined && (typeof data.token !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(data.token)))) throw busy();
+        return { stat, pid: data.pid, token: data.token as string | undefined };
+      } catch { throw busy(); }
+    };
+    const removeOwned = (target: string, owned: ReturnType<typeof inspect>) => {
+      checkRoot();
+      const current = inspect(target);
+      if (current.stat.dev !== owned.stat.dev || current.stat.ino !== owned.stat.ino ||
+          current.pid !== owned.pid || current.token !== owned.token) throw busy();
+      rmSync(target);
+    };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      checkRoot();
+      let created = false;
+      try {
+        writeFileSync(file, JSON.stringify({ pid: process.pid, token }), { flag: 'wx', mode: 0o600, flush: true });
+        created = true;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-        let pid;
-        try { pid = JSON.parse(readFileSync(file, 'utf8')).pid as unknown; } catch { /* an incomplete lock remains protected */ }
-        if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid < 1 || processAlive(pid)) {
-          throw new BridgeError('STATE_BUSY', 'Another bridge operation owns this task or copy');
-        }
-        rmSync(file);
       }
+      if (created) {
+        const owned = inspect(file);
+        if (owned.pid !== process.pid || owned.token !== token) throw busy();
+        let released = false;
+        return () => { if (released) return; removeOwned(file, owned); released = true; };
+      }
+      const observed = inspect(file);
+      if (processAlive(observed.pid)) throw busy();
+      // Serialize stale recovery. A leftover recovery gate fails closed for inspection.
+      const gate = file + '.recovery', gateToken = randomUUID();
+      try { writeFileSync(gate, JSON.stringify({ pid: process.pid, token: gateToken }), { flag: 'wx', mode: 0o600, flush: true }); }
+      catch { throw busy(); }
+      const ownedGate = inspect(gate);
+      if (ownedGate.pid !== process.pid || ownedGate.token !== gateToken) throw busy();
+      try {
+        checkRoot();
+        const current = inspect(file);
+        if (current.stat.dev !== observed.stat.dev || current.stat.ino !== observed.stat.ino ||
+            current.pid !== observed.pid || current.token !== observed.token || processAlive(current.pid)) throw busy();
+        rmSync(file);
+      } finally { removeOwned(gate, ownedGate); }
     }
-    throw new BridgeError('STATE_BUSY', 'Could not acquire bridge state lock');
+    throw busy();
   }
 }
