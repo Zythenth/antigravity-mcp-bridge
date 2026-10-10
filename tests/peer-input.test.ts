@@ -229,6 +229,7 @@ test('cancellation stops an active peer continuation and leaves pending dependen
     adapter.calls.find(call => call.key === 'a')!.finish(envelope({ messageId: randomUUID(), toNode: 'b', text: 'cancel pending work' }));
     await until(() => adapter.calls.length === 3);
     await tasks.groups.cancel(group.groupId);
+    await until(() => tasks.list().find(task => task.sourceMessage)?.status === 'cancelled');
     const waited = await tasks.groups.wait(group.groupId, [], 1);
     assert.equal(waited.group.state, 'cancelled'); assert.equal(waited.ready, true);
     assert.equal(tasks.list().find(task => task.sourceMessage)!.status, 'cancelled');
