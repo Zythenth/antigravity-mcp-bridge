@@ -1,3 +1,5 @@
+import { jointWaitTaskSchema } from './joint-wait.js';
+import { groupSummarySchema, groupAssignmentSchema } from './group-contract.js';
 import { memorySummarySchema } from './project-memory.js';
 import { memorySelectionSchema } from './memory-context.js';
 import { z } from 'zod';
@@ -42,6 +44,7 @@ const report = z.discriminatedUnion('role', [
   z.object({ role: z.literal('reviewer'), source: z.literal('agy-reported'), data: reviewerReportSchema, citationsChecked: z.literal(true) }).strict(),
 ]);
 export const taskRecordSchema = z.object({
+  group: z.lazy(() => groupAssignmentSchema).optional(),
   memory: z.array(z.lazy(() => memorySummarySchema)).max(8).optional(),
   deliveryMode: deliveryModeSchema.optional(),
   providedSkills: stagedSkillsSchema.optional(),
@@ -87,6 +90,13 @@ const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model:
 const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxPolicySchema, sha256: hash }).strict();
 
 export const successOutputSchemas = {
+  antigravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_group_create: z.object({ group: groupSummarySchema }).strict(),
+  antigravity_group_start: z.object({ group: groupSummarySchema }).strict(),
+  antigravity_group_status: z.object({ group: groupSummarySchema }).strict(),
+  antigravity_groups: z.object({ groups: z.array(groupSummarySchema).max(100) }).strict(),
+  antigravity_group_wait: z.object({ group: groupSummarySchema, ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_group_cancel: z.object({ group: groupSummarySchema }).strict(),
   antigravity_memory_list: z.object({ memories: z.array(memorySummarySchema), limits: z.object({ maxEntries: count, maxBytes: count, maxEntryBytes: count }).strict() }).strict(),
   antigravity_memory_read: z.object({ memory: memorySummarySchema, ...chunkShape }).strict(),
   antigravity_memory_write: z.object({ memory: memorySummarySchema }).strict(),

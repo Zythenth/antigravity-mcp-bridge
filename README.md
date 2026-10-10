@@ -119,10 +119,10 @@ Defina `BRIDGE_TOOL_PROFILE` no ambiente do servidor e reinicie a conexão MCP:
 
 | Valor | Ferramentas no código atual | Catálogo e execução |
 | --- | --- | --- |
-| `full` (padrão) | 41 | Todas as ferramentas; preserva a configuração existente |
-| `query` | 29 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
-| `review` | 32 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
-| `implementation` | 41 | Fluxo completo, incluindo testes, integração confirmada e descarte |
+| `full` (padrão) | 48 | Todas as ferramentas; preserva a configuração existente |
+| `query` | 34 | Consulta, modelos, sessões, handoff, comparação e consulta da política de sandbox; tarefas somente em leitura |
+| `review` | 37 | Consulta mais prévia, leitura de patches e verificação; tarefas somente em leitura |
+| `implementation` | 48 | Fluxo completo, incluindo testes, integração confirmada e descarte |
 
 O perfil é informado em `antigravity_health.toolProfile`. Ferramentas fora do perfil não são registradas e chamadas diretas são recusadas. `query` e `review` também recusam `mode: "write"`; omitir o modo seleciona leitura. Perfis reduzem o catálogo e restringem essas tarefas; o sandbox e a política de autorização da integração continuam necessários. Valores desconhecidos impedem a inicialização.
 
@@ -221,6 +221,42 @@ $env:BRIDGE_CUSTOM_ROLES = '[{"name":"security-review","baseRole":"reviewer","de
 `antigravity_roles` lista os nomes disponíveis, descrições, base e tamanho das instruções. Selecione o nome em `role` de `antigravity_run` ou `antigravity_handoff`; os schemas MCP anunciam os nomes configurados. Cada papel tem nome de até 32 caracteres em letras minúsculas, números e hífens, `baseRole` e instruções de até 8.000 caracteres. A descrição é opcional, até 500 caracteres. Há até 20 papéis; nomes duplicados, substituição dos três nomes nativos, bases desconhecidas ou instruções vazias impedem a inicialização.
 
 As bases `planner` e `reviewer` conservam modo de leitura, contratos JSON e conferência de citações. `implementer` conserva o fluxo de escrita na cópia e as mesmas exigências de verificação e confirmação para integração. Instruções personalizadas não dão permissões extras e entram no limite total do prompt. A definição usada é salva com a tarefa; a retomada mantém instruções e base originais, mesmo após mudar a configuração. Para trocar de papel, crie uma nova tarefa ou faça handoff.
+
+## Grupos de tarefas e espera conjunta
+
+As ferramentas desta seção estão no código atual. O cliente cria um grupo com UUID estável, raiz Git, título e até 32 tarefas. Cada tarefa tem uma chave única, `owner` com um papel configurado, `dependsOn` e as opções de execução em `task`. Dependências desconhecidas, duplicadas, ciclos e definições maiores que 4 MiB são recusados. Há até 100 grupos retidos.
+
+| Ferramenta | Uso |
+| --- | --- |
+| `antigravity_group_create` | Persiste a definição; não inicia modelos |
+| `antigravity_group_start` | Inicia ou retoma com `expectedDefinitionSha256` |
+| `antigravity_group_status` / `antigravity_groups` | Metadados, responsáveis, dependências e referências |
+| `antigravity_group_wait` | Espera mensagens públicas ou término do grupo |
+| `antigravity_group_cancel` | Impede novos nós e cancela tarefas no servidor responsável |
+| `antigravity_wait_many` | Espera de 1 a 32 tarefas avulsas com cursores independentes |
+
+Exemplo de `definition` para `antigravity_group_create`:
+
+```json
+{
+  "workingDirectory": "<raiz-git-absoluta>",
+  "title": "Inspeção sequencial",
+  "jobs": [
+    { "key": "inspect", "owner": "implementer", "dependsOn": [],
+      "task": { "prompt": "Inspecione os arquivos selecionados.", "mode": "read-only" } },
+    { "key": "check", "owner": "implementer", "dependsOn": ["inspect"],
+      "task": { "prompt": "Confira os requisitos da tarefa.", "mode": "read-only" } }
+  ]
+}
+```
+
+Repita o mesmo UUID e a mesma definição para consultar uma criação com resposta perdida; outra definição com esse UUID retorna `GROUP_CONFLICT`. O início exige o hash devolvido. O servidor admite um nó somente após todos os seus pré-requisitos terminarem com sucesso. Falha ou cancelamento bloqueiam os dependentes. Cada nó tem sua própria cópia; dependências controlam a ordem e não integram automaticamente alterações entre cópias.
+
+Os grupos usam entrega `messages`. Cada nó aplica hooks da política nativa dentro da cópia, com as ferramentas de arquivo permitidas pelo teto humano e `finish`. MCPs entram por seleção da tarefa ou por um padrão explícito do perfil. A raiz do projeto precisa permanecer canônica e separada do estado privado do bridge. As esperas devolvem no máximo quatro mensagens no total, uma por tarefa, com `nextCursor`, `oldestAvailable` e `truncated`. Passe os cursores anteriores na próxima espera. `hasMoreMessages` e `hasMore` sinalizam mensagens ainda não lidas, inclusive quando `ready` já for verdadeiro. As respostas não incluem prompts, histórico de ferramentas ou resultados intermediários completos; use os leitores por partes quando precisar deles. Cancelar a espera preserva a execução.
+
+Após reiniciar o servidor, `resumeRequired` informa a necessidade de retomada explícita. O coordenador recupera IDs já aceitos e não repete nós concluídos. Se uma admissão interrompida não tiver identidade verificável, retorna `GROUP_ADMISSION_UNVERIFIED`; não inicia outra execução silenciosamente. Alterar o perfil de um responsável pausa novas admissões com `GROUP_PROFILE_CHANGED`. Tarefas removidas pela retenção retornam erro, sem repetição.
+
+O estado `completed` informa o término das execuções. Integração continua exigindo revisão, testes, verificação atual e hash por tarefa. Os registros de grupo ficam no estado privado até remoção local; descarte as cópias antes de apagar registros, conforme [Privacidade](PRIVACY.md).
 
 ## Memória privada por projeto e especialista
 
@@ -369,7 +405,7 @@ As verificações automáticas demonstram apenas as condições declaradas; a co
 
 ## Eventos, sessões e cancelamento
 
-O bridge exige suporte aos formatos `stream-json` e a `--sandbox`, conferidos na descoberta do CLI. A versão verificada neste projeto é `agy` 1.2.16. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
+O bridge exige suporte aos formatos `stream-json` e a `--sandbox`, conferidos na descoberta do CLI. A versão verificada neste projeto é `agy` 1.3.2. Eventos estruturados chegam como NDJSON; diagnósticos de `stderr` permanecem separados. Linhas inválidas são expostas como `stream.unparsed`. O `EventStore` mantém um buffer limitado: `truncated: true` indica perda de eventos antigos. Registros de tarefas, sessões, eventos disponíveis, preferência de modelo e referências às cópias são persistidos por escrita atômica em `~/.antigravity-mcp-bridge` (ou `BRIDGE_STATE_DIRECTORY`). O estado contém prompts e resultados: mantenha esse diretório privado, fora dos projetos versionados e de pastas compartilhadas.
 
 ### Modelo padrão
 

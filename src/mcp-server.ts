@@ -1,3 +1,5 @@
+import { groupDefinitionSchema } from './group-contract.js';
+import { waitTargetsSchema, waitCursorsSchema } from './joint-wait.js';
 import { memorySelectionSchema } from './memory-context.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -154,6 +156,43 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     description: 'Remove exactly the reviewed memory version. Existing task snapshots remain immutable until their retained task state is removed.',
     inputSchema: { ...memoryInput, expectedSha256: memoryHash }, annotations: action,
   }, async ({ workingDirectory, specialist, expectedSha256 }) => safe(() => tasks.removeMemory(workingDirectory, specialist, expectedSha256))());
+
+  const groupIdInput = { groupId: z.string().uuid() };
+  if (toolEnabled(tasks.toolProfile, 'antigravity_group_create')) server.registerTool('antigravity_group_create', {
+    outputSchema: outputSchemas.antigravity_group_create, title: 'Create a dependency group',
+    description: 'Persist a bounded group with configured specialist owners and dependencies. Use a stable client-generated UUID; repeating the same definition returns the existing group, a different definition is rejected. No model starts until group_start.',
+    inputSchema: { ...groupIdInput, definition: groupDefinitionSchema }, annotations: action,
+  }, async ({ groupId, definition }) => safe(async () => ({ group: await tasks.groups.create(groupId, definition) }))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_group_start')) server.registerTool('antigravity_group_start', {
+    outputSchema: outputSchemas.antigravity_group_start, title: 'Start or resume a dependency group',
+    description: 'Start pending nodes whose prerequisites completed. Bind to the saved definition hash. Explicit resume recovers accepted task IDs and never repeats terminal nodes. Interrupted provider tasks remain failed; no automatic provider replay.',
+    inputSchema: { ...groupIdInput, expectedDefinitionSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
+  }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => ({ group: tasks.groups.start(groupId, expectedDefinitionSha256) }))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_group_status')) server.registerTool('antigravity_group_status', {
+    outputSchema: outputSchemas.antigravity_group_status, title: 'Inspect group state',
+    description: 'Return node owners, dependencies, statuses and task references without task prompts, file histories or intermediate results. Group completion is execution state, not patch verification.',
+    inputSchema: groupIdInput, annotations: readOnly,
+  }, async ({ groupId }) => safe(() => ({ group: tasks.groups.status(groupId) }))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_groups')) server.registerTool('antigravity_groups', {
+    outputSchema: outputSchemas.antigravity_groups, title: 'List retained groups',
+    description: 'List retained group metadata. Group definitions and task prompts stay in private server state.',
+    inputSchema: {}, annotations: readOnly,
+  }, safe(() => ({ groups: tasks.groups.list() })));
+  if (toolEnabled(tasks.toolProfile, 'antigravity_group_wait')) server.registerTool('antigravity_group_wait', {
+    outputSchema: outputSchemas.antigravity_group_wait, title: 'Wait for compact group progress',
+    description: 'Wait up to60 seconds for public messages or group completion. At most4 messages total, one per task; return per-task cursors and truncation indicators. Waiting cancellation leaves tasks running. No raw tool history.',
+    inputSchema: { ...groupIdInput, cursors: waitCursorsSchema.optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() }, annotations: readOnly,
+  }, async ({ groupId, cursors, timeoutSeconds }, extra) => safe(() => tasks.groups.wait(groupId, cursors, timeoutSeconds, extra.signal))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_group_cancel')) server.registerTool('antigravity_group_cancel', {
+    outputSchema: outputSchemas.antigravity_group_cancel, title: 'Cancel a dependency group',
+    description: 'Stop future nodes and cancel tasks in the coordinating server. Partial copies remain for inspection. Other live servers retain ownership of their tasks.',
+    inputSchema: groupIdInput, annotations: action,
+  }, async ({ groupId }) => safe(async () => ({ group: await tasks.groups.cancel(groupId) }))());
+  if (toolEnabled(tasks.toolProfile, 'antigravity_wait_many')) server.registerTool('antigravity_wait_many', {
+    outputSchema: outputSchemas.antigravity_wait_many, title: 'Wait for several tasks',
+    description: 'Wait jointly for1..32 retained task IDs with independent message cursors. Returns at most4 public messages total, no tool history. Missing tasks are explicit per-target errors. ready means all targets ended, not that they succeeded.',
+    inputSchema: { targets: waitTargetsSchema, timeoutSeconds: z.number().int().min(1).max(60).optional() }, annotations: readOnly,
+  }, async ({ targets, timeoutSeconds }, extra) => safe(() => tasks.waitMany(targets, timeoutSeconds, extra.signal))());
 
   const runSchema = {
     prompt: z.string().min(1),

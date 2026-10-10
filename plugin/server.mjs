@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path17) {
-      let input2 = path17;
+    function removeDotSegments(path18) {
+      let input2 = path18;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path17 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path17 && path17 !== "/" ? path17 : void 0;
+        const path18 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path18 && path18 !== "/" ? path18 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path17) {
-  if (!path17)
+function getElementAtPath(obj, path18) {
+  if (!path18)
     return obj;
-  return path17.reduce((acc, key) => acc?.[key], obj);
+  return path18.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path17, issues) {
+function prefixIssues(path18, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path17);
+    iss.path.unshift(path18);
     return iss;
   });
 }
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path17 = []) => {
+  const processError = (error63, path18 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path17, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path18, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
       } else {
-        const fullpath = [...path17, ...issue2.path];
+        const fullpath = [...path18, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8837,9 +8837,9 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
           let i = 0;
           while (i < fullpath.length) {
             const el = fullpath[i];
-            const terminal2 = i === fullpath.length - 1;
+            const terminal3 = i === fullpath.length - 1;
             if (el === "_errors") {
-              if (terminal2)
+              if (terminal3)
                 curr._errors.push(mapper(issue2));
               i++;
               continue;
@@ -8853,7 +8853,7 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
               });
             }
             const node2 = curr[el];
-            if (terminal2) {
+            if (terminal3) {
               node2._errors.push(mapper(issue2));
             }
             curr = node2;
@@ -8868,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path17 = []) => {
+  const processError = (error63, path18 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path17, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path18, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path17, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
       } else {
-        const fullpath = [...path17, ...issue2.path];
+        const fullpath = [...path18, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8887,7 +8887,7 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
         let i = 0;
         while (i < fullpath.length) {
           const el = fullpath[i];
-          const terminal2 = i === fullpath.length - 1;
+          const terminal3 = i === fullpath.length - 1;
           if (typeof el === "string") {
             curr.properties ?? (curr.properties = {});
             if (!Object.prototype.hasOwnProperty.call(curr.properties, el)) {
@@ -8904,7 +8904,7 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
             (_a3 = curr.items)[el] ?? (_a3[el] = { errors: [] });
             curr = curr.items[el];
           }
-          if (terminal2) {
+          if (terminal3) {
             curr.errors.push(mapper(issue2));
           }
           i++;
@@ -8917,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path17 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path17) {
+  const path18 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path18) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path17 = ref.slice(1).split("/").filter(Boolean);
-  if (path17.length === 0) {
+  const path18 = ref.slice(1).split("/").filter(Boolean);
+  if (path18.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path17[0] === defsKey) {
-    const key = path17[1] === void 0 ? void 0 : decodeJSONPointerSegment(path17[1]);
+  if (path18[0] === defsKey) {
+    const key = path18[1] === void 0 ? void 0 : decodeJSONPointerSegment(path18[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28652,11 +28652,11 @@ function replaceStateFile(temporary, target) {
       return;
     } catch (error62) {
       const code = error62.code;
-      const delay3 = delays[attempt];
-      if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(code ?? "") || delay3 === void 0) {
+      const delay4 = delays[attempt];
+      if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(code ?? "") || delay4 === void 0) {
         throw error62;
       }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay3);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay4);
     }
   }
 }
@@ -28856,11 +28856,11 @@ var ProjectMemoryStore = class {
         const lockPid = lockData.pid;
         const lockToken = lockData.token;
         if (processAlive(lockPid)) {
-          const delay3 = delays[attempt];
-          if (delay3 === void 0) {
+          const delay4 = delays[attempt];
+          if (delay4 === void 0) {
             throw new BridgeError("MEMORY_BUSY", "Project memory is busy");
           }
-          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay3);
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay4);
           continue;
         }
         const recoveryFile = path.join(this.memoryDirectory, "memory-recovery.lock");
@@ -29582,6 +29582,11 @@ import os from "node:os";
 // dist/src/tool-profiles.js
 var toolProfileSchema = external_exports.enum(["full", "query", "review", "implementation"]);
 var queryTools = /* @__PURE__ */ new Set([
+  "antigravity_wait_many",
+  "antigravity_group_status",
+  "antigravity_groups",
+  "antigravity_group_wait",
+  "antigravity_group_cancel",
   "antigravity_memory_list",
   "antigravity_memory_read",
   "antigravity_health",
@@ -30368,7 +30373,7 @@ async function assertNoLinkAncestry(targetPath, label) {
 }
 async function hookMain() {
   const fsp2 = await import("node:fs/promises");
-  const path17 = await import("node:path");
+  const path18 = await import("node:path");
   const crypto3 = await import("node:crypto");
   const url2 = await import("node:url");
   const WINDOWS_DEVICE_NAMES5 = /* @__PURE__ */ new Set([
@@ -30402,20 +30407,20 @@ async function hookMain() {
     return WINDOWS_DEVICE_NAMES5.has(base);
   }
   function isInside(parent, child) {
-    const p = process.platform === "win32" ? path17.resolve(parent).toLowerCase() : path17.resolve(parent);
-    const c = process.platform === "win32" ? path17.resolve(child).toLowerCase() : path17.resolve(child);
-    const rel = path17.relative(p, c);
-    return rel === "" || !rel.startsWith("..") && !path17.isAbsolute(rel);
+    const p = process.platform === "win32" ? path18.resolve(parent).toLowerCase() : path18.resolve(parent);
+    const c = process.platform === "win32" ? path18.resolve(child).toLowerCase() : path18.resolve(child);
+    const rel = path18.relative(p, c);
+    return rel === "" || !rel.startsWith("..") && !path18.isAbsolute(rel);
   }
   function canonicalProtected(target) {
-    const parts = path17.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
+    const parts = path18.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
     return parts.includes(".git") || parts[0] === ".agents";
   }
   function emitDecision(decision2, reason2) {
     console.log(JSON.stringify({ decision: decision2, reason: reason2 }));
     process.exit(0);
   }
-  const manifestPath = path17.resolve(process.cwd(), "bridge-execution-policy.json");
+  const manifestPath = path18.resolve(process.cwd(), "bridge-execution-policy.json");
   let manifestStat;
   try {
     manifestStat = await fsp2.lstat(manifestPath);
@@ -30465,8 +30470,8 @@ async function hookMain() {
   }
   const isWindows = process.platform === "win32";
   try {
-    const expectedCanonical = path17.resolve(manifest.canonicalCopyRoot);
-    const actualCanonical = path17.resolve(await fsp2.realpath(path17.resolve(process.cwd(), "..")));
+    const expectedCanonical = path18.resolve(manifest.canonicalCopyRoot);
+    const actualCanonical = path18.resolve(await fsp2.realpath(path18.resolve(process.cwd(), "..")));
     const match = isWindows ? expectedCanonical.toLowerCase() === actualCanonical.toLowerCase() : expectedCanonical === actualCanonical;
     if (!match) {
       emitDecision("deny", "Denied by execution policy");
@@ -30504,12 +30509,12 @@ async function hookMain() {
     emitDecision("deny", "Denied by execution policy");
   }
   if (Array.isArray(input2.workspacePaths) && input2.workspacePaths.length > 0) {
-    const origRoot = path17.resolve(manifest.originalCopyRoot);
-    const canonRoot = path17.resolve(manifest.canonicalCopyRoot);
+    const origRoot = path18.resolve(manifest.originalCopyRoot);
+    const canonRoot = path18.resolve(manifest.canonicalCopyRoot);
     const matchAny = input2.workspacePaths.some((wp) => {
       if (typeof wp !== "string")
         return false;
-      const res = path17.resolve(wp);
+      const res = path18.resolve(wp);
       return isWindows ? res.toLowerCase() === origRoot.toLowerCase() || res.toLowerCase() === canonRoot.toLowerCase() : res === origRoot || res === canonRoot;
     });
     if (!matchAny) {
@@ -30570,7 +30575,7 @@ async function hookMain() {
       const rawTarget = toolName === "view_file" ? args?.AbsolutePath : args?.TargetFile;
       let pathValid = typeof rawTarget === "string" && rawTarget.length > 0 && rawTarget.length <= 4e3;
       if (pathValid) {
-        if (!path17.isAbsolute(rawTarget)) {
+        if (!path18.isAbsolute(rawTarget)) {
           pathValid = false;
         } else if (isWindows) {
           if (!/^[A-Za-z]:[\\/]/.test(rawTarget) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(rawTarget) || rawTarget.slice(2).includes(":")) {
@@ -30585,7 +30590,7 @@ async function hookMain() {
         decision = "deny";
         reason = "Invalid or non-absolute target file path";
       } else {
-        const resolvedTarget = path17.resolve(rawTarget);
+        const resolvedTarget = path18.resolve(rawTarget);
         const insideOriginal = isInside(manifest.originalCopyRoot, resolvedTarget);
         const insideCanonical = isInside(manifest.canonicalCopyRoot, resolvedTarget);
         if (!insideOriginal && !insideCanonical) {
@@ -30593,9 +30598,9 @@ async function hookMain() {
           reason = "Path is outside copy directory";
         } else {
           const rootUsed = insideOriginal ? manifest.originalCopyRoot : manifest.canonicalCopyRoot;
-          let relToRoot = path17.relative(rootUsed, resolvedTarget);
-          if (isWindows && (relToRoot.startsWith("..") || path17.isAbsolute(relToRoot))) {
-            relToRoot = path17.relative(path17.resolve(rootUsed).toLowerCase(), path17.resolve(resolvedTarget).toLowerCase());
+          let relToRoot = path18.relative(rootUsed, resolvedTarget);
+          if (isWindows && (relToRoot.startsWith("..") || path18.isAbsolute(relToRoot))) {
+            relToRoot = path18.relative(path18.resolve(rootUsed).toLowerCase(), path18.resolve(resolvedTarget).toLowerCase());
           }
           const segs = relToRoot.split(/[\\/]+/).filter(Boolean);
           let segsSafe = true;
@@ -30626,7 +30631,7 @@ async function hookMain() {
                 let ancSafe = true;
                 let current = rootUsed;
                 for (let i = 0; i < segs.length - 1; i++) {
-                  current = path17.join(current, segs[i]);
+                  current = path18.join(current, segs[i]);
                   try {
                     const st = await fsp2.lstat(current);
                     if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -30671,7 +30676,7 @@ async function hookMain() {
             let ancSafe = true;
             let current = rootUsed;
             for (let i = 0; i < segs.length - 1; i++) {
-              current = path17.join(current, segs[i]);
+              current = path18.join(current, segs[i]);
               try {
                 const st = await fsp2.lstat(current);
                 if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31766,6 +31771,7 @@ function compactTask(task2) {
     integratedAt: task2.integratedAt,
     discardedAt: task2.discardedAt,
     deliveryMode: task2.deliveryMode,
+    ...task2.group ? { group: structuredClone(task2.group) } : {},
     ...task2.memory !== void 0 ? { memory: structuredClone(task2.memory) } : {},
     ...task2.agentPolicy ? { agentPolicy: task2.agentPolicy, agentPolicyReceipt: task2.agentPolicyReceipt } : {},
     ...task2.providedSkills?.length ? { providedSkillSummaries: task2.providedSkills.map((skill) => ({ name: skill.name, sha256: skill.sha256, fileCount: skill.files.length })) } : {},
@@ -32781,6 +32787,12 @@ function validatePrompt(prompt, maxChars) {
     throw new BridgeError("INVALID_PROMPT", `prompt must contain 1 to ${maxChars} characters and no NUL`);
   }
 }
+async function validateStateSeparation(workingDirectory, stateDirectory) {
+  const state = await realpath3(stateDirectory);
+  if (within(workingDirectory, state) || within(state, workingDirectory)) {
+    throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps private bridge state; keep that storage outside projects");
+  }
+}
 
 // dist/src/cli-adapter.js
 function taskPrompt(options, maxChars) {
@@ -33013,6 +33025,441 @@ var CliAdapter = class {
   }
 };
 
+// dist/src/group-contract.js
+import { createHash as createHash11 } from "node:crypto";
+
+// dist/src/verification.js
+import { createHash as createHash10 } from "node:crypto";
+import { createReadStream as createReadStream4 } from "node:fs";
+var criterionSchema = external_exports.object({
+  id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
+  description: external_exports.string().min(1).max(2e3),
+  check: external_exports.object({
+    kind: external_exports.enum(["file-exists", "file-absent", "file-contains", "file-not-contains"]),
+    path: external_exports.string().min(1).max(1e3),
+    text: external_exports.string().min(1).max(4e3).optional()
+  }).strict().refine((check2) => !["file-contains", "file-not-contains"].includes(check2.kind) || Boolean(check2.text), "A text check requires text").optional()
+}).strict();
+var criteriaSchema = external_exports.array(criterionSchema).min(1).max(100).refine((criteria) => new Set(criteria.map((item) => item.id)).size === criteria.length, "Criterion IDs must be unique");
+var reviewEvidenceSchema = external_exports.object({
+  criterionId: external_exports.string().min(1).max(64),
+  verdict: external_exports.enum(["passed", "failed", "unverified"]),
+  path: external_exports.string().min(1).max(1e3),
+  line: external_exports.number().int().min(1),
+  quote: external_exports.string().min(1).max(4e3),
+  explanation: external_exports.string().min(1).max(2e3)
+}).strict();
+var reviewSchema = external_exports.array(reviewEvidenceSchema).max(100).refine((reviews) => new Set(reviews.map((item) => item.criterionId)).size === reviews.length, "One review per criterion");
+async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
+  if (criteria.length)
+    criteria = criteriaSchema.parse(criteria);
+  reviews = reviewSchema.parse(reviews);
+  if (reviews.some((review) => !criteria.some((criterion) => criterion.id === review.criterionId))) {
+    throw new BridgeError("INVALID_REVIEW", "Review refers to an unknown acceptance criterion");
+  }
+  const fileHashes = /* @__PURE__ */ Object.create(null);
+  const contents = /* @__PURE__ */ new Map();
+  async function file3(relative2) {
+    if (contents.has(relative2))
+      return contents.get(relative2);
+    try {
+      const chunks = [];
+      let length = 0;
+      for await (const chunk of createReadStream4(await checkedPath(project.copyDirectory, relative2, true))) {
+        length += chunk.length;
+        if (length > 1e7)
+          throw new BridgeError("VERIFICATION_TOO_LARGE", "Verification file exceeds 10 MB");
+        chunks.push(chunk);
+      }
+      const buffer = Buffer.concat(chunks);
+      fileHashes[relative2] = createHash10("sha256").update(buffer).digest("hex");
+      contents.set(relative2, buffer);
+      return buffer;
+    } catch (error62) {
+      if (error62.code !== "ENOENT")
+        throw error62;
+      fileHashes[relative2] = null;
+      contents.set(relative2, void 0);
+      return void 0;
+    }
+  }
+  const checks = [];
+  for (const criterion of criteria) {
+    let checkPassed;
+    if (criterion.check) {
+      const { kind, path: path18, text } = criterion.check;
+      const content = await file3(path18);
+      if (kind === "file-exists")
+        checkPassed = content !== void 0;
+      if (kind === "file-absent")
+        checkPassed = content === void 0;
+      if (kind === "file-contains")
+        checkPassed = content !== void 0 && content.toString("utf8").includes(text);
+      if (kind === "file-not-contains")
+        checkPassed = content !== void 0 && !content.toString("utf8").includes(text);
+    }
+    const review = reviews.find((item) => item.criterionId === criterion.id);
+    let grounded = false;
+    if (review) {
+      const content = await file3(review.path);
+      const lines = content?.toString("utf8").split(/\r?\n/);
+      const quoteLines = review.quote.split(/\r?\n/);
+      grounded = Boolean(lines && lines.slice(review.line - 1, review.line - 1 + quoteLines.length).join("\n") === quoteLines.join("\n"));
+    }
+    const status3 = checkPassed === false || review && (!grounded || review.verdict === "failed") ? "failed" : !review || review.verdict === "unverified" ? "unverified" : "passed";
+    checks.push({ criterionId: criterion.id, status: status3, observation: checkPassed === false ? "Artifact check failed" : review && !grounded ? "Review quote does not match the file and line" : !review ? "Codex review evidence is missing" : "Artifact check: " + (checkPassed === void 0 ? "not specified" : "passed") + "; client review: " + review.verdict });
+  }
+  const status2 = checks.some((check2) => check2.status === "failed") ? "failed" : !checks.length || checks.some((check2) => check2.status === "unverified") ? "unverified" : "passed";
+  return { sha256, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), status: status2, checks, review: { source: "client-reported", evidence: reviews }, fileHashes };
+}
+
+// dist/src/task-groups.js
+var KEY_REGEX = /^[a-z][a-z0-9-]{0,63}$/;
+var OWNER_REGEX = /^[a-z][a-z0-9-]{0,31}$/;
+var RESERVED_KEYS = /* @__PURE__ */ new Set([
+  "constructor",
+  "prototype",
+  "__proto__",
+  "valueOf",
+  "toString",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString"
+]);
+var GROUP_NODE_STATUS_VALUES = [
+  "pending",
+  "starting",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+  "blocked"
+];
+var GroupNodeStatus = external_exports.enum(GROUP_NODE_STATUS_VALUES);
+var groupNodeSchema = external_exports.object({
+  key: external_exports.string().regex(KEY_REGEX, "Node key must match /^[a-z][a-z0-9-]{0,63}$/").refine((k) => !RESERVED_KEYS.has(k) && !(k in Object.prototype), "Node key cannot be a reserved object property"),
+  owner: external_exports.string().regex(OWNER_REGEX, "Owner must match /^[a-z][a-z0-9-]{0,31}$/"),
+  dependsOn: external_exports.array(external_exports.string().regex(KEY_REGEX, "Dependency key must match /^[a-z][a-z0-9-]{0,63}$/")).min(0).max(31, "dependsOn cannot exceed 31 dependencies").refine((deps) => new Set(deps).size === deps.length, "dependsOn must contain distinct node keys")
+}).strict();
+var groupGraphSchema = external_exports.object({
+  nodes: external_exports.array(groupNodeSchema).min(1, "Graph must contain 1..32 nodes").max(32, "Graph must contain 1..32 nodes")
+}).strict().superRefine((val, ctx) => {
+  const keys2 = /* @__PURE__ */ new Set();
+  let hasDuplicate = false;
+  for (let i = 0; i < val.nodes.length; i++) {
+    const node2 = val.nodes[i];
+    if (keys2.has(node2.key)) {
+      hasDuplicate = true;
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        message: `Duplicate node key "${node2.key}"`,
+        path: ["nodes", i, "key"]
+      });
+    }
+    keys2.add(node2.key);
+  }
+  if (hasDuplicate)
+    return;
+  let hasInvalidRef = false;
+  for (let i = 0; i < val.nodes.length; i++) {
+    const node2 = val.nodes[i];
+    for (let j = 0; j < node2.dependsOn.length; j++) {
+      const dep = node2.dependsOn[j];
+      if (dep === node2.key) {
+        hasInvalidRef = true;
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          message: `Self edge detected: node "${node2.key}" depends on itself`,
+          path: ["nodes", i, "dependsOn", j]
+        });
+      } else if (!keys2.has(dep)) {
+        hasInvalidRef = true;
+        ctx.addIssue({
+          code: external_exports.ZodIssueCode.custom,
+          message: `Missing reference: dependency "${dep}" is not defined in graph`,
+          path: ["nodes", i, "dependsOn", j]
+        });
+      }
+    }
+  }
+  if (hasInvalidRef)
+    return;
+  const nodeMap = /* @__PURE__ */ new Map();
+  for (const node2 of val.nodes)
+    nodeMap.set(node2.key, node2.dependsOn);
+  const state = /* @__PURE__ */ new Map();
+  function dfs(key) {
+    state.set(key, 1);
+    const deps = nodeMap.get(key) ?? [];
+    for (const dep of deps) {
+      if (!nodeMap.has(dep))
+        continue;
+      const s = state.get(dep) ?? 0;
+      if (s === 1)
+        return true;
+      if (s === 0 && dfs(dep))
+        return true;
+    }
+    state.set(key, 2);
+    return false;
+  }
+  for (const node2 of val.nodes) {
+    if ((state.get(node2.key) ?? 0) === 0 && dfs(node2.key)) {
+      ctx.addIssue({
+        code: external_exports.ZodIssueCode.custom,
+        message: `Cycle detected in dependency graph containing "${node2.key}"`,
+        path: ["nodes"]
+      });
+      break;
+    }
+  }
+});
+function validateGroupGraph(input2) {
+  if (typeof input2 !== "object" || input2 === null || Array.isArray(input2)) {
+    throw new BridgeError("INVALID_GROUP", "Group graph must be an object");
+  }
+  const rootKeys = Object.getOwnPropertyNames(input2);
+  if (rootKeys.length !== 1 || rootKeys[0] !== "nodes" || !Object.prototype.hasOwnProperty.call(input2, "nodes")) {
+    throw new BridgeError("INVALID_GROUP", 'Group graph must contain only own "nodes" property');
+  }
+  const result = groupGraphSchema.safeParse(input2);
+  if (!result.success) {
+    throw new BridgeError("INVALID_GROUP", result.error.issues[0]?.message ?? "Invalid group graph");
+  }
+  return {
+    nodes: result.data.nodes.map((node2) => ({
+      key: node2.key,
+      owner: node2.owner,
+      dependsOn: [...node2.dependsOn]
+    }))
+  };
+}
+function initialGroupProgress(graph2) {
+  const validGraph = validateGroupGraph(graph2);
+  const progress2 = {};
+  for (const node2 of validGraph.nodes) {
+    progress2[node2.key] = "pending";
+  }
+  return progress2;
+}
+function groupReadiness(graph2, progress2) {
+  const validGraph = validateGroupGraph(graph2);
+  if (typeof progress2 !== "object" || progress2 === null || Array.isArray(progress2)) {
+    throw new BridgeError("INVALID_GROUP_STATE", "Group progress must be an object");
+  }
+  const ownKeys = Object.getOwnPropertyNames(progress2);
+  if (ownKeys.length !== validGraph.nodes.length) {
+    throw new BridgeError("INVALID_GROUP_STATE", `Progress contains ${ownKeys.length} keys, expected ${validGraph.nodes.length}`);
+  }
+  const nodeKeySet = new Set(validGraph.nodes.map((n) => n.key));
+  for (const k of ownKeys) {
+    if (!nodeKeySet.has(k)) {
+      throw new BridgeError("INVALID_GROUP_STATE", `Unknown key "${k}" in progress`);
+    }
+  }
+  const safeProgress = /* @__PURE__ */ Object.create(null);
+  for (const node2 of validGraph.nodes) {
+    if (!Object.prototype.hasOwnProperty.call(progress2, node2.key)) {
+      throw new BridgeError("INVALID_GROUP_STATE", `Missing key "${node2.key}" in progress`);
+    }
+    const val = progress2[node2.key];
+    const parseRes = GroupNodeStatus.safeParse(val);
+    if (!parseRes.success) {
+      throw new BridgeError("INVALID_GROUP_STATE", `Invalid status "${typeof val}" for node "${node2.key}"`);
+    }
+    safeProgress[node2.key] = parseRes.data;
+  }
+  const depMap = /* @__PURE__ */ new Map();
+  for (const node2 of validGraph.nodes) {
+    depMap.set(node2.key, node2.dependsOn);
+  }
+  const taintedMemo = /* @__PURE__ */ new Map();
+  function isTainted(key) {
+    if (taintedMemo.has(key)) {
+      return taintedMemo.get(key);
+    }
+    const status2 = safeProgress[key];
+    if (status2 === "failed" || status2 === "cancelled" || status2 === "blocked") {
+      taintedMemo.set(key, true);
+      return true;
+    }
+    const deps = depMap.get(key) ?? [];
+    for (const dep of deps) {
+      if (isTainted(dep)) {
+        taintedMemo.set(key, true);
+        return true;
+      }
+    }
+    taintedMemo.set(key, false);
+    return false;
+  }
+  const ready = [];
+  const waiting = [];
+  const blocked = [];
+  for (const node2 of validGraph.nodes) {
+    const status2 = safeProgress[node2.key];
+    if (status2 !== "pending") {
+      continue;
+    }
+    const deps = node2.dependsOn;
+    const isBlocked = deps.some((dep) => isTainted(dep));
+    if (isBlocked) {
+      blocked.push(node2.key);
+    } else {
+      const allCompleted = deps.every((dep) => safeProgress[dep] === "completed");
+      if (allCompleted) {
+        ready.push(node2.key);
+      } else {
+        waiting.push(node2.key);
+      }
+    }
+  }
+  const hasActive = validGraph.nodes.some((n) => safeProgress[n.key] === "starting" || safeProgress[n.key] === "running");
+  const terminal3 = !hasActive && ready.length === 0 && waiting.length === 0;
+  return { ready, waiting, blocked, terminal: terminal3 };
+}
+
+// dist/src/group-contract.js
+var groupAdmissionSchema = external_exports.object({
+  groupId: external_exports.string().uuid(),
+  nodeKey: external_exports.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
+  owner: roleSchema,
+  definitionSha256: external_exports.string().regex(/^[a-f0-9]{64}$/)
+}).strict();
+var groupAssignmentSchema = groupAdmissionSchema.extend({ rootTaskId: external_exports.string().uuid() });
+var groupTaskInputSchema = external_exports.lazy(() => profileDefaultsSchema.extend({
+  deliveryMode: external_exports.literal("messages").optional(),
+  prompt: external_exports.string().min(1).max(1e6),
+  mode: external_exports.enum(["write", "read-only"]).optional(),
+  acceptanceCriteria: criteriaSchema.optional()
+}).strict());
+var groupDefinitionSchema = external_exports.object({
+  workingDirectory: external_exports.string().min(1),
+  title: external_exports.string().min(1).max(200),
+  jobs: external_exports.array(external_exports.object({
+    key: external_exports.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
+    owner: roleSchema,
+    dependsOn: external_exports.array(external_exports.string()).max(31),
+    task: groupTaskInputSchema
+  }).strict()).min(1).max(32)
+}).strict().superRefine((definition, ctx) => {
+  try {
+    validateGroupGraph({ nodes: definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) });
+  } catch {
+    ctx.addIssue({ code: "custom", message: "Invalid group dependency graph" });
+  }
+  if (Buffer.byteLength(JSON.stringify(definition), "utf8") > 4 * 1024 * 1024)
+    ctx.addIssue({ code: "custom", message: "Group definition exceeds 4 MiB" });
+});
+function groupDefinitionSha256(definition) {
+  return createHash11("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
+}
+var groupStateSchema = external_exports.enum(["created", "running", "paused", "completed", "failed", "cancelled"]);
+var groupNodeRecordSchema = external_exports.object({
+  state: external_exports.lazy(() => GroupNodeStatus),
+  taskId: external_exports.string().uuid().optional(),
+  error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
+}).strict();
+var groupRecordSchema = external_exports.object({
+  version: external_exports.literal(1),
+  groupId: external_exports.string().uuid(),
+  definitionSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  definition: groupDefinitionSchema,
+  profiles: external_exports.record(external_exports.string(), external_exports.string().regex(/^[a-f0-9]{64}$/)),
+  nodes: external_exports.record(external_exports.string(), groupNodeRecordSchema),
+  state: groupStateSchema,
+  createdAt: external_exports.string().datetime(),
+  updatedAt: external_exports.string().datetime(),
+  ownerPid: external_exports.number().int().positive().optional(),
+  ownerId: external_exports.string().uuid().optional(),
+  error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
+}).strict();
+var groupSummarySchema = external_exports.object({
+  groupId: external_exports.string().uuid(),
+  definitionSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  workingDirectory: external_exports.string(),
+  title: external_exports.string(),
+  state: groupStateSchema,
+  createdAt: external_exports.string().datetime(),
+  updatedAt: external_exports.string().datetime(),
+  resumeRequired: external_exports.boolean(),
+  error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional(),
+  nodes: external_exports.array(external_exports.object({
+    key: external_exports.string(),
+    owner: roleSchema,
+    dependsOn: external_exports.array(external_exports.string()),
+    ...groupNodeRecordSchema.shape
+  }).strict()).max(32)
+}).strict();
+function summarizeGroup(record2, resumeRequired = record2.state === "paused") {
+  return groupSummarySchema.parse({
+    groupId: record2.groupId,
+    definitionSha256: record2.definitionSha256,
+    workingDirectory: record2.definition.workingDirectory,
+    title: record2.definition.title,
+    state: record2.state,
+    createdAt: record2.createdAt,
+    updatedAt: record2.updatedAt,
+    resumeRequired,
+    error: record2.error,
+    nodes: record2.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn, ...record2.nodes[key] }))
+  });
+}
+
+// dist/src/joint-wait.js
+var waitTargetSchema = external_exports.object({
+  taskId: external_exports.string().uuid(),
+  after: external_exports.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0)
+}).strict();
+var waitCursorsSchema = external_exports.array(waitTargetSchema).max(32).refine((items) => new Set(items.map((item) => item.taskId.toLowerCase())).size === items.length, "Duplicate wait target");
+var waitTargetsSchema = waitCursorsSchema.min(1);
+var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
+var jointWaitTaskSchema = external_exports.object({
+  taskId: external_exports.string().uuid(),
+  status: external_exports.string().nullable(),
+  ready: external_exports.boolean(),
+  nextCursor: external_exports.number().int().nonnegative(),
+  oldestAvailable: external_exports.number().int().positive(),
+  truncated: external_exports.boolean(),
+  messages: external_exports.array(bridgeMessageSchema).max(1),
+  hasMore: external_exports.boolean(),
+  error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
+}).strict();
+function jointWaitPage(records, targets) {
+  let remaining = 4;
+  const byId = new Map(records.map((record2) => [record2.taskId.toLowerCase(), record2]));
+  const tasks = targets.map((target) => {
+    const record2 = byId.get(target.taskId.toLowerCase());
+    if (!record2)
+      return {
+        taskId: target.taskId,
+        status: null,
+        ready: true,
+        messages: [],
+        hasMore: false,
+        nextCursor: target.after,
+        oldestAvailable: Math.min(Number.MAX_SAFE_INTEGER, target.after + 1),
+        truncated: false,
+        error: { code: "TASK_NOT_FOUND", message: "This retained task is unavailable; no execution was repeated" }
+      };
+    const page = readMessages(record2, target.after, 1);
+    const messages = remaining ? page.messages : [];
+    remaining -= messages.length;
+    return {
+      taskId: record2.taskId,
+      status: record2.status,
+      ready: terminal.has(record2.status),
+      ...page,
+      messages,
+      nextCursor: messages.at(-1)?.sequence ?? target.after,
+      hasMore: (record2.messageCursor ?? 0) > (messages.at(-1)?.sequence ?? target.after),
+      error: record2.error
+    };
+  });
+  return { tasks, ready: tasks.length > 0 && tasks.every((task2) => task2.ready), hasMessages: tasks.some((task2) => task2.messages.length > 0), hasMoreMessages: tasks.some((task2) => task2.hasMore) };
+}
+
 // node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
@@ -33208,9 +33655,9 @@ var ZodError2 = class _ZodError extends Error {
           let i = 0;
           while (i < issue2.path.length) {
             const el = issue2.path[i];
-            const terminal2 = i === issue2.path.length - 1;
+            const terminal3 = i === issue2.path.length - 1;
             if (el === "_errors") {
-              if (terminal2)
+              if (terminal3)
                 curr._errors.push(mapper(issue2));
               i++;
               continue;
@@ -33228,7 +33675,7 @@ var ZodError2 = class _ZodError extends Error {
               }
             }
             curr = curr[el];
-            if (terminal2) {
+            if (terminal3) {
               curr._errors.push(mapper(issue2));
             }
             i++;
@@ -33387,8 +33834,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path17, errorMaps, issueData } = params;
-  const fullPath = [...path17, ...issueData.path || []];
+  const { data, path: path18, errorMaps, issueData } = params;
+  const fullPath = [...path18, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -33503,11 +33950,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path17, key) {
+  constructor(parent, value, path18, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path17;
+    this._path = path18;
     this._key = key;
   }
   get path() {
@@ -37058,11 +37505,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path17) {
-  if (path17.length === 0) {
+function getDotPath(path18) {
+  if (path18.length === 0) {
     return "object root";
   }
-  return path17.reduce((acc, seg, index) => {
+  return path18.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -40917,93 +41364,8 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// dist/src/verification.js
-import { createHash as createHash10 } from "node:crypto";
-import { createReadStream as createReadStream4 } from "node:fs";
-var criterionSchema = external_exports.object({
-  id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
-  description: external_exports.string().min(1).max(2e3),
-  check: external_exports.object({
-    kind: external_exports.enum(["file-exists", "file-absent", "file-contains", "file-not-contains"]),
-    path: external_exports.string().min(1).max(1e3),
-    text: external_exports.string().min(1).max(4e3).optional()
-  }).strict().refine((check2) => !["file-contains", "file-not-contains"].includes(check2.kind) || Boolean(check2.text), "A text check requires text").optional()
-}).strict();
-var criteriaSchema = external_exports.array(criterionSchema).min(1).max(100).refine((criteria) => new Set(criteria.map((item) => item.id)).size === criteria.length, "Criterion IDs must be unique");
-var reviewEvidenceSchema = external_exports.object({
-  criterionId: external_exports.string().min(1).max(64),
-  verdict: external_exports.enum(["passed", "failed", "unverified"]),
-  path: external_exports.string().min(1).max(1e3),
-  line: external_exports.number().int().min(1),
-  quote: external_exports.string().min(1).max(4e3),
-  explanation: external_exports.string().min(1).max(2e3)
-}).strict();
-var reviewSchema = external_exports.array(reviewEvidenceSchema).max(100).refine((reviews) => new Set(reviews.map((item) => item.criterionId)).size === reviews.length, "One review per criterion");
-async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
-  if (criteria.length)
-    criteria = criteriaSchema.parse(criteria);
-  reviews = reviewSchema.parse(reviews);
-  if (reviews.some((review) => !criteria.some((criterion) => criterion.id === review.criterionId))) {
-    throw new BridgeError("INVALID_REVIEW", "Review refers to an unknown acceptance criterion");
-  }
-  const fileHashes = /* @__PURE__ */ Object.create(null);
-  const contents = /* @__PURE__ */ new Map();
-  async function file3(relative2) {
-    if (contents.has(relative2))
-      return contents.get(relative2);
-    try {
-      const chunks = [];
-      let length = 0;
-      for await (const chunk of createReadStream4(await checkedPath(project.copyDirectory, relative2, true))) {
-        length += chunk.length;
-        if (length > 1e7)
-          throw new BridgeError("VERIFICATION_TOO_LARGE", "Verification file exceeds 10 MB");
-        chunks.push(chunk);
-      }
-      const buffer = Buffer.concat(chunks);
-      fileHashes[relative2] = createHash10("sha256").update(buffer).digest("hex");
-      contents.set(relative2, buffer);
-      return buffer;
-    } catch (error62) {
-      if (error62.code !== "ENOENT")
-        throw error62;
-      fileHashes[relative2] = null;
-      contents.set(relative2, void 0);
-      return void 0;
-    }
-  }
-  const checks = [];
-  for (const criterion of criteria) {
-    let checkPassed;
-    if (criterion.check) {
-      const { kind, path: path17, text } = criterion.check;
-      const content = await file3(path17);
-      if (kind === "file-exists")
-        checkPassed = content !== void 0;
-      if (kind === "file-absent")
-        checkPassed = content === void 0;
-      if (kind === "file-contains")
-        checkPassed = content !== void 0 && content.toString("utf8").includes(text);
-      if (kind === "file-not-contains")
-        checkPassed = content !== void 0 && !content.toString("utf8").includes(text);
-    }
-    const review = reviews.find((item) => item.criterionId === criterion.id);
-    let grounded = false;
-    if (review) {
-      const content = await file3(review.path);
-      const lines = content?.toString("utf8").split(/\r?\n/);
-      const quoteLines = review.quote.split(/\r?\n/);
-      grounded = Boolean(lines && lines.slice(review.line - 1, review.line - 1 + quoteLines.length).join("\n") === quoteLines.join("\n"));
-    }
-    const status3 = checkPassed === false || review && (!grounded || review.verdict === "failed") ? "failed" : !review || review.verdict === "unverified" ? "unverified" : "passed";
-    checks.push({ criterionId: criterion.id, status: status3, observation: checkPassed === false ? "Artifact check failed" : review && !grounded ? "Review quote does not match the file and line" : !review ? "Codex review evidence is missing" : "Artifact check: " + (checkPassed === void 0 ? "not specified" : "passed") + "; client review: " + review.verdict });
-  }
-  const status2 = checks.some((check2) => check2.status === "failed") ? "failed" : !checks.length || checks.some((check2) => check2.status === "unverified") ? "unverified" : "passed";
-  return { sha256, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), status: status2, checks, review: { source: "client-reported", evidence: reviews }, fileHashes };
-}
-
 // dist/src/native-tests.js
-import { createHash as createHash11, randomUUID as randomUUID4 } from "node:crypto";
+import { createHash as createHash12, randomUUID as randomUUID4 } from "node:crypto";
 import { appendFile, mkdir as mkdir4, readFile as readFile3, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
 import path11 from "node:path";
 var testCommandSchema = external_exports.object({
@@ -41107,7 +41469,7 @@ async function prepareNativeTest(project, request, settings) {
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
   const absolute = path11.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash3 = createHash11("sha256").update(script).digest("hex");
+  const hash3 = createHash12("sha256").update(script).digest("hex");
   const exclude = path11.join(project.gitDirectory, "info", "exclude");
   await mkdir4(path11.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
@@ -41333,10 +41695,10 @@ function compareFindings(tasks, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path17, line, quote } = opinions[0].finding;
+    const { path: path18, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path17,
+      path: path18,
       line,
       quote,
       opinions,
@@ -41347,7 +41709,7 @@ function compareFindings(tasks, models) {
 }
 
 // dist/src/sandbox-policy.js
-import { createHash as createHash12 } from "node:crypto";
+import { createHash as createHash13 } from "node:crypto";
 import { lstat as lstat6, readdir as readdir4, realpath as realpath4 } from "node:fs/promises";
 import os4 from "node:os";
 import path12 from "node:path";
@@ -41438,7 +41800,7 @@ function requireNormalizedPolicy(value) {
 }
 function sandboxPolicyDigest(policy) {
   const normalized = requireNormalizedPolicy(policy);
-  return createHash12("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
+  return createHash13("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
 }
 function parseSandboxPolicySnapshot(value) {
   const snapshot = external_exports.object({
@@ -41663,6 +42025,7 @@ var report = external_exports.discriminatedUnion("role", [
   external_exports.object({ role: external_exports.literal("reviewer"), source: external_exports.literal("agy-reported"), data: reviewerReportSchema, citationsChecked: external_exports.literal(true) }).strict()
 ]);
 var taskRecordSchema = external_exports.object({
+  group: external_exports.lazy(() => groupAssignmentSchema).optional(),
   memory: external_exports.array(external_exports.lazy(() => memorySummarySchema)).max(8).optional(),
   deliveryMode: deliveryModeSchema.optional(),
   providedSkills: stagedSkillsSchema.optional(),
@@ -41736,6 +42099,13 @@ var chunkShape = {
 var usageRow = external_exports.object({ taskId: id, sessionId: external_exports.string().nullable(), model: external_exports.string().nullable(), status, ...tokenUsage.shape }).strict();
 var sandboxPolicySnapshot = external_exports.object({ version: external_exports.literal(1), policy: sandboxPolicySchema, sha256: hash2 }).strict();
 var successOutputSchemas = {
+  antigravity_wait_many: external_exports.object({ ready: external_exports.boolean(), timedOut: external_exports.boolean(), hasMoreMessages: external_exports.boolean(), tasks: external_exports.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_group_create: external_exports.object({ group: groupSummarySchema }).strict(),
+  antigravity_group_start: external_exports.object({ group: groupSummarySchema }).strict(),
+  antigravity_group_status: external_exports.object({ group: groupSummarySchema }).strict(),
+  antigravity_groups: external_exports.object({ groups: external_exports.array(groupSummarySchema).max(100) }).strict(),
+  antigravity_group_wait: external_exports.object({ group: groupSummarySchema, ready: external_exports.boolean(), timedOut: external_exports.boolean(), hasMoreMessages: external_exports.boolean(), tasks: external_exports.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_group_cancel: external_exports.object({ group: groupSummarySchema }).strict(),
   antigravity_memory_list: external_exports.object({ memories: external_exports.array(memorySummarySchema), limits: external_exports.object({ maxEntries: count, maxBytes: count, maxEntryBytes: count }).strict() }).strict(),
   antigravity_memory_read: external_exports.object({ memory: memorySummarySchema, ...chunkShape }).strict(),
   antigravity_memory_write: external_exports.object({ memory: memorySummarySchema }).strict(),
@@ -42129,6 +42499,63 @@ function createMcpServer(adapter, tasks) {
       inputSchema: { ...memoryInput, expectedSha256: memoryHash },
       annotations: action
     }, async ({ workingDirectory, specialist, expectedSha256 }) => safe(() => tasks.removeMemory(workingDirectory, specialist, expectedSha256))());
+  const groupIdInput = { groupId: external_exports.string().uuid() };
+  if (toolEnabled(tasks.toolProfile, "antigravity_group_create"))
+    server.registerTool("antigravity_group_create", {
+      outputSchema: outputSchemas.antigravity_group_create,
+      title: "Create a dependency group",
+      description: "Persist a bounded group with configured specialist owners and dependencies. Use a stable client-generated UUID; repeating the same definition returns the existing group, a different definition is rejected. No model starts until group_start.",
+      inputSchema: { ...groupIdInput, definition: groupDefinitionSchema },
+      annotations: action
+    }, async ({ groupId, definition }) => safe(async () => ({ group: await tasks.groups.create(groupId, definition) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_group_start"))
+    server.registerTool("antigravity_group_start", {
+      outputSchema: outputSchemas.antigravity_group_start,
+      title: "Start or resume a dependency group",
+      description: "Start pending nodes whose prerequisites completed. Bind to the saved definition hash. Explicit resume recovers accepted task IDs and never repeats terminal nodes. Interrupted provider tasks remain failed; no automatic provider replay.",
+      inputSchema: { ...groupIdInput, expectedDefinitionSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
+      annotations: action
+    }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => ({ group: tasks.groups.start(groupId, expectedDefinitionSha256) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_group_status"))
+    server.registerTool("antigravity_group_status", {
+      outputSchema: outputSchemas.antigravity_group_status,
+      title: "Inspect group state",
+      description: "Return node owners, dependencies, statuses and task references without task prompts, file histories or intermediate results. Group completion is execution state, not patch verification.",
+      inputSchema: groupIdInput,
+      annotations: readOnly
+    }, async ({ groupId }) => safe(() => ({ group: tasks.groups.status(groupId) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_groups"))
+    server.registerTool("antigravity_groups", {
+      outputSchema: outputSchemas.antigravity_groups,
+      title: "List retained groups",
+      description: "List retained group metadata. Group definitions and task prompts stay in private server state.",
+      inputSchema: {},
+      annotations: readOnly
+    }, safe(() => ({ groups: tasks.groups.list() })));
+  if (toolEnabled(tasks.toolProfile, "antigravity_group_wait"))
+    server.registerTool("antigravity_group_wait", {
+      outputSchema: outputSchemas.antigravity_group_wait,
+      title: "Wait for compact group progress",
+      description: "Wait up to60 seconds for public messages or group completion. At most4 messages total, one per task; return per-task cursors and truncation indicators. Waiting cancellation leaves tasks running. No raw tool history.",
+      inputSchema: { ...groupIdInput, cursors: waitCursorsSchema.optional(), timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
+      annotations: readOnly
+    }, async ({ groupId, cursors, timeoutSeconds }, extra) => safe(() => tasks.groups.wait(groupId, cursors, timeoutSeconds, extra.signal))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_group_cancel"))
+    server.registerTool("antigravity_group_cancel", {
+      outputSchema: outputSchemas.antigravity_group_cancel,
+      title: "Cancel a dependency group",
+      description: "Stop future nodes and cancel tasks in the coordinating server. Partial copies remain for inspection. Other live servers retain ownership of their tasks.",
+      inputSchema: groupIdInput,
+      annotations: action
+    }, async ({ groupId }) => safe(async () => ({ group: await tasks.groups.cancel(groupId) }))());
+  if (toolEnabled(tasks.toolProfile, "antigravity_wait_many"))
+    server.registerTool("antigravity_wait_many", {
+      outputSchema: outputSchemas.antigravity_wait_many,
+      title: "Wait for several tasks",
+      description: "Wait jointly for1..32 retained task IDs with independent message cursors. Returns at most4 public messages total, no tool history. Missing tasks are explicit per-target errors. ready means all targets ended, not that they succeeded.",
+      inputSchema: { targets: waitTargetsSchema, timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
+      annotations: readOnly
+    }, async ({ targets, timeoutSeconds }, extra) => safe(() => tasks.waitMany(targets, timeoutSeconds, extra.signal))());
   const runSchema = {
     prompt: external_exports.string().min(1),
     model: external_exports.string().min(1).max(128).nullable().optional(),
@@ -42234,7 +42661,7 @@ function createMcpServer(adapter, tasks) {
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path17, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path17, offset, limit))());
+    }, async ({ taskId, expectedSha256, path: path18, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path18, offset, limit))());
   if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
     server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
@@ -42461,116 +42888,18 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
         limit: external_exports.number().int().min(1).max(65536).optional()
       },
       annotations: readOnly
-    }, async ({ taskId, path: path17, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path17, expectedSha256, offset, limit))());
+    }, async ({ taskId, path: path18, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path18, expectedSha256, offset, limit))());
   return server;
 }
 
-// dist/src/task-manager.js
-import { createHash as createHash16, randomUUID as randomUUID8 } from "node:crypto";
-import { spawn as spawn6 } from "node:child_process";
+// dist/src/group-manager.js
+import { createHash as createHash14, randomUUID as randomUUID7 } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 
-// dist/src/logger.js
-function logTaskEvent(taskId, type, data) {
-  if (!type.startsWith("task.") && type !== "process.started")
-    return;
-  const details = data && typeof data === "object" ? data : {};
-  const entry = { timestamp: (/* @__PURE__ */ new Date()).toISOString(), taskId, type };
-  if (type === "process.started" && typeof details.pid === "number")
-    entry.pid = details.pid;
-  if (type === "task.failed" && typeof details.code === "string")
-    entry.code = details.code;
-  process.stderr.write(JSON.stringify(entry) + "\n");
-}
-
-// dist/src/event-store.js
-var EventStore = class {
-  capacity;
-  onAppend;
-  events = [];
-  cursors = /* @__PURE__ */ new Map();
-  constructor(capacity, onAppend) {
-    this.capacity = capacity;
-    this.onAppend = onAppend;
-  }
-  append(taskId, type, data, raw) {
-    const sequence = (this.cursors.get(taskId) || 0) + 1;
-    this.cursors.set(taskId, sequence);
-    const bounded = (value) => {
-      const serialized = JSON.stringify(value);
-      return serialized && serialized.length > 16e3 ? { truncated: true, preview: serialized.slice(0, 16e3) } : value;
-    };
-    const event = { taskId, sequence, timestamp: (/* @__PURE__ */ new Date()).toISOString(), type, data: bounded(data) };
-    if (raw !== void 0)
-      event.raw = bounded(raw);
-    this.events.push(event);
-    if (this.events.length > this.capacity)
-      this.events.splice(0, this.events.length - this.capacity);
-    logTaskEvent(taskId, type, data);
-    this.onAppend?.(taskId);
-    return event;
-  }
-  read(taskId, after = 0, limit = 200) {
-    const bucket = this.events.filter((event) => event.taskId === taskId);
-    const oldestAvailable = bucket[0]?.sequence || (this.cursors.get(taskId) || 0) + 1;
-    const events = bucket.filter((event) => event.sequence > after).slice(0, limit);
-    return { events, nextCursor: events.at(-1)?.sequence || after, oldestAvailable, truncated: after < oldestAvailable - 1 };
-  }
-  drop(taskId) {
-    this.cursors.delete(taskId);
-    for (let index = this.events.length - 1; index >= 0; index--) {
-      if (this.events[index]?.taskId === taskId)
-        this.events.splice(index, 1);
-    }
-  }
-  snapshot(taskId) {
-    return { events: this.events.filter((event) => event.taskId === taskId), cursor: this.cursors.get(taskId) || 0 };
-  }
-  restore(taskId, events, cursor) {
-    this.drop(taskId);
-    this.events.push(...events);
-    this.events.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.sequence - b.sequence);
-    if (this.events.length > this.capacity)
-      this.events.splice(0, this.events.length - this.capacity);
-    this.cursors.set(taskId, cursor);
-  }
-};
-
-// dist/src/stream-parser.js
-import { StringDecoder } from "node:string_decoder";
-var LineParser = class {
-  onLine;
-  maxLineChars;
-  decoder = new StringDecoder("utf8");
-  remainder = "";
-  constructor(onLine, maxLineChars = 2e6) {
-    this.onLine = onLine;
-    this.maxLineChars = maxLineChars;
-  }
-  write(chunk) {
-    this.remainder += this.decoder.write(chunk);
-    this.drain();
-    if (this.remainder.length > this.maxLineChars) {
-      this.onLine(this.remainder.slice(0, this.maxLineChars));
-      this.remainder = "";
-    }
-  }
-  end() {
-    this.remainder += this.decoder.end();
-    this.drain();
-    if (this.remainder)
-      this.onLine(this.remainder);
-    this.remainder = "";
-  }
-  drain() {
-    let newline;
-    while ((newline = this.remainder.indexOf("\n")) !== -1) {
-      const line = this.remainder.slice(0, newline).replace(/\r$/, "");
-      this.remainder = this.remainder.slice(newline + 1);
-      if (line)
-        this.onLine(line);
-    }
-  }
-};
+// dist/src/group-store.js
+import { lstatSync as lstatSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync as realpathSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { randomUUID as randomUUID6 } from "node:crypto";
+import path14 from "node:path";
 
 // dist/src/state-store.js
 import { randomUUID as randomUUID5 } from "node:crypto";
@@ -42605,6 +42934,7 @@ var snapshotSchema = external_exports.object({
     roleDefinition: roleDefinitionSchema.optional(),
     providedSkills: stagedSkillsSchema.optional(),
     agentPolicyReceipt: external_exports.object({ sha256: external_exports.string().regex(/^[a-f0-9]{64}$/), decisionCount: external_exports.number().int().nonnegative(), deniedCount: external_exports.number().int().nonnegative() }).strict().optional(),
+    group: external_exports.lazy(() => groupAssignmentSchema).optional(),
     memory: external_exports.array(external_exports.lazy(() => memorySummarySchema)).max(8).optional(),
     agentPolicy: resolvedAgentPolicySchema.optional(),
     outputSchema: external_exports.record(external_exports.string(), external_exports.unknown()).optional(),
@@ -42630,6 +42960,7 @@ var snapshotSchema = external_exports.object({
     }).strict()).max(20).optional()
   }).passthrough(),
   options: external_exports.object({
+    group: external_exports.lazy(() => groupAssignmentSchema).optional(),
     memory: external_exports.lazy(() => memorySelectionSchema).optional(),
     memorySnapshots: external_exports.lazy(() => memorySnapshotsSchema).optional(),
     allowedTools: nativeToolsSchema.optional(),
@@ -42783,6 +43114,8 @@ var StateStore = class {
       if (new Set(inbox.map((item) => item.messageId.toLowerCase())).size !== inbox.length || inbox.some((item) => item.taskId !== data.record.taskId || item.receipt.taskId !== data.record.taskId || item.receipt.messageId !== item.messageId) || data.record.dispatching && !inbox.some((item) => item.messageId === data.record.dispatching.messageId && item.receipt.state === "queued")) {
         throw new BridgeError("INVALID_STATE", "Persisted inbox does not match task identity");
       }
+      if (JSON.stringify(data.record.group) !== JSON.stringify(data.options.group))
+        throw new BridgeError("INVALID_STATE", "Persisted group assignment differs from task options");
       const snapshots = data.options.memorySnapshots;
       if (snapshots?.some((entry) => entry.projectId !== computeProjectId(data.record.workingDirectory)) || JSON.stringify(data.record.memory) !== JSON.stringify(summarizeMemory(snapshots)) || JSON.stringify(data.options.memory) !== JSON.stringify(snapshots?.map(({ specialist, sha256 }) => ({ specialist, sha256 })))) {
         throw new BridgeError("INVALID_STATE", "Persisted private memory differs from its project, hashes or metadata");
@@ -42837,10 +43170,497 @@ var StateStore = class {
   }
 };
 
+// dist/src/group-store.js
+var GroupStore = class {
+  state;
+  root;
+  identity;
+  constructor(directory) {
+    this.state = new StateStore(directory);
+    this.root = realpathSync5.native(directory);
+    this.identity = this.directoryIdentity();
+  }
+  directoryIdentity() {
+    let current = this.root;
+    for (; ; ) {
+      const stat4 = lstatSync4(current);
+      if (!stat4.isDirectory() || stat4.isSymbolicLink())
+        throw new BridgeError("INVALID_STATE", "Unsafe group storage ancestry");
+      const parent = path14.dirname(current);
+      if (parent === current)
+        break;
+      current = parent;
+    }
+    const stat3 = lstatSync4(this.root, { bigint: true });
+    return stat3.dev.toString() + ":" + stat3.ino.toString();
+  }
+  file(groupId) {
+    if (this.directoryIdentity() !== this.identity)
+      throw new BridgeError("INVALID_STATE", "Group storage identity changed");
+    if (!/^[a-f0-9-]{36}$/i.test(groupId))
+      throw new BridgeError("INVALID_GROUP", "Invalid group ID");
+    return path14.join(this.root, "group-" + groupId.toLowerCase() + ".json");
+  }
+  read(groupId) {
+    const file3 = this.file(groupId);
+    try {
+      const stat3 = lstatSync4(file3);
+      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.nlink !== 1 || stat3.size > 5 * 1024 * 1024)
+        throw Error("Unsafe group file");
+      const record2 = groupRecordSchema.parse(JSON.parse(readFileSync3(file3, "utf8")));
+      if (record2.groupId.toLowerCase() !== groupId.toLowerCase() || record2.definitionSha256 !== groupDefinitionSha256(record2.definition))
+        throw Error("Group identity or definition changed");
+      const keys2 = record2.definition.jobs.map((job) => job.key);
+      if (Object.keys(record2.profiles).length !== keys2.length || keys2.some((key) => !Object.hasOwn(record2.profiles, key)))
+        throw Error("Group profiles mismatch");
+      groupReadiness({ nodes: record2.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) }, Object.fromEntries(Object.entries(record2.nodes).map(([key, value]) => [key, value.state])));
+      return record2;
+    } catch (error62) {
+      if (error62.code === "ENOENT")
+        throw new BridgeError("GROUP_NOT_FOUND", "Unknown group");
+      throw new BridgeError("INVALID_STATE", "Invalid private group state");
+    }
+  }
+  list() {
+    this.file(randomUUID6());
+    return readdirSync3(this.root).filter((name) => /^group-[a-f0-9-]{36}\.json$/.test(name)).map((name) => this.read(name.slice(6, -5)));
+  }
+  write(record2) {
+    const validated = groupRecordSchema.parse(record2), file3 = this.file(record2.groupId), temporary = file3 + "." + randomUUID6() + ".tmp";
+    try {
+      try {
+        this.read(record2.groupId);
+      } catch (error62) {
+        if (!(error62 instanceof BridgeError) || error62.code !== "GROUP_NOT_FOUND")
+          throw error62;
+      }
+      writeFileSync4(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
+      replaceStateFile2(temporary, file3);
+    } finally {
+      rmSync3(temporary, { force: true });
+    }
+  }
+};
+
+// dist/src/group-manager.js
+var finished = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
+function profileHash(value) {
+  return createHash14("sha256").update(JSON.stringify(value)).digest("hex");
+}
+function graph(record2) {
+  return { nodes: record2.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) };
+}
+function progress(record2) {
+  return Object.fromEntries(Object.entries(record2.nodes).map(([key, node2]) => [key, node2.state]));
+}
+function observedState(task2) {
+  if (task2.status === "completed" || task2.status === "cancelled")
+    return task2.status;
+  if (task2.status === "failed" || task2.status === "timeout")
+    return "failed";
+  return task2.status === "queued" || task2.status === "starting" ? "starting" : "running";
+}
+var GroupManager = class {
+  tasks;
+  config;
+  store;
+  ownerId = randomUUID7();
+  loops = /* @__PURE__ */ new Map();
+  stopped = false;
+  waiting = 0;
+  summary(record2) {
+    const retained = this.tasks.list();
+    for (const [key, node2] of Object.entries(record2.nodes))
+      if (node2.taskId) {
+        const task2 = retained.find((task3) => task3.taskId.toLowerCase() === node2.taskId?.toLowerCase());
+        if (task2) {
+          this.assertMember(record2, key, task2);
+          if (!["completed", "failed", "cancelled", "blocked"].includes(node2.state)) {
+            node2.state = observedState(task2);
+            node2.error = task2.error;
+          }
+        }
+      }
+    return summarizeGroup(record2, record2.state === "paused" || record2.state === "running" && !!record2.ownerPid && !processAlive2(record2.ownerPid));
+  }
+  constructor(tasks, config2) {
+    this.tasks = tasks;
+    this.config = config2;
+    this.store = new GroupStore(config2.stateDirectory);
+  }
+  assertMember(record2, key, task2) {
+    if (task2.group?.groupId.toLowerCase() !== record2.groupId.toLowerCase() || task2.group.nodeKey !== key || task2.group.owner !== record2.definition.jobs.find((job) => job.key === key)?.owner || task2.role !== task2.group.owner || task2.group.definitionSha256 !== record2.definitionSha256 || task2.workingDirectory !== record2.definition.workingDirectory) {
+      throw new BridgeError("INVALID_STATE", "A task reference does not belong to this exact group, node and project");
+    }
+  }
+  async create(groupId, input2) {
+    groupId = groupId.toLowerCase();
+    const definition = groupDefinitionSchema.parse(input2);
+    definition.workingDirectory = await validateWorkingDirectory(definition.workingDirectory, this.config.forbiddenDirectories);
+    await validateRuntimeCacheSeparation(definition.workingDirectory, this.config.windowsNodeCacheDirectory);
+    await validateStateSeparation(definition.workingDirectory, this.config.stateDirectory);
+    await validateProjectRoot(definition.workingDirectory);
+    const profiles = Object.fromEntries(definition.jobs.map((job) => {
+      const role = resolveRole(job.owner, this.config.customRoles);
+      const options = applyRoleDefaults({ ...job.task, workingDirectory: definition.workingDirectory, role: job.owner }, role);
+      validatePrompt(options.prompt, this.config.maxPromptChars);
+      taskPrompt({ ...options, roleDefinition: role }, this.config.maxPromptChars);
+      return [job.key, profileHash(role)];
+    }));
+    const definitionSha256 = groupDefinitionSha256(definition), release = this.store.state.acquire("group-registry");
+    try {
+      try {
+        const existing = this.store.read(groupId);
+        if (existing.definitionSha256 !== definitionSha256)
+          throw new BridgeError("GROUP_CONFLICT", "This group ID already belongs to another definition");
+        return this.summary(existing);
+      } catch (error62) {
+        if (!(error62 instanceof BridgeError) || error62.code !== "GROUP_NOT_FOUND")
+          throw error62;
+      }
+      if (this.store.list().length >= 100)
+        throw new BridgeError("GROUP_LIMIT_EXCEEDED", "At most 100 retained groups are supported");
+      const now = (/* @__PURE__ */ new Date()).toISOString(), record2 = {
+        version: 1,
+        groupId,
+        definitionSha256,
+        definition,
+        profiles,
+        nodes: Object.fromEntries(Object.entries(initialGroupProgress(graph({ definition }))).map(([key, state]) => [key, { state }])),
+        state: "created",
+        createdAt: now,
+        updatedAt: now
+      };
+      this.store.write(record2);
+      return this.summary(record2);
+    } finally {
+      release();
+    }
+  }
+  status(groupId) {
+    return this.summary(this.store.read(groupId));
+  }
+  list() {
+    return this.store.list().map((record2) => this.summary(record2));
+  }
+  start(groupId, expectedDefinitionSha256) {
+    if (this.stopped)
+      throw new BridgeError("AGY_PROCESS_FAILED", "Group coordinator is stopping");
+    const release = this.store.state.acquire("group-" + groupId.toLowerCase());
+    let record2;
+    try {
+      record2 = this.store.read(groupId);
+      this.summary(record2);
+      if (record2.definitionSha256 !== expectedDefinitionSha256)
+        throw new BridgeError("GROUP_CHANGED", "Inspect the current group definition before starting");
+      if (finished.has(record2.state))
+        return this.summary(record2);
+      if (record2.state === "running" && record2.ownerId !== this.ownerId && record2.ownerPid && processAlive2(record2.ownerPid))
+        throw new BridgeError("GROUP_OWNED_BY_OTHER_SERVER", "Another live server coordinates this group");
+      record2.state = "running";
+      record2.ownerPid = process.pid;
+      record2.ownerId = this.ownerId;
+      delete record2.error;
+      record2.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.store.write(record2);
+    } finally {
+      release();
+    }
+    this.launch(record2.groupId);
+    return this.summary(record2);
+  }
+  launch(groupId) {
+    if (this.loops.has(groupId))
+      return;
+    const loop = this.run(groupId).finally(() => this.loops.delete(groupId));
+    this.loops.set(groupId, loop);
+  }
+  async run(groupId) {
+    while (!this.stopped) {
+      try {
+        if (!await this.advance(groupId))
+          return;
+      } catch (error62) {
+        if (!(error62 instanceof BridgeError) || error62.code !== "STATE_BUSY") {
+          try {
+            const release = this.store.state.acquire("group-" + groupId);
+            try {
+              const record2 = this.store.read(groupId);
+              if (record2.ownerId === this.ownerId && record2.state === "running") {
+                record2.state = "paused";
+                record2.error = { code: error62 instanceof BridgeError ? error62.code : "GROUP_COORDINATION_FAILED", message: "Coordination stopped; inspect existing tasks before explicitly resuming" };
+                record2.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+                this.store.write(record2);
+              }
+            } finally {
+              release();
+            }
+          } catch {
+          }
+          return;
+        }
+      }
+      await delay(100);
+    }
+  }
+  async advance(groupId) {
+    let selected, definitionSha256 = "", workingDirectory = "";
+    const release = this.store.state.acquire("group-" + groupId);
+    try {
+      const record2 = this.store.read(groupId);
+      if (record2.state !== "running" || record2.ownerId !== this.ownerId)
+        return false;
+      const retained = this.tasks.list();
+      for (const job of record2.definition.jobs) {
+        const node2 = record2.nodes[job.key];
+        const task3 = node2.taskId ? retained.find((task4) => task4.taskId.toLowerCase() === node2.taskId?.toLowerCase()) : retained.find((task4) => task4.group?.groupId.toLowerCase() === groupId.toLowerCase() && task4.group.nodeKey === job.key && task4.group.rootTaskId.toLowerCase() === task4.taskId.toLowerCase());
+        if (task3)
+          this.assertMember(record2, job.key, task3);
+        if (["completed", "failed", "cancelled", "blocked"].includes(node2.state))
+          continue;
+        if (task3) {
+          node2.taskId = task3.taskId;
+          node2.state = observedState(task3);
+          node2.error = task3.error;
+        } else if (node2.taskId) {
+          node2.state = "failed";
+          node2.error = { code: "GROUP_TASK_MISSING", message: "Accepted task state is unavailable; it was not repeated" };
+        } else if (node2.state === "starting") {
+          node2.state = "failed";
+          node2.error = { code: "GROUP_ADMISSION_UNVERIFIED", message: "Admission checkpoint has no retained task identity; no model execution was repeated" };
+        }
+      }
+      const readiness = groupReadiness(graph(record2), progress(record2));
+      for (const key of readiness.blocked)
+        record2.nodes[key] = { state: "blocked", error: { code: "DEPENDENCY_FAILED", message: "A prerequisite did not complete successfully" } };
+      if (readiness.terminal) {
+        record2.state = Object.values(record2.nodes).every((node2) => node2.state === "completed") ? "completed" : "failed";
+      } else {
+        const key = record2.definition.jobs.find((job) => record2.nodes[job.key].state === "starting" && !record2.nodes[job.key].taskId)?.key ?? readiness.ready[0];
+        if (key) {
+          selected = record2.definition.jobs.find((job) => job.key === key);
+          if (profileHash(resolveRole(selected.owner, this.config.customRoles)) !== record2.profiles[key])
+            throw new BridgeError("GROUP_PROFILE_CHANGED", "Configured specialist changed; inspect the group before selecting a new definition");
+          record2.nodes[key] = { state: "starting" };
+          definitionSha256 = record2.definitionSha256;
+          workingDirectory = record2.definition.workingDirectory;
+        }
+      }
+      record2.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.store.write(record2);
+      if (record2.state !== "running")
+        return false;
+    } finally {
+      release();
+    }
+    if (!selected)
+      return true;
+    let task2, failure3;
+    try {
+      task2 = await this.tasks.runInGroup({ ...selected.task, workingDirectory, deliveryMode: "messages" }, { groupId, nodeKey: selected.key, owner: selected.owner, definitionSha256 });
+    } catch (error62) {
+      failure3 = { code: error62 instanceof BridgeError ? error62.code : "GROUP_ADMISSION_FAILED", message: "Task admission failed; inspect retained tasks before new work" };
+    }
+    let cancel = false;
+    const finish = this.store.state.acquire("group-" + groupId);
+    try {
+      const record2 = this.store.read(groupId), node2 = record2.nodes[selected.key];
+      if (task2) {
+        node2.taskId = task2.taskId;
+        node2.state = observedState(task2);
+        node2.error = task2.error;
+        cancel = record2.state !== "running" || record2.ownerId !== this.ownerId || this.stopped;
+      } else {
+        node2.state = "failed";
+        node2.error = failure3;
+      }
+      record2.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.store.write(record2);
+    } finally {
+      finish();
+    }
+    if (cancel && task2)
+      await this.tasks.cancel(task2.taskId);
+    return !cancel;
+  }
+  async cancel(groupId) {
+    const release = this.store.state.acquire("group-" + groupId.toLowerCase());
+    let ids;
+    try {
+      const record2 = this.store.read(groupId);
+      if (finished.has(record2.state))
+        return this.summary(record2);
+      if (record2.ownerId && record2.ownerId !== this.ownerId && record2.ownerPid && processAlive2(record2.ownerPid))
+        throw new BridgeError("GROUP_OWNED_BY_OTHER_SERVER", "Cancel the group in its coordinating server");
+      this.summary(record2);
+      record2.state = "cancelled";
+      ids = Object.values(record2.nodes).flatMap((node2) => !["completed", "failed", "cancelled", "blocked"].includes(node2.state) && node2.taskId ? [node2.taskId] : []);
+      for (const node2 of Object.values(record2.nodes))
+        if (node2.state === "pending" || node2.state === "starting" && !node2.taskId)
+          node2.state = "cancelled";
+      record2.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.store.write(record2);
+    } finally {
+      release();
+    }
+    await Promise.all(ids.map((id2) => this.tasks.cancel(id2)));
+    return this.status(groupId);
+  }
+  async wait(groupId, cursors = [], timeoutSeconds = 30, signal) {
+    cursors = waitCursorsSchema.parse(cursors);
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60)
+      throw new BridgeError("INVALID_TIMEOUT", "Wait timeout must be between 1 and 60 seconds");
+    if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks)
+      throw new BridgeError("WAIT_LIMIT_EXCEEDED", "Too many concurrent group waits");
+    this.waiting++;
+    try {
+      const deadline = Date.now() + timeoutSeconds * 1e3;
+      for (; ; ) {
+        if (signal?.aborted)
+          throw new BridgeError("WAIT_CANCELLED", "Waiting cancelled; group execution continues");
+        const record2 = this.store.read(groupId), group = this.summary(record2);
+        const targets = Object.values(record2.nodes).flatMap((node2) => node2.taskId ? [{ taskId: node2.taskId, after: cursors.find((cursor) => cursor.taskId.toLowerCase() === node2.taskId?.toLowerCase())?.after ?? 0 }] : []);
+        const page = jointWaitPage(this.tasks.list(), targets), ready = finished.has(group.state) && page.tasks.every((task2) => task2.ready);
+        if (ready || group.resumeRequired || page.hasMessages || Date.now() >= deadline)
+          return { group, ready, timedOut: !ready && !group.resumeRequired && !page.hasMessages, hasMoreMessages: page.hasMoreMessages, tasks: page.tasks };
+        try {
+          await delay(Math.min(100, Math.max(1, deadline - Date.now())), void 0, { signal });
+        } catch {
+          throw new BridgeError("WAIT_CANCELLED", "Waiting cancelled; group execution continues");
+        }
+      }
+    } finally {
+      this.waiting--;
+    }
+  }
+  async shutdown() {
+    this.stopped = true;
+    await Promise.all(this.loops.values());
+    for (const record2 of this.store.list())
+      if (record2.ownerId === this.ownerId && record2.state === "running") {
+        const release = this.store.state.acquire("group-" + record2.groupId);
+        try {
+          record2.state = "paused";
+          record2.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+          this.store.write(record2);
+        } finally {
+          release();
+        }
+      }
+  }
+};
+
+// dist/src/task-manager.js
+import { createHash as createHash18, randomUUID as randomUUID10 } from "node:crypto";
+import { spawn as spawn6 } from "node:child_process";
+
+// dist/src/logger.js
+function logTaskEvent(taskId, type, data) {
+  if (!type.startsWith("task.") && type !== "process.started")
+    return;
+  const details = data && typeof data === "object" ? data : {};
+  const entry = { timestamp: (/* @__PURE__ */ new Date()).toISOString(), taskId, type };
+  if (type === "process.started" && typeof details.pid === "number")
+    entry.pid = details.pid;
+  if (type === "task.failed" && typeof details.code === "string")
+    entry.code = details.code;
+  process.stderr.write(JSON.stringify(entry) + "\n");
+}
+
+// dist/src/event-store.js
+var EventStore = class {
+  capacity;
+  onAppend;
+  events = [];
+  cursors = /* @__PURE__ */ new Map();
+  constructor(capacity, onAppend) {
+    this.capacity = capacity;
+    this.onAppend = onAppend;
+  }
+  append(taskId, type, data, raw) {
+    const sequence = (this.cursors.get(taskId) || 0) + 1;
+    this.cursors.set(taskId, sequence);
+    const bounded = (value) => {
+      const serialized = JSON.stringify(value);
+      return serialized && serialized.length > 16e3 ? { truncated: true, preview: serialized.slice(0, 16e3) } : value;
+    };
+    const event = { taskId, sequence, timestamp: (/* @__PURE__ */ new Date()).toISOString(), type, data: bounded(data) };
+    if (raw !== void 0)
+      event.raw = bounded(raw);
+    this.events.push(event);
+    if (this.events.length > this.capacity)
+      this.events.splice(0, this.events.length - this.capacity);
+    logTaskEvent(taskId, type, data);
+    this.onAppend?.(taskId);
+    return event;
+  }
+  read(taskId, after = 0, limit = 200) {
+    const bucket = this.events.filter((event) => event.taskId === taskId);
+    const oldestAvailable = bucket[0]?.sequence || (this.cursors.get(taskId) || 0) + 1;
+    const events = bucket.filter((event) => event.sequence > after).slice(0, limit);
+    return { events, nextCursor: events.at(-1)?.sequence || after, oldestAvailable, truncated: after < oldestAvailable - 1 };
+  }
+  drop(taskId) {
+    this.cursors.delete(taskId);
+    for (let index = this.events.length - 1; index >= 0; index--) {
+      if (this.events[index]?.taskId === taskId)
+        this.events.splice(index, 1);
+    }
+  }
+  snapshot(taskId) {
+    return { events: this.events.filter((event) => event.taskId === taskId), cursor: this.cursors.get(taskId) || 0 };
+  }
+  restore(taskId, events, cursor) {
+    this.drop(taskId);
+    this.events.push(...events);
+    this.events.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.sequence - b.sequence);
+    if (this.events.length > this.capacity)
+      this.events.splice(0, this.events.length - this.capacity);
+    this.cursors.set(taskId, cursor);
+  }
+};
+
+// dist/src/stream-parser.js
+import { StringDecoder } from "node:string_decoder";
+var LineParser = class {
+  onLine;
+  maxLineChars;
+  decoder = new StringDecoder("utf8");
+  remainder = "";
+  constructor(onLine, maxLineChars = 2e6) {
+    this.onLine = onLine;
+    this.maxLineChars = maxLineChars;
+  }
+  write(chunk) {
+    this.remainder += this.decoder.write(chunk);
+    this.drain();
+    if (this.remainder.length > this.maxLineChars) {
+      this.onLine(this.remainder.slice(0, this.maxLineChars));
+      this.remainder = "";
+    }
+  }
+  end() {
+    this.remainder += this.decoder.end();
+    this.drain();
+    if (this.remainder)
+      this.onLine(this.remainder);
+    this.remainder = "";
+  }
+  drain() {
+    let newline;
+    while ((newline = this.remainder.indexOf("\n")) !== -1) {
+      const line = this.remainder.slice(0, newline).replace(/\r$/, "");
+      this.remainder = this.remainder.slice(newline + 1);
+      if (line)
+        this.onLine(line);
+    }
+  }
+};
+
 // dist/src/chunks.js
-import { createHash as createHash13 } from "node:crypto";
+import { createHash as createHash15 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash13("sha256").update(text).digest("hex");
+  const sha256 = createHash15("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -42866,13 +43686,13 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 }
 
 // dist/src/task-manager.js
-import { setTimeout as delay2 } from "node:timers/promises";
+import { setTimeout as delay3 } from "node:timers/promises";
 
 // dist/src/windows-executor.js
 import { spawn as spawn5 } from "node:child_process";
 import { lstat as lstat9, mkdir as mkdir7, mkdtemp as mkdtemp2, realpath as realpath5, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
-import { randomUUID as randomUUID7 } from "node:crypto";
-import path16 from "node:path";
+import { randomUUID as randomUUID9 } from "node:crypto";
+import path17 from "node:path";
 import os6 from "node:os";
 
 // dist/src/windows-helper-source.js
@@ -43839,17 +44659,17 @@ internal static class WindowsTestRunner
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
-import { createHash as createHash15 } from "node:crypto";
+import { createHash as createHash17 } from "node:crypto";
 import { chmod, lstat as lstat8, mkdir as mkdir6, open as open4, readdir as readdir6, unlink as unlink3 } from "node:fs/promises";
-import path15 from "node:path";
+import path16 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash14, randomUUID as randomUUID6 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID8 } from "node:crypto";
 import { spawn as spawn4 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
 import { lstat as lstat7, mkdir as mkdir5, open as open3, readFile as readFile4, readdir as readdir5, rename, rm as rm4, unlink as unlink2 } from "node:fs/promises";
-import path14 from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import path15 from "node:path";
+import { setTimeout as delay2 } from "node:timers/promises";
 
 // dist/src/portable-node-descriptor.js
 var portableNodeDescriptor = {
@@ -43925,7 +44745,7 @@ function sameFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
 }
 function assetPath(root, descriptor, asset) {
-  return path14.join(root, cacheLeafName(descriptor), asset.fileName);
+  return path15.join(root, cacheLeafName(descriptor), asset.fileName);
 }
 function cacheLeafName(descriptor) {
   return descriptor.buildId + "-" + descriptor.assets.node.sha256;
@@ -43965,11 +44785,11 @@ function absoluteCacheDirectory(value) {
     if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
       fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
     }
-  } else if (!path14.isAbsolute(value)) {
+  } else if (!path15.isAbsolute(value)) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
   }
-  const absolute = path14.resolve(value);
-  if (absolute === path14.parse(absolute).root)
+  const absolute = path15.resolve(value);
+  if (absolute === path15.parse(absolute).root)
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
@@ -44053,7 +44873,7 @@ async function sha256File3(file3, expectedSize) {
     const opened = await handle.stat();
     if (!sameFile(opened, before))
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
-    const hash3 = createHash14("sha256");
+    const hash3 = createHash16("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
     while (offset < size) {
@@ -44078,7 +44898,7 @@ async function verifyAsset(root, descriptor, asset) {
   }
 }
 async function verifyCacheLayout(root, descriptor) {
-  const leaf = path14.join(root, cacheLeafName(descriptor));
+  const leaf = path15.join(root, cacheLeafName(descriptor));
   const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
   const entries = await readdir5(leaf, { withFileTypes: true });
   if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
@@ -44091,7 +44911,7 @@ async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableN
   const pinned = requireDescriptor(descriptor);
   const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root);
-  const leaf = path14.join(root, cacheLeafName(pinned));
+  const leaf = path15.join(root, cacheLeafName(pinned));
   const leafInfo = await lstat7(leaf).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
@@ -44142,7 +44962,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
     const file3 = await open3(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
     try {
       const reader = response2.body.getReader();
-      const hash3 = createHash14("sha256");
+      const hash3 = createHash16("sha256");
       let bytes = 0;
       for (; ; ) {
         const item = await reader.read();
@@ -44172,7 +44992,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
   }
 }
 async function removeOwnedTemporary(root, temporary) {
-  if (path14.dirname(temporary) !== root || !path14.basename(temporary).startsWith(".portable-node-")) {
+  if (path15.dirname(temporary) !== root || !path15.basename(temporary).startsWith(".portable-node-")) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
   }
   await inspectReparsePoints([temporary]);
@@ -44223,7 +45043,7 @@ async function recoverDeadPreparationLock(file3) {
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
-  const file3 = path14.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  const file3 = path15.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
       const handle = await open3(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
@@ -44256,7 +45076,7 @@ async function acquirePreparationLock(root, descriptor) {
         if (!(verifyError instanceof BridgeError) || verifyError.code !== "PORTABLE_NODE_NOT_PREPARED")
           throw verifyError;
       }
-      await delay(250);
+      await delay2(250);
     }
   }
   fail("PORTABLE_NODE_BUSY", "Another process is preparing the portable Node runtime");
@@ -44274,7 +45094,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path14.join(root, ".portable-node-" + randomUUID6());
+  const temporary = path15.join(root, ".portable-node-" + randomUUID8());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -44286,9 +45106,9 @@ async function preparePortableNodeRuntime(options) {
     await inspectReparsePoints([temporary]);
     const fetchImpl = options.fetch ?? globalThis.fetch;
     for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
-      await downloadAsset(asset, path14.join(temporary, asset.fileName), fetchImpl);
+      await downloadAsset(asset, path15.join(temporary, asset.fileName), fetchImpl);
     }
-    const final = path14.join(root, cacheLeafName(descriptor));
+    const final = path15.join(root, cacheLeafName(descriptor));
     try {
       await rename(temporary, final);
     } catch (error62) {
@@ -44345,11 +45165,11 @@ function fail2(code, message) {
   throw new BridgeError(code, message);
 }
 function canonicalKey2(file3) {
-  return path15.resolve(file3).toLocaleLowerCase("en-US");
+  return path16.resolve(file3).toLocaleLowerCase("en-US");
 }
 function isUnsafeWindowsPath(value) {
   const normalized = value.replaceAll("/", "\\");
-  const basename2 = path15.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const basename2 = path16.win32.basename(normalized).replace(/[ .]+$/u, "");
   const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
   return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename2) || withoutDrive.includes(":");
 }
@@ -44361,7 +45181,7 @@ function validateWindowsCommand(command2) {
   if (normalized.split("\\").some((part) => part === "." || part === "..")) {
     fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
   }
-  if (!path15.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+  if (!path16.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
     fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
   }
 }
@@ -44371,12 +45191,12 @@ function validateLimits(limits) {
   }
 }
 async function assertSafePath(file3) {
-  const absolute = path15.resolve(file3);
-  const parsed = path15.parse(absolute);
-  const parts = path15.relative(parsed.root, absolute).split(path15.sep).filter(Boolean);
+  const absolute = path16.resolve(file3);
+  const parsed = path16.parse(absolute);
+  const parts = path16.relative(parsed.root, absolute).split(path16.sep).filter(Boolean);
   let current = parsed.root;
   for (const part of parts) {
-    current = path15.join(current, part);
+    current = path16.join(current, part);
     const info = await lstat8(current);
     if (info.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
@@ -44420,11 +45240,11 @@ async function readBoundedFile(file3, limit) {
   }
 }
 function commandNames(executable) {
-  const basename2 = path15.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename2 = path16.win32.basename(executable).toLocaleLowerCase("en-US");
   if (basename2 === "npm" || basename2 === "npm.cmd") {
     return { kind: "npm", names: [basename2 === "npm" ? executable + ".cmd" : executable] };
   }
-  const extension = path15.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path16.extname(executable).toLocaleLowerCase("en-US");
   if (extension === ".cmd" || extension === ".bat") {
     fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
   }
@@ -44435,10 +45255,10 @@ function commandNames(executable) {
 }
 async function resolveCommand(executable) {
   const requested = commandNames(executable);
-  const directories = path15.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path15.delimiter).filter((directory) => directory && path15.isAbsolute(directory));
+  const directories = path16.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path16.delimiter).filter((directory) => directory && path16.isAbsolute(directory));
   for (const directory of directories) {
     for (const name of requested.names) {
-      const candidate = path15.isAbsolute(name) ? path15.resolve(name) : path15.resolve(directory, name);
+      const candidate = path16.isAbsolute(name) ? path16.resolve(name) : path16.resolve(directory, name);
       try {
         const info = await lstat8(candidate);
         if (info.isSymbolicLink())
@@ -44457,17 +45277,17 @@ async function resolveCommand(executable) {
   fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
 }
 function stagedPath(runtime, relative2) {
-  const target = path15.resolve(runtime, ...relative2);
-  const prefix = runtime.endsWith(path15.sep) ? runtime : runtime + path15.sep;
+  const target = path16.resolve(runtime, ...relative2);
+  const prefix = runtime.endsWith(path16.sep) ? runtime : runtime + path16.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   return target;
 }
 async function stageDirectory(directory, state) {
-  const target = path15.resolve(directory);
+  const target = path16.resolve(directory);
   if (target === state.runtime)
     return;
-  const prefix = state.runtime.endsWith(path15.sep) ? state.runtime : state.runtime + path15.sep;
+  const prefix = state.runtime.endsWith(path16.sep) ? state.runtime : state.runtime + path16.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   const targetKey = canonicalKey2(target);
@@ -44475,7 +45295,7 @@ async function stageDirectory(directory, state) {
     return;
   if (state.targets.has(targetKey))
     fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
-  const parent = path15.dirname(target);
+  const parent = path16.dirname(target);
   if (parent === target)
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   await stageDirectory(parent, state);
@@ -44486,8 +45306,8 @@ async function stageDirectory(directory, state) {
   state.directories.add(targetKey);
 }
 async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path15.resolve(sourcePath);
-  const target = path15.resolve(targetPath);
+  const source = path16.resolve(sourcePath);
+  const target = path16.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
   const previousTarget = state.sources.get(sourceKey);
@@ -44504,7 +45324,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
     fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
   }
-  await stageDirectory(path15.dirname(target), state);
+  await stageDirectory(path16.dirname(target), state);
   const sourceHandle = await open4(source, "r");
   let targetHandle;
   let created = false;
@@ -44528,7 +45348,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
     targetHandle = await open4(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
     created = true;
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
-    const hash3 = expectedSha256 ? createHash15("sha256") : void 0;
+    const hash3 = expectedSha256 ? createHash17("sha256") : void 0;
     let offset = 0;
     while (offset < expected.size) {
       const length = Math.min(buffer.length, expected.size - offset);
@@ -44573,7 +45393,7 @@ async function hashStagedFile(file3) {
     const opened = await handle.stat();
     if (!isSameFile(opened, expected))
       fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
-    const hash3 = createHash15("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = createHash17("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
     let offset = 0;
     while (offset < expected.size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
@@ -44596,14 +45416,14 @@ async function stageNativeExecutable(source, destination, state, expectedSha256)
   }
   if (expectedSha256)
     return executable;
-  const directory = path15.dirname(source);
+  const directory = path16.dirname(source);
   const siblings = await readdir6(directory, { withFileTypes: true });
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     if (!/\.dll$/iu.test(entry.name))
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path15.join(directory, entry.name), path15.join(path15.dirname(destination), entry.name), state, true);
+    await stageFile(path16.join(directory, entry.name), path16.join(path16.dirname(destination), entry.name), state, true);
   }
   return executable;
 }
@@ -44628,8 +45448,8 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
     const childRelative = [...relative2, entry.name];
     if (npmPathIsOmitted(childRelative))
       continue;
-    const childSource = path15.join(source, entry.name);
-    const childDestination = path15.join(destination, entry.name);
+    const childSource = path16.join(source, entry.name);
+    const childDestination = path16.join(destination, entry.name);
     if (entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
     if (entry.isDirectory()) {
@@ -44647,7 +45467,7 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
   }
 }
 async function stageSystemCmd(systemRoot, runtime, state) {
-  const source = path15.join(systemRoot, "System32", "cmd.exe");
+  const source = path16.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
 async function stageNpm(launcher, runtime, state, args, portableNode) {
@@ -44655,11 +45475,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
   }
-  const nodeDirectory = path15.dirname(launcher);
-  const nodeSource = path15.join(nodeDirectory, "node.exe");
-  const npmSource = path15.join(nodeDirectory, "node_modules", "npm");
-  const manifestPath = path15.join(npmSource, "package.json");
-  const cliSource = path15.join(npmSource, "bin", "npm-cli.js");
+  const nodeDirectory = path16.dirname(launcher);
+  const nodeSource = path16.join(nodeDirectory, "node.exe");
+  const npmSource = path16.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path16.join(npmSource, "package.json");
+  const cliSource = path16.join(npmSource, "bin", "npm-cli.js");
   let manifest;
   try {
     manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
@@ -44679,11 +45499,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
   const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  if (!path15.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+  if (!path16.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
-  return { executable: node2, args: [cli, ...args], pathEntries: [path15.dirname(node2)], comspec, portableNode: portableNode?.identity };
+  return { executable: node2, args: [cli, ...args], pathEntries: [path16.dirname(node2)], comspec, portableNode: portableNode?.identity };
 }
 async function hostNodeIdentity(file3) {
   const [candidate, host] = await Promise.all([regularFile(file3), regularFile(process.execPath)]);
@@ -44704,7 +45524,7 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
   validateWindowsCommand(command2);
   validateLimits(limits);
-  const runtime = path15.resolve(runtimeDirectory);
+  const runtime = path16.resolve(runtimeDirectory);
   await assertSafePath(runtime);
   const runtimeInfo = await lstat8(runtime);
   if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir6(runtime)).length !== 0) {
@@ -44713,12 +45533,12 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
-    const adjacentNode = path15.join(path15.dirname(resolved.file), "node.exe");
+    const adjacentNode = path16.join(path16.dirname(resolved.file), "node.exe");
     return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection));
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
-  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path15.basename(resolved.file)]), state, portableNode?.identity.sha256);
-  return { executable, args: [...command2.args], pathEntries: [path15.dirname(executable)], portableNode: portableNode?.identity };
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path16.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  return { executable, args: [...command2.args], pathEntries: [path16.dirname(executable)], portableNode: portableNode?.identity };
 }
 
 // dist/src/windows-executor.js
@@ -44747,10 +45567,10 @@ var libraryRuntime = (() => {
   return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
 })();
 function verifyPathMappings(result, roots) {
-  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path16.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path17.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
   const aliases = /* @__PURE__ */ new Set();
   for (const mapping of result.pathMappings) {
-    if (expected.get(mapping.kind) !== path16.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+    if (expected.get(mapping.kind) !== path17.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
     if (aliases.has(mapping.aliasRoot))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
@@ -44761,15 +45581,15 @@ function verifyPathMappings(result, roots) {
     throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
 }
 function contains2(root, target) {
-  const relative2 = path16.relative(root, target);
-  return relative2 === "" || !relative2.startsWith(".." + path16.sep) && relative2 !== ".." && !path16.isAbsolute(relative2);
+  const relative2 = path17.relative(root, target);
+  return relative2 === "" || !relative2.startsWith(".." + path17.sep) && relative2 !== ".." && !path17.isAbsolute(relative2);
 }
 function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
   const canonical = await realpath5(directory);
-  if (path16.dirname(canonical) !== temp || !path16.basename(canonical).startsWith(prefix) || (await lstat9(directory)).isSymbolicLink()) {
+  if (path17.dirname(canonical) !== temp || !path17.basename(canonical).startsWith(prefix) || (await lstat9(directory)).isSymbolicLink()) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
@@ -44825,11 +45645,11 @@ async function nativeProcess(executable, args, options, input2) {
   }
 }
 async function compileController(temp, options) {
-  const compiler = path16.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  const compiler = path17.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat9(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath5(await mkdtemp2(path16.join(temp, "agy-mcp-controller-")));
-  const source = path16.join(directory, "runner.cs"), helper = path16.join(directory, "runner.exe");
+  const directory = await realpath5(await mkdtemp2(path17.join(temp, "agy-mcp-controller-")));
+  const source = path17.join(directory, "runner.cs"), helper = path17.join(directory, "runner.exe");
   try {
     await writeFile4(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
@@ -44843,7 +45663,7 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path16.join(directory, "request-" + randomUUID7() + ".json");
+  const file3 = path17.join(directory, "request-" + randomUUID9() + ".json");
   await writeFile4(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
@@ -44865,19 +45685,19 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     try {
       return await realpath5(value);
     } catch {
-      return path16.resolve(value);
+      return path17.resolve(value);
     }
   }));
   const paths2 = /* @__PURE__ */ new Map();
   const inspect = async (value, rights) => {
-    if (!path16.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+    if (!path17.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath5(value), root = path16.parse(canonical).root;
+    const canonical = await realpath5(value), root = path17.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
-    const relative2 = path16.relative(root, canonical).split(path16.sep).filter(Boolean);
+    const relative2 = path17.relative(root, canonical).split(path17.sep).filter(Boolean);
     let current = root, entries = 0;
     const walk = async (candidate) => {
       const stat3 = await lstat9(candidate);
@@ -44888,11 +45708,11 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
         for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
           if (++entries > maxFiles)
             throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
-          await walk(path16.join(candidate, name));
+          await walk(path17.join(candidate, name));
         }
     };
     for (const part of relative2) {
-      current = path16.join(current, part);
+      current = path17.join(current, part);
       const stat3 = await lstat9(current);
       if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
@@ -44923,7 +45743,7 @@ async function runRecoveryWithController(stateDirectory, options) {
   }
 }
 async function recoverWindowsExecutions(stateDirectory) {
-  const effective = path16.resolve(stateDirectory);
+  const effective = path17.resolve(stateDirectory);
   await mkdir7(effective, { recursive: true, mode: 448 });
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
@@ -44937,17 +45757,17 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
   };
-  const stateDirectory = path16.resolve(options.stateDirectory ?? path16.join(os6.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path17.resolve(options.stateDirectory ?? path17.join(os6.homedir(), ".antigravity-mcp-bridge"));
   await mkdir7(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
   const temp = await realpath5(os6.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath5(await mkdtemp2(path16.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath5(await mkdtemp2(path16.join(temp, "agy-mcp-scratch-")));
+  const runtime = await realpath5(await mkdtemp2(path17.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath5(await mkdtemp2(path17.join(temp, "agy-mcp-scratch-")));
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
-    const nonce = randomUUID7(), systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const nonce = randomUUID9(), systemRoot = process.env.SystemRoot || "C:\\Windows";
     const request = {
       action: mode,
       nonce,
@@ -44967,7 +45787,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       environment: {
         SystemRoot: systemRoot,
         WINDIR: systemRoot,
-        PATH: [...staged.pathEntries, path16.join(systemRoot, "System32")].join(path16.delimiter),
+        PATH: [...staged.pathEntries, path17.join(systemRoot, "System32")].join(path17.delimiter),
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
         TEMP: scratch,
         TMP: scratch,
@@ -44975,7 +45795,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
         HOME: scratch,
         APPDATA: scratch,
         LOCALAPPDATA: scratch,
-        COMSPEC: staged.comspec ?? path16.join(systemRoot, "System32", "cmd.exe")
+        COMSPEC: staged.comspec ?? path17.join(systemRoot, "System32", "cmd.exe")
       }
     };
     const file3 = await writeRequest(controller.directory, request);
@@ -44998,7 +45818,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
 }
 
 // dist/src/task-manager.js
-var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
+var terminal2 = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
 var TaskManager = class {
   adapter;
   config;
@@ -45009,12 +45829,19 @@ var TaskManager = class {
   waiting = 0;
   batching = 0;
   stopped = false;
-  inboxOwnerId = randomUUID8();
+  inboxOwnerId = randomUUID10();
   flushingInboxes = /* @__PURE__ */ new Set();
   claimingMessages = /* @__PURE__ */ new Set();
   busyProjects = /* @__PURE__ */ new Set();
   state;
   memoryStore;
+  groupManager;
+  get groups() {
+    return this.groupManager ??= new GroupManager(this, this.config);
+  }
+  runInGroup(options, admission) {
+    return this.run({ ...options, role: admission.owner, groupAdmission: groupAdmissionSchema.parse(admission) });
+  }
   nativeRecovery;
   nativeRecoveryError;
   constructor(adapter, config2) {
@@ -45034,7 +45861,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash16("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash18("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -45058,7 +45885,7 @@ var TaskManager = class {
       const task2 = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
       this.tasks.set(item.record.taskId, task2);
       this.events.restore(item.record.taskId, item.events, item.cursor);
-      if (!terminal.has(item.record.status) && !processAlive2(item.ownerPid)) {
+      if (!terminal2.has(item.record.status) && !processAlive2(item.ownerPid)) {
         if (item.record.pid && processAlive2(item.record.pid)) {
           item.record.error = { code: "ORPHAN_PROCESS_RUNNING", message: "The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination" };
         } else {
@@ -45177,6 +46004,9 @@ var TaskManager = class {
   }
   async run(options) {
     options = { ...options };
+    delete options.group;
+    if (options.groupAdmission && options.sessionId)
+      throw new BridgeError("INVALID_GROUP", "Group admission starts a new session");
     delete options.memorySnapshots;
     const initialRoleDefinition = options.sessionId ? void 0 : resolveRole(options.role ?? "implementer", this.config.customRoles);
     if (initialRoleDefinition) {
@@ -45185,6 +46015,8 @@ var TaskManager = class {
       if (options.contextTaskId)
         options = { ...options, skills, includePaths, memory };
     }
+    if (options.groupAdmission && options.mcpServers === void 0)
+      options.mcpServers = [];
     if (options.memory !== void 0)
       options.memory = memorySelectionSchema.parse(options.memory);
     if (options.effort !== void 0)
@@ -45216,6 +46048,11 @@ var TaskManager = class {
       options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
+    if (options.groupAdmission) {
+      await validateStateSeparation(workingDirectory, this.config.stateDirectory);
+      if (options.workingDirectory !== workingDirectory)
+        throw new BridgeError("GROUP_CHANGED", "Group project no longer resolves to its saved canonical directory");
+    }
     if (options.isolateWorktree === false)
       throw new BridgeError("ISOLATION_REQUIRED", "Direct execution in the source project is disabled");
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId))
@@ -45226,6 +46063,15 @@ var TaskManager = class {
     let accepted = false;
     try {
       this.refresh();
+      if (options.groupAdmission) {
+        const admission = groupAdmissionSchema.parse(options.groupAdmission);
+        const existing = [...this.tasks.values()].find((task2) => task2.record.group?.groupId.toLowerCase() === admission.groupId.toLowerCase() && task2.record.group.nodeKey === admission.nodeKey && task2.record.group.rootTaskId.toLowerCase() === task2.record.taskId.toLowerCase());
+        if (existing) {
+          if (existing.record.workingDirectory !== workingDirectory || existing.record.group.definitionSha256 !== admission.definitionSha256 || existing.record.group.owner !== admission.owner)
+            throw new BridgeError("INVALID_GROUP", "Group admission identity changed");
+          return this.status(existing.record.taskId);
+        }
+      }
       const contextSource = options.contextTaskId ? this.tasks.get(options.contextTaskId) : void 0;
       if (options.contextTaskId && (options.sessionId || !contextSource?.project || contextSource.record.status !== "completed" || contextSource.record.integratedAt || contextSource.record.workingDirectory !== workingDirectory)) {
         throw new BridgeError("INVALID_CONTEXT", "Context requires a completed, retained, non-integrated task in the same project; use a new session");
@@ -45372,7 +46218,7 @@ var TaskManager = class {
       taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
       pendingProjectRelease = previous?.project || contextProject ? this.state.acquire(this.projectLock(previous?.project ?? contextProject)) : void 0;
       if (this.tasks.size >= this.config.maxRetainedTasks) {
-        const oldestFinished = [...this.tasks.values()].find((task2) => terminal.has(task2.record.status) && task2 !== contextSource && !this.hasPendingInbox(task2.record) && !(options.sourceMessage && task2 === previous));
+        const oldestFinished = [...this.tasks.values()].find((task2) => terminal2.has(task2.record.status) && task2 !== contextSource && !this.hasPendingInbox(task2.record) && !(options.sourceMessage && task2 === previous));
         if (!oldestFinished)
           throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
         if (oldestFinished !== previous && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
@@ -45388,13 +46234,17 @@ var TaskManager = class {
         options.outputSchema = void 0;
         options.artifactPaths = void 0;
       }
+      const taskId = randomUUID10();
+      options.group = options.groupAdmission ? { ...options.groupAdmission, rootTaskId: taskId } : previous?.record.group && structuredClone(previous.record.group);
+      delete options.groupAdmission;
       const record2 = {
+        group: options.group,
         memory: summarizeMemory(options.memorySnapshots),
         parentTaskId: options.parentTaskId,
         sourceMessage: options.sourceMessage,
         deliveryMode: options.deliveryMode,
         providedSkills: options.providedSkills,
-        taskId: randomUUID8(),
+        taskId,
         sessionId: options.sessionId,
         model,
         effort: options.effort,
@@ -45471,7 +46321,7 @@ var TaskManager = class {
   }
   result(taskId) {
     const task2 = this.status(taskId);
-    return { task: task2, ready: terminal.has(task2.status) };
+    return { task: task2, ready: terminal2.has(task2.status) };
   }
   readResult(taskId, offset = 0, limit = 1e4, expectedContentSha256) {
     const result = this.result(taskId);
@@ -45534,7 +46384,7 @@ var TaskManager = class {
   async readPatch(taskId, expectedSha256, relative2, offset = 0, limit = 1e4) {
     this.refresh();
     const task2 = this.tasks.get(taskId);
-    if (!task2?.project || !terminal.has(task2.record.status))
+    if (!task2?.project || !terminal2.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before reading its patch");
     return this.withProject(task2.project, async () => {
       const preview = await previewProjectCopy(task2.project, this.config);
@@ -45550,7 +46400,7 @@ var TaskManager = class {
   async preview(taskId, includePatch = true) {
     this.refresh();
     const task2 = this.tasks.get(taskId);
-    if (!task2 || !task2.project || !terminal.has(task2.record.status))
+    if (!task2 || !task2.project || !terminal2.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for an isolated task to finish");
     return this.withProject(task2.project, async () => {
       const preview = await previewProjectCopy(task2.project, this.config);
@@ -45592,7 +46442,7 @@ var TaskManager = class {
     if (this.config.maxRetainedTasks < models.length + 1 || this.config.maxQueuedTasks < models.length)
       throw new BridgeError("COMPARISON_LIMIT_EXCEEDED", "Retention and queue limits must accommodate all comparison members and the source");
     const source = this.status(sourceTaskId);
-    const comparison = { comparisonId: randomUUID8(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
+    const comparison = { comparisonId: randomUUID10(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
     const taskIds = [];
     this.batching++;
     try {
@@ -45635,7 +46485,7 @@ var TaskManager = class {
     if (!comparison)
       throw new BridgeError("COMPARISON_NOT_FOUND", "No retained tasks for this comparison");
     const missingModels = comparison.models.filter((model) => !tasks.some((task2) => task2.model === model));
-    const ready = tasks.every((task2) => terminal.has(task2.status));
+    const ready = tasks.every((task2) => terminal2.has(task2.status));
     const complete = ready && !missingModels.length && tasks.every((task2) => task2.status === "completed" && task2.report?.role === "reviewer");
     const current = await this.context(comparison.sourceTaskId).catch((error62) => {
       if (error62 instanceof BridgeError && ["INVALID_CONTEXT", "TASK_NOT_FOUND", "TASK_NOT_READY"].includes(error62.code))
@@ -45644,7 +46494,7 @@ var TaskManager = class {
     });
     const opinions = await Promise.all(tasks.map(async (task2) => {
       const project = this.tasks.get(task2.taskId)?.project;
-      const contextMatches = project && terminal.has(task2.status) ? await this.withProject(project, async () => await fingerprintProjectCopy(project, this.config) === comparison.treeSha256).catch((error62) => {
+      const contextMatches = project && terminal2.has(task2.status) ? await this.withProject(project, async () => await fingerprintProjectCopy(project, this.config) === comparison.treeSha256).catch((error62) => {
         if (error62 instanceof BridgeError && error62.code === "TASK_NOT_READY")
           return null;
         throw error62;
@@ -45664,7 +46514,7 @@ var TaskManager = class {
       ready,
       complete: complete && opinions.every((opinion) => opinion.contextMatches === true),
       missingModels,
-      contextStale: current === null || current.treeSha256 !== comparison.treeSha256 || opinions.some((opinion) => terminal.has(opinion.status) && opinion.contextMatches !== true),
+      contextStale: current === null || current.treeSha256 !== comparison.treeSha256 || opinions.some((opinion) => terminal2.has(opinion.status) && opinion.contextMatches !== true),
       opinions,
       findings: compareFindings(tasks.filter((task2) => opinions.some((opinion) => opinion.taskId === task2.taskId && opinion.contextMatches === true)), comparison.models),
       warnings: [
@@ -45676,7 +46526,7 @@ var TaskManager = class {
   async verify(taskId, expectedSha256, reviews = []) {
     this.refresh();
     const task2 = this.tasks.get(taskId);
-    if (!task2?.project || !terminal.has(task2.record.status))
+    if (!task2?.project || !terminal2.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before verification");
     return this.withProject(task2.project, async () => {
       const preview = await previewProjectCopy(task2.project, this.config);
@@ -45751,7 +46601,7 @@ var TaskManager = class {
     try {
       this.refresh();
       const current = this.tasks.get(sourceTaskId);
-      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal.has(current.record.status) || current.record.status !== "completed" && current.record.error?.code !== "TEST_FAILED" || current.record.integratedAt) {
+      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal2.has(current.record.status) || current.record.status !== "completed" && current.record.error?.code !== "TEST_FAILED" || current.record.integratedAt) {
         throw new BridgeError("TASK_NOT_READY", "Tests require a completed write task with an isolated copy and CLI conversation");
       }
       if ([...this.tasks.values()].filter((candidate) => candidate.project === current.project).at(-1) !== current) {
@@ -45766,7 +46616,7 @@ var TaskManager = class {
         throw new BridgeError("QUEUE_FULL", "Task queue is full");
       releaseProject = this.state.acquire(this.projectLock(current.project));
       if (this.tasks.size >= this.config.maxRetainedTasks) {
-        const oldestFinished = [...this.tasks.values()].find((candidate) => terminal.has(candidate.record.status) && candidate !== current && !this.hasPendingInbox(candidate.record)) ?? (this.hasPendingInbox(current.record) ? void 0 : current);
+        const oldestFinished = [...this.tasks.values()].find((candidate) => terminal2.has(candidate.record.status) && candidate !== current && !this.hasPendingInbox(candidate.record)) ?? (this.hasPendingInbox(current.record) ? void 0 : current);
         if (!oldestFinished)
           throw new BridgeError("QUEUE_FULL", "Task retention limit reached with active tasks");
         if (oldestFinished !== current && oldestFinished.project && ![...this.tasks.values()].some((other) => other !== oldestFinished && other.project === oldestFinished.project)) {
@@ -45777,10 +46627,11 @@ var TaskManager = class {
         this.state.drop(oldestFinished.record.taskId);
       }
       const record2 = {
+        group: structuredClone(current.record.group),
         memory: structuredClone(current.record.memory),
         deliveryMode: current.record.deliveryMode,
         providedSkills: current.project.providedSkills,
-        taskId: randomUUID8(),
+        taskId: randomUUID10(),
         sessionId: current.record.sessionId,
         model: current.record.model,
         effort: current.record.effort,
@@ -45803,6 +46654,7 @@ var TaskManager = class {
         agentPolicy: current.record.agentPolicy
       };
       const options = {
+        group: structuredClone(current.record.group),
         memory: structuredClone(current.options.memory),
         memorySnapshots: structuredClone(current.options.memorySnapshots),
         deliveryMode: record2.deliveryMode,
@@ -45835,7 +46687,7 @@ var TaskManager = class {
   async recordTest(taskId, expectedSha256, command2, exitCode, output2 = "") {
     this.refresh();
     const task2 = this.tasks.get(taskId);
-    if (!task2?.project || !terminal.has(task2.record.status))
+    if (!task2?.project || !terminal2.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Wait for the task before recording tests");
     if (!command2.trim() || command2.length > 1e3 || !Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255 || output2.length > 4e3) {
       throw new BridgeError("INVALID_TEST_EVIDENCE", "Invalid command, exit code or output size");
@@ -45851,7 +46703,7 @@ var TaskManager = class {
     });
   }
   async withProject(project, operation) {
-    if (this.busyProjects.has(project) || [...this.tasks.values()].some((task2) => task2.project === project && !terminal.has(task2.record.status))) {
+    if (this.busyProjects.has(project) || [...this.tasks.values()].some((task2) => task2.project === project && !terminal2.has(task2.record.status))) {
       throw new BridgeError("TASK_NOT_READY", "Wait for all operations on this copy to finish");
     }
     this.busyProjects.add(project);
@@ -45870,7 +46722,7 @@ var TaskManager = class {
     const task2 = this.tasks.get(taskId);
     if (!task2)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
-    if (!terminal.has(task2.record.status))
+    if (!terminal2.has(task2.record.status))
       throw new BridgeError("TASK_NOT_READY", "Cancel and wait for the task before discarding");
     if (task2.project) {
       const project = task2.project;
@@ -45892,7 +46744,7 @@ var TaskManager = class {
     const discardedTaskIds = [];
     for (const project of new Set([...this.tasks.values()].map((task2) => task2.project).filter((p) => Boolean(p)))) {
       const related = [...this.tasks.values()].filter((task2) => task2.project === project);
-      if (this.busyProjects.has(project) || related.some((task2) => !terminal.has(task2.record.status)))
+      if (this.busyProjects.has(project) || related.some((task2) => !terminal2.has(task2.record.status)))
         continue;
       const latest = Math.max(...related.map((task2) => Date.parse(task2.record.completedAt || task2.record.createdAt)));
       if (now - latest < this.config.copyRetentionHours * 36e5)
@@ -45914,7 +46766,7 @@ var TaskManager = class {
     if ([...this.tasks.values()].filter((other) => other.project === task2.project).at(-1) !== task2) {
       throw new BridgeError("TASK_NOT_READY", "Preview and integrate the latest task for this copy");
     }
-    if ([...this.tasks.values()].some((other) => other !== task2 && other.project === task2.project && !terminal.has(other.record.status))) {
+    if ([...this.tasks.values()].some((other) => other !== task2 && other.project === task2.project && !terminal2.has(other.record.status))) {
       throw new BridgeError("TASK_NOT_READY", "Wait for the resumed task to finish");
     }
     return this.withProject(task2.project, async () => {
@@ -45929,7 +46781,7 @@ var TaskManager = class {
       await this.requireVerification(task2, expectedSha256);
       if (!preauthorized && !await confirm(reviewed))
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
-      const releaseSource = this.state.acquire("source-" + createHash16("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash18("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -45986,9 +46838,9 @@ var TaskManager = class {
         throw new BridgeError("MESSAGE_ID_CONFLICT", "This message ID already identifies different text");
       if (existing && existing.receipt.state !== "queued")
         return { receipt: this.inboxReceipt(existing) };
-      if (!task2.owned && !terminal.has(task2.record.status))
+      if (!task2.owned && !terminal2.has(task2.record.status))
         throw new BridgeError("TASK_OWNED_BY_OTHER_SERVER", "Send through the bridge that owns the running task");
-      if (task2.record.integratedAt || task2.record.discardedAt || !task2.project && terminal.has(task2.record.status)) {
+      if (task2.record.integratedAt || task2.record.discardedAt || !task2.project && terminal2.has(task2.record.status)) {
         throw new BridgeError("INVALID_MESSAGE_TARGET", "This task no longer retains a conversation copy");
       }
       if (!existing) {
@@ -45999,7 +46851,7 @@ var TaskManager = class {
         this.events.append(taskId, "caller.message-queued", { messageId });
       }
       directory = task2.project?.copyDirectory;
-      if (terminal.has(task2.record.status) && task2.record.status !== "completed") {
+      if (terminal2.has(task2.record.status) && task2.record.status !== "completed") {
         this.failPendingInbox(directory, task2, task2.record.status === "cancelled" ? "cancelled" : "failed", "TASK_NOT_COMPLETED");
       }
     } finally {
@@ -46066,7 +46918,7 @@ var TaskManager = class {
     const directory = task2.project?.copyDirectory;
     const related = directory ? [...this.tasks.values()].filter((candidate) => candidate.project?.copyDirectory === directory) : [task2];
     const continuationPending = related.some((candidate) => this.hasPendingInbox(candidate.record));
-    if (directory && continuationPending && terminal.has(task2.record.status))
+    if (directory && continuationPending && terminal2.has(task2.record.status))
       this.scheduleInbox(directory);
     return { ...task2.record.continuationTaskId ? { continuationTaskId: task2.record.continuationTaskId } : {}, continuationPending };
   }
@@ -46090,7 +46942,7 @@ var TaskManager = class {
         this.recoverInboxClaims(true);
         const related = [...this.tasks.values()].filter((task2) => task2.project?.copyDirectory === directory);
         latest = related.filter((task2) => !(task2.record.error?.code === "STATE_PERSISTENCE_FAILED" && !task2.record.startedAt)).at(-1);
-        if (!latest || !terminal.has(latest.record.status) || latest.owned || this.busyProjects.has(latest.project))
+        if (!latest || !terminal2.has(latest.record.status) || latest.owned || this.busyProjects.has(latest.project))
           return;
         if (latest.record.status !== "completed" || latest.record.integratedAt || latest.record.discardedAt || !latest.record.sessionId) {
           this.failPendingInbox(directory, latest, "failed", "INVALID_MESSAGE_TARGET");
@@ -46181,7 +47033,7 @@ var TaskManager = class {
       const task2 = this.tasks.get(taskId);
       if (!task2)
         throw new BridgeError("TASK_NOT_FOUND", "Unknown task: " + taskId);
-      if (!task2.owned && !terminal.has(task2.record.status))
+      if (!task2.owned && !terminal2.has(task2.record.status))
         throw new BridgeError("TASK_OWNED_BY_OTHER_SERVER", "Change delivery in the bridge that owns the running task");
       task2.record.deliveryMode = deliveryMode;
       task2.options.deliveryMode = deliveryMode;
@@ -46194,6 +47046,31 @@ var TaskManager = class {
   readEvents(taskId, after = 0, limit = 200) {
     this.status(taskId);
     return this.events.read(taskId, after, limit);
+  }
+  async waitMany(input2, timeoutSeconds = 30, signal) {
+    const targets = waitTargetsSchema.parse(input2);
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60)
+      throw new BridgeError("INVALID_TIMEOUT", "Wait timeout must be between 1 and 60 seconds");
+    if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks)
+      throw new BridgeError("WAIT_LIMIT_EXCEEDED", "Too many concurrent waits");
+    this.waiting++;
+    try {
+      const deadline = Date.now() + timeoutSeconds * 1e3;
+      for (; ; ) {
+        if (signal?.aborted)
+          throw new BridgeError("WAIT_CANCELLED", "Waiting cancelled; tasks continue");
+        const page = jointWaitPage(this.list(), targets);
+        if (page.ready || page.hasMessages || Date.now() >= deadline)
+          return { ready: page.ready, timedOut: !page.ready && !page.hasMessages, hasMoreMessages: page.hasMoreMessages, tasks: page.tasks };
+        try {
+          await delay3(Math.min(100, Math.max(1, deadline - Date.now())), void 0, { signal });
+        } catch {
+          throw new BridgeError("WAIT_CANCELLED", "Waiting cancelled; tasks continue");
+        }
+      }
+    } finally {
+      this.waiting--;
+    }
   }
   async wait(taskId, after = 0, timeoutSeconds = 30, signal, onEvent, cursorMode) {
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
@@ -46216,7 +47093,7 @@ var TaskManager = class {
         const continuation = this.continuationState(taskId);
         if (deliveryMode === "messages") {
           const messages = readMessages(task2, after);
-          const ready2 = terminal.has(task2.status);
+          const ready2 = terminal2.has(task2.status);
           if (messages.messages.length || ready2 && (!continuation.continuationPending || continuation.continuationTaskId) || Date.now() >= deadline)
             return {
               taskId,
@@ -46229,7 +47106,7 @@ var TaskManager = class {
               ...messages,
               tokenUsage: task2.tokenUsage
             };
-          await delay2(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
+          await delay3(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
           continue;
         }
         const page = this.events.read(taskId, cursor, 1e3);
@@ -46237,7 +47114,7 @@ var TaskManager = class {
           await onEvent?.(event);
           cursor = event.sequence;
         }
-        const ready = terminal.has(task2.status);
+        const ready = terminal2.has(task2.status);
         if (ready || Date.now() >= deadline)
           return {
             taskId,
@@ -46250,7 +47127,7 @@ var TaskManager = class {
             ...this.events.read(taskId, after, 1e3),
             tokenUsage: task2.tokenUsage
           };
-        await delay2(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
+        await delay3(Math.min(250, Math.max(1, deadline - Date.now())), void 0, { signal });
       }
     } catch (error62) {
       if (signal?.aborted)
@@ -46274,7 +47151,7 @@ var TaskManager = class {
     const task2 = this.tasks.get(taskId);
     if (!task2)
       throw new BridgeError("TASK_NOT_FOUND", `Unknown task: ${taskId}`);
-    if (terminal.has(task2.record.status))
+    if (terminal2.has(task2.record.status))
       return this.status(taskId);
     if (!task2.owned)
       throw new BridgeError("TASK_OWNED_BY_OTHER_SERVER", "Cancel the task in the bridge process that started it");
@@ -46301,6 +47178,7 @@ var TaskManager = class {
     return this.status(taskId);
   }
   async shutdown() {
+    await this.groupManager?.shutdown();
     this.stopped = true;
     const owned = [...this.tasks.values()].filter((task2) => task2.owned);
     await Promise.all(owned.map((task2) => this.cancel(task2.record.taskId)));
@@ -46805,7 +47683,7 @@ ${error62.message}`;
     task2.messageKeys ??= /* @__PURE__ */ new Set();
     for (const input2 of extractAgentMessages(text)) {
       const payload = JSON.stringify(input2);
-      const key = step + ":" + createHash16("sha256").update(payload).digest("hex");
+      const key = step + ":" + createHash18("sha256").update(payload).digest("hex");
       if (task2.messageKeys.has(key) || final && task2.record.messages?.some((message2) => message2.source === "agy-reported" && message2.kind === input2.kind && message2.text === input2.text))
         continue;
       if (task2.messageKeys.size >= 1e3) {
@@ -46822,7 +47700,7 @@ ${error62.message}`;
     }
   }
   finish(task2, status2, code, message) {
-    if (terminal.has(task2.record.status))
+    if (terminal2.has(task2.record.status))
       return;
     task2.record.status = status2;
     task2.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();

@@ -1,3 +1,4 @@
+import type { GroupAdmission, GroupAssignment } from './group-contract.js';
 import type { MemorySnapshot, MemorySummary } from './project-memory.js';
 import type { MemorySelection } from './memory-context.js';
 import type { BridgeMessage, DeliveryMode } from './messages.js';
@@ -27,6 +28,7 @@ export interface BridgeEvent {
 }
 
 export interface TaskRecord {
+  group?: GroupAssignment;
   memory?: MemorySummary[];
   deliveryMode?: DeliveryMode;
   messages?: BridgeMessage[];
@@ -117,6 +119,8 @@ export interface TestEvidence {
 }
 
 export interface RunOptions extends AgentPolicySelection {
+  groupAdmission?: GroupAdmission;
+  group?: GroupAssignment;
   memory?: MemorySelection;
   memorySnapshots?: MemorySnapshot[];
   agentPolicy?: ResolvedAgentPolicy;

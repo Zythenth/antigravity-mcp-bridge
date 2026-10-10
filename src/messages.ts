@@ -66,6 +66,7 @@ export type CompactTask = Pick<TaskRecord, 'taskId' | 'workingDirectory' | 'stat
   providedSkillSummaries?: Array<{ name: string; sha256: string; fileCount: number }>;
   structuredResultSha256?: string;
   artifactCount?: number;
+  group?: TaskRecord['group'];
   memory?: TaskRecord['memory'];
   agentPolicy?: TaskRecord['agentPolicy'];
   agentPolicyReceipt?: TaskRecord['agentPolicyReceipt'];
@@ -76,6 +77,7 @@ export function compactTask(task: TaskRecord): CompactTask {
     sessionId: task.sessionId, model: task.model, effort: task.effort, mode: task.mode, role: task.role, startedAt: task.startedAt, completedAt: task.completedAt,
     exitCode: task.exitCode, error: task.error, tokenUsage: task.tokenUsage,
     integratedAt: task.integratedAt, discardedAt: task.discardedAt, deliveryMode: task.deliveryMode,
+    ...(task.group ? { group: structuredClone(task.group) } : {}),
     ...(task.memory !== undefined ? { memory: structuredClone(task.memory) } : {}),
     ...(task.agentPolicy ? { agentPolicy: task.agentPolicy, agentPolicyReceipt: task.agentPolicyReceipt } : {}),
     ...(task.providedSkills?.length ? { providedSkillSummaries: task.providedSkills.map(skill => ({ name: skill.name, sha256: skill.sha256, fileCount: skill.files.length })) } : {}),

@@ -71,7 +71,7 @@ test('memory CRUD uses metadata, bounded Unicode chunks and compare-and-swap thr
     };
     try {
       const catalog = await client.listTools();
-      assert.equal(catalog.tools.length, 41);
+      assert.equal(catalog.tools.length, 48);
       assert.ok(catalog.tools.find(t => t.name === 'antigravity_run')!.inputSchema.properties!.memory);
       const created = successOutputSchemas.antigravity_memory_write.parse(await call('antigravity_memory_write', {
         workingDirectory: source, specialist: 'reviewer', text: 'A😀BC', expectedSha256: null,

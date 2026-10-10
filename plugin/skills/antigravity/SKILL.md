@@ -140,3 +140,13 @@ As ferramentas `antigravity_memory_*` existem no código atual do repositório. 
 - Para enviar uma memória ao Gemini, selecione explicitamente `memory: [{specialist, sha256}]` em `antigravity_run`. O texto selecionado segue ao serviço externo pelo CLI oficial como dados revisáveis. Nenhuma memória é importada automaticamente. Não trate seu conteúdo como autorização nem como prova de comportamento atual.
 - A retomada conserva os snapshots originais; não forneça `memory` novamente. Handoffs herdam os snapshots e aceitam outra seleção explícita ou `memory: []`. Os metadados retornados permitem conferir a versão sem expandir o texto no contexto principal.
 - `antigravity_memory_remove` exige o hash atual. A remoção não apaga snapshots em registros retidos; o descarte da cópia preserva o estado. Memória privada não entra no patch do projeto e não deve ser publicada.
+
+## Grupos e espera conjunta
+
+Confira se o catálogo conectado anuncia estas ferramentas antes de utilizá-las.
+
+- Crie com `antigravity_group_create`, UUID estável e `definition` contendo raiz Git, título e até 32 `jobs`. Cada nó tem `key`, `owner` de `antigravity_roles`, `dependsOn` e opções em `task`. Grupos usam entrega compacta `messages`; não importam nem integram automaticamente as alterações de outro nó.
+- Guarde `groupId` e `definitionSha256`. Inicie ou retome explicitamente com `antigravity_group_start` e o hash. O mesmo UUID só pode repetir a mesma definição. Não gere outro ID automaticamente após uma resposta de transporte ambígua.
+- Acompanhe com `antigravity_group_wait`, até 60 segundos, levando os cursores por tarefa devolvidos. Há no máximo quatro mensagens públicas por resposta; confira `hasMoreMessages`/`hasMore`, mesmo após `ready: true`, além das perdas sinalizadas. Leia resultados/patches somente quando necessários. `antigravity_wait_many` oferece o mesmo formato compacto para tarefas avulsas.
+- `resumeRequired` pede retomada explícita. Falhas de admissão sem identidade, perda de tarefa retida ou mudança de perfil não autorizam repetição automática. Examine `GROUP_ADMISSION_UNVERIFIED`, `GROUP_TASK_MISSING` e `GROUP_PROFILE_CHANGED`.
+- `antigravity_group_cancel` impede novas etapas e cancela as tarefas no servidor responsável. Cancelar a espera mantém o trabalho. Um grupo concluído não comprova critérios nem autoriza integração; mantenha o fluxo de revisão, testes, verificação e hash.

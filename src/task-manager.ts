@@ -1,3 +1,6 @@
+import { jointWaitPage, waitTargetsSchema } from './joint-wait.js';
+import { groupAdmissionSchema, type GroupAdmission } from './group-contract.js';
+import { GroupManager } from './group-manager.js';
 import { ProjectMemoryStore, type MemorySnapshot } from './project-memory.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
 import { validateProjectRoot } from './isolation.js';
@@ -14,7 +17,7 @@ import { EventStore } from './event-store.js';
 import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
-import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory } from './validation.js';
+import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
 import { processAlive, StateStore } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand, type WindowsNativeTestRequest } from './native-tests.js';
@@ -49,6 +52,9 @@ export class TaskManager {
   private readonly busyProjects = new Set<ProjectCopy>();
   private readonly state: StateStore;
   private memoryStore?: ProjectMemoryStore;
+  private groupManager?: GroupManager;
+  get groups(): GroupManager { return this.groupManager ??= new GroupManager(this, this.config); }
+  runInGroup(options: RunOptions, admission: GroupAdmission) { return this.run({ ...options, role: admission.owner, groupAdmission: groupAdmissionSchema.parse(admission) }); }
   private readonly nativeRecovery: Promise<void>;
   private nativeRecoveryError: unknown;
 
@@ -195,6 +201,8 @@ export class TaskManager {
 
   async run(options: RunOptions): Promise<TaskRecord> {
     options = { ...options };
+    delete options.group;
+    if (options.groupAdmission && options.sessionId) throw new BridgeError('INVALID_GROUP', 'Group admission starts a new session');
     delete options.memorySnapshots; // Internal snapshots are resolved only by the bridge.
     const initialRoleDefinition = options.sessionId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
     if (initialRoleDefinition) {
@@ -202,6 +210,7 @@ export class TaskManager {
       options = applyRoleDefaults(options, initialRoleDefinition);
       if (options.contextTaskId) options = { ...options, skills, includePaths, memory };
     }
+    if (options.groupAdmission && options.mcpServers === undefined) options.mcpServers = [];
     if (options.memory !== undefined) options.memory = memorySelectionSchema.parse(options.memory);
     if (options.effort !== undefined) effortSchema.parse(options.effort);
     if (profileReadOnly(this.config.toolProfile)) {
@@ -223,6 +232,10 @@ export class TaskManager {
     if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
+    if (options.groupAdmission) {
+      await validateStateSeparation(workingDirectory, this.config.stateDirectory);
+      if (options.workingDirectory !== workingDirectory) throw new BridgeError('GROUP_CHANGED', 'Group project no longer resolves to its saved canonical directory');
+    }
     if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', 'Invalid conversation ID');
     const releaseRegistry = this.state.acquire('registry');
@@ -231,6 +244,16 @@ export class TaskManager {
     let accepted = false;
     try {
       this.refresh();
+      if (options.groupAdmission) {
+        const admission = groupAdmissionSchema.parse(options.groupAdmission);
+        const existing = [...this.tasks.values()].find(task => task.record.group?.groupId.toLowerCase() === admission.groupId.toLowerCase() &&
+          task.record.group.nodeKey === admission.nodeKey && task.record.group.rootTaskId.toLowerCase() === task.record.taskId.toLowerCase());
+        if (existing) {
+          if (existing.record.workingDirectory !== workingDirectory || existing.record.group!.definitionSha256 !== admission.definitionSha256 ||
+              existing.record.group!.owner !== admission.owner) throw new BridgeError('INVALID_GROUP', 'Group admission identity changed');
+          return this.status(existing.record.taskId);
+        }
+      }
       const contextSource = options.contextTaskId ? this.tasks.get(options.contextTaskId) : undefined;
       if (options.contextTaskId && (options.sessionId || !contextSource?.project || contextSource.record.status !== 'completed' ||
         contextSource.record.integratedAt || contextSource.record.workingDirectory !== workingDirectory)) {
@@ -359,7 +382,10 @@ export class TaskManager {
         options.outputSchema = undefined;
         options.artifactPaths = undefined;
       }
-      const record: TaskRecord = { memory: summarizeMemory(options.memorySnapshots), parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId: randomUUID(), sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
+      const taskId = randomUUID();
+      options.group = options.groupAdmission ? { ...options.groupAdmission, rootTaskId: taskId } : previous?.record.group && structuredClone(previous.record.group);
+      delete options.groupAdmission;
+      const record: TaskRecord = { group: options.group, memory: summarizeMemory(options.memorySnapshots), parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId, sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
@@ -652,14 +678,14 @@ export class TaskManager {
         this.events.drop(oldestFinished.record.taskId);
         this.state.drop(oldestFinished.record.taskId);
       }
-      const record: TaskRecord = { memory: structuredClone(current.record.memory), deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
+      const record: TaskRecord = { group: structuredClone(current.record.group), memory: structuredClone(current.record.memory), deliveryMode: current.record.deliveryMode, providedSkills: current.project.providedSkills, taskId: randomUUID(), sessionId: current.record.sessionId, model: current.record.model, effort: current.record.effort,
         mode: 'write', role: current.record.role, roleDefinition: current.record.roleDefinition, prompt: 'Run the requested tests in the Windows sandbox.',
         acceptanceCriteria: current.record.acceptanceCriteria, handoff: current.record.handoff, tests: current.record.tests,
         usageIsResume: true, usageBaseline: this.latestObservedUsage(current.record.sessionId, current.record.workingDirectory),
         workingDirectory: current.record.workingDirectory, copyDirectory: current.project.copyDirectory, includedFiles: current.project.includedFiles,
         status: 'queued', createdAt: new Date().toISOString(),
         outputSchema: current.record.outputSchema, artifactPaths: current.record.artifactPaths, agentPolicy: current.record.agentPolicy };
-      const options: RunOptions = { memory: structuredClone(current.options.memory), memorySnapshots: structuredClone(current.options.memorySnapshots), deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
+      const options: RunOptions = { group: structuredClone(current.record.group), memory: structuredClone(current.options.memory), memorySnapshots: structuredClone(current.options.memorySnapshots), deliveryMode: record.deliveryMode, providedSkills: record.providedSkills, prompt: record.prompt, workingDirectory: record.workingDirectory, sessionId: record.sessionId,
         agentPolicy: record.agentPolicy, model: record.model, effort: record.effort, timeoutSeconds, mode: 'write', role: record.role, roleDefinition: record.roleDefinition,
         acceptanceCriteria: record.acceptanceCriteria, nativeTest };
       this.tasks.set(record.taskId, { record, options, ownerPid: process.pid, owned: true, project: current.project, releaseProject });
@@ -965,6 +991,23 @@ export class TaskManager {
     return this.events.read(taskId, after, limit);
   }
 
+  async waitMany(input: unknown, timeoutSeconds = 30, signal?: AbortSignal) {
+    const targets = waitTargetsSchema.parse(input);
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) throw new BridgeError('INVALID_TIMEOUT', 'Wait timeout must be between 1 and 60 seconds');
+    if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks) throw new BridgeError('WAIT_LIMIT_EXCEEDED', 'Too many concurrent waits');
+    this.waiting++;
+    try {
+      const deadline = Date.now() + timeoutSeconds * 1000;
+      for (;;) {
+        if (signal?.aborted) throw new BridgeError('WAIT_CANCELLED', 'Waiting cancelled; tasks continue');
+        const page = jointWaitPage(this.list(), targets);
+        if (page.ready || page.hasMessages || Date.now() >= deadline) return { ready: page.ready, timedOut: !page.ready && !page.hasMessages, hasMoreMessages: page.hasMoreMessages, tasks: page.tasks };
+        try { await delay(Math.min(100, Math.max(1, deadline - Date.now())), undefined, { signal }); }
+        catch { throw new BridgeError('WAIT_CANCELLED', 'Waiting cancelled; tasks continue'); }
+      }
+    } finally { this.waiting--; }
+  }
+
   async wait(taskId: string, after = 0, timeoutSeconds = 30, signal?: AbortSignal, onEvent?: (event: BridgeEvent) => Promise<void>, cursorMode?: DeliveryMode) {
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
       throw new BridgeError('INVALID_TIMEOUT', 'Wait timeout must be between 1 and 60 seconds');
@@ -1041,6 +1084,7 @@ export class TaskManager {
   }
 
   async shutdown(): Promise<void> {
+    await this.groupManager?.shutdown();
     this.stopped = true;
     const owned = [...this.tasks.values()].filter(task => task.owned);
     await Promise.all(owned.map(task => this.cancel(task.record.taskId)));

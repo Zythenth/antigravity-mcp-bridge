@@ -20,6 +20,8 @@ O bridge não lê diretamente cookies, tokens nem arquivos de autenticação. A 
 
 A memória por projeto e especialista é armazenada em `project-memory/` dentro do estado privado. Somente entradas explicitamente selecionadas pelo chamador são enviadas ao CLI. As tarefas retêm snapshots do texto selecionado para permitir retomadas consistentes; listar memórias e consultar tarefas devolve metadados, e a leitura de texto usa uma ferramenta separada.
 
+Os registros `group-<UUID>.json` guardam definições, prompts, responsáveis, dependências, hashes de perfil e referências às tarefas. Permanecem no estado privado até remoção local, com até 100 grupos e 4 MiB por definição. Respostas de acompanhamento devolvem metadados e mensagens públicas limitadas. Cada nó usa as regras de cópia e de retenção de tarefas descritas acima.
+
 ## Remoção
 
 `antigravity_discard` remove a cópia e o baseline, incluindo tarefas retomadas que compartilham esses diretórios. Ele preserva os registros locais de tarefa, resultados e eventos. A remoção local não apaga históricos mantidos pelo Google, pelo CLI ou pelo cliente MCP.

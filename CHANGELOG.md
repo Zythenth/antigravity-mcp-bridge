@@ -2,6 +2,8 @@
 
 ## Em desenvolvimento
 
+- Grupos com responsáveis e dependências, admissão persistida, retomada explícita e espera conjunta com cursores e mensagens limitadas.
+
 - Memória privada por projeto e especialista, com seleção explícita, snapshots por tarefa, comparação de hashes e leitores paginados.
 
 - Resultados JSON validados, artefatos com SHA-256 e leitura paginada.

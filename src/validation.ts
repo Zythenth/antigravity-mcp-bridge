@@ -53,3 +53,10 @@ export function validatePrompt(prompt: string, maxChars: number): void {
     throw new BridgeError('INVALID_PROMPT', `prompt must contain 1 to ${maxChars} characters and no NUL`);
   }
 }
+
+export async function validateStateSeparation(workingDirectory: string, stateDirectory: string): Promise<void> {
+  const state = await realpath(stateDirectory);
+  if (within(workingDirectory, state) || within(state, workingDirectory)) {
+    throw new BridgeError('INVALID_WORKING_DIRECTORY', 'workingDirectory overlaps private bridge state; keep that storage outside projects');
+  }
+}
