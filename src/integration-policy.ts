@@ -1,6 +1,8 @@
 import { realpathSync, statSync } from 'node:fs';
 import path from 'node:path';
 
+export interface IntegrationApproval { confirmed: boolean; rememberProject?: boolean }
+
 export function preauthorizedIntegrationRoots(value?: string): string[] {
   const roots: unknown = JSON.parse(value ?? '[]');
   if (!Array.isArray(roots) || roots.length > 20 || roots.some(root => typeof root !== 'string' || !path.isAbsolute(root))) {

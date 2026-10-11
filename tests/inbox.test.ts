@@ -295,3 +295,57 @@ test('project preauthorization skips only the repeated form and keeps hash, revi
     assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'changed');
   } finally { await f.close(); }
 });
+
+test('only a successful, explicitly remembered integration authorizes the next task after restart', async () => {
+  const f = await fixture(false);
+  try {
+    const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed');
+    await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
+    const preview = await f.tasks.preview(id);
+    await f.tasks.verify(id, preview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'changed', explanation: 'Observed fixture content' }]);
+    await assert.rejects(f.tasks.integrate(id, preview.sha256, async () => ({ confirmed: false, rememberProject: true })), { code: 'APPROVAL_DENIED' });
+    assert.equal(f.tasks.preauthorizedProjectCount, 0);
+    await assert.rejects(f.tasks.integrate(id, preview.sha256, async () => {
+      await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed during approval');
+      return { confirmed: true, rememberProject: true };
+    }), { code: 'REVIEW_CHANGED' });
+    assert.equal(f.tasks.preauthorizedProjectCount, 0);
+    await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
+    await f.tasks.integrate(id, preview.sha256, async () => ({ confirmed: true, rememberProject: true }));
+    const restarted = new TaskManager(f.adapter, f.config); f.managers.push(restarted);
+    assert.equal(restarted.preauthorizedProjectCount, 1);
+    const next = await restarted.run({ prompt: 'next integration', workingDirectory: f.source, mode: 'write',
+      acceptanceCriteria: [{ id: 'source', description: 'Changed source' }] });
+    await until(() => restarted.status(next.taskId).status === 'completed');
+    await writeFile(path.join(restarted.status(next.taskId).copyDirectory!, 'source.txt'), 'next');
+    const nextPreview = await restarted.preview(next.taskId);
+    await assert.rejects(restarted.integrate(next.taskId, '0'.repeat(64)), { code: 'REVIEW_CHANGED' });
+    await assert.rejects(restarted.integrate(next.taskId, nextPreview.sha256), { code: 'VERIFICATION_REQUIRED' });
+    await restarted.verify(next.taskId, nextPreview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'next', explanation: 'Observed fixture content' }]);
+    await restarted.integrate(next.taskId, nextPreview.sha256, async () => { assert.fail('The remembered project must not prompt again'); });
+    assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'next');
+    assert.equal(f.tasks.preauthorizedProjectCount, 1);
+    assert.equal(restarted.events.read(next.taskId).events.some(event => event.type === 'copy.integrated' &&
+      (event.data as { approvalSource?: string }).approvalSource === 'remembered-project'), true);
+  } finally { await f.close(); }
+});
+
+test('one-time integration stays one-time and preference failures report that the patch was applied', async t => {
+  for (const rememberProject of [false, true]) await t.test(String(rememberProject), async subtest => {
+    const f = await fixture(false);
+    try {
+      const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed');
+      await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
+      const preview = await f.tasks.preview(id);
+      await f.tasks.verify(id, preview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'changed', explanation: 'Observed fixture content' }]);
+      const save = subtest.mock.method(StateStore.prototype, 'rememberIntegrationRoot', () => { throw new Error('write failed'); });
+      const operation = f.tasks.integrate(id, preview.sha256, async () => ({ confirmed: true, rememberProject }));
+      if (rememberProject) await assert.rejects(operation, error => error instanceof Error && 'code' in error && error.code === 'INTEGRATION_PREFERENCE_FAILED' && /patch was applied/.test(error.message));
+      else await operation;
+      assert.equal(save.mock.callCount(), rememberProject ? 1 : 0);
+      assert.ok(f.tasks.status(id).integratedAt);
+      assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'changed');
+      assert.equal(f.tasks.preauthorizedProjectCount, 0);
+    } finally { await f.close(); }
+  });
+});

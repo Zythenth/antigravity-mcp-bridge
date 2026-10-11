@@ -11,7 +11,7 @@ import { validateProjectRoot } from './isolation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { readExecutionPolicyReceipt } from './execution-policy.js';
 import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolicy } from './agent-policy.js';
-import { integrationPreauthorized } from './integration-policy.js';
+import { integrationPreauthorized, type IntegrationApproval } from './integration-policy.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } from './skills.js';
@@ -115,8 +115,9 @@ export class TaskManager {
   }
 
   get toolProfile() { return this.config.toolProfile; }
-  get preauthorizedProjectCount() { return this.config.preauthorizedIntegrationRoots.length; }
-  integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.config.preauthorizedIntegrationRoots); }
+  private integrationRoots() { return [...new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.loadIntegrationRoots()])]; }
+  get preauthorizedProjectCount() { return this.integrationRoots().length; }
+  integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.integrationRoots()); }
   roles() { return listRoles(this.config.customRoles); }
 
   getSandboxPolicy(): SandboxPolicySnapshot { return this.state.loadSandboxPolicy(); }
@@ -825,7 +826,7 @@ export class TaskManager {
     return { discardedTaskIds };
   }
 
-  async integrate(taskId: string, expectedSha256: string, confirm?: (preview: ChangePreview) => Promise<boolean>) {
+  async integrate(taskId: string, expectedSha256: string, confirm?: (preview: ChangePreview) => Promise<boolean | IntegrationApproval>) {
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
@@ -844,7 +845,10 @@ export class TaskManager {
       const preauthorized = this.integrationPreauthorized(taskId);
       if (!preauthorized && !confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation or a configured project preauthorization');
       await this.requireVerification(task, expectedSha256);
-      if (!preauthorized && !await confirm!(reviewed)) throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
+      const approval = preauthorized ? undefined : await confirm!(reviewed);
+      if (!preauthorized && approval !== true && (typeof approval !== 'object' || approval?.confirmed !== true)) {
+        throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
+      }
       const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
       try {
         const current = await previewProjectCopy(task.project!, this.config);
@@ -853,7 +857,13 @@ export class TaskManager {
         const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();
-          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: preauthorized ? 'configured-project' : 'mcp-elicitation' });
+          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: preauthorized
+            ? integrationPreauthorized(task.record.workingDirectory, this.config.preauthorizedIntegrationRoots) ? 'configured-project' : 'remembered-project'
+            : 'mcp-elicitation' });
+        }
+        if (typeof approval === 'object' && approval.rememberProject === true) {
+          try { this.state.rememberIntegrationRoot(task.record.workingDirectory); }
+          catch { throw new BridgeError('INTEGRATION_PREFERENCE_FAILED', 'The patch was applied, but project authorization could not be saved; future integrations still require confirmation unless already preauthorized'); }
         }
         return preview;
       } finally { releaseSource(); }

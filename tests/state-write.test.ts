@@ -80,7 +80,7 @@ test('non-transient errors are propagated without retry or state replacement', (
   } finally { mock.restoreAll(); syncBuiltinESMExports(); f.close(); }
 });
 
-test('model and sandbox policy snapshots share the bounded atomic replacement', { skip: process.platform !== 'win32' }, () => {
+test('model, sandbox policy and integration preferences share the bounded atomic replacement', { skip: process.platform !== 'win32' }, () => {
   const f = fixture();
   const rename = fs.renameSync;
   const seen = new Set<string>();
@@ -94,8 +94,10 @@ test('model and sandbox policy snapshots share the bounded atomic replacement', 
     f.state.saveModel('mock-pro');
     const policy = f.state.loadSandboxPolicy();
     f.state.saveSandboxPolicy(policy);
+    f.state.rememberIntegrationRoot(f.directory);
     assert.equal(f.state.loadModel()?.model, 'mock-pro');
     assert.equal(f.state.loadSandboxPolicy().sha256, sandboxPolicyDigest(policy.policy));
-    assert.equal(seen.size, 2);
+    assert.equal(f.state.loadIntegrationRoots().length, 1);
+    assert.equal(seen.size, 3);
   } finally { mock.restoreAll(); syncBuiltinESMExports(); f.close(); }
 });

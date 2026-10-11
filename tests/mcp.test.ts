@@ -19,6 +19,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   let client: Client | undefined;
   let decision: 'accept' | 'decline' | 'cancel' = 'accept';
   let confirmation = false;
+  let rememberProject = false;
   const confirmations: string[] = [];
   async function connect(withElicitation = false): Promise<Client> {
     const next = new Client({ name: 'bridge-contract-test', version: '1' }, { capabilities: withElicitation ? { elicitation: { form: {} } } : {} });
@@ -27,7 +28,8 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
       if (request.params.mode !== 'form') throw new Error('Unexpected elicitation mode');
       confirmations.push(request.params.message);
       assert.equal(request.params.requestedSchema.properties.confirm?.default, false);
-      return { action: decision, ...(decision === 'accept' ? { content: { confirm: confirmation } } : {}) };
+      assert.equal(request.params.requestedSchema.properties.rememberProject?.default, false);
+      return { action: decision, ...(decision === 'accept' ? { content: { confirm: confirmation, rememberProject } } : {}) };
     });
     await next.connect(new StdioClientTransport({ command: process.execPath,
       args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
@@ -126,19 +128,29 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal(consumption.byModel[0].model, 'mock-pro');
     await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
+    rememberProject = true;
     for (const response of ['decline', 'cancel', 'accept'] as const) {
       decision = response;
       const denied = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.sha256 } });
       assert.equal((denied.structuredContent as any).error.code, 'APPROVAL_DENIED');
       await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+      assert.equal((await call('antigravity_health')).integrationApproval.preauthorizedProjectCount, 0);
     }
     confirmation = true;
     await call('antigravity_integrate', { taskId, expectedSha256: preview.sha256 });
+    assert.equal((await call('antigravity_health')).integrationApproval.preauthorizedProjectCount, 1);
     assert.equal(confirmations.length, 4);
     assert.ok(confirmations.every(message => message.includes(preview.sha256) && message.includes(JSON.stringify(canonicalSource))));
     assert.equal(await readFile(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await call('antigravity_discard', { taskId });
     await assert.rejects(readFile(path.join(final.task.copyDirectory, 'source.txt')), { code: 'ENOENT' });
+    await client.close();
+    client = await connect();
+    const approval = (await call('antigravity_health')).integrationApproval;
+    assert.equal(approval.available, true);
+    assert.equal(approval.preauthorizedProjectCount, 1);
+    await rm(path.join(dir, 'state', 'integration-approvals.json'));
+    assert.equal((await call('antigravity_health')).integrationApproval.available, false);
   } finally {
     await client?.close();
     assert.equal(path.dirname(dir), os.tmpdir());

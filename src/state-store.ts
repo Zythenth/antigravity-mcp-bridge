@@ -17,10 +17,14 @@ import type { BridgeEvent } from './types.js';
 import { usageCountersSchema } from './usage.js';
 import { roleDefinitionSchema, effortSchema } from './roles.js';
 import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
+import { preauthorizedIntegrationRoots } from './integration-policy.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
 const maxSandboxPolicyFileBytes = 2 * 20 * 1000 * 6 + 4096;
 const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
+const integrationApprovalsSchema = z.object({ version: z.literal(1), roots: z.array(z.string().min(1).max(1000).refine(root =>
+  !root.includes('\0') && path.isAbsolute(root) && path.resolve(root) === root && root !== path.parse(root).root &&
+  (process.platform !== 'win32' || root === root.toLowerCase()))).max(20) }).strict();
 const snapshotSchema = z.object({
   version: z.literal(1), ownerPid: z.number().int().positive(),
   record: z.object({ taskId: z.string().uuid(), workingDirectory: z.string(), prompt: z.string(),
@@ -108,6 +112,32 @@ export class StateStore {
   private file(taskId: string): string {
     if (!uuid.test(taskId)) throw new BridgeError('INVALID_STATE', 'Invalid persisted task ID');
     return path.join(this.directory, taskId + '.json');
+  }
+
+  loadIntegrationRoots(): string[] {
+    const file = path.join(this.directory, 'integration-approvals.json');
+    try {
+      const stat = lstatSync(file);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 128 * 1024) throw new Error('Unsafe integration approvals');
+      return integrationApprovalsSchema.parse(JSON.parse(readFileSync(file, 'utf8'))).roots;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw new BridgeError('INVALID_STATE', 'Invalid persisted integration approvals');
+    }
+  }
+
+  rememberIntegrationRoot(directory: string): void {
+    const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0]!;
+    const release = this.acquire('integration-approvals');
+    const target = path.join(this.directory, 'integration-approvals.json');
+    const temporary = target + '.' + randomUUID() + '.tmp';
+    try {
+      const roots = this.loadIntegrationRoots();
+      if (roots.includes(canonical)) return;
+      const snapshot = integrationApprovalsSchema.parse({ version: 1, roots: [...roots, canonical] });
+      writeFileSync(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600, flush: true });
+      replaceStateFile(temporary, target);
+    } finally { rmSync(temporary, { force: true }); release(); }
   }
 
   loadModel(): { model: string | null } | undefined {

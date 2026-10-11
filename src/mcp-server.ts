@@ -53,7 +53,7 @@ function sandboxPolicyConfirmation(previous: SandboxPolicySnapshot, proposed: Sa
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
   const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.8.0' }, {
-    instructions: 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; exact projects explicitly preauthorized in server configuration skip repeated human forms. All other projects require MCP form elicitation. The original project changes only through confirmed integration.',
+    instructions: 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; exact projects authorized in server configuration or remembered through human form confirmation skip repeated human forms. All other projects require MCP form elicitation. The original project changes only through confirmed integration.',
   });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
@@ -313,7 +313,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_integrate')) server.registerTool('antigravity_integrate', {
     outputSchema: outputSchemas.antigravity_integrate,
-    title: 'Integrate reviewed changes', description: 'Apply a currently verified patch bound to its preview SHA-256. Exact projects preauthorized in server configuration skip the repeated form; other projects require human MCP form confirmation. Caller text or tool arguments cannot change that policy.',
+    title: 'Integrate reviewed changes', description: 'Apply a currently verified patch bound to its preview SHA-256. The human confirmation form can remember authorization for this exact project. Configured or remembered projects skip repeated forms. Caller text or tool arguments cannot grant authorization.',
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
   }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, async preview => {
     if (!server.server.getClientCapabilities()?.elicitation?.form) {
@@ -322,11 +322,15 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     const files = preview.fileSummaries.map(file => `${file.status} ${JSON.stringify(file.path)} (${file.binary ? 'binário' : '+' + file.insertions + ' -' + file.deletions})`).join('\n');
     const answer = await server.server.elicitInput({ mode: 'form',
       message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?\nOrigem: ${JSON.stringify(preview.sourceDirectory)}\nTarefa: ${taskId}\nSHA-256 revisado: ${preview.sha256}\n${files}\nA integração modifica o original. Confirme apenas após revisar o patch e os testes.`,
-      requestedSchema: { type: 'object', properties: { confirm: { type: 'boolean', title: 'Confirmo a integração deste patch', default: false } }, required: ['confirm'] },
+      requestedSchema: { type: 'object', properties: {
+        confirm: { type: 'boolean', title: 'Confirmo a integração deste patch', default: false },
+        rememberProject: { type: 'boolean', title: 'Não pedir novamente neste projeto', description: 'Autoriza futuras integrações revisadas somente nesta raiz de projeto. A escolha fica salva localmente e pode ser revogada.', default: false },
+      }, required: ['confirm'] },
     }, { timeout: 300000 }).catch(() => {
       throw new BridgeError('APPROVAL_FAILED', 'Client confirmation failed or timed out; no changes were applied');
     });
-    return answer.action === 'accept' && answer.content?.confirm === true;
+    return { confirmed: answer.action === 'accept' && answer.content?.confirm === true,
+      rememberProject: answer.action === 'accept' && answer.content?.rememberProject === true };
   }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_discard')) server.registerTool('antigravity_discard', {

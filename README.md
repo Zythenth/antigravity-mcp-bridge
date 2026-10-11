@@ -185,11 +185,15 @@ Acompanhe `continuationTaskId` com um novo cursor em zero. `continuationPending:
 
 ## Integração com autorização prévia
 
+No formulário de `antigravity_integrate`, marque **Confirmo a integração deste patch** para aprovar somente o patch exibido. A opção **Não pedir novamente neste projeto** fica desmarcada por padrão. Ao marcar ambas, o bridge salva a autorização da raiz exata depois de integrar o patch com sucesso; ela continua válida após reiniciar o servidor. Recusar, cancelar ou aprovar sem essa opção não salva autorização. Projetos descendentes e vizinhos continuam exigindo confirmação.
+
+A escolha fica no arquivo privado `integration-approvals.json`, dentro de `BRIDGE_STATE_DIRECTORY` (por padrão, `~/.antigravity-mcp-bridge`). Para revogar, remova a raiz do array `roots` desse arquivo ou apague o arquivo para revogar todas as escolhas lembradas. A próxima integração já consultará a preferência atualizada. São aceitos até 20 projetos lembrados; esse arquivo deve permanecer fora do repositório e da cópia delegada. Se o patch for aplicado mas a preferência não puder ser salva, `INTEGRATION_PREFERENCE_FAILED` informa essa situação; a tarefa fica registrada como integrada.
+
 Para liberar integrações de um projeto uma vez, configure `BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS` no ambiente privado do servidor como um array JSON de raízes absolutas, por exemplo `["<raiz-absoluta-do-projeto>"]`, e reinicie a conexão. Os diretórios precisam existir. A configuração não pode autorizar uma raiz de disco; a correspondência é exata e não abrange projetos descendentes ou vizinhos. Remova a raiz e reinicie para revogar a autorização.
 
-Nesses projetos, `antigravity_integrate` dispensa o formulário repetido. Continuam obrigatórios: tarefa de escrita concluída, hash atual, critérios verificados, revisão apoiada nos arquivos e evidência de testes sem falhas ou desatualização. O bridge confere novamente o patch antes de aplicar. Outros projetos mantêm a confirmação humana pelo cliente MCP. Texto do Gemini, mensagens do chamador e argumentos de ferramentas não alteram essa configuração nem concedem permissões de sandbox.
+Nos projetos configurados ou lembrados pelo formulário, `antigravity_integrate` dispensa a confirmação repetida. Continuam obrigatórios: tarefa de escrita concluída, hash atual, critérios verificados, revisão apoiada nos arquivos e evidência de testes sem falhas ou desatualização. O bridge confere novamente o patch antes de aplicar. Outros projetos mantêm a confirmação humana pelo cliente MCP. Texto do Gemini, mensagens do chamador e argumentos de ferramentas não concedem autorização nem permissões de sandbox. Revogar uma escolha do formulário não remove a autorização configurada no ambiente; nesse caso, remova também a raiz da variável e reinicie a conexão.
 
-`antigravity_health.integrationApproval.preauthorizedProjectCount` informa a quantidade configurada; a existência de uma raiz autorizada não libera as demais.
+`antigravity_health.integrationApproval.preauthorizedProjectCount` informa a quantidade de raízes configuradas ou lembradas; a existência de uma raiz autorizada não libera as demais.
 
 ## Skills fornecidas pelo cliente
 
