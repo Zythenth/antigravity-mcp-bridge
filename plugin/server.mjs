@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path18) {
-      let input2 = path18;
+    function removeDotSegments(path20) {
+      let input2 = path20;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path18 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path18 && path18 !== "/" ? path18 : void 0;
+        const path20 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path20 && path20 !== "/" ? path20 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path18) {
-  if (!path18)
+function getElementAtPath(obj, path20) {
+  if (!path20)
     return obj;
-  return path18.reduce((acc, key) => acc?.[key], obj);
+  return path20.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path18, issues) {
+function prefixIssues(path20, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path18);
+    iss.path.unshift(path20);
     return iss;
   });
 }
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error63, path18 = []) => {
+  const processError2 = (error63, path20 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path18, ...issue2.path]));
+        issue2.errors.map((issues) => processError2({ issues }, [...path20, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
       } else {
-        const fullpath = [...path18, ...issue2.path];
+        const fullpath = [...path20, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8863,22 +8863,22 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
       }
     }
   };
-  processError(error62);
+  processError2(error62);
   return fieldErrors;
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError = (error63, path18 = []) => {
+  const processError2 = (error63, path20 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path18, ...issue2.path]));
+        issue2.errors.map((issues) => processError2({ issues }, [...path20, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path18, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
       } else {
-        const fullpath = [...path18, ...issue2.path];
+        const fullpath = [...path20, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8912,13 +8912,13 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
       }
     }
   };
-  processError(error62);
+  processError2(error62);
   return result;
 }
 function toDotPath(_path) {
   const segs = [];
-  const path18 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path18) {
+  const path20 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path20) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path18 = ref.slice(1).split("/").filter(Boolean);
-  if (path18.length === 0) {
+  const path20 = ref.slice(1).split("/").filter(Boolean);
+  if (path20.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path18[0] === defsKey) {
-    const key = path18[1] === void 0 ? void 0 : decodeJSONPointerSegment(path18[1]);
+  if (path20[0] === defsKey) {
+    const key = path20[1] === void 0 ? void 0 : decodeJSONPointerSegment(path20[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28511,7 +28511,7 @@ var StdioServerTransport = class {
 };
 
 // dist/src/cli-adapter.js
-import { spawn as spawn3 } from "node:child_process";
+import { spawn as spawn4 } from "node:child_process";
 
 // dist/src/project-memory.js
 import { createHash, randomUUID } from "node:crypto";
@@ -29640,19 +29640,19 @@ var peerContextSchema = external_exports.object({
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync2, realpathSync as realpathSync3, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { access as access2 } from "node:fs/promises";
-import path10 from "node:path";
+import path12 from "node:path";
 
 // dist/src/roles.js
-import { createHash as createHash9 } from "node:crypto";
+import { createHash as createHash10 } from "node:crypto";
 import { readFile as readFile2, stat } from "node:fs/promises";
 
 // dist/src/isolation.js
-import { createHash as createHash5 } from "node:crypto";
-import { spawn } from "node:child_process";
+import { createHash as createHash6 } from "node:crypto";
+import { spawn as spawn2 } from "node:child_process";
 import { createReadStream as createReadStream2 } from "node:fs";
-import { copyFile, lstat as lstat3, mkdir as mkdir3, mkdtemp, readdir as readdir2, realpath as realpath2, rm as rm2 } from "node:fs/promises";
+import { lstat as lstat4, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir2, realpath as realpath2, rm as rm2 } from "node:fs/promises";
 import os3 from "node:os";
-import path7 from "node:path";
+import path9 from "node:path";
 
 // dist/src/skills.js
 import { createHash as createHash3 } from "node:crypto";
@@ -29987,7 +29987,7 @@ function positiveInteger(value, fallback, max) {
     throw new Error(`Invalid numeric configuration: ${value}`);
   return n;
 }
-var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
+var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
 function testExecutor(value) {
   if (value === void 0)
     return process.platform === "win32" ? "windows-lpac" : "agy";
@@ -30033,6 +30033,9 @@ function parseStringArray(value, envName) {
   const items = [...new Set(parsed.map((item) => item.trim()))];
   if (envName === "BRIDGE_ALLOWED_ENV_VARS" && items.some((item) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
     throw new Error(envName + " must contain exact environment variable names");
+  }
+  if ((envName === "BRIDGE_SECRET_EXCLUSIONS" || envName === "BRIDGE_SECRET_EXCEPTIONS") && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
+    throw new Error(envName + " must contain relative glob patterns without traversal");
   }
   return items;
 }
@@ -30745,7 +30748,7 @@ async function assertNoLinkAncestry(targetPath, label) {
 }
 async function hookMain() {
   const fsp2 = await import("node:fs/promises");
-  const path18 = await import("node:path");
+  const path20 = await import("node:path");
   const crypto3 = await import("node:crypto");
   const url2 = await import("node:url");
   const WINDOWS_DEVICE_NAMES5 = /* @__PURE__ */ new Set([
@@ -30779,20 +30782,20 @@ async function hookMain() {
     return WINDOWS_DEVICE_NAMES5.has(base);
   }
   function isInside(parent, child) {
-    const p = process.platform === "win32" ? path18.resolve(parent).toLowerCase() : path18.resolve(parent);
-    const c = process.platform === "win32" ? path18.resolve(child).toLowerCase() : path18.resolve(child);
-    const rel = path18.relative(p, c);
-    return rel === "" || !rel.startsWith("..") && !path18.isAbsolute(rel);
+    const p = process.platform === "win32" ? path20.resolve(parent).toLowerCase() : path20.resolve(parent);
+    const c = process.platform === "win32" ? path20.resolve(child).toLowerCase() : path20.resolve(child);
+    const rel = path20.relative(p, c);
+    return rel === "" || !rel.startsWith("..") && !path20.isAbsolute(rel);
   }
   function canonicalProtected(target) {
-    const parts = path18.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
+    const parts = path20.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
     return parts.includes(".git") || parts[0] === ".agents";
   }
   function emitDecision(decision2, reason2) {
     console.log(JSON.stringify({ decision: decision2, reason: reason2 }));
     process.exit(0);
   }
-  const manifestPath = path18.resolve(process.cwd(), "bridge-execution-policy.json");
+  const manifestPath = path20.resolve(process.cwd(), "bridge-execution-policy.json");
   let manifestStat;
   try {
     manifestStat = await fsp2.lstat(manifestPath);
@@ -30842,8 +30845,8 @@ async function hookMain() {
   }
   const isWindows = process.platform === "win32";
   try {
-    const expectedCanonical = path18.resolve(manifest.canonicalCopyRoot);
-    const actualCanonical = path18.resolve(await fsp2.realpath(path18.resolve(process.cwd(), "..")));
+    const expectedCanonical = path20.resolve(manifest.canonicalCopyRoot);
+    const actualCanonical = path20.resolve(await fsp2.realpath(path20.resolve(process.cwd(), "..")));
     const match = isWindows ? expectedCanonical.toLowerCase() === actualCanonical.toLowerCase() : expectedCanonical === actualCanonical;
     if (!match) {
       emitDecision("deny", "Denied by execution policy");
@@ -30881,12 +30884,12 @@ async function hookMain() {
     emitDecision("deny", "Denied by execution policy");
   }
   if (Array.isArray(input2.workspacePaths) && input2.workspacePaths.length > 0) {
-    const origRoot = path18.resolve(manifest.originalCopyRoot);
-    const canonRoot = path18.resolve(manifest.canonicalCopyRoot);
+    const origRoot = path20.resolve(manifest.originalCopyRoot);
+    const canonRoot = path20.resolve(manifest.canonicalCopyRoot);
     const matchAny = input2.workspacePaths.some((wp) => {
       if (typeof wp !== "string")
         return false;
-      const res = path18.resolve(wp);
+      const res = path20.resolve(wp);
       return isWindows ? res.toLowerCase() === origRoot.toLowerCase() || res.toLowerCase() === canonRoot.toLowerCase() : res === origRoot || res === canonRoot;
     });
     if (!matchAny) {
@@ -30947,7 +30950,7 @@ async function hookMain() {
       const rawTarget = toolName === "view_file" ? args?.AbsolutePath : args?.TargetFile;
       let pathValid = typeof rawTarget === "string" && rawTarget.length > 0 && rawTarget.length <= 4e3;
       if (pathValid) {
-        if (!path18.isAbsolute(rawTarget)) {
+        if (!path20.isAbsolute(rawTarget)) {
           pathValid = false;
         } else if (isWindows) {
           if (!/^[A-Za-z]:[\\/]/.test(rawTarget) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(rawTarget) || rawTarget.slice(2).includes(":")) {
@@ -30962,7 +30965,7 @@ async function hookMain() {
         decision = "deny";
         reason = "Invalid or non-absolute target file path";
       } else {
-        const resolvedTarget = path18.resolve(rawTarget);
+        const resolvedTarget = path20.resolve(rawTarget);
         const insideOriginal = isInside(manifest.originalCopyRoot, resolvedTarget);
         const insideCanonical = isInside(manifest.canonicalCopyRoot, resolvedTarget);
         if (!insideOriginal && !insideCanonical) {
@@ -30970,9 +30973,9 @@ async function hookMain() {
           reason = "Path is outside copy directory";
         } else {
           const rootUsed = insideOriginal ? manifest.originalCopyRoot : manifest.canonicalCopyRoot;
-          let relToRoot = path18.relative(rootUsed, resolvedTarget);
-          if (isWindows && (relToRoot.startsWith("..") || path18.isAbsolute(relToRoot))) {
-            relToRoot = path18.relative(path18.resolve(rootUsed).toLowerCase(), path18.resolve(resolvedTarget).toLowerCase());
+          let relToRoot = path20.relative(rootUsed, resolvedTarget);
+          if (isWindows && (relToRoot.startsWith("..") || path20.isAbsolute(relToRoot))) {
+            relToRoot = path20.relative(path20.resolve(rootUsed).toLowerCase(), path20.resolve(resolvedTarget).toLowerCase());
           }
           const segs = relToRoot.split(/[\\/]+/).filter(Boolean);
           let segsSafe = true;
@@ -31003,7 +31006,7 @@ async function hookMain() {
                 let ancSafe = true;
                 let current = rootUsed;
                 for (let i = 0; i < segs.length - 1; i++) {
-                  current = path18.join(current, segs[i]);
+                  current = path20.join(current, segs[i]);
                   try {
                     const st = await fsp2.lstat(current);
                     if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31048,7 +31051,7 @@ async function hookMain() {
             let ancSafe = true;
             let current = rootUsed;
             for (let i = 0; i < segs.length - 1; i++) {
-              current = path18.join(current, segs[i]);
+              current = path20.join(current, segs[i]);
               try {
                 const st = await fsp2.lstat(current);
                 if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31625,6 +31628,464 @@ async function discardExecutionPolicy(staged, stateDirectory) {
   await fsp.unlink(expected);
 }
 
+// dist/src/secret-preflight.js
+import { createHash as createHash5 } from "node:crypto";
+import { lstat as lstat3, open as open3 } from "node:fs/promises";
+import path7 from "node:path";
+var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".env",
+  ".ini",
+  ".conf",
+  ".cfg",
+  ".cnf",
+  ".properties",
+  ".toml",
+  ".yaml",
+  ".yml"
+]);
+function validateGlobPattern(pattern) {
+  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be a non-empty string without NUL");
+  }
+  let norm = pattern.replaceAll("\\", "/").trim();
+  while (norm.startsWith("./")) {
+    norm = norm.slice(2);
+  }
+  if (!norm) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be a non-empty string without NUL");
+  }
+  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be project-relative: " + pattern);
+  }
+  const parts = norm.split("/");
+  if (parts.some((p) => p === "..")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must not contain traversal (..): " + pattern);
+  }
+  return norm;
+}
+function globToRegExp(pattern) {
+  let p = validateGlobPattern(pattern);
+  if (p === "**" || p === "*") {
+    return /^.*$/i;
+  }
+  if (p.endsWith("/")) {
+    p += "**";
+  }
+  let leadingRx = "";
+  if (p.startsWith("**/")) {
+    leadingRx = "(?:.*\\/)?";
+    p = p.slice(3);
+  } else if (!p.includes("/")) {
+    leadingRx = "(?:.*\\/)?";
+  }
+  let trailingRx = "";
+  if (p.endsWith("/**")) {
+    trailingRx = "\\/.*";
+    p = p.slice(0, -3);
+  }
+  const segments = p.split("/**/");
+  const segmentRegexes = segments.map((seg) => {
+    return seg.split("**").map((part) => part.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]")).join(".*");
+  });
+  const joined = segmentRegexes.join("/(?:.*/)?");
+  return new RegExp(`^${leadingRx}${joined}${trailingRx}$`, "i");
+}
+function matchProjectRelativeGlob(pattern, relativePath) {
+  const rx = globToRegExp(pattern);
+  return rx.test(relativePath);
+}
+function isKnownCredentialFile(normalizedRelative) {
+  const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
+  const base = path7.posix.basename(norm);
+  if (base === ".env" || base === ".envrc")
+    return true;
+  if (base.startsWith(".env.")) {
+    if (base === ".env.example" || base === ".env.sample" || base === ".env.template" || base === ".env.dist") {
+      return false;
+    }
+    return true;
+  }
+  if (/^id_(?:rsa|dsa|ecdsa|ed25519)(?:\..*)?$/.test(base)) {
+    if (base.endsWith(".pub"))
+      return false;
+    return true;
+  }
+  if (base.endsWith(".pub"))
+    return false;
+  if (base.endsWith(".key")) {
+    if (base.includes("pub") || base.includes("cert"))
+      return false;
+    if (base.includes("priv") || base.includes("secret") || base === "server.key" || base === "client.key" || base === "tls.key" || base === "ssl.key" || base === "host.key" || base === "jwt.key") {
+      return true;
+    }
+    return false;
+  }
+  if (base.endsWith(".pem")) {
+    if (base.includes("pub") || base.includes("cert"))
+      return false;
+    if (base.includes("priv") || base.includes("key"))
+      return true;
+    return false;
+  }
+  if (base.endsWith(".pfx") || base.endsWith(".p12") || base.endsWith(".pkcs12") || base.endsWith(".keystore") || base.endsWith(".jks")) {
+    return true;
+  }
+  if (base === ".git-credentials" || base === ".netrc" || base === "_netrc")
+    return true;
+  if (norm.endsWith("/.aws/credentials") || norm.endsWith("/.aws/config") || norm === ".aws/credentials" || norm === ".aws/config")
+    return true;
+  if (norm.endsWith("/.kube/config") || norm === ".kube/config" || base === "kubeconfig")
+    return true;
+  if (norm.endsWith("/.docker/config.json") || norm === ".docker/config.json" || base === ".dockercfg")
+    return true;
+  if (/^(?:service[-_]account|serviceaccountkey)\.json$/.test(base))
+    return true;
+  return false;
+}
+var KNOWN_SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".ts",
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".tsx",
+  ".jsx",
+  ".py",
+  ".go",
+  ".rs",
+  ".java",
+  ".c",
+  ".cpp",
+  ".cc",
+  ".h",
+  ".hpp",
+  ".cs",
+  ".rb",
+  ".php",
+  ".swift",
+  ".kt"
+]);
+function detectSecretContent(normalizedRelative, content, scanState = {}) {
+  const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
+  const base = path7.posix.basename(norm);
+  const ext = path7.posix.extname(norm);
+  const text = content.toString("utf8");
+  const trimmed = text.trimStart();
+  const isSource = KNOWN_SOURCE_EXTENSIONS.has(ext);
+  if (!isSource) {
+    if (/(?:^|[\r\n])\s*-----BEGIN[A-Z0-9 _-]*PRIVATE KEY-----/i.test(text)) {
+      return true;
+    }
+    if (/(?:^|[\r\n])\s*-----BEGIN PGP PRIVATE KEY BLOCK-----/.test(text))
+      return true;
+    if (/(?:^|[\r\n])\s*PuTTY-User-Key-File-/.test(text))
+      return true;
+  }
+  if (ext === ".json" || !ext && trimmed.startsWith("{")) {
+    if (text.includes('"type"') && text.includes('"service_account"')) {
+      scanState.jsonHasTypeServiceAccount = true;
+    }
+    if (text.includes('"private_key"') || text.includes('"private_key_id"')) {
+      scanState.jsonHasPrivateKeyField = true;
+    }
+    if (scanState.jsonHasTypeServiceAccount && scanState.jsonHasPrivateKeyField) {
+      return true;
+    }
+  }
+  const isConfigFile = CONFIG_EXTENSIONS.has(ext) || base.startsWith(".env") || base === ".git-credentials" || base === ".netrc" || base === "_netrc" || base === ".npmrc" || norm.includes("/.aws/") || norm.includes("/.kube/") || norm.includes("/.docker/") || ext === ".txt" && (base.includes("config") || base.includes("cred") || base.includes("secret") || base.includes("token") || base.includes("aws") || base.includes("auth"));
+  if (isConfigFile) {
+    const awsMatch = text.match(/^\s*(?:aws_secret_access_key|aws_session_token|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)\s*[:=]\s*([A-Za-z0-9/+=]{20,})/m);
+    if (awsMatch) {
+      const val = awsMatch[1].toLowerCase();
+      if (!val.includes("your_") && !val.includes("example") && !val.includes("placeholder") && !val.includes("changeme") && !val.includes("xxxx") && !val.includes("dummy")) {
+        return true;
+      }
+    }
+    const npmMatch = text.match(/(?:\/\/registry\.[^:]+:_authToken|_authToken)\s*[:=]\s*([A-Za-z0-9_-]{20,})/);
+    if (npmMatch) {
+      const val = npmMatch[1].toLowerCase();
+      if (!val.includes("your_") && !val.includes("example") && !val.includes("placeholder") && !val.includes("dummy")) {
+        return true;
+      }
+    }
+    if (/^\s*(?:token|access_token|github_token|password)\s*[:=]\s*['"]?(?:ghp|gho|ghs)_[A-Za-z0-9]{36}/m.test(text)) {
+      return true;
+    }
+    if (/^\s*(?:bot_token|token|api_token)\s*[:=]\s*['"]?xox[baprs]-[0-9]{10,}-[A-Za-z0-9]{10,}/m.test(text)) {
+      return true;
+    }
+    if (/^\s*(?:stripe_key|secret_key|api_key)\s*[:=]\s*['"]?sk_live_[0-9a-zA-Z]{24,}/m.test(text)) {
+      return true;
+    }
+    if (/^\s*(?:private_key|ssl_key|tls_key|key)\s*[:=]\s*['"]?-----BEGIN/im.test(text)) {
+      return true;
+    }
+  }
+  if (base.endsWith(".key") && !base.includes("pub") && !base.includes("cert")) {
+    if (/(?:^|[\r\n])\s*-----BEGIN[A-Z0-9 _-]*PRIVATE KEY-----/i.test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+async function preflightProjectFiles(directory, candidates, limits, checkedPathFn = checkedPath) {
+  if (candidates.length > limits.maxCopyFiles) {
+    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${candidates.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  }
+  const eligible = [];
+  const blocked = [];
+  const records = /* @__PURE__ */ new Map();
+  const exclusions = (limits.secretExclusions ?? []).filter(Boolean);
+  const exceptions = (limits.secretExceptions ?? []).filter(Boolean);
+  let aggregateBytesScanned = 0;
+  for (const candidate of candidates) {
+    let absolute;
+    try {
+      absolute = await checkedPathFn(directory, candidate, true);
+    } catch (error62) {
+      if (error62 instanceof BridgeError && (error62.code === "UNSAFE_PROJECT_PATH" || error62.code === "INVALID_INCLUDE_PATH")) {
+        blocked.push({ path: candidate, reason: "UNSAFE_PATH" });
+        continue;
+      }
+      if (error62.code === "ENOENT")
+        continue;
+      throw error62;
+    }
+    const relative2 = validRelative(candidate);
+    if (exclusions.some((pattern) => matchProjectRelativeGlob(pattern, relative2))) {
+      blocked.push({ path: relative2, reason: "SECRET_EXCLUSION" });
+      continue;
+    }
+    const isExcepted = exceptions.some((pattern) => matchProjectRelativeGlob(pattern, relative2));
+    if (!isExcepted && isKnownCredentialFile(relative2)) {
+      blocked.push({ path: relative2, reason: "SECRET_FILE" });
+      continue;
+    }
+    const handle = await open3(absolute, "r");
+    try {
+      let revalidatedPath;
+      try {
+        revalidatedPath = await checkedPathFn(directory, candidate, true);
+      } catch (error62) {
+        if (error62 instanceof BridgeError && (error62.code === "UNSAFE_PROJECT_PATH" || error62.code === "INVALID_INCLUDE_PATH")) {
+          blocked.push({ path: relative2, reason: "UNSAFE_PATH" });
+          continue;
+        }
+        if (error62.code === "ENOENT")
+          continue;
+        throw error62;
+      }
+      const fstat = await handle.stat();
+      const currentLstat = await lstat3(revalidatedPath);
+      if (!fstat.isFile() || currentLstat.isSymbolicLink() || !currentLstat.isFile()) {
+        blocked.push({ path: relative2, reason: "UNSAFE_PATH" });
+        continue;
+      }
+      if (currentLstat.ino !== fstat.ino || currentLstat.dev !== fstat.dev || currentLstat.size !== fstat.size) {
+        blocked.push({ path: relative2, reason: "UNSAFE_PATH" });
+        continue;
+      }
+      if (fstat.size > limits.maxCopyBytes || aggregateBytesScanned + fstat.size > limits.maxCopyBytes) {
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", `Candidate files exceed ${limits.maxCopyBytes} copy byte budget`);
+      }
+      const CHUNK_SIZE = 64 * 1024;
+      const OVERLAP_SIZE = 4 * 1024;
+      const buf = Buffer.allocUnsafe(CHUNK_SIZE);
+      const hash3 = createHash5("sha256");
+      let totalRead = 0;
+      let hasSecret = false;
+      let prevOverlap = Buffer.alloc(0);
+      const scanState = {};
+      for (; ; ) {
+        const { bytesRead } = await handle.read(buf, 0, CHUNK_SIZE, null);
+        if (bytesRead === 0)
+          break;
+        totalRead += bytesRead;
+        aggregateBytesScanned += bytesRead;
+        if (totalRead > limits.maxCopyBytes || aggregateBytesScanned > limits.maxCopyBytes) {
+          throw new BridgeError("COPY_LIMIT_EXCEEDED", `Candidate files exceed ${limits.maxCopyBytes} copy byte budget`);
+        }
+        const slice = buf.subarray(0, bytesRead);
+        hash3.update(slice);
+        if (!isExcepted && !hasSecret) {
+          const window = prevOverlap.length > 0 ? Buffer.concat([prevOverlap, slice]) : slice;
+          if (detectSecretContent(relative2, window, scanState)) {
+            hasSecret = true;
+          }
+          const takeOverlap = Math.min(slice.length, OVERLAP_SIZE);
+          prevOverlap = Buffer.from(slice.subarray(slice.length - takeOverlap));
+        }
+      }
+      if (hasSecret) {
+        blocked.push({ path: relative2, reason: "SECRET_CONTENT" });
+        continue;
+      }
+      const sha256 = hash3.digest("hex");
+      eligible.push(relative2);
+      records.set(relative2, {
+        path: relative2,
+        size: fstat.size,
+        mtimeMs: fstat.mtimeMs,
+        ino: fstat.ino,
+        dev: fstat.dev,
+        sha256
+      });
+    } finally {
+      await handle.close();
+    }
+  }
+  return { eligible, blocked, records };
+}
+
+// dist/src/subprocess.js
+import { spawn } from "node:child_process";
+import path8 from "node:path";
+var stopping = /* @__PURE__ */ new WeakSet();
+var ownedProcessGroups = /* @__PURE__ */ new WeakSet();
+function registerOwnedProcessGroup(child) {
+  ownedProcessGroups.add(child);
+}
+function processError(error62, operation) {
+  if (error62 instanceof BridgeError)
+    return error62;
+  const code = error62?.code;
+  if (code === "ENOENT")
+    return new BridgeError("AGY_NOT_FOUND", "agy executable not found");
+  if (code === "EACCES" || code === "EPERM")
+    return new BridgeError("AGY_PERMISSION_DENIED", "Permission denied executing agy");
+  if (operation === "stdin" || code === "EPIPE" || code === "EOF" || code === "ECONNRESET" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END")
+    return new BridgeError("CLI_INPUT_FAILED", "Failed writing input to agy");
+  const message = error62 instanceof Error ? error62.message : String(error62);
+  return new BridgeError("AGY_IO_FAILED", `agy ${operation} failed: ${message}`);
+}
+function terminateSubprocess(child, options) {
+  const isOwned = options?.ownedGroup ?? ownedProcessGroups.has(child);
+  if (stopping.has(child))
+    return;
+  if ((child.exitCode != null || child.signalCode != null) && !isOwned)
+    return;
+  stopping.add(child);
+  let closed = false;
+  let killer;
+  const force = () => {
+    if (!closed) {
+      if (process.platform === "win32") {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      } else if (child.pid) {
+        if (isOwned) {
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {
+            try {
+              child.kill("SIGKILL");
+            } catch {
+            }
+          }
+        } else {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+          }
+        }
+      } else {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      }
+    }
+  };
+  const timeoutMs = options?.escalationTimeoutMs ?? 3e3;
+  const timer = setTimeout(() => {
+    force();
+    if (killer && killer.exitCode === null && killer.signalCode === null) {
+      try {
+        killer.kill();
+      } catch {
+      }
+    }
+  }, timeoutMs);
+  timer.unref();
+  const cleanup = () => {
+    closed = true;
+    clearTimeout(timer);
+  };
+  child.once("close", cleanup);
+  if (process.platform === "win32") {
+    if (child.pid) {
+      try {
+        const executable = path8.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
+        killer = spawn(executable, ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, shell: false, stdio: "ignore" });
+        killer.once("error", force);
+        killer.once("close", (code) => {
+          if (code !== 0)
+            force();
+        });
+      } catch {
+        force();
+      }
+    } else {
+      force();
+    }
+  } else {
+    if (child.pid) {
+      if (isOwned) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          try {
+            child.kill("SIGTERM");
+          } catch {
+            force();
+          }
+        }
+      } else {
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          force();
+        }
+      }
+    } else {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        force();
+      }
+    }
+  }
+}
+function redactDiagnostic(value, state) {
+  if (!value)
+    return "";
+  let text = String(value);
+  if (state) {
+    if (state.inPrivateKey) {
+      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
+        state.inPrivateKey = false;
+      }
+      return "[private key redacted]";
+    }
+    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(text)) {
+      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
+        state.inPrivateKey = false;
+      } else {
+        state.inPrivateKey = true;
+      }
+      return "[private key redacted]";
+    }
+  }
+  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[private key redacted]").replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, "[private key redacted]");
+  text = text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, "$1[redacted]@");
+  for (const [name, secret] of Object.entries(process.env)) {
+    if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name))
+      text = text.split(secret).join("[redacted]");
+  }
+  return text.replace(/\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/g, "[redacted]").replace(/(Bearer\s+)[^\s"']+/gi, "$1[redacted]");
+}
+
 // dist/src/isolation.js
 var maxGitOutput = 1e7;
 async function verifyManagedCopy(project) {
@@ -31644,7 +32105,7 @@ async function stageProjectExecutionPolicy(project, request, limits) {
   const snapshot = await snapshotCopyFiles(project, limits);
   let bytes = 0;
   for (const file3 of snapshot.keys())
-    bytes += (await lstat3(await checkedPath(project.copyDirectory, file3, true))).size;
+    bytes += (await lstat4(await checkedPath(project.copyDirectory, file3, true))).size;
   project.executionPolicy = await stageExecutionPolicy(project.copyDirectory, { ...request, skillFiles: (project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => file3.path)) }, { ...limits, maxCopyFiles: limits.maxCopyFiles - snapshot.size, maxCopyBytes: limits.maxCopyBytes - bytes });
   project.executionStateDirectory = request.stateDirectory;
 }
@@ -31655,11 +32116,11 @@ async function discardProjectCopy(project) {
     [project.gitDirectory, "agy-mcp-baseline-"]
   ];
   for (const [directory, prefix] of targets) {
-    const absolute = path7.resolve(directory);
-    if (path7.relative(root, await realpath2(path7.dirname(absolute))) !== "" || !path7.basename(absolute).startsWith(prefix)) {
+    const absolute = path9.resolve(directory);
+    if (path9.relative(root, await realpath2(path9.dirname(absolute))) !== "" || !path9.basename(absolute).startsWith(prefix)) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
     }
-    const info = await lstat3(absolute).catch((error62) => {
+    const info = await lstat4(absolute).catch((error62) => {
       if (error62.code === "ENOENT")
         return void 0;
       throw error62;
@@ -31668,7 +32129,7 @@ async function discardProjectCopy(project) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
   }
   for (const [directory] of targets)
-    await rm2(path7.resolve(directory), { recursive: true, force: true });
+    await rm2(path9.resolve(directory), { recursive: true, force: true });
   if (project.executionPolicy) {
     if (!project.executionStateDirectory)
       throw new BridgeError("INVALID_AGENT_POLICY", "Private execution storage binding is missing");
@@ -31677,7 +32138,34 @@ async function discardProjectCopy(project) {
 }
 async function git(cwd, args, input2, allowedCodes = [0]) {
   return new Promise((resolve2, reject) => {
-    const child = spawn("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    let childProc;
+    try {
+      childProc = spawn2("git", args, { cwd, windowsHide: true, stdio: "pipe" });
+    } catch (err) {
+      reject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(err.message)));
+      return;
+    }
+    const child = childProc;
+    let settled = false;
+    const settleReject = (error62) => {
+      if (settled)
+        return;
+      settled = true;
+      terminateSubprocess(child);
+      reject(error62);
+    };
+    const settleResolve = (result) => {
+      if (settled)
+        return;
+      settled = true;
+      resolve2(result);
+    };
+    let ioError = null;
+    const recordIoError = (error62) => {
+      if (!ioError)
+        ioError = error62;
+      terminateSubprocess(child);
+    };
     const chunks = [];
     let length = 0;
     let stderr = "";
@@ -31686,44 +32174,98 @@ async function git(cwd, args, input2, allowedCodes = [0]) {
       length += chunk.length;
       if (length > maxGitOutput) {
         overflow = true;
-        child.kill();
-      } else
+        terminateSubprocess(child);
+      } else {
         chunks.push(chunk);
+      }
     });
     child.stderr.on("data", (chunk) => {
       stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
     });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (overflow)
-        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      else if (!allowedCodes.includes(code ?? -1))
-        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
-      else
-        resolve2(Buffer.concat(chunks));
+    child.stdin.on("error", (error62) => {
+      recordIoError(error62);
     });
-    child.stdin.end(input2);
+    child.stdout.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.stderr.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.once("error", (error62) => {
+      settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(error62.message)));
+    });
+    child.once("close", (code) => {
+      if (overflow) {
+        settleReject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      } else if (ioError) {
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(ioError.message || "Git stream communication error")));
+      } else if (!allowedCodes.includes(code ?? -1)) {
+        const diag = stderr.trim() || "git exited with code " + code;
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(diag)));
+      } else {
+        settleResolve(Buffer.concat(chunks));
+      }
+    });
+    if (input2 !== void 0) {
+      try {
+        child.stdin.end(input2);
+      } catch (err) {
+        recordIoError(err);
+      }
+    } else {
+      try {
+        child.stdin.end();
+      } catch (err) {
+        recordIoError(err);
+      }
+    }
   });
 }
 function splitNull(bytes) {
   return bytes.toString("utf8").split("\0").filter(Boolean);
 }
+var WINDOWS_DEVICE_REGEX = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i;
 function validRelative(input2) {
-  const value = input2.replaceAll("\\", "/").replace(/\/$/, "");
-  const parts = value.split("/");
-  if (!value || value.startsWith("/") || /^[A-Za-z]:/.test(value) || parts.some((part) => !part || part === "." || part === ".." || part === ".git")) {
-    throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths must contain project-relative files or directories");
+  if (typeof input2 !== "string" || !input2 || input2.includes("\0")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Path must be a non-empty string without NUL");
   }
-  return value;
+  let norm = input2.replaceAll("\\", "/");
+  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm) || norm.startsWith("//")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Path must be relative: " + input2);
+  }
+  if (norm.endsWith("/")) {
+    norm = norm.slice(0, -1);
+  }
+  const parts = norm.split("/");
+  if (parts.some((p) => !p || p === "." || p === "..")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Path must not contain traversal or empty segments: " + input2);
+  }
+  if (parts.some((p) => p === ".git")) {
+    throw new BridgeError("INVALID_INCLUDE_PATH", "Path must not contain .git: " + input2);
+  }
+  if (process.platform === "win32") {
+    if (input2.includes(":")) {
+      throw new BridgeError("INVALID_INCLUDE_PATH", "Windows Alternate Data Streams (colons) are forbidden: " + input2);
+    }
+    for (const part of parts) {
+      if (WINDOWS_DEVICE_REGEX.test(part)) {
+        throw new BridgeError("INVALID_INCLUDE_PATH", "Windows reserved device names are forbidden: " + input2);
+      }
+      if (part.toLowerCase() === ".git" || /^git~\d+$/i.test(part)) {
+        throw new BridgeError("INVALID_INCLUDE_PATH", "Windows .git aliases are forbidden: " + input2);
+      }
+    }
+  }
+  return parts.join("/");
 }
 async function checkedPath(root, relative2, mustExist) {
   const parts = validRelative(relative2).split("/");
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path7.join(current, parts[index]);
+    current = path9.join(current, parts[index]);
     let info;
     try {
-      info = await lstat3(current);
+      info = await lstat4(current);
     } catch (error62) {
       if (!mustExist && error62.code === "ENOENT")
         break;
@@ -31736,7 +32278,7 @@ async function checkedPath(root, relative2, mustExist) {
   return current;
 }
 async function sha256File2(file3) {
-  const digest = createHash5("sha256");
+  const digest = createHash6("sha256");
   for await (const chunk of createReadStream2(file3))
     digest.update(chunk);
   return digest.digest("hex");
@@ -31748,59 +32290,160 @@ async function validateProjectRoot(sourceDirectory) {
   } catch {
     throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
   }
-  if (path7.relative(await realpath2(top), await realpath2(sourceDirectory)) !== "") {
+  if (path9.relative(await realpath2(top), await realpath2(sourceDirectory)) !== "") {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
   }
 }
-async function listProjectFiles(sourceDirectory) {
+async function enumerateGitCandidates(sourceDirectory) {
   await validateProjectRoot(sourceDirectory);
   const candidates = [...new Set(splitNull(await git(sourceDirectory, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
   if (!candidates.length)
     return [];
   const ignored = new Set(splitNull(await git(sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])));
-  return candidates.filter((file3) => !ignored.has(file3) && !file3.split("/").includes(".git")).sort();
+  return candidates.filter((file3) => {
+    if (ignored.has(file3))
+      return false;
+    const parts = file3.split("/");
+    if (parts.some((p) => p === ".git"))
+      return false;
+    if (process.platform === "win32" && parts.some((p) => p.toLowerCase() === ".git" || /^git~\d+$/i.test(p)))
+      return false;
+    return true;
+  }).sort();
+}
+async function listProjectFiles(sourceDirectory, limits = DEFAULT_PROJECT_LIMITS, blockedCollector) {
+  const unignored = await enumerateGitCandidates(sourceDirectory);
+  if (!unignored.length)
+    return [];
+  const preflight = await preflightProjectFiles(sourceDirectory, unignored, limits);
+  if (blockedCollector) {
+    blockedCollector.push(...preflight.blocked);
+  }
+  return preflight.eligible.sort();
+}
+async function writeAll(handle, buffer) {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesWritten } = await handle.write(buffer, offset, buffer.length - offset, null);
+    if (bytesWritten <= 0) {
+      throw new BridgeError("COPY_WRITE_FAILED", "Zero progress while writing file");
+    }
+    offset += bytesWritten;
+  }
+}
+async function copyVerifiedFile(source, target, relative2, record2, budget, errorCode) {
+  if (!record2) {
+    throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
+  }
+  const srcHandle = await open4(source, "r");
+  let dstHandle;
+  try {
+    const fstat = await srcHandle.stat();
+    const currentLstat = await lstat4(source);
+    if (currentLstat.isSymbolicLink() || !currentLstat.isFile() || !fstat.isFile()) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Project copy cannot use links or non-regular files: " + relative2);
+    }
+    if (currentLstat.ino !== fstat.ino || currentLstat.dev !== fstat.dev || currentLstat.size !== fstat.size) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "Project copy detected file replacement: " + relative2);
+    }
+    if (fstat.size > budget.remainingBytes) {
+      throw new BridgeError("COPY_LIMIT_EXCEEDED", errorCode === "SOURCE_CHANGED" ? "Source grew beyond the copy byte limit during copying" : "Context copy exceeds configured limits");
+    }
+    if (fstat.size !== record2.size || record2.ino !== 0 && fstat.ino !== record2.ino || record2.dev !== 0 && fstat.dev !== record2.dev) {
+      throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
+    }
+    await mkdir3(path9.dirname(target), { recursive: true });
+    dstHandle = await open4(target, "w", fstat.mode);
+    const CHUNK_SIZE = 64 * 1024;
+    const buf = Buffer.allocUnsafe(CHUNK_SIZE);
+    const hash3 = createHash6("sha256");
+    let copiedBytes = 0;
+    for (; ; ) {
+      const { bytesRead } = await srcHandle.read(buf, 0, CHUNK_SIZE, null);
+      if (bytesRead === 0)
+        break;
+      copiedBytes += bytesRead;
+      if (copiedBytes > budget.remainingBytes) {
+        throw new BridgeError("COPY_LIMIT_EXCEEDED", errorCode === "SOURCE_CHANGED" ? "Source grew beyond the copy byte limit during copying" : "Context copy exceeds configured limits");
+      }
+      const slice = buf.subarray(0, bytesRead);
+      hash3.update(slice);
+      await writeAll(dstHandle, slice);
+    }
+    const sha256 = hash3.digest("hex");
+    if (sha256 !== record2.sha256 || copiedBytes !== record2.size) {
+      throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
+    }
+    budget.remainingBytes -= copiedBytes;
+    return sha256;
+  } finally {
+    if (dstHandle) {
+      await dstHandle.close().catch(() => {
+      });
+    }
+    await srcHandle.close().catch(() => {
+    });
+  }
 }
 async function createProjectCopy(sourceDirectory, includePaths, onCreated, limits = DEFAULT_PROJECT_LIMITS, skills = [], execution) {
-  const candidates = await listProjectFiles(sourceDirectory);
-  let selected = candidates;
+  const unignored = await enumerateGitCandidates(sourceDirectory);
+  if (!unignored.length)
+    throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
+  let candidatesToScan;
   if (includePaths !== void 0) {
     if (!includePaths.length)
       throw new BridgeError("INVALID_INCLUDE_PATH", "includePaths cannot be empty");
     const wanted = includePaths.map(validRelative);
     for (const item of wanted) {
-      if (!candidates.some((file3) => file3 === item || file3.startsWith(item + "/"))) {
+      if (!unignored.some((file3) => file3 === item || file3.startsWith(item + "/"))) {
         throw new BridgeError("INVALID_INCLUDE_PATH", "No eligible file matches: " + item);
       }
     }
-    selected = candidates.filter((file3) => wanted.some((item) => file3 === item || file3.startsWith(item + "/")));
+    candidatesToScan = unignored.filter((file3) => wanted.some((item) => file3 === item || file3.startsWith(item + "/")));
+  } else {
+    candidatesToScan = unignored;
+  }
+  if (!candidatesToScan.length)
+    throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
+  if (candidatesToScan.length > limits.maxCopyFiles) {
+    throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${candidatesToScan.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  }
+  const preflight = await preflightProjectFiles(sourceDirectory, candidatesToScan, limits);
+  const selected = preflight.eligible;
+  if (includePaths !== void 0) {
+    const wanted = includePaths.map(validRelative);
+    for (const item of wanted) {
+      if (!selected.some((file3) => file3 === item || file3.startsWith(item + "/"))) {
+        throw new BridgeError("INVALID_INCLUDE_PATH", "No eligible file matches: " + item);
+      }
+    }
   }
   if (!selected.length)
     throw new BridgeError("ISOLATION_EMPTY", "No eligible project files to copy");
-  if (selected.length > limits.maxCopyFiles)
+  if (selected.length > limits.maxCopyFiles) {
     throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  }
   let totalBytes = 0;
   for (const relative2 of selected) {
-    totalBytes += (await lstat3(await checkedPath(sourceDirectory, relative2, true))).size;
+    totalBytes += (await lstat4(await checkedPath(sourceDirectory, relative2, true))).size;
     if (totalBytes > limits.maxCopyBytes)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
-  const copyDirectory = await mkdtemp(path7.join(os3.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path7.join(os3.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   try {
-    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected, blockedFiles: preflight.blocked };
     onCreated?.(project);
-    totalBytes = 0;
+    const budget = { remainingBytes: limits.maxCopyBytes };
     for (const relative2 of selected) {
       const source = await checkedPath(sourceDirectory, relative2, true);
-      const target = path7.join(copyDirectory, ...relative2.split("/"));
-      await mkdir3(path7.dirname(target), { recursive: true });
-      await copyFile(source, target);
-      totalBytes += (await lstat3(target)).size;
-      if (totalBytes > limits.maxCopyBytes)
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Source grew beyond the copy byte limit during copying");
-      baseline.set(relative2, await sha256File2(target));
+      const target = path9.join(copyDirectory, ...relative2.split("/"));
+      const record2 = preflight.records.get(relative2);
+      const hash3 = await copyVerifiedFile(source, target, relative2, record2, budget, "SOURCE_CHANGED");
+      baseline.set(relative2, hash3);
     }
+    totalBytes = limits.maxCopyBytes - budget.remainingBytes;
     const staged = await stageProvidedSkills(copyDirectory, skills, { ...limits, maxCopyFiles: limits.maxCopyFiles - selected.length, maxCopyBytes: limits.maxCopyBytes - totalBytes });
     if (staged.length)
       project.providedSkills = staged;
@@ -31817,7 +32460,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
       "-c",
       "user.email=bridge@invalid.local",
       "-c",
-      "core.hooksPath=" + path7.join(gitDirectory, "disabled-hooks"),
+      "core.hooksPath=" + path9.join(gitDirectory, "disabled-hooks"),
       "commit",
       "--quiet",
       "--allow-empty",
@@ -31826,10 +32469,10 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     ]);
     return project;
   } catch (error62) {
-    if (path7.dirname(copyDirectory) === os3.tmpdir() && path7.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+    if (path9.dirname(copyDirectory) === os3.tmpdir() && path9.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
       await rm2(copyDirectory, { recursive: true, force: true });
     }
-    if (path7.dirname(gitDirectory) === os3.tmpdir() && path7.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+    if (path9.dirname(gitDirectory) === os3.tmpdir() && path9.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
       await rm2(gitDirectory, { recursive: true, force: true });
     }
     throw error62;
@@ -31877,7 +32520,7 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
     fileSummaries,
     summary,
     patch: bytes.toString("utf8"),
-    sha256: createHash5("sha256").update(bytes).digest("hex"),
+    sha256: createHash6("sha256").update(bytes).digest("hex"),
     sourceDirectory: project.sourceDirectory,
     copyDirectory: project.copyDirectory
   };
@@ -31889,10 +32532,10 @@ async function verifyReadOnlyCopy(project, baseline = new Map([...project.baseli
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path7.join(directory, entry.name), relative2 + "/");
+        await visit2(path9.join(directory, entry.name), relative2 + "/");
       else {
         seen.add(relative2);
-        if (!entry.isFile() || baseline.get(relative2) !== await sha256File2(path7.join(directory, entry.name))) {
+        if (!entry.isFile() || baseline.get(relative2) !== await sha256File2(path9.join(directory, entry.name))) {
           throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative2);
         }
       }
@@ -31928,10 +32571,10 @@ async function snapshotCopyFiles(project, limits) {
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path7.join(directory, entry.name), relative2 + "/");
+        await visit2(path9.join(directory, entry.name), relative2 + "/");
       else {
         const file3 = await checkedPath(project.copyDirectory, relative2, true);
-        bytes += (await lstat3(file3)).size;
+        bytes += (await lstat4(file3)).size;
         if (hashes.size >= limits.maxCopyFiles || bytes > limits.maxCopyBytes)
           throw new BridgeError("COPY_LIMIT_EXCEEDED", "Copy snapshot exceeds configured limits");
         hashes.set(relative2, await sha256File2(file3));
@@ -31954,12 +32597,28 @@ async function forkProjectCopy(project, limits) {
     for (const file3 of splitNull(await git(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
       ignored.add(file3);
   }
-  const copyDirectory = await mkdtemp(path7.join(os3.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path7.join(os3.tmpdir(), "agy-mcp-baseline-"));
-  const fork = { ...project, executionPolicy: void 0, executionStateDirectory: void 0, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
+  const eligibleCandidates = candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)));
+  const preflight = await preflightProjectFiles(project.copyDirectory, eligibleCandidates, limits);
+  for (const blocked of preflight.blocked) {
+    if (project.baseline.has(blocked.path)) {
+      throw new BridgeError("CONTEXT_CHANGED", "Baseline file became blocked or unsafe: " + blocked.path);
+    }
+  }
+  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
+  const fork = {
+    ...project,
+    executionPolicy: void 0,
+    executionStateDirectory: void 0,
+    copyDirectory,
+    gitDirectory,
+    baseline: new Map(project.baseline),
+    includedFiles: [],
+    blockedFiles: preflight.blocked
+  };
   try {
-    let bytes = 0;
-    for (const relative2 of candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)))) {
+    const budget = { remainingBytes: limits.maxCopyBytes };
+    for (const relative2 of preflight.eligible) {
       let source;
       try {
         source = await checkedPath(project.copyDirectory, relative2, true);
@@ -31968,12 +32627,12 @@ async function forkProjectCopy(project, limits) {
           continue;
         throw error62;
       }
-      bytes += (await lstat3(source)).size;
-      if (fork.includedFiles.length >= limits.maxCopyFiles || bytes > limits.maxCopyBytes)
+      if (fork.includedFiles.length >= limits.maxCopyFiles) {
         throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
-      const target = path7.join(copyDirectory, ...validRelative(relative2).split("/"));
-      await mkdir3(path7.dirname(target), { recursive: true });
-      await copyFile(source, target);
+      }
+      const target = path9.join(copyDirectory, ...validRelative(relative2).split("/"));
+      const record2 = preflight.records.get(relative2);
+      await copyVerifiedFile(source, target, relative2, record2, budget, "CONTEXT_CHANGED");
       fork.includedFiles.push(relative2);
     }
     await git(copyDirectory, ["-c", "init.templateDir=", "clone", "--bare", "--no-hardlinks", "--quiet", project.gitDirectory, gitDirectory]);
@@ -31991,7 +32650,7 @@ async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) 
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
   const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
   const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
-  const digest = createHash5("sha256");
+  const digest = createHash6("sha256");
   let count2 = 0, bytes = 0;
   for (const relative2 of candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)))) {
     let file3;
@@ -32004,7 +32663,7 @@ async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) 
     }
     if (++count2 > limits.maxCopyFiles)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", "Test snapshot file limit exceeded");
-    const hash3 = createHash5("sha256");
+    const hash3 = createHash6("sha256");
     for await (const chunk of createReadStream2(file3)) {
       bytes += chunk.length;
       if (bytes > limits.maxCopyBytes)
@@ -32030,7 +32689,7 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
         throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file3.path);
     } else {
       try {
-        await lstat3(source);
+        await lstat4(source);
         throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file3.path);
       } catch (error62) {
         if (error62.code !== "ENOENT")
@@ -32045,7 +32704,7 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
 }
 
 // dist/src/messages.js
-import { createHash as createHash6, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash7, randomUUID as randomUUID2 } from "node:crypto";
 var deliveryModeSchema = external_exports.enum(["messages", "events"]);
 var MAX_MESSAGE_CHARS = 2e3;
 var MAX_TASK_MESSAGES = 100;
@@ -32123,7 +32782,7 @@ function resultReference(record2) {
   return {
     tool: "antigravity_read_result",
     taskId: record2.taskId,
-    contentSha256: createHash6("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
+    contentSha256: createHash7("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
   };
 }
 function compactTask(task2) {
@@ -32156,11 +32815,11 @@ function compactTask(task2) {
 }
 
 // dist/src/artifacts.js
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash8 } from "node:crypto";
 import { createReadStream as createReadStream3 } from "node:fs";
-import { lstat as lstat4, readdir as readdir3 } from "node:fs/promises";
-import { spawn as spawn2 } from "node:child_process";
-import path8 from "node:path";
+import { lstat as lstat5, readdir as readdir3 } from "node:fs/promises";
+import { spawn as spawn3 } from "node:child_process";
+import path10 from "node:path";
 var WINDOWS_DEVICE_NAMES4 = /* @__PURE__ */ new Set([
   "CON",
   "PRN",
@@ -32251,7 +32910,7 @@ var artifactReferenceSchema = external_exports.object({
 }).strict();
 async function git2(cwd, args, input2, allowedCodes = [0]) {
   return new Promise((resolve2, reject) => {
-    const child = spawn2("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn3("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     const chunks = [];
     let length = 0;
     let stderr = "";
@@ -32286,7 +32945,7 @@ function splitNull2(bytes) {
 async function verifyCopyRoot(copyDirectory) {
   let rootStat;
   try {
-    rootStat = await lstat4(copyDirectory);
+    rootStat = await lstat5(copyDirectory);
   } catch (err) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "Cannot access copy directory: " + (err instanceof Error ? err.message : String(err)));
   }
@@ -32315,7 +32974,7 @@ async function verifyExactDiskCase(rootDir, relativePath) {
       }
       throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
     }
-    current = path8.join(current, seg);
+    current = path10.join(current, seg);
   }
   return current;
 }
@@ -32358,14 +33017,14 @@ async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS
       throw err;
     }
     await verifyExactDiskCase(project.copyDirectory, relative2);
-    const st = await lstat4(filePath);
+    const st = await lstat5(filePath);
     if (!st.isFile() || st.isSymbolicLink()) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative2);
     }
     if (st.size > limits.maxCopyBytes) {
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Artifact size exceeds copy limit of ${limits.maxCopyBytes} bytes`);
     }
-    const hasher = createHash7("sha256");
+    const hasher = createHash8("sha256");
     let fileBytes = 0;
     for await (const chunk of createReadStream3(filePath)) {
       fileBytes += chunk.length;
@@ -32419,7 +33078,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
     throw err;
   }
   await verifyExactDiskCase(project.copyDirectory, relative2);
-  const st = await lstat4(filePath);
+  const st = await lstat5(filePath);
   if (!st.isFile() || st.isSymbolicLink()) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative2);
   }
@@ -32434,7 +33093,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
   const windowLen = Math.max(0, windowEnd - windowStart);
   const windowBuf = Buffer.alloc(windowLen);
   let streamBytes = 0;
-  const hasher = createHash7("sha256");
+  const hasher = createHash8("sha256");
   const stream = createReadStream3(filePath);
   try {
     for await (const chunk of stream) {
@@ -32483,7 +33142,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
 }
 
 // dist/src/structured-results.js
-import { createHash as createHash8 } from "node:crypto";
+import { createHash as createHash9 } from "node:crypto";
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
@@ -32830,7 +33489,7 @@ function validateStructuredResult(schema, value) {
   }
   validateOutputSchema(schema);
   const snapshot = JSON.parse(serialized);
-  const schemaHash = createHash8("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
+  const schemaHash = createHash9("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
   let validatorFn = validatorCache.get(schemaHash);
   if (!validatorFn) {
     try {
@@ -32857,7 +33516,7 @@ function validateStructuredResult(schema, value) {
       throw err;
     throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result validation failed: " + (err instanceof Error ? err.message : String(err)));
   }
-  const sha256 = createHash8("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
+  const sha256 = createHash9("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
   return { value: snapshot, sha256 };
 }
 
@@ -32967,10 +33626,10 @@ var builtinDefinitions = [
   { name: "reviewer", baseRole: "reviewer", instruction: "", description: "Review files in read-only mode with checked citations." }
 ];
 function hashJsonSchema(schema) {
-  return createHash9("sha256").update(JSON.stringify(schema)).digest("hex");
+  return createHash10("sha256").update(JSON.stringify(schema)).digest("hex");
 }
 function hashSkillBundle(skill) {
-  return createHash9("sha256").update(JSON.stringify(skill)).digest("hex");
+  return createHash10("sha256").update(JSON.stringify(skill)).digest("hex");
 }
 function resolveRole(name, customRoles = []) {
   const role = [...builtinDefinitions, ...customRoles].find((role2) => role2.name === name);
@@ -33104,14 +33763,14 @@ async function validateRoleReport(role, raw, copyDirectory) {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access, lstat as lstat5, realpath as realpath3, stat as stat2 } from "node:fs/promises";
-import path9 from "node:path";
+import { access, lstat as lstat6, realpath as realpath3, stat as stat2 } from "node:fs/promises";
+import path11 from "node:path";
 function within(root, candidate) {
-  const relative2 = path9.relative(root, candidate);
-  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path9.sep}`) && !path9.isAbsolute(relative2);
+  const relative2 = path11.relative(root, candidate);
+  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path11.sep}`) && !path11.isAbsolute(relative2);
 }
 async function validateWorkingDirectory(input2, forbidden) {
-  if (!path9.isAbsolute(input2))
+  if (!path11.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
     const directory = await realpath3(input2);
@@ -33119,7 +33778,7 @@ async function validateWorkingDirectory(input2, forbidden) {
       throw new Error("not a directory");
     await access(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath3(excluded).catch(() => path9.resolve(excluded));
+      const resolved = await realpath3(excluded).catch(() => path11.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -33131,22 +33790,22 @@ async function validateWorkingDirectory(input2, forbidden) {
   }
 }
 async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
-  let existing = path9.resolve(cacheDirectory);
+  let existing = path11.resolve(cacheDirectory);
   const missing = [];
   try {
     for (; ; ) {
       try {
-        await lstat5(existing);
+        await lstat6(existing);
         break;
       } catch (error62) {
-        const parent = path9.dirname(existing);
+        const parent = path11.dirname(existing);
         if (error62.code !== "ENOENT" || parent === existing)
           throw error62;
-        missing.unshift(path9.basename(existing));
+        missing.unshift(path11.basename(existing));
         existing = parent;
       }
     }
-    const cache = path9.join(await realpath3(existing), ...missing);
+    const cache = path11.join(await realpath3(existing), ...missing);
     if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
       throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
     }
@@ -33168,6 +33827,142 @@ async function validateStateSeparation(workingDirectory, stateDirectory) {
   }
 }
 
+// dist/src/cli-environment.js
+var WINDOWS_PATHEXT_FALLBACK = ".COM;.EXE;.BAT;.CMD";
+var DEFAULT_ALLOWED_ENV_VAR_RATIONALES = {
+  // System and Executable Resolution
+  PATH: "System executable search path required by the OS and child processes",
+  PATHEXT: "Windows executable file extensions list for executable resolution",
+  SystemRoot: "Windows system directory (e.g. C:\\Windows); required for core OS binaries and DLL resolution",
+  SystemDrive: "Windows system drive root (e.g. C:); required by Windows subsystem tools",
+  ComSpec: "Windows command processor executable path (cmd.exe)",
+  WINDIR: "Windows directory path; required by legacy Windows binaries and tools",
+  SHELL: "User default shell executable path on Unix systems",
+  TERM: "Terminal emulation capability descriptor",
+  COLORTERM: "Terminal truecolor and color capability indicator",
+  // User Home and Profile Directories
+  HOME: "User home directory on Unix/macOS; required for user configurations and keyring storage",
+  USERPROFILE: "User profile directory on Windows; required for user configuration and credentials",
+  APPDATA: "Windows roaming application data directory; required for Antigravity and tool configs",
+  LOCALAPPDATA: "Windows local application data directory; required for local caches and data stores",
+  HOMEDRIVE: "Windows home directory drive letter",
+  HOMEPATH: "Windows home directory path component",
+  USER: "Current logged-in user name on Unix systems",
+  LOGNAME: "Current login name on Unix systems",
+  USERNAME: "Current user name on Windows systems",
+  // Temporary Directories
+  TEMP: "Standard temporary directory path (Windows and Unix)",
+  TMP: "Standard temporary directory path fallback (Windows and Unix)",
+  TMPDIR: "Standard temporary directory path on POSIX/Unix systems",
+  // Locale, Language, and Timezone
+  LANG: "Primary system locale setting for character encoding and language",
+  LC_ALL: "POSIX locale override setting",
+  LC_CTYPE: "POSIX character classification and encoding setting",
+  LC_MESSAGES: "POSIX system messages language setting",
+  TZ: "System timezone configuration",
+  // XDG Base Directories & Session / Native Keyring Auth
+  XDG_CONFIG_HOME: "XDG user-specific configuration directory",
+  XDG_DATA_HOME: "XDG user-specific data directory",
+  XDG_CACHE_HOME: "XDG user-specific non-essential cache directory",
+  XDG_RUNTIME_DIR: "XDG user runtime directory; required for runtime sockets including D-Bus",
+  XDG_DATA_DIRS: "XDG system-wide data directories preference search list",
+  XDG_CONFIG_DIRS: "XDG system-wide configuration directories preference search list",
+  DBUS_SESSION_BUS_ADDRESS: "D-Bus session bus address; required for Linux Secret Service, GNOME Keyring, and KWallet",
+  GNOME_KEYRING_CONTROL: "GNOME Keyring daemon socket control directory",
+  GNOME_KEYRING_PID: "GNOME Keyring daemon process ID",
+  SECURITYSESSIONID: "macOS security session identifier required for Keychain access in GUI/terminal sessions",
+  // Remote SSH session context (non-credential environment detection)
+  SSH_CONNECTION: "Remote SSH connection client/server address and port context",
+  SSH_CLIENT: "Remote SSH client address and port context",
+  SSH_TTY: "Remote SSH terminal device path context",
+  // Network and Proxy Settings
+  HTTP_PROXY: "HTTP proxy server URL for outbound network requests",
+  HTTPS_PROXY: "HTTPS proxy server URL for secure outbound network requests",
+  ALL_PROXY: "General proxy server URL for all outbound traffic",
+  NO_PROXY: "Comma-separated list of hostnames or domains exempt from proxying",
+  http_proxy: "Lowercase HTTP proxy server URL for standard Unix tools",
+  https_proxy: "Lowercase HTTPS proxy server URL for standard Unix tools",
+  all_proxy: "Lowercase general proxy server URL for standard Unix tools",
+  no_proxy: "Lowercase proxy bypass host list for standard Unix tools",
+  // SSL/TLS Certificates (Enterprise and Custom Roots)
+  SSL_CERT_FILE: "Path to custom or enterprise CA certificate bundle file (OpenSSL, Python)",
+  SSL_CERT_DIR: "Path to directory containing trusted CA certificates (OpenSSL)",
+  REQUESTS_CA_BUNDLE: "Path to custom CA bundle file for Python requests library",
+  CURL_CA_BUNDLE: "Path to custom CA bundle file for curl",
+  NODE_EXTRA_CA_CERTS: "Path to additional root CA certificates bundle for Node.js runtimes",
+  // Official Google / Gemini Auth & Custom Endpoints
+  GEMINI_API_KEY: "Official Gemini API key authentication for Antigravity CLI when modelProvider is gemini",
+  GOOGLE_GEMINI_BASE_URL: "Official custom endpoint base URL for Gemini API requests",
+  GOOGLE_APPLICATION_CREDENTIALS: "Path to Google Application Default Credentials (ADC) service account key JSON file",
+  GOOGLE_CLOUD_PROJECT: "Google Cloud project ID for ADC enterprise resource quota, billing, and project context",
+  GCLOUD_PROJECT: "Common Google Cloud project ID fallback for gcloud SDK and ADC client libraries",
+  GOOGLE_CLOUD_UNIVERSE_DOMAIN: "Google Cloud Universe / Sovereign Cloud domain for enterprise deployments",
+  // Windows OS, Architecture, and Enterprise Domain Context
+  OS: "Windows operating system family identifier (e.g. Windows_NT)",
+  PROCESSOR_ARCHITECTURE: "Windows CPU architecture identifier (e.g. AMD64, ARM64)",
+  PROCESSOR_ARCHITEW6432: "Windows architecture of the native processor for 32-bit processes on 64-bit Windows",
+  NUMBER_OF_PROCESSORS: "Windows logical processor count for parallel execution",
+  ProgramData: "Windows system-wide shared application data directory",
+  ProgramFiles: "Windows 64-bit Program Files directory",
+  "ProgramFiles(x86)": "Windows 32-bit Program Files directory",
+  CommonProgramFiles: "Windows common files directory",
+  "CommonProgramFiles(x86)": "Windows 32-bit common files directory",
+  USERDOMAIN: "Windows domain or workstation name of the current user account",
+  USERDNSDOMAIN: "Windows Active Directory fully-qualified DNS domain name for enterprise authentication",
+  COMPUTERNAME: "Windows computer NetBIOS hostname"
+};
+var DEFAULT_ALLOWED_ENV_VARS = Object.freeze(Object.keys(DEFAULT_ALLOWED_ENV_VAR_RATIONALES));
+function cliEnvironment(allowedEnvVars, source = process.env, platform = process.platform) {
+  const result = {};
+  const isWindows = platform === "win32";
+  if (isWindows) {
+    const allowedUpper = /* @__PURE__ */ new Set();
+    for (const name of DEFAULT_ALLOWED_ENV_VARS) {
+      allowedUpper.add(name.toUpperCase());
+    }
+    for (const name of allowedEnvVars) {
+      const trimmed = name.trim();
+      if (trimmed) {
+        allowedUpper.add(trimmed.toUpperCase());
+      }
+    }
+    const seenUpper = /* @__PURE__ */ new Set();
+    for (const [key, value] of Object.entries(source)) {
+      if (key === "__proto__" || typeof value !== "string")
+        continue;
+      const upperKey = key.toUpperCase();
+      if (!allowedUpper.has(upperKey))
+        continue;
+      if (seenUpper.has(upperKey))
+        continue;
+      seenUpper.add(upperKey);
+      result[key] = value;
+    }
+    if (!seenUpper.has("PATHEXT")) {
+      result.PATHEXT = WINDOWS_PATHEXT_FALLBACK;
+    }
+  } else {
+    const allowedExact = /* @__PURE__ */ new Set();
+    for (const name of DEFAULT_ALLOWED_ENV_VARS) {
+      allowedExact.add(name);
+    }
+    for (const name of allowedEnvVars) {
+      const trimmed = name.trim();
+      if (trimmed) {
+        allowedExact.add(trimmed);
+      }
+    }
+    for (const [key, value] of Object.entries(source)) {
+      if (key === "__proto__" || typeof value !== "string")
+        continue;
+      if (!allowedExact.has(key))
+        continue;
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 // dist/src/cli-adapter.js
 function taskPrompt(options, maxChars) {
   const role = options.roleDefinition ?? resolveRole(options.role ?? "implementer");
@@ -33186,14 +33981,14 @@ function taskPrompt(options, maxChars) {
   return content;
 }
 function stageSchemaFile(stateDirectory, content) {
-  if (!path10.isAbsolute(stateDirectory))
+  if (!path12.isAbsolute(stateDirectory))
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage must be absolute");
   mkdirSync2(stateDirectory, { recursive: true, mode: 448 });
   if (lstatSync2(stateDirectory).isSymbolicLink())
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage cannot be a link");
   const root = realpathSync3.native(stateDirectory);
   const identity = lstatSync2(root);
-  const file3 = path10.join(root, "cli-schema-" + randomUUID3() + ".json");
+  const file3 = path12.join(root, "cli-schema-" + randomUUID3() + ".json");
   writeFileSync2(file3, content, { flag: "wx", mode: 384 });
   let cleaned = false;
   return { file: file3, cleanup() {
@@ -33211,14 +34006,14 @@ function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
 async function resolveExecutable(command2) {
-  if (path10.isAbsolute(command2))
-    return path10.resolve(command2);
+  if (path12.isAbsolute(command2))
+    return path12.resolve(command2);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
-  for (const directory of (process.env.PATH || "").split(path10.delimiter)) {
+  for (const directory of (process.env.PATH || "").split(path12.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path10.join(directory, command2 + extension);
+      const candidate = path12.join(directory, command2 + extension);
       try {
         await access2(candidate);
         return candidate;
@@ -33239,39 +34034,97 @@ var CliAdapter = class {
     this.prefixArgs = prefixArgs;
   }
   environment() {
-    const env = { ...process.env };
-    if (process.platform === "win32" && process.env.PATHEXT === void 0)
-      env.PATHEXT = ".COM;.EXE;.BAT;.CMD";
-    return env;
+    return cliEnvironment(this.config.allowedEnvVars);
   }
   probe(args, timeoutMs = 1e4) {
     return new Promise((resolve2, reject) => {
-      const child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      let child;
+      try {
+        child = spawn4(this.config.agyPath, [...this.prefixArgs, ...args], {
+          env: this.environment(),
+          windowsHide: true,
+          shell: false,
+          detached: process.platform !== "win32",
+          stdio: ["ignore", "pipe", "pipe"]
+        });
+        if (process.platform !== "win32") {
+          registerOwnedProcessGroup(child);
+        }
+      } catch (error62) {
+        return reject(processError(error62, "spawn"));
+      }
       let stdout = "", stderr = "";
-      const timer = setTimeout(() => child.kill(), timeoutMs);
-      child.stdout.on("data", (chunk) => {
-        stdout = (stdout + String(chunk)).slice(-2e6);
-      });
-      child.stderr.on("data", (chunk) => {
-        stderr = (stderr + String(chunk)).slice(-1e5);
-      });
-      child.once("error", (error62) => {
+      let timedOut = false;
+      let settled = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        terminateSubprocess(child);
+      }, timeoutMs);
+      timer.unref();
+      const fail3 = (error62, op) => {
+        if (settled)
+          return;
+        settled = true;
         clearTimeout(timer);
-        reject(error62);
-      });
-      child.once("close", (code) => {
+        terminateSubprocess(child);
+        reject(processError(error62, op));
+      };
+      if (child.stdout) {
+        child.stdout.on("data", (chunk) => {
+          stdout = (stdout + String(chunk)).slice(-2e6);
+        });
+        child.stdout.on("error", (err) => fail3(err, "stdout"));
+      }
+      if (child.stderr) {
+        child.stderr.on("data", (chunk) => {
+          stderr = (stderr + String(chunk)).slice(-1e5);
+        });
+        child.stderr.on("error", (err) => fail3(err, "stderr"));
+      }
+      child.once("error", (error62) => fail3(error62, "probe"));
+      child.once("close", (code, signal) => {
+        if (settled)
+          return;
+        settled = true;
         clearTimeout(timer);
-        resolve2({ code, stdout, stderr });
+        resolve2({ code, signal, stdout, stderr, timedOut });
       });
     });
   }
   async discover() {
     try {
       const [version2, help] = await Promise.all([this.probe(["--version"]), this.probe(["--help"])]);
-      this.version = (version2.stdout || version2.stderr).trim() || void 0;
-      this.help = help.stdout + "\n" + help.stderr;
+      if (version2.timedOut || help.timedOut) {
+        throw new BridgeError("AGY_PROBE_FAILED", "agy probe timed out");
+      }
+      if (version2.signal !== null || help.signal !== null) {
+        throw new BridgeError("AGY_PROBE_FAILED", `agy probe terminated by signal ${version2.signal ?? help.signal}`);
+      }
+      if (version2.code !== 0) {
+        const diag = redactDiagnostic((version2.stderr || version2.stdout).trim());
+        throw new BridgeError("AGY_PROBE_FAILED", `agy --version failed with exit code ${version2.code}${diag ? ": " + diag : ""}`);
+      }
+      if (help.code !== 0) {
+        const diag = redactDiagnostic((help.stderr || help.stdout).trim());
+        throw new BridgeError("AGY_PROBE_FAILED", `agy --help failed with exit code ${help.code}${diag ? ": " + diag : ""}`);
+      }
+      const versionText = (version2.stdout || version2.stderr).trim();
+      const helpText = help.stdout + "\n" + help.stderr;
+      if (!versionText) {
+        throw new BridgeError("AGY_INCOMPATIBLE", "agy --version returned empty or invalid output");
+      }
+      if (!help.stdout.trim() && !help.stderr.trim()) {
+        throw new BridgeError("AGY_INCOMPATIBLE", "agy --help returned empty output");
+      }
+      const streaming = helpText.includes("stream-json") && helpText.includes("--output-format");
+      const sandbox = helpText.includes("--sandbox");
+      if (!streaming || !sandbox) {
+        const missing = [!streaming ? "stream-json" : "", !sandbox ? "--sandbox" : ""].filter(Boolean).join(", ");
+        throw new BridgeError("AGY_INCOMPATIBLE", `Installed agy is incompatible (missing ${missing})`);
+      }
+      this.version = versionText;
+      this.help = helpText;
       this.installed = true;
-      const streaming = this.help.includes("stream-json") && this.help.includes("--output-format");
       return {
         installed: true,
         path: await resolveExecutable(this.config.agyPath),
@@ -33280,7 +34133,7 @@ var CliAdapter = class {
         capabilities: {
           structuredOutput: streaming,
           streaming,
-          sandbox: this.help.includes("--sandbox"),
+          sandbox,
           readOnlyMode: this.help.includes("--mode") && this.help.includes("plan"),
           models: this.help.includes("models"),
           modelSelection: this.help.includes("--model"),
@@ -33291,12 +34144,16 @@ var CliAdapter = class {
       };
     } catch (error62) {
       this.installed = false;
+      this.version = void 0;
+      this.help = "";
+      const err = error62 instanceof BridgeError ? error62 : processError(error62, "probe");
+      const formatted = `${err.code}: ${redactDiagnostic(err.message)}`;
       return {
         installed: false,
         path: this.config.agyPath,
         authenticated: null,
         capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
-        error: error62 instanceof Error ? error62.message : String(error62)
+        error: formatted
       };
     }
   }
@@ -33310,7 +34167,7 @@ var CliAdapter = class {
       if (error62 instanceof BridgeError && error62.code === "AGY_AUTH_REQUIRED")
         discovery.authenticated = false;
       else
-        discovery.error = error62 instanceof Error ? error62.message : String(error62);
+        discovery.error = error62 instanceof Error ? redactDiagnostic(error62.message) : redactDiagnostic(String(error62));
     }
     return discovery;
   }
@@ -33319,14 +34176,16 @@ var CliAdapter = class {
     try {
       result = await this.probe(["models"], 2e4);
     } catch (error62) {
-      if (error62.code === "ENOENT")
-        throw new BridgeError("AGY_NOT_FOUND", "agy executable not found");
-      throw new BridgeError("AGY_PROCESS_FAILED", error62 instanceof Error ? error62.message : String(error62));
+      throw processError(error62, "models");
     }
+    if (result.timedOut)
+      throw new BridgeError("AGY_TIMEOUT", "agy models timed out");
     if (isAuthError(result.stdout + result.stderr))
       throw new BridgeError("AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
-    if (result.code !== 0)
-      throw new BridgeError("AGY_PROCESS_FAILED", `agy models exited ${result.code}`);
+    if (result.code !== 0) {
+      const diag = redactDiagnostic((result.stderr || result.stdout).trim());
+      throw new BridgeError("AGY_PROCESS_FAILED", `agy models exited ${result.code}${diag ? ": " + diag : ""}`);
+    }
     const models = result.stdout.split(/\r?\n/).map((line) => line.trim().match(/^([a-zA-Z0-9][a-zA-Z0-9._-]*)\s+(.+)$/)).filter((match) => Boolean(match)).map((match) => ({ id: match[1], name: match[2].trim() }));
     if (models.length === 0)
       throw new BridgeError("AGY_AUTH_REQUIRED", "No models returned; authenticate with the official interactive `agy` command");
@@ -33381,21 +34240,65 @@ var CliAdapter = class {
       args[schemaIndex + 1] = staged.file;
     let child;
     try {
-      child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawn4(this.config.agyPath, [...this.prefixArgs, ...args], {
+        env: this.environment(),
+        cwd,
+        windowsHide: true,
+        shell: false,
+        detached: process.platform !== "win32",
+        stdio: ["pipe", "pipe", "pipe"]
+      });
+      if (process.platform !== "win32") {
+        registerOwnedProcessGroup(child);
+      }
     } catch (error62) {
       staged?.cleanup();
-      throw error62;
+      throw processError(error62, "spawn");
     }
+    let cleaned = false;
     const cleanup = () => {
+      if (cleaned)
+        return;
+      cleaned = true;
       try {
         staged?.cleanup();
-      } catch {
-        child.schemaCleanupError = new BridgeError("SCHEMA_CLEANUP_FAILED", "Private schema cleanup failed; inspect schema storage");
+      } catch (error62) {
+        child.schemaCleanupError = error62 instanceof BridgeError ? error62 : new BridgeError("SCHEMA_CLEANUP_FAILED", "Private schema cleanup failed; inspect schema storage");
       }
     };
     child.once("error", cleanup);
     child.once("close", cleanup);
-    child.stdin.end(JSON.stringify({ event: "user", message: { content } }) + "\n");
+    const onCommError = (err, op) => {
+      if (!child.communicationError) {
+        child.communicationError = processError(err, op);
+      }
+      terminateSubprocess(child);
+    };
+    child.stdin.on("error", (err) => onCommError(err, "stdin"));
+    child.stdout.on("error", (err) => onCommError(err, "stdout"));
+    child.stderr.on("error", (err) => onCommError(err, "stderr"));
+    child.on("error", (err) => {
+      if (!child.startupError && !child.communicationError) {
+        child.startupError = processError(err, "spawn");
+      }
+      terminateSubprocess(child);
+    });
+    const payload = JSON.stringify({ event: "user", message: { content } }) + "\n";
+    try {
+      child.stdin.write(payload, "utf8", (err) => {
+        if (err) {
+          onCommError(err, "stdin");
+          return;
+        }
+        try {
+          child.stdin.end();
+        } catch (endErr) {
+          onCommError(endErr, "stdin");
+        }
+      });
+    } catch (err) {
+      onCommError(err, "stdin");
+    }
     return child;
   }
   static authError(message) {
@@ -33404,7 +34307,7 @@ var CliAdapter = class {
 };
 
 // dist/src/workflows.js
-import { createHash as createHash10 } from "node:crypto";
+import { createHash as createHash11 } from "node:crypto";
 var HASH_REGEX = /^[a-f0-9]{64}$/;
 var workflowHookSchema = external_exports.object({
   requireReview: external_exports.boolean().optional(),
@@ -33538,7 +34441,7 @@ function workflowCheckpointSha256(checkpoint) {
   if (!parsed.success) {
     throw new BridgeError("INVALID_WORKFLOW_CHECKPOINT", parsed.error.issues[0]?.message ?? "Invalid workflow checkpoint");
   }
-  return createHash10("sha256").update(Buffer.from(JSON.stringify(parsed.data), "utf8")).digest("hex");
+  return createHash11("sha256").update(Buffer.from(JSON.stringify(parsed.data), "utf8")).digest("hex");
 }
 var workflowInputSchema = external_exports.object({
   nodeKey: nodeKeySchema,
@@ -33613,7 +34516,7 @@ function buildWorkflowContext(inputs) {
   if (bytes > MAX_WORKFLOW_CONTEXT_BYTES) {
     throw new BridgeError("WORKFLOW_CONTEXT_TOO_LARGE", `Workflow context size (${bytes} bytes) exceeds limit of ${MAX_WORKFLOW_CONTEXT_BYTES} bytes`);
   }
-  const sha256 = createHash10("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  const sha256 = createHash11("sha256").update(Buffer.from(text, "utf8")).digest("hex");
   return { text, sha256, bytes };
 }
 
@@ -33784,10 +34687,10 @@ function requireGroupBudget(status2) {
 }
 
 // dist/src/group-contract.js
-import { createHash as createHash12 } from "node:crypto";
+import { createHash as createHash13 } from "node:crypto";
 
 // dist/src/verification.js
-import { createHash as createHash11 } from "node:crypto";
+import { createHash as createHash12 } from "node:crypto";
 import { createReadStream as createReadStream4 } from "node:fs";
 var criterionSchema = external_exports.object({
   id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
@@ -33830,7 +34733,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
         chunks.push(chunk);
       }
       const buffer = Buffer.concat(chunks);
-      fileHashes[relative2] = createHash11("sha256").update(buffer).digest("hex");
+      fileHashes[relative2] = createHash12("sha256").update(buffer).digest("hex");
       contents.set(relative2, buffer);
       return buffer;
     } catch (error62) {
@@ -33845,8 +34748,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path18, text } = criterion.check;
-      const content = await file3(path18);
+      const { kind, path: path20, text } = criterion.check;
+      const content = await file3(path20);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -33927,7 +34830,7 @@ var groupDefinitionSchema = external_exports.object({
     ctx.addIssue({ code: "custom", message: "Group definition exceeds 4 MiB" });
 });
 function groupDefinitionSha256(definition) {
-  return createHash12("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
+  return createHash13("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
 }
 var groupStateSchema = external_exports.enum(["created", "running", "paused", "completed", "failed", "cancelled"]);
 var groupNodeRecordSchema = external_exports.object({
@@ -33952,7 +34855,7 @@ var peerDeliverySchema = external_exports.object({
   error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
 }).strict().superRefine((delivery, ctx) => {
   if (typeof delivery.text === "string") {
-    const expectedSha256 = createHash12("sha256").update(delivery.text, "utf8").digest("hex");
+    const expectedSha256 = createHash13("sha256").update(delivery.text, "utf8").digest("hex");
     if (delivery.sha256 !== expectedSha256) {
       ctx.addIssue({
         code: "custom",
@@ -34324,14 +35227,14 @@ var ZodError2 = class _ZodError extends Error {
       return issue2.message;
     };
     const fieldErrors = { _errors: [] };
-    const processError = (error62) => {
+    const processError2 = (error62) => {
       for (const issue2 of error62.issues) {
         if (issue2.code === "invalid_union") {
-          issue2.unionErrors.map(processError);
+          issue2.unionErrors.map(processError2);
         } else if (issue2.code === "invalid_return_type") {
-          processError(issue2.returnTypeError);
+          processError2(issue2.returnTypeError);
         } else if (issue2.code === "invalid_arguments") {
-          processError(issue2.argumentsError);
+          processError2(issue2.argumentsError);
         } else if (issue2.path.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -34367,7 +35270,7 @@ var ZodError2 = class _ZodError extends Error {
         }
       }
     };
-    processError(this);
+    processError2(this);
     return fieldErrors;
   }
   static assert(value) {
@@ -34518,8 +35421,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path18, errorMaps, issueData } = params;
-  const fullPath = [...path18, ...issueData.path || []];
+  const { data, path: path20, errorMaps, issueData } = params;
+  const fullPath = [...path20, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -34634,11 +35537,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path18, key) {
+  constructor(parent, value, path20, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path18;
+    this._path = path20;
     this._key = key;
   }
   get path() {
@@ -38189,11 +39092,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path18) {
-  if (path18.length === 0) {
+function getDotPath(path20) {
+  if (path20.length === 0) {
     return "object root";
   }
-  return path18.reduce((acc, seg, index) => {
+  return path20.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -42049,9 +42952,9 @@ var EMPTY_COMPLETION_RESULT = {
 };
 
 // dist/src/native-tests.js
-import { createHash as createHash13, randomUUID as randomUUID4 } from "node:crypto";
+import { createHash as createHash14, randomUUID as randomUUID4 } from "node:crypto";
 import { appendFile, mkdir as mkdir4, readFile as readFile3, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
-import path11 from "node:path";
+import path13 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
   args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
@@ -42151,11 +43054,11 @@ async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID4();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path11.join(project.copyDirectory, file3);
+  const absolute = path13.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash3 = createHash13("sha256").update(script).digest("hex");
-  const exclude = path11.join(project.gitDirectory, "info", "exclude");
-  await mkdir4(path11.dirname(exclude), { recursive: true });
+  const hash3 = createHash14("sha256").update(script).digest("hex");
+  const exclude = path13.join(project.gitDirectory, "info", "exclude");
+  await mkdir4(path13.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
   await writeFile3(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
@@ -42280,10 +43183,10 @@ function compareFindings(tasks, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path18, line, quote } = opinions[0].finding;
+    const { path: path20, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path18,
+      path: path20,
       line,
       quote,
       opinions,
@@ -42294,10 +43197,10 @@ function compareFindings(tasks, models) {
 }
 
 // dist/src/sandbox-policy.js
-import { createHash as createHash14 } from "node:crypto";
-import { lstat as lstat6, readdir as readdir4, realpath as realpath4 } from "node:fs/promises";
+import { createHash as createHash15 } from "node:crypto";
+import { lstat as lstat7, readdir as readdir4, realpath as realpath4 } from "node:fs/promises";
 import os4 from "node:os";
-import path12 from "node:path";
+import path14 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
 var persistedPolicySchema = external_exports.object({
   readRoots: paths,
@@ -42345,8 +43248,8 @@ function comparePaths(left, right) {
   return 0;
 }
 function contains(root, target) {
-  const relative2 = path12.relative(pathKey(root), pathKey(target));
-  return relative2 === "" || !relative2.startsWith(".." + path12.sep) && relative2 !== ".." && !path12.isAbsolute(relative2);
+  const relative2 = path14.relative(pathKey(root), pathKey(target));
+  return relative2 === "" || !relative2.startsWith(".." + path14.sep) && relative2 !== ".." && !path14.isAbsolute(relative2);
 }
 function overlaps(left, right) {
   return contains(left, right) || contains(right, left);
@@ -42385,7 +43288,7 @@ function requireNormalizedPolicy(value) {
 }
 function sandboxPolicyDigest(policy) {
   const normalized = requireNormalizedPolicy(policy);
-  return createHash14("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
+  return createHash15("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
 }
 function parseSandboxPolicySnapshot(value) {
   const snapshot = external_exports.object({
@@ -42412,20 +43315,20 @@ function localAbsolutePath(value) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
       }
     }
-  } else if (!path12.isAbsolute(value) || value.startsWith("//")) {
+  } else if (!path14.isAbsolute(value) || value.startsWith("//")) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
   }
-  return path12.resolve(value);
+  return path14.resolve(value);
 }
 async function inspectExistingPath(absolute) {
-  const root = path12.parse(absolute).root;
-  const parts = path12.relative(root, absolute).split(path12.sep).filter(Boolean);
+  const root = path14.parse(absolute).root;
+  const parts = path14.relative(root, absolute).split(path14.sep).filter(Boolean);
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path12.join(current, parts[index]);
+    current = path14.join(current, parts[index]);
     let info;
     try {
-      info = await lstat6(current);
+      info = await lstat7(current);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must already exist");
@@ -42442,7 +43345,7 @@ async function inspectExistingPath(absolute) {
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a sandbox permission target");
   }
-  const final = await lstat6(canonical).catch(() => void 0);
+  const final = await lstat7(canonical).catch(() => void 0);
   if (!final || final.isSymbolicLink() || !final.isDirectory() && !final.isFile() || final.isFile() && final.nlink > 1) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must resolve to regular files or directories");
   }
@@ -42458,10 +43361,10 @@ async function inspectDirectoryGrant(directory, limits) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
     for (const name of children) {
-      const child = path12.join(current, name);
+      const child = path14.join(current, name);
       let info;
       try {
-        info = await lstat6(child);
+        info = await lstat7(child);
       } catch {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox directory grants cannot change during validation");
       }
@@ -42488,14 +43391,14 @@ async function inspectSandboxGrant(value) {
 }
 async function canonicalProtectedPath(value) {
   const absolute = localAbsolutePath(value);
-  const root = path12.parse(absolute).root;
-  const parts = path12.relative(root, absolute).split(path12.sep).filter(Boolean);
+  const root = path14.parse(absolute).root;
+  const parts = path14.relative(root, absolute).split(path14.sep).filter(Boolean);
   let current = root, firstMissing = parts.length;
   for (let index = 0; index < parts.length; index++) {
-    const next = path12.join(current, parts[index]);
+    const next = path14.join(current, parts[index]);
     let info;
     try {
-      info = await lstat6(next);
+      info = await lstat7(next);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         firstMissing = index;
@@ -42514,13 +43417,13 @@ async function canonicalProtectedPath(value) {
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
-  return path12.join(canonical, ...parts.slice(firstMissing));
+  return path14.join(canonical, ...parts.slice(firstMissing));
 }
 async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
   return Promise.all([
     stateDirectory,
     ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
-    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path12.join(os4.homedir(), name)),
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path14.join(os4.homedir(), name)),
     ...forbidden
   ].map(canonicalProtectedPath));
 }
@@ -42528,7 +43431,7 @@ async function canonicalPaths(values, protectedRoots, limits) {
   const temporary = await canonicalProtectedPath(os4.tmpdir());
   const canonical = await Promise.all(values.map(async (value) => {
     const target = await inspectSandboxGrant(value);
-    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path12.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path14.sep).some((part) => ownedTemporaryDirectory.test(part))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
     }
     if (target.directory)
@@ -43011,10 +43914,10 @@ function createMcpServer(adapter, tasks) {
     server.registerTool("antigravity_list_project_files", {
       outputSchema: outputSchemas.antigravity_list_project_files,
       title: "List files eligible for a project copy",
-      description: "List tracked and untracked files excluding Git ignore and local exclude matches.",
+      description: "List tracked and untracked files excluding Git ignore, local exclude matches, and the active secret policy.",
       inputSchema: { workingDirectory: external_exports.string().min(1) },
       annotations: readOnly
-    }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
+    }, async ({ workingDirectory }) => safe(async () => ({ files: await tasks.listProjectFiles(workingDirectory) }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_set_model"))
     server.registerTool("antigravity_set_model", {
       outputSchema: outputSchemas.antigravity_set_model,
@@ -43271,7 +44174,7 @@ function createMcpServer(adapter, tasks) {
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path18, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path18, offset, limit))());
+    }, async ({ taskId, expectedSha256, path: path20, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path20, offset, limit))());
   if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
     server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
@@ -43506,24 +44409,28 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
         limit: external_exports.number().int().min(1).max(65536).optional()
       },
       annotations: readOnly
-    }, async ({ taskId, path: path18, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path18, expectedSha256, offset, limit))());
+    }, async ({ taskId, path: path20, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path20, expectedSha256, offset, limit))());
   return server;
 }
 
 // dist/src/group-store.js
 import { lstatSync as lstatSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync as realpathSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { randomUUID as randomUUID6 } from "node:crypto";
-import path14 from "node:path";
+import path16 from "node:path";
 
 // dist/src/state-store.js
 import { randomUUID as randomUUID5 } from "node:crypto";
 import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import path13 from "node:path";
+import path15 from "node:path";
 import os5 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
-var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path13.isAbsolute(root) && path13.resolve(root) === root && root !== path13.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
+var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path15.isAbsolute(root) && path15.resolve(root) === root && root !== path15.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
+var blockedMetadataSchema = external_exports.object({
+  path: external_exports.string(),
+  reason: external_exports.enum(["SECRET_FILE", "SECRET_CONTENT", "SECRET_EXCLUSION", "UNSAFE_PATH"])
+}).strict();
 var snapshotSchema = external_exports.object({
   version: external_exports.literal(1),
   ownerPid: external_exports.number().int().positive(),
@@ -43601,7 +44508,8 @@ var snapshotSchema = external_exports.object({
     gitDirectory: external_exports.string(),
     baseline: external_exports.array(external_exports.tuple([external_exports.string(), external_exports.string().regex(/^[a-f0-9]{64}$/)])),
     includedFiles: external_exports.array(external_exports.string()),
-    providedSkills: stagedSkillsSchema.optional()
+    providedSkills: stagedSkillsSchema.optional(),
+    blockedFiles: external_exports.array(blockedMetadataSchema).optional()
   }).optional(),
   events: external_exports.array(external_exports.object({ taskId: external_exports.string().uuid(), sequence: external_exports.number().int().positive(), timestamp: external_exports.string(), type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() })),
   cursor: external_exports.number().int().nonnegative()
@@ -43632,7 +44540,7 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path13.isAbsolute(directory))
+    if (!path15.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
     mkdirSync3(directory, { recursive: true, mode: 448 });
     if (lstatSync3(directory).isSymbolicLink())
@@ -43641,10 +44549,10 @@ var StateStore = class {
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path13.join(this.directory, taskId + ".json");
+    return path15.join(this.directory, taskId + ".json");
   }
   loadIntegrationRoots() {
-    const file3 = path13.join(this.directory, "integration-approvals.json");
+    const file3 = path15.join(this.directory, "integration-approvals.json");
     try {
       const stat3 = lstatSync3(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.nlink !== 1 || stat3.size > 128 * 1024)
@@ -43659,7 +44567,7 @@ var StateStore = class {
   rememberIntegrationRoot(directory) {
     const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0];
     const release = this.acquire("integration-approvals");
-    const target = path13.join(this.directory, "integration-approvals.json");
+    const target = path15.join(this.directory, "integration-approvals.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       const roots = this.loadIntegrationRoots();
@@ -43674,7 +44582,7 @@ var StateStore = class {
     }
   }
   loadModel() {
-    const file3 = path13.join(this.directory, "model-selection.json");
+    const file3 = path15.join(this.directory, "model-selection.json");
     try {
       const stat3 = lstatSync3(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
@@ -43687,7 +44595,7 @@ var StateStore = class {
     }
   }
   loadSandboxPolicy() {
-    const file3 = path13.join(this.directory, "sandbox-policy.json");
+    const file3 = path15.join(this.directory, "sandbox-policy.json");
     try {
       const stat3 = lstatSync3(file3);
       if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > maxSandboxPolicyFileBytes)
@@ -43708,7 +44616,7 @@ var StateStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
-    const target = path13.join(this.directory, "sandbox-policy.json");
+    const target = path15.join(this.directory, "sandbox-policy.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       this.loadSandboxPolicy();
@@ -43721,7 +44629,7 @@ var StateStore = class {
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path13.join(this.directory, "model-selection.json");
+    const target = path15.join(this.directory, "model-selection.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       this.loadModel();
@@ -43745,7 +44653,7 @@ var StateStore = class {
   }
   load() {
     return readdirSync2(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path13.join(this.directory, name);
+      const file3 = path15.join(this.directory, name);
       if (lstatSync3(file3).isSymbolicLink() || lstatSync3(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
@@ -43754,7 +44662,7 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path13.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path15.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       const messages = data.record.messages ?? [];
@@ -43779,10 +44687,10 @@ var StateStore = class {
       if (data.record.agentPolicy?.sha256 !== data.options.agentPolicy?.sha256)
         throw new BridgeError("INVALID_STATE", "Persisted task tool policies disagree");
       if (data.project) {
-        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && path13.relative(realpathSync4.native(data.project.executionStateDirectory), realpathSync4.native(this.directory)) !== "" || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
+        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && path15.relative(realpathSync4.native(data.project.executionStateDirectory), realpathSync4.native(this.directory)) !== "" || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
           throw new BridgeError("INVALID_STATE", "Persisted execution policy differs from task or private storage");
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path13.isAbsolute(directory) || path13.relative(os5.tmpdir(), path13.dirname(directory)) !== "" || !path13.basename(directory).startsWith(prefix)) {
+          if (!path15.isAbsolute(directory) || path15.relative(os5.tmpdir(), path15.dirname(directory)) !== "" || !path15.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -43803,7 +44711,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path13.join(this.directory, name + ".lock"), token = randomUUID5();
+    const file3 = path15.join(this.directory, name + ".lock"), token = randomUUID5();
     const root = lstatSync3(this.directory, { bigint: true });
     const busy = () => new BridgeError("STATE_BUSY", "Another operation owns this task or copy, or its lock cannot be verified");
     const checkRoot = () => {
@@ -43896,7 +44804,7 @@ var GroupStore = class {
       const stat4 = lstatSync4(current);
       if (!stat4.isDirectory() || stat4.isSymbolicLink())
         throw new BridgeError("INVALID_STATE", "Unsafe group storage ancestry");
-      const parent = path14.dirname(current);
+      const parent = path16.dirname(current);
       if (parent === current)
         break;
       current = parent;
@@ -43909,7 +44817,7 @@ var GroupStore = class {
       throw new BridgeError("INVALID_STATE", "Group storage identity changed");
     if (!/^[a-f0-9-]{36}$/i.test(groupId))
       throw new BridgeError("INVALID_GROUP", "Invalid group ID");
-    return path14.join(this.root, "group-" + groupId.toLowerCase() + ".json");
+    return path16.join(this.root, "group-" + groupId.toLowerCase() + ".json");
   }
   read(groupId) {
     const file3 = this.file(groupId);
@@ -43956,11 +44864,11 @@ var GroupStore = class {
 };
 
 // dist/src/group-manager.js
-import { createHash as createHash15, randomUUID as randomUUID7 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID7 } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 var finished = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
 function profileHash(value) {
-  return createHash15("sha256").update(JSON.stringify(value)).digest("hex");
+  return createHash16("sha256").update(JSON.stringify(value)).digest("hex");
 }
 function graph(record2) {
   return { nodes: record2.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) };
@@ -44080,7 +44988,7 @@ var GroupManager = class {
           messageId,
           toNode: input2.toNode,
           text: input2.text,
-          sha256: createHash15("sha256").update(input2.text).digest("hex"),
+          sha256: createHash16("sha256").update(input2.text).digest("hex"),
           transportId: randomUUID7(),
           state: allowed ? "pending" : "failed",
           ...!allowed ? { error: { code: "PEER_ROUTE_DENIED", message: "This directed peer route was not selected" } } : {}
@@ -44376,7 +45284,7 @@ var GroupManager = class {
         taskId: input2.taskId,
         outputSha256: input2.outputSha256,
         ...summary ? { summary: summary.slice(0, 2e3) } : {},
-        reference: { tool: "antigravity_read_result", taskId: task2.taskId, contentSha256: createHash15("sha256").update(JSON.stringify(task2.result ?? null)).digest("hex") }
+        reference: { tool: "antigravity_read_result", taskId: task2.taskId, contentSha256: createHash16("sha256").update(JSON.stringify(task2.result ?? null)).digest("hex") }
       };
     } finally {
       registry2?.();
@@ -44624,8 +45532,7 @@ var GroupManager = class {
 };
 
 // dist/src/task-manager.js
-import { createHash as createHash19, randomUUID as randomUUID10 } from "node:crypto";
-import { spawn as spawn6 } from "node:child_process";
+import { createHash as createHash20, randomUUID as randomUUID10 } from "node:crypto";
 
 // dist/src/logger.js
 function logTaskEvent(taskId, type, data) {
@@ -44731,9 +45638,9 @@ var LineParser = class {
 };
 
 // dist/src/chunks.js
-import { createHash as createHash16 } from "node:crypto";
+import { createHash as createHash17 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash16("sha256").update(text).digest("hex");
+  const sha256 = createHash17("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -44762,10 +45669,10 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 import { setTimeout as delay3 } from "node:timers/promises";
 
 // dist/src/windows-executor.js
-import { spawn as spawn5 } from "node:child_process";
-import { lstat as lstat9, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath6, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
+import { spawn as spawn6 } from "node:child_process";
+import { lstat as lstat10, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath6, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
 import { randomUUID as randomUUID9 } from "node:crypto";
-import path17 from "node:path";
+import path19 from "node:path";
 import os7 from "node:os";
 
 // dist/src/windows-helper-source.js
@@ -45868,17 +46775,17 @@ internal static class ReparseInspector\r
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
-import { createHash as createHash18 } from "node:crypto";
-import { chmod, lstat as lstat8, mkdir as mkdir6, open as open4, readdir as readdir6, unlink as unlink3 } from "node:fs/promises";
-import path16 from "node:path";
+import { createHash as createHash19 } from "node:crypto";
+import { chmod, lstat as lstat9, mkdir as mkdir6, open as open6, readdir as readdir6, unlink as unlink3 } from "node:fs/promises";
+import path18 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash17, randomUUID as randomUUID8 } from "node:crypto";
-import { spawn as spawn4 } from "node:child_process";
+import { createHash as createHash18, randomUUID as randomUUID8 } from "node:crypto";
+import { spawn as spawn5 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat7, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open3, readFile as readFile4, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
+import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readFile as readFile4, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
 import os6 from "node:os";
-import path15 from "node:path";
+import path17 from "node:path";
 import { setTimeout as delay2 } from "node:timers/promises";
 
 // dist/src/portable-node-descriptor.js
@@ -45939,7 +46846,7 @@ function sameFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
 }
 function assetPath(root, descriptor, asset) {
-  return path15.join(root, cacheLeafName(descriptor), asset.fileName);
+  return path17.join(root, cacheLeafName(descriptor), asset.fileName);
 }
 function cacheLeafName(descriptor) {
   return descriptor.buildId + "-" + descriptor.assets.node.sha256;
@@ -45979,17 +46886,17 @@ function absoluteCacheDirectory(value) {
     if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
       fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
     }
-  } else if (!path15.isAbsolute(value)) {
+  } else if (!path17.isAbsolute(value)) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
   }
-  const absolute = path15.resolve(value);
-  if (absolute === path15.parse(absolute).root)
+  const absolute = path17.resolve(value);
+  if (absolute === path17.parse(absolute).root)
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
 async function verifyOwnedTemporaryDirectory(directory, tempRoot, prefix) {
   const canonical = await realpath5(directory);
-  if (path15.dirname(canonical) !== tempRoot || !path15.basename(canonical).startsWith(prefix) || (await lstat7(directory)).isSymbolicLink()) {
+  if (path17.dirname(canonical) !== tempRoot || !path17.basename(canonical).startsWith(prefix) || (await lstat8(directory)).isSymbolicLink()) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary directory was replaced or linked");
   }
   return canonical;
@@ -46002,8 +46909,8 @@ async function removeOwnedDirectory(directory, tempRoot, prefix, expected) {
   });
   if (!canonical)
     return;
-  const current = await lstat7(directory);
-  if (path15.dirname(canonical) !== tempRoot || !path15.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
+  const current = await lstat8(directory);
+  if (path17.dirname(canonical) !== tempRoot || !path17.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary cleanup path escaped its intended location");
   }
   await rm4(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
@@ -46018,15 +46925,15 @@ async function inspectReparsePoints(paths2) {
   const totalTimeoutMs = 15e3;
   const deadline = started + totalTimeoutMs;
   const timeRemainingMs = () => Math.max(0, Math.round(deadline - performance.now()));
-  const compiler = path15.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
-  if (!(await lstat7(compiler).catch(() => void 0))?.isFile()) {
+  const compiler = path17.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  if (!(await lstat8(compiler).catch(() => void 0))?.isFile()) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "The Windows .NET Framework compiler is unavailable");
   }
   const tempRoot = await realpath5(os6.tmpdir());
-  const directory = await realpath5(await mkdtemp2(path15.join(tempRoot, "agy-mcp-inspector-")));
-  const directoryInfo = await lstat7(directory);
-  const sourceFile = path15.join(directory, "inspector.cs");
-  const exeFile = path15.join(directory, "inspector.exe");
+  const directory = await realpath5(await mkdtemp2(path17.join(tempRoot, "agy-mcp-inspector-")));
+  const directoryInfo = await lstat8(directory);
+  const sourceFile = path17.join(directory, "inspector.cs");
+  const exeFile = path17.join(directory, "inspector.exe");
   let stdout = "", stdoutChars = 0, stderrChars = 0;
   let stopReason;
   let executionError;
@@ -46039,7 +46946,7 @@ async function inspectReparsePoints(paths2) {
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Compilation timed out");
     }
     const compileResult = await new Promise((resolve2) => {
-      const compileChild2 = spawn4(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
+      const compileChild2 = spawn5(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
         windowsHide: true,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"]
@@ -46079,7 +46986,7 @@ async function inspectReparsePoints(paths2) {
       const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${compileResult.code}; signal=${compileResult.signal}; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
     }
-    const exeStat = await lstat7(exeFile).catch(() => void 0);
+    const exeStat = await lstat8(exeFile).catch(() => void 0);
     if (!exeStat?.isFile()) {
       const diagnostics = `reason=spawn-error; elapsedMs=${Math.round(performance.now() - started)}; exitCode=null; signal=null; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
@@ -46091,7 +46998,7 @@ async function inspectReparsePoints(paths2) {
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
     }
     const result = await new Promise((resolve2) => {
-      const child = spawn4(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn5(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
       let spawnError = false;
       const stop = (reason) => {
         if (!stopReason) {
@@ -46153,7 +47060,7 @@ async function inspectCachePath(value, create = false) {
   await inspectReparsePoints([absolute]);
   if (create)
     await mkdir5(absolute, { recursive: true, mode: 448 });
-  const info = await lstat7(absolute).catch((error62) => {
+  const info = await lstat8(absolute).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime has not been prepared");
     throw error62;
@@ -46164,7 +47071,7 @@ async function inspectCachePath(value, create = false) {
 }
 async function regularCacheFile(file3, expectedSize) {
   await inspectReparsePoints([file3]);
-  const info = await lstat7(file3).catch((error62) => {
+  const info = await lstat8(file3).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is incomplete; run --prepare-windows-runtime");
     throw error62;
@@ -46179,12 +47086,12 @@ async function sha256File3(file3, expectedSize) {
   const size = Number(before.size);
   if (!Number.isSafeInteger(size) || size < 0)
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file has an invalid size");
-  const handle = await open3(file3, "r");
+  const handle = await open5(file3, "r");
   try {
     const opened = await handle.stat();
     if (!sameFile(opened, before))
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
-    const hash3 = createHash17("sha256");
+    const hash3 = createHash18("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
     while (offset < size) {
@@ -46209,7 +47116,7 @@ async function verifyAsset(root, descriptor, asset) {
   }
 }
 async function verifyCacheLayout(root, descriptor) {
-  const leaf = path15.join(root, cacheLeafName(descriptor));
+  const leaf = path17.join(root, cacheLeafName(descriptor));
   const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
   const entries = await readdir5(leaf, { withFileTypes: true });
   if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
@@ -46222,8 +47129,8 @@ async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableN
   const pinned = requireDescriptor(descriptor);
   const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root);
-  const leaf = path15.join(root, cacheLeafName(pinned));
-  const leafInfo = await lstat7(leaf).catch((error62) => {
+  const leaf = path17.join(root, cacheLeafName(pinned));
+  const leafInfo = await lstat8(leaf).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
     throw error62;
@@ -46270,10 +47177,10 @@ async function downloadAsset(asset, destination, fetchImpl) {
     if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) !== asset.bytes)) {
       fail("PORTABLE_NODE_DOWNLOAD_REJECTED", "Portable Node download size does not match the embedded descriptor");
     }
-    const file3 = await open3(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
+    const file3 = await open5(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
     try {
       const reader = response2.body.getReader();
-      const hash3 = createHash17("sha256");
+      const hash3 = createHash18("sha256");
       let bytes = 0;
       for (; ; ) {
         const item = await reader.read();
@@ -46303,11 +47210,11 @@ async function downloadAsset(asset, destination, fetchImpl) {
   }
 }
 async function removeOwnedTemporary(root, temporary) {
-  if (path15.dirname(temporary) !== root || !path15.basename(temporary).startsWith(".portable-node-")) {
+  if (path17.dirname(temporary) !== root || !path17.basename(temporary).startsWith(".portable-node-")) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
   }
   await inspectReparsePoints([temporary]);
-  const info = await lstat7(temporary).catch((error62) => {
+  const info = await lstat8(temporary).catch((error62) => {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
@@ -46328,7 +47235,7 @@ function processAlive3(pid) {
 }
 async function recoverDeadPreparationLock(file3) {
   await inspectReparsePoints([file3]);
-  const before = await lstat7(file3).catch((error62) => {
+  const before = await lstat8(file3).catch((error62) => {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
@@ -46347,23 +47254,23 @@ async function recoverDeadPreparationLock(file3) {
   const pid = typeof owner === "object" && owner !== null ? owner.pid : void 0;
   if (!Number.isSafeInteger(pid) || typeof pid !== "number" || pid < 1 || processAlive3(pid))
     return false;
-  const after = await lstat7(file3).catch(() => void 0);
+  const after = await lstat8(file3).catch(() => void 0);
   if (!after || !sameFile(before, after))
     return false;
   await unlink2(file3);
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
-  const file3 = path15.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  const file3 = path17.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
-      const handle = await open3(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
+      const handle = await open5(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
       await handle.writeFile(JSON.stringify({ pid: process.pid }));
       const expected = await handle.stat();
       await handle.close();
       return async () => {
         await inspectReparsePoints([file3]);
-        const current = await lstat7(file3).catch((error62) => {
+        const current = await lstat8(file3).catch((error62) => {
           if (error62.code === "ENOENT")
             return void 0;
           throw error62;
@@ -46405,7 +47312,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path15.join(root, ".portable-node-" + randomUUID8());
+  const temporary = path17.join(root, ".portable-node-" + randomUUID8());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -46417,16 +47324,16 @@ async function preparePortableNodeRuntime(options) {
     await inspectReparsePoints([temporary]);
     const fetchImpl = options.fetch ?? globalThis.fetch;
     for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
-      await downloadAsset(asset, path15.join(temporary, asset.fileName), fetchImpl);
+      await downloadAsset(asset, path17.join(temporary, asset.fileName), fetchImpl);
     }
-    const final = path15.join(root, cacheLeafName(descriptor));
+    const final = path17.join(root, cacheLeafName(descriptor));
     try {
       await rename(temporary, final);
     } catch (error62) {
       if (error62.code !== "EEXIST" && error62.code !== "EPERM")
         throw error62;
       try {
-        await lstat7(final);
+        await lstat8(final);
       } catch {
         throw error62;
       }
@@ -46476,11 +47383,11 @@ function fail2(code, message) {
   throw new BridgeError(code, message);
 }
 function canonicalKey2(file3) {
-  return path16.resolve(file3).toLocaleLowerCase("en-US");
+  return path18.resolve(file3).toLocaleLowerCase("en-US");
 }
 function isUnsafeWindowsPath(value) {
   const normalized = value.replaceAll("/", "\\");
-  const basename2 = path16.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const basename2 = path18.win32.basename(normalized).replace(/[ .]+$/u, "");
   const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
   return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename2) || withoutDrive.includes(":");
 }
@@ -46492,7 +47399,7 @@ function validateWindowsCommand(command2) {
   if (normalized.split("\\").some((part) => part === "." || part === "..")) {
     fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
   }
-  if (!path16.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+  if (!path18.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
     fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
   }
 }
@@ -46502,13 +47409,13 @@ function validateLimits(limits) {
   }
 }
 async function assertSafePath(file3) {
-  const absolute = path16.resolve(file3);
-  const parsed = path16.parse(absolute);
-  const parts = path16.relative(parsed.root, absolute).split(path16.sep).filter(Boolean);
+  const absolute = path18.resolve(file3);
+  const parsed = path18.parse(absolute);
+  const parts = path18.relative(parsed.root, absolute).split(path18.sep).filter(Boolean);
   let current = parsed.root;
   for (const part of parts) {
-    current = path16.join(current, part);
-    const info = await lstat8(current);
+    current = path18.join(current, part);
+    const info = await lstat9(current);
     if (info.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
   }
@@ -46518,7 +47425,7 @@ function isSameFile(observed, expected) {
 }
 async function regularFile(file3, allowMultipleLinks = false) {
   await assertSafePath(file3);
-  const info = await lstat8(file3);
+  const info = await lstat9(file3);
   if (!info.isFile() || info.isSymbolicLink())
     fail2("UNSAFE_RUNTIME_PATH", "Runtime files must be regular files: " + file3);
   if (!allowMultipleLinks && info.nlink > 1)
@@ -46531,7 +47438,7 @@ async function readBoundedFile(file3, limit) {
   const expected = await regularFile(file3);
   if (expected.size > limit)
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher or manifest exceeds its inspection limit");
-  const source = await open4(file3, "r");
+  const source = await open6(file3, "r");
   try {
     const observed = await source.stat();
     if (!observed.isFile() || observed.nlink > 1 || !isSameFile(observed, expected) || observed.size > limit) {
@@ -46551,11 +47458,11 @@ async function readBoundedFile(file3, limit) {
   }
 }
 function commandNames(executable) {
-  const basename2 = path16.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename2 = path18.win32.basename(executable).toLocaleLowerCase("en-US");
   if (basename2 === "npm" || basename2 === "npm.cmd") {
     return { kind: "npm", names: [basename2 === "npm" ? executable + ".cmd" : executable] };
   }
-  const extension = path16.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path18.extname(executable).toLocaleLowerCase("en-US");
   if (extension === ".cmd" || extension === ".bat") {
     fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
   }
@@ -46566,12 +47473,12 @@ function commandNames(executable) {
 }
 async function resolveCommand(executable) {
   const requested = commandNames(executable);
-  const directories = path16.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path16.delimiter).filter((directory) => directory && path16.isAbsolute(directory));
+  const directories = path18.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path18.delimiter).filter((directory) => directory && path18.isAbsolute(directory));
   for (const directory of directories) {
     for (const name of requested.names) {
-      const candidate = path16.isAbsolute(name) ? path16.resolve(name) : path16.resolve(directory, name);
+      const candidate = path18.isAbsolute(name) ? path18.resolve(name) : path18.resolve(directory, name);
       try {
-        const info = await lstat8(candidate);
+        const info = await lstat9(candidate);
         if (info.isSymbolicLink())
           fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + candidate);
         if (!info.isFile())
@@ -46588,17 +47495,17 @@ async function resolveCommand(executable) {
   fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
 }
 function stagedPath(runtime, relative2) {
-  const target = path16.resolve(runtime, ...relative2);
-  const prefix = runtime.endsWith(path16.sep) ? runtime : runtime + path16.sep;
+  const target = path18.resolve(runtime, ...relative2);
+  const prefix = runtime.endsWith(path18.sep) ? runtime : runtime + path18.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   return target;
 }
 async function stageDirectory(directory, state) {
-  const target = path16.resolve(directory);
+  const target = path18.resolve(directory);
   if (target === state.runtime)
     return;
-  const prefix = state.runtime.endsWith(path16.sep) ? state.runtime : state.runtime + path16.sep;
+  const prefix = state.runtime.endsWith(path18.sep) ? state.runtime : state.runtime + path18.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   const targetKey = canonicalKey2(target);
@@ -46606,7 +47513,7 @@ async function stageDirectory(directory, state) {
     return;
   if (state.targets.has(targetKey))
     fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
-  const parent = path16.dirname(target);
+  const parent = path18.dirname(target);
   if (parent === target)
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   await stageDirectory(parent, state);
@@ -46617,8 +47524,8 @@ async function stageDirectory(directory, state) {
   state.directories.add(targetKey);
 }
 async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path16.resolve(sourcePath);
-  const target = path16.resolve(targetPath);
+  const source = path18.resolve(sourcePath);
+  const target = path18.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
   const previousTarget = state.sources.get(sourceKey);
@@ -46635,8 +47542,8 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
     fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
   }
-  await stageDirectory(path16.dirname(target), state);
-  const sourceHandle = await open4(source, "r");
+  await stageDirectory(path18.dirname(target), state);
+  const sourceHandle = await open6(source, "r");
   let targetHandle;
   let created = false;
   try {
@@ -46656,10 +47563,10 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
         fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "Runtime executable or DLL has no Windows image header");
       }
     }
-    targetHandle = await open4(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
+    targetHandle = await open6(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
     created = true;
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
-    const hash3 = expectedSha256 ? createHash18("sha256") : void 0;
+    const hash3 = expectedSha256 ? createHash19("sha256") : void 0;
     let offset = 0;
     while (offset < expected.size) {
       const length = Math.min(buffer.length, expected.size - offset);
@@ -46699,12 +47606,12 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
 }
 async function hashStagedFile(file3) {
   const expected = await regularFile(file3);
-  const handle = await open4(file3, "r");
+  const handle = await open6(file3, "r");
   try {
     const opened = await handle.stat();
     if (!isSameFile(opened, expected))
       fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
-    const hash3 = createHash18("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = createHash19("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
     let offset = 0;
     while (offset < expected.size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
@@ -46727,14 +47634,14 @@ async function stageNativeExecutable(source, destination, state, expectedSha256)
   }
   if (expectedSha256)
     return executable;
-  const directory = path16.dirname(source);
+  const directory = path18.dirname(source);
   const siblings = await readdir6(directory, { withFileTypes: true });
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     if (!/\.dll$/iu.test(entry.name))
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path16.join(directory, entry.name), path16.join(path16.dirname(destination), entry.name), state, true);
+    await stageFile(path18.join(directory, entry.name), path18.join(path18.dirname(destination), entry.name), state, true);
   }
   return executable;
 }
@@ -46759,8 +47666,8 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
     const childRelative = [...relative2, entry.name];
     if (npmPathIsOmitted(childRelative))
       continue;
-    const childSource = path16.join(source, entry.name);
-    const childDestination = path16.join(destination, entry.name);
+    const childSource = path18.join(source, entry.name);
+    const childDestination = path18.join(destination, entry.name);
     if (entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
     if (entry.isDirectory()) {
@@ -46778,7 +47685,7 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
   }
 }
 async function stageSystemCmd(systemRoot, runtime, state) {
-  const source = path16.join(systemRoot, "System32", "cmd.exe");
+  const source = path18.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
 async function stageNpm(launcher, runtime, state, args, portableNode) {
@@ -46786,11 +47693,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
   }
-  const nodeDirectory = path16.dirname(launcher);
-  const nodeSource = path16.join(nodeDirectory, "node.exe");
-  const npmSource = path16.join(nodeDirectory, "node_modules", "npm");
-  const manifestPath = path16.join(npmSource, "package.json");
-  const cliSource = path16.join(npmSource, "bin", "npm-cli.js");
+  const nodeDirectory = path18.dirname(launcher);
+  const nodeSource = path18.join(nodeDirectory, "node.exe");
+  const npmSource = path18.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path18.join(npmSource, "package.json");
+  const cliSource = path18.join(npmSource, "bin", "npm-cli.js");
   let manifest;
   try {
     manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
@@ -46810,11 +47717,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
   await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
   const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  if (!path16.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+  if (!path18.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
-  return { executable: node2, args: [cli, ...args], pathEntries: [path16.dirname(node2)], comspec, portableNode: portableNode?.identity };
+  return { executable: node2, args: [cli, ...args], pathEntries: [path18.dirname(node2)], comspec, portableNode: portableNode?.identity };
 }
 async function hostNodeIdentity(file3) {
   const [candidate, host] = await Promise.all([regularFile(file3), regularFile(process.execPath)]);
@@ -46835,21 +47742,21 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
   validateWindowsCommand(command2);
   validateLimits(limits);
-  const runtime = path16.resolve(runtimeDirectory);
+  const runtime = path18.resolve(runtimeDirectory);
   await assertSafePath(runtime);
-  const runtimeInfo = await lstat8(runtime);
+  const runtimeInfo = await lstat9(runtime);
   if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir6(runtime)).length !== 0) {
     fail2("UNSAFE_RUNTIME_PATH", "Windows runtime staging requires an empty owned directory");
   }
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
-    const adjacentNode = path16.join(path16.dirname(resolved.file), "node.exe");
+    const adjacentNode = path18.join(path18.dirname(resolved.file), "node.exe");
     return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection));
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
-  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path16.basename(resolved.file)]), state, portableNode?.identity.sha256);
-  return { executable, args: [...command2.args], pathEntries: [path16.dirname(executable)], portableNode: portableNode?.identity };
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path18.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  return { executable, args: [...command2.args], pathEntries: [path18.dirname(executable)], portableNode: portableNode?.identity };
 }
 
 // dist/src/windows-executor.js
@@ -46878,10 +47785,10 @@ var libraryRuntime = (() => {
   return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
 })();
 function verifyPathMappings(result, roots) {
-  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path17.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path19.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
   const aliases = /* @__PURE__ */ new Set();
   for (const mapping of result.pathMappings) {
-    if (expected.get(mapping.kind) !== path17.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+    if (expected.get(mapping.kind) !== path19.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
     if (aliases.has(mapping.aliasRoot))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
@@ -46892,30 +47799,30 @@ function verifyPathMappings(result, roots) {
     throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
 }
 function contains2(root, target) {
-  const relative2 = path17.relative(root, target);
-  return relative2 === "" || !relative2.startsWith(".." + path17.sep) && relative2 !== ".." && !path17.isAbsolute(relative2);
+  const relative2 = path19.relative(root, target);
+  return relative2 === "" || !relative2.startsWith(".." + path19.sep) && relative2 !== ".." && !path19.isAbsolute(relative2);
 }
 function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
   const canonical = await realpath6(directory);
-  if (path17.dirname(canonical) !== temp || !path17.basename(canonical).startsWith(prefix) || (await lstat9(directory)).isSymbolicLink()) {
+  if (path19.dirname(canonical) !== temp || !path19.basename(canonical).startsWith(prefix) || (await lstat10(directory)).isSymbolicLink()) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
 }
 async function nativeProcess(executable, args, options, input2) {
   options.signal?.throwIfAborted();
-  const child = spawn5(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn6(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   options.onProcess?.(child);
-  let stdout = "", stderr = "", oversized = false, stopping = false;
+  let stdout = "", stderr = "", oversized = false, stopping2 = false;
   const controllerOutputLimit = Math.max(1e5, Math.min(4e5, (options.sandbox?.maxOutputChars ?? 4e3) * 6 + 12e3));
   let hardStop;
   const stop = () => {
-    if (stopping)
+    if (stopping2)
       return;
-    stopping = true;
+    stopping2 = true;
     if (input2)
       child.stdin.write(input2 + "\n", () => {
       });
@@ -46956,11 +47863,11 @@ async function nativeProcess(executable, args, options, input2) {
   }
 }
 async function compileController(temp, options) {
-  const compiler = path17.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
-  if (!(await lstat9(compiler).catch(() => void 0))?.isFile())
+  const compiler = path19.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  if (!(await lstat10(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath6(await mkdtemp3(path17.join(temp, "agy-mcp-controller-")));
-  const source = path17.join(directory, "runner.cs"), helper = path17.join(directory, "runner.exe");
+  const directory = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-controller-")));
+  const source = path19.join(directory, "runner.cs"), helper = path19.join(directory, "runner.exe");
   try {
     await writeFile5(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
@@ -46974,7 +47881,7 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path17.join(directory, "request-" + randomUUID9() + ".json");
+  const file3 = path19.join(directory, "request-" + randomUUID9() + ".json");
   await writeFile5(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
@@ -46996,22 +47903,22 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     try {
       return await realpath6(value);
     } catch {
-      return path17.resolve(value);
+      return path19.resolve(value);
     }
   }));
   const paths2 = /* @__PURE__ */ new Map();
   const inspect = async (value, rights) => {
-    if (!path17.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+    if (!path19.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath6(value), root = path17.parse(canonical).root;
+    const canonical = await realpath6(value), root = path19.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
-    const relative2 = path17.relative(root, canonical).split(path17.sep).filter(Boolean);
+    const relative2 = path19.relative(root, canonical).split(path19.sep).filter(Boolean);
     let current = root, entries = 0;
     const walk = async (candidate) => {
-      const stat3 = await lstat9(candidate);
+      const stat3 = await lstat10(candidate);
       if (stat3.isSymbolicLink() || !stat3.isDirectory() && !stat3.isFile() || stat3.isFile() && stat3.nlink > 1) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets cannot contain links, hard links, or non-regular files");
       }
@@ -47019,12 +47926,12 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
         for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
           if (++entries > maxFiles)
             throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
-          await walk(path17.join(candidate, name));
+          await walk(path19.join(candidate, name));
         }
     };
     for (const part of relative2) {
-      current = path17.join(current, part);
-      const stat3 = await lstat9(current);
+      current = path19.join(current, part);
+      const stat3 = await lstat10(current);
       if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
     }
@@ -47054,7 +47961,7 @@ async function runRecoveryWithController(stateDirectory, options) {
   }
 }
 async function recoverWindowsExecutions(stateDirectory) {
-  const effective = path17.resolve(stateDirectory);
+  const effective = path19.resolve(stateDirectory);
   await mkdir7(effective, { recursive: true, mode: 448 });
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
@@ -47068,13 +47975,13 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
   };
-  const stateDirectory = path17.resolve(options.stateDirectory ?? path17.join(os7.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path19.resolve(options.stateDirectory ?? path19.join(os7.homedir(), ".antigravity-mcp-bridge"));
   await mkdir7(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
   const temp = await realpath6(os7.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath6(await mkdtemp3(path17.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath6(await mkdtemp3(path17.join(temp, "agy-mcp-scratch-")));
+  const runtime = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-scratch-")));
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
@@ -47098,7 +48005,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       environment: {
         SystemRoot: systemRoot,
         WINDIR: systemRoot,
-        PATH: [...staged.pathEntries, path17.join(systemRoot, "System32")].join(path17.delimiter),
+        PATH: [...staged.pathEntries, path19.join(systemRoot, "System32")].join(path19.delimiter),
         PATHEXT: ".COM;.EXE;.BAT;.CMD",
         TEMP: scratch,
         TMP: scratch,
@@ -47106,7 +48013,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
         HOME: scratch,
         APPDATA: scratch,
         LOCALAPPDATA: scratch,
-        COMSPEC: staged.comspec ?? path17.join(systemRoot, "System32", "cmd.exe")
+        COMSPEC: staged.comspec ?? path19.join(systemRoot, "System32", "cmd.exe")
       }
     };
     const file3 = await writeRequest(controller.directory, request);
@@ -47172,7 +48079,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash19("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash20("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -47292,6 +48199,13 @@ var TaskManager = class {
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
     await validateProjectRoot(directory);
     return directory;
+  }
+  async listProjectFiles(workingDirectory) {
+    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    await validateStateSeparation(directory, this.config.stateDirectory);
+    await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
+    await validateProjectRoot(directory);
+    return listProjectFiles(directory, this.config);
   }
   async listMemory(workingDirectory) {
     const directory = await this.memoryProject(workingDirectory), store = this.projectMemory();
@@ -47910,7 +48824,7 @@ var TaskManager = class {
       const observedTests = lastObservedTest && lastObservedTest.sha256 === preview.sha256 && lastObservedTest.treeSha256 === treeSha256 && lastObservedTest.beforeTreeSha256 === treeSha256 && lastObservedTest.exitCode === 0 && !lastObservedTest.executionError && !lastObservedTest.truncated ? [lastObservedTest] : [];
       const needsReview = hooks.requireReview || criteria.some((criterion) => !criterion.check) || reviewed?.status === "failed";
       const phase = needsReview && !reviewPassed ? "pending-review" : hooks.requireTests && !observedTests.length ? "pending-tests" : "validated";
-      const validationSha256 = createHash19("sha256").update(JSON.stringify({
+      const validationSha256 = createHash20("sha256").update(JSON.stringify({
         criteria,
         fileHashes: automatic.fileHashes,
         reviews: reviewed ? { checks: reviewed.checks, fileHashes: reviewed.fileHashes, evidence: previous.review.evidence } : null,
@@ -47924,7 +48838,7 @@ var TaskManager = class {
           sandboxPolicySha256: test.sandboxPolicySha256,
           portableNode: test.portableNode,
           testTaskId: test.testTaskId,
-          outputSha256: createHash19("sha256").update(test.output).digest("hex")
+          outputSha256: createHash20("sha256").update(test.output).digest("hex")
         })),
         phase
       })).digest("hex");
@@ -48189,7 +49103,7 @@ var TaskManager = class {
       if (!preauthorized && approval !== true && (typeof approval !== "object" || approval?.confirmed !== true)) {
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
       }
-      const releaseSource = this.state.acquire("source-" + createHash19("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash20("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -48616,7 +49530,9 @@ var TaskManager = class {
       task2.releaseProject?.();
       task2.releaseProject = void 0;
     } else {
-      task2.termination = "cancelled";
+      if (!task2.termination) {
+        task2.termination = "cancelled";
+      }
       if (task2.nativeAbort)
         task2.nativeAbort.abort();
       else if (task2.child)
@@ -48684,7 +49600,8 @@ var TaskManager = class {
       task2.releaseProject ??= this.state.acquire(this.projectLock(task2.project));
       record2.copyDirectory = task2.project.copyDirectory;
       record2.includedFiles = task2.project.includedFiles;
-      this.events.append(record2.taskId, "copy.ready", { copyDirectory: record2.copyDirectory });
+      const blockedFiles = (task2.project?.blockedFiles ?? []).map((b) => ({ path: b.path, reason: b.reason }));
+      this.events.append(record2.taskId, "copy.ready", { copyDirectory: record2.copyDirectory, blockedFiles });
       if (record2.handoff && !task2.options.sessionId) {
         if (await fingerprintProjectCopy(task2.project, this.config) !== record2.handoff.treeSha256 || (await previewProjectCopy(task2.project, this.config)).sha256 !== record2.handoff.patchSha256)
           throw new BridgeError("CONTEXT_CHANGED", "Queued context copy changed before execution");
@@ -48716,31 +49633,79 @@ var TaskManager = class {
       this.events.append(record2.taskId, "process.started", { pid: child.pid });
       const timeoutMs = task2.options.timeoutSeconds * 1e3;
       task2.timer = setTimeout(() => {
-        task2.termination = "timeout";
+        task2.termination ??= "timeout";
         this.terminate(child);
       }, timeoutMs);
+      task2.timer.unref();
       let stderr = "";
+      const stderrRedactor = {};
+      let lastWasRedactedKey = false;
       const stdoutParser = new LineParser((line) => this.handleStdout(task2, line));
       const stderrParser = new LineParser((line) => {
-        stderr = (stderr + "\n" + line).slice(-1e4);
-        this.events.append(record2.taskId, "process.stderr", { text: line.slice(0, 4e3) });
+        const redacted = redactDiagnostic(line, stderrRedactor);
+        if (redacted === "[private key redacted]") {
+          if (!lastWasRedactedKey) {
+            lastWasRedactedKey = true;
+            stderr = (stderr + "\n" + redacted).slice(-1e4);
+            this.events.append(record2.taskId, "process.stderr", { text: redacted });
+          }
+          return;
+        }
+        lastWasRedactedKey = false;
+        stderr = (stderr + "\n" + redacted).slice(-1e4);
+        this.events.append(record2.taskId, "process.stderr", { text: redacted.slice(0, 4e3) });
       });
       child.stdout.on("data", (chunk) => stdoutParser.write(chunk));
       child.stderr.on("data", (chunk) => stderrParser.write(chunk));
+      child.stdout.on("error", (error62) => {
+        const redacted = redactDiagnostic(error62.message);
+        stderr += "\n" + redacted;
+        this.events.append(record2.taskId, "process.error", { message: redacted });
+        if (!task2.termination)
+          this.terminate(child);
+      });
+      child.stderr.on("error", (error62) => {
+        const redacted = redactDiagnostic(error62.message);
+        stderr += "\n" + redacted;
+        this.events.append(record2.taskId, "process.error", { message: redacted });
+        if (!task2.termination)
+          this.terminate(child);
+      });
+      child.stdin.on("error", (error62) => {
+        const redacted = redactDiagnostic(error62.message);
+        stderr += "\n" + redacted;
+        this.events.append(record2.taskId, "process.error", { message: redacted });
+        if (!task2.termination)
+          this.terminate(child);
+      });
+      child.on("error", (error62) => {
+        const redacted = redactDiagnostic(error62.message);
+        stderr += `
+${redacted}`;
+        this.events.append(record2.taskId, "process.error", { message: redacted });
+        if (!task2.termination)
+          this.terminate(child);
+      });
       const exitCode = await new Promise((resolve2) => {
-        child.once("error", (error62) => {
-          stderr += `
-${error62.message}`;
-          this.events.append(record2.taskId, "process.error", { message: error62.message });
-        });
         child.once("close", resolve2);
       });
       stdoutParser.end();
       stderrParser.end();
-      if (task2.timer)
+      if (task2.timer) {
         clearTimeout(task2.timer);
+        task2.timer = void 0;
+      }
+      task2.child = void 0;
+      if (task2.termination) {
+        this.finish(task2, task2.termination);
+        return;
+      }
       if (child.schemaCleanupError)
         throw child.schemaCleanupError;
+      if (child.startupError)
+        throw child.startupError;
+      if (child.communicationError)
+        throw child.communicationError;
       record2.exitCode = exitCode;
       if (native) {
         await native.cleanup();
@@ -48786,16 +49751,19 @@ ${error62.message}`;
           }
         }
       }
+      if (task2.termination) {
+        this.finish(task2, task2.termination);
+        return;
+      }
       if (record2.mode === "read-only")
         await verifyReadOnlyCopy(task2.project, readOnlyBaseline);
-      if (task2.termination)
-        this.finish(task2, task2.termination);
-      else if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))
+      if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))
         this.finish(task2, "failed", "AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
       else if (/no output produced[^\r\n]*["']mcp["'][^\r\n]*permission[^\r\n]*headless/iu.test(stderr)) {
         this.finish(task2, "failed", "AGY_MCP_PERMISSION_REQUIRED", "Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.");
       } else if (exitCode !== 0 || !record2.result || record2.result.status !== "SUCCESS") {
-        const message = record2.result?.error || `agy exited with code ${exitCode}`;
+        const rawMessage = record2.result?.error || (stderr.trim() ? stderr.trim() : `agy exited with code ${exitCode}`);
+        const message = redactDiagnostic(rawMessage);
         this.finish(task2, "failed", !record2.result && task2.parseErrors ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message);
       } else {
         if (task2.project.executionPolicy) {
@@ -48818,9 +49786,29 @@ ${error62.message}`;
         this.finish(task2, "completed");
       }
     } catch (error62) {
-      const code = error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED";
-      this.finish(task2, "failed", code, error62 instanceof Error ? error62.message : String(error62));
+      if (task2.timer) {
+        clearTimeout(task2.timer);
+        task2.timer = void 0;
+      }
+      if (task2.child) {
+        this.terminate(task2.child);
+        task2.child = void 0;
+      }
+      if (task2.termination)
+        this.finish(task2, task2.termination);
+      else {
+        const code = error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED";
+        this.finish(task2, "failed", code, error62 instanceof Error ? redactDiagnostic(error62.message) : redactDiagnostic(String(error62)));
+      }
     } finally {
+      if (task2.timer) {
+        clearTimeout(task2.timer);
+        task2.timer = void 0;
+      }
+      if (task2.child) {
+        this.terminate(task2.child);
+        task2.child = void 0;
+      }
       await native?.cleanup();
     }
   }
@@ -48890,6 +49878,8 @@ ${error62.message}`;
     }
   }
   async repairWindowsTest(task2, request, observedExitCode, timeoutSeconds) {
+    if (task2.termination)
+      return;
     if (!task2.project)
       throw new BridgeError("TASK_NOT_READY", "Windows test copy is unavailable");
     const { nativeTest: _nativeTest, outputSchema: _outputSchema, artifactPaths: _artifactPaths, ...baseOptions } = task2.options;
@@ -48910,32 +49900,83 @@ ${error62.message}`;
     task2.record.status = "running";
     this.events.append(task2.record.taskId, "process.started", { pid: child.pid, repair: true });
     let stderr = "";
+    const repairStderrRedactor = {};
+    let lastRepairWasRedactedKey = false;
     const stdoutParser = new LineParser((line) => this.handleStdout(task2, line));
     const stderrParser = new LineParser((line) => {
-      stderr = (stderr + "\n" + line).slice(-1e4);
-      this.events.append(task2.record.taskId, "process.stderr", { text: line.slice(0, 4e3) });
+      const redacted = redactDiagnostic(line, repairStderrRedactor);
+      if (redacted === "[private key redacted]") {
+        if (!lastRepairWasRedactedKey) {
+          lastRepairWasRedactedKey = true;
+          stderr = (stderr + "\n" + redacted).slice(-1e4);
+          this.events.append(task2.record.taskId, "process.stderr", { text: redacted });
+        }
+        return;
+      }
+      lastRepairWasRedactedKey = false;
+      stderr = (stderr + "\n" + redacted).slice(-1e4);
+      this.events.append(task2.record.taskId, "process.stderr", { text: redacted.slice(0, 4e3) });
     });
     child.stdout.on("data", (chunk) => stdoutParser.write(chunk));
     child.stderr.on("data", (chunk) => stderrParser.write(chunk));
-    const exitCode = await new Promise((resolve2) => {
-      child.once("error", (error62) => {
-        stderr += "\n" + error62.message;
-        this.events.append(task2.record.taskId, "process.error", { message: error62.message });
-      });
-      child.once("close", resolve2);
+    child.stdout.on("error", (error62) => {
+      const redacted = redactDiagnostic(error62.message);
+      stderr += "\n" + redacted;
+      this.events.append(task2.record.taskId, "process.error", { message: redacted });
+      if (!task2.termination)
+        this.terminate(child);
     });
-    stdoutParser.end();
-    stderrParser.end();
-    task2.child = void 0;
-    task2.record.exitCode = exitCode;
-    if (task2.termination)
-      return;
-    if (CliAdapter.authError(stderr + JSON.stringify(task2.record.result || ""))) {
-      throw new BridgeError("AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
-    }
-    if (exitCode !== 0 || !task2.record.result || task2.record.result.status !== "SUCCESS") {
-      const message = task2.record.result?.error || `agy repair exited with code ${exitCode}`;
-      throw new BridgeError("AGY_PROCESS_FAILED", message);
+    child.stderr.on("error", (error62) => {
+      const redacted = redactDiagnostic(error62.message);
+      stderr += "\n" + redacted;
+      this.events.append(task2.record.taskId, "process.error", { message: redacted });
+      if (!task2.termination)
+        this.terminate(child);
+    });
+    child.stdin.on("error", (error62) => {
+      const redacted = redactDiagnostic(error62.message);
+      stderr += "\n" + redacted;
+      this.events.append(task2.record.taskId, "process.error", { message: redacted });
+      if (!task2.termination)
+        this.terminate(child);
+    });
+    child.on("error", (error62) => {
+      const redacted = redactDiagnostic(error62.message);
+      stderr += `
+${redacted}`;
+      this.events.append(task2.record.taskId, "process.error", { message: redacted });
+      if (!task2.termination)
+        this.terminate(child);
+    });
+    try {
+      const exitCode = await new Promise((resolve2) => {
+        child.once("close", resolve2);
+      });
+      stdoutParser.end();
+      stderrParser.end();
+      task2.child = void 0;
+      task2.record.exitCode = exitCode;
+      if (task2.termination)
+        return;
+      if (child.schemaCleanupError)
+        throw child.schemaCleanupError;
+      if (child.startupError)
+        throw child.startupError;
+      if (child.communicationError)
+        throw child.communicationError;
+      if (CliAdapter.authError(stderr + JSON.stringify(task2.record.result || ""))) {
+        throw new BridgeError("AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
+      }
+      if (exitCode !== 0 || !task2.record.result || task2.record.result.status !== "SUCCESS") {
+        const rawMessage = task2.record.result?.error || (stderr.trim() ? stderr.trim() : `agy repair exited with code ${exitCode}`);
+        const message = redactDiagnostic(rawMessage);
+        throw new BridgeError("AGY_PROCESS_FAILED", message);
+      }
+    } finally {
+      if (task2.child) {
+        this.terminate(task2.child);
+        task2.child = void 0;
+      }
     }
     if (task2.project.executionPolicy) {
       await verifyManagedCopy(task2.project);
@@ -48960,19 +50001,20 @@ ${error62.message}`;
     const deadline = Date.now() + task2.options.timeoutSeconds * 1e3;
     let modelInvoked = false;
     task2.timer = setTimeout(() => {
-      task2.termination = "timeout";
+      task2.termination ??= "timeout";
       if (task2.nativeAbort)
         task2.nativeAbort.abort();
       else if (task2.child)
         this.terminate(task2.child);
     }, task2.options.timeoutSeconds * 1e3);
+    task2.timer.unref();
     try {
       for (let attempt = 1; attempt <= request.maxAttempts; attempt++) {
         if (task2.termination)
           break;
         const remaining = this.remainingSeconds(deadline);
         if (!remaining) {
-          task2.termination = "timeout";
+          task2.termination ??= "timeout";
           break;
         }
         const beforePreview = await previewProjectCopy(task2.project, this.config);
@@ -49027,7 +50069,7 @@ ${error62.message}`;
         }
         const repairSeconds = this.remainingSeconds(deadline);
         if (!repairSeconds) {
-          task2.termination = "timeout";
+          task2.termination ??= "timeout";
           break;
         }
         if (task2.record.group) {
@@ -49050,6 +50092,10 @@ ${error62.message}`;
         clearTimeout(task2.timer);
       task2.timer = void 0;
       task2.nativeAbort = void 0;
+      if (task2.child) {
+        this.terminate(task2.child);
+        task2.child = void 0;
+      }
     }
   }
   handleStdout(task2, line) {
@@ -49062,7 +50108,7 @@ ${error62.message}`;
       raw = parsed;
     } catch {
       task2.parseErrors = (task2.parseErrors || 0) + 1;
-      this.events.append(record2.taskId, "stream.unparsed", { line: line.slice(0, 4e3) });
+      this.events.append(record2.taskId, "stream.unparsed", { line: redactDiagnostic(line).slice(0, 4e3) });
       return;
     }
     const sourceType = raw.event;
@@ -49087,7 +50133,7 @@ ${error62.message}`;
           task2.nativeTest.attempts.push(attempt);
           this.events.append(record2.taskId, "test.executed", { attempt: task2.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
           if (task2.nativeTest.attempts.length > task2.options.nativeTest.maxAttempts) {
-            task2.termination = "cancelled";
+            task2.termination ??= "cancelled";
             if (task2.child)
               this.terminate(task2.child);
           }
@@ -49124,8 +50170,11 @@ ${error62.message}`;
       if (record2.status === "running")
         record2.status = "streaming";
     } else if (sourceType === "result" && raw.result && typeof raw.result === "object") {
-      record2.result = raw.result;
       const result = raw.result;
+      if (typeof result.error === "string") {
+        result.error = redactDiagnostic(result.error);
+      }
+      record2.result = raw.result;
       if (typeof result.conversation_id === "string")
         record2.sessionId = result.conversation_id;
       if (result.usage !== void 0) {
@@ -49164,7 +50213,7 @@ ${error62.message}`;
     task2.messageKeys ??= /* @__PURE__ */ new Set();
     for (const input2 of extractAgentMessages(text)) {
       const payload = JSON.stringify(input2);
-      const key = step + ":" + createHash19("sha256").update(payload).digest("hex");
+      const key = step + ":" + createHash20("sha256").update(payload).digest("hex");
       if (task2.messageKeys.has(key) || final && task2.record.messages?.some((message2) => message2.source === "agy-reported" && message2.kind === input2.kind && message2.text === input2.text))
         continue;
       if (task2.messageKeys.size >= 1e3) {
@@ -49183,6 +50232,14 @@ ${error62.message}`;
   finish(task2, status2, code, message) {
     if (terminal3.has(task2.record.status))
       return;
+    if (task2.record.result && typeof task2.record.result.error === "string") {
+      task2.record.result.error = redactDiagnostic(task2.record.result.error);
+    }
+    if (task2.termination && status2 !== task2.termination) {
+      status2 = task2.termination;
+      code = status2 === "timeout" ? "TASK_TIMEOUT" : "TASK_CANCELLED";
+      message = status2 === "timeout" ? "Task execution timed out" : "Task cancelled";
+    }
     task2.record.status = status2;
     task2.record.completedAt = (/* @__PURE__ */ new Date()).toISOString();
     if (status2 === "timeout")
@@ -49190,7 +50247,7 @@ ${error62.message}`;
     if (status2 === "cancelled")
       code = "TASK_CANCELLED";
     if (code)
-      task2.record.error = { code, message: message || code };
+      task2.record.error = { code, message: redactDiagnostic(message || code) };
     if (status2 !== "completed")
       this.failPendingInbox(task2.project?.copyDirectory, task2, status2 === "cancelled" ? "cancelled" : "failed", code ?? "TASK_NOT_COMPLETED");
     const output2 = task2.record.result;
@@ -49202,18 +50259,7 @@ ${error62.message}`;
     this.events.append(task2.record.taskId, `task.${status2}`, task2.record.error || { exitCode: task2.record.exitCode });
   }
   terminate(child) {
-    if (child.exitCode !== null || child.killed)
-      return;
-    child.kill("SIGINT");
-    const grace = setTimeout(() => {
-      if (child.exitCode !== null)
-        return;
-      if (process.platform === "win32" && child.pid)
-        spawn6("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
-      else
-        child.kill("SIGKILL");
-    }, 3e3);
-    grace.unref();
+    terminateSubprocess(child);
   }
 };
 

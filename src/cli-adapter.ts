@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { memoryPrompt } from './memory-context.js';
 import { peerOriginSchema, peerContextSchema } from './peer-messages.js';
 import { randomUUID } from 'node:crypto';
@@ -9,6 +9,8 @@ import { BridgeError, type RunOptions } from './types.js';
 import type { Config } from './config.js';
 import { roleContract, resolveRole } from './roles.js';
 import { validatePrompt } from './validation.js';
+import { terminateSubprocess, processError, redactDiagnostic, registerOwnedProcessGroup } from './subprocess.js';
+import { cliEnvironment } from './cli-environment.js';
 
 export function taskPrompt(options: RunOptions, maxChars: number): string {
   const role = options.roleDefinition ?? resolveRole(options.role ?? 'implementer');
@@ -29,8 +31,11 @@ export function taskPrompt(options: RunOptions, maxChars: number): string {
   return content;
 }
 
-
-export type CliProcess = ChildProcessWithoutNullStreams & { schemaCleanupError?: BridgeError };
+export type CliProcess = ChildProcessWithoutNullStreams & {
+  schemaCleanupError?: BridgeError;
+  communicationError?: BridgeError;
+  startupError?: BridgeError;
+};
 
 function stageSchemaFile(stateDirectory: string, content: string) {
   if (!path.isAbsolute(stateDirectory)) throw new BridgeError('INVALID_STATE_DIRECTORY', 'Schema storage must be absolute');
@@ -52,7 +57,7 @@ function stageSchemaFile(stateDirectory: string, content: string) {
   } };
 }
 
-interface ProbeResult { code: number | null; stdout: string; stderr: string }
+interface ProbeResult { code: number | null; signal: NodeJS.Signals | null; stdout: string; stderr: string; timedOut: boolean }
 export interface Model { id: string; name: string }
 export interface Discovery {
   installed: boolean;
@@ -87,35 +92,97 @@ export class CliAdapter {
   constructor(private readonly config: Config, private readonly prefixArgs: string[] = []) {}
 
   private environment(): NodeJS.ProcessEnv {
-    const env = { ...process.env };
-    // MCP clients can omit PATHEXT, preventing PowerShell from finding installed executables.
-    if (process.platform === 'win32' && process.env.PATHEXT === undefined) env.PATHEXT = '.COM;.EXE;.BAT;.CMD';
-    return env;
+    return cliEnvironment(this.config.allowedEnvVars);
   }
 
   private probe(args: string[], timeoutMs = 10000): Promise<ProbeResult> {
     return new Promise((resolve, reject) => {
-      const child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      let child: ChildProcess;
+      try {
+        child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], {
+          env: this.environment(),
+          windowsHide: true,
+          shell: false,
+          detached: process.platform !== 'win32',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        if (process.platform !== 'win32') {
+          registerOwnedProcessGroup(child);
+        }
+      } catch (error) {
+        return reject(processError(error, 'spawn'));
+      }
       let stdout = '', stderr = '';
-      const timer = setTimeout(() => child.kill(), timeoutMs);
-      child.stdout.on('data', chunk => { stdout = (stdout + String(chunk)).slice(-2_000_000); });
-      child.stderr.on('data', chunk => { stderr = (stderr + String(chunk)).slice(-100_000); });
-      child.once('error', error => { clearTimeout(timer); reject(error); });
-      child.once('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
+      let timedOut = false;
+      let settled = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        terminateSubprocess(child);
+      }, timeoutMs);
+      timer.unref();
+      const fail = (error: unknown, op: string) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        terminateSubprocess(child);
+        reject(processError(error, op));
+      };
+      if (child.stdout) {
+        child.stdout.on('data', chunk => { stdout = (stdout + String(chunk)).slice(-2_000_000); });
+        child.stdout.on('error', err => fail(err, 'stdout'));
+      }
+      if (child.stderr) {
+        child.stderr.on('data', chunk => { stderr = (stderr + String(chunk)).slice(-100_000); });
+        child.stderr.on('error', err => fail(err, 'stderr'));
+      }
+      child.once('error', error => fail(error, 'probe'));
+      child.once('close', (code, signal) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ code, signal, stdout, stderr, timedOut });
+      });
     });
   }
 
   async discover(): Promise<Discovery> {
     try {
       const [version, help] = await Promise.all([this.probe(['--version']), this.probe(['--help'])]);
-      this.version = (version.stdout || version.stderr).trim() || undefined;
-      this.help = help.stdout + '\n' + help.stderr;
+      if (version.timedOut || help.timedOut) {
+        throw new BridgeError('AGY_PROBE_FAILED', 'agy probe timed out');
+      }
+      if (version.signal !== null || help.signal !== null) {
+        throw new BridgeError('AGY_PROBE_FAILED', `agy probe terminated by signal ${version.signal ?? help.signal}`);
+      }
+      if (version.code !== 0) {
+        const diag = redactDiagnostic((version.stderr || version.stdout).trim());
+        throw new BridgeError('AGY_PROBE_FAILED', `agy --version failed with exit code ${version.code}${diag ? ': ' + diag : ''}`);
+      }
+      if (help.code !== 0) {
+        const diag = redactDiagnostic((help.stderr || help.stdout).trim());
+        throw new BridgeError('AGY_PROBE_FAILED', `agy --help failed with exit code ${help.code}${diag ? ': ' + diag : ''}`);
+      }
+      const versionText = (version.stdout || version.stderr).trim();
+      const helpText = help.stdout + '\n' + help.stderr;
+      if (!versionText) {
+        throw new BridgeError('AGY_INCOMPATIBLE', 'agy --version returned empty or invalid output');
+      }
+      if (!help.stdout.trim() && !help.stderr.trim()) {
+        throw new BridgeError('AGY_INCOMPATIBLE', 'agy --help returned empty output');
+      }
+      const streaming = helpText.includes('stream-json') && helpText.includes('--output-format');
+      const sandbox = helpText.includes('--sandbox');
+      if (!streaming || !sandbox) {
+        const missing = [!streaming ? 'stream-json' : '', !sandbox ? '--sandbox' : ''].filter(Boolean).join(', ');
+        throw new BridgeError('AGY_INCOMPATIBLE', `Installed agy is incompatible (missing ${missing})`);
+      }
+      this.version = versionText;
+      this.help = helpText;
       this.installed = true;
-      const streaming = this.help.includes('stream-json') && this.help.includes('--output-format');
       return {
         installed: true, path: await resolveExecutable(this.config.agyPath), version: this.version, authenticated: null,
         capabilities: {
-          structuredOutput: streaming, streaming, sandbox: this.help.includes('--sandbox'),
+          structuredOutput: streaming, streaming, sandbox,
           readOnlyMode: this.help.includes('--mode') && this.help.includes('plan'),
           models: this.help.includes('models'), modelSelection: this.help.includes('--model'),
           resume: this.help.includes('--conversation'), sessionsList: false, cancel: false,
@@ -123,9 +190,15 @@ export class CliAdapter {
       };
     } catch (error) {
       this.installed = false;
-      return { installed: false, path: this.config.agyPath, authenticated: null,
+      this.version = undefined;
+      this.help = '';
+      const err = error instanceof BridgeError ? error : processError(error, 'probe');
+      const formatted = `${err.code}: ${redactDiagnostic(err.message)}`;
+      return {
+        installed: false, path: this.config.agyPath, authenticated: null,
         capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
-        error: error instanceof Error ? error.message : String(error) };
+        error: formatted,
+      };
     }
   }
 
@@ -136,7 +209,7 @@ export class CliAdapter {
       discovery.authenticated = (await this.listModels()).length > 0;
     } catch (error) {
       if (error instanceof BridgeError && error.code === 'AGY_AUTH_REQUIRED') discovery.authenticated = false;
-      else discovery.error = error instanceof Error ? error.message : String(error);
+      else discovery.error = error instanceof Error ? redactDiagnostic(error.message) : redactDiagnostic(String(error));
     }
     return discovery;
   }
@@ -145,11 +218,14 @@ export class CliAdapter {
     let result: ProbeResult;
     try { result = await this.probe(['models'], 20000); }
     catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new BridgeError('AGY_NOT_FOUND', 'agy executable not found');
-      throw new BridgeError('AGY_PROCESS_FAILED', error instanceof Error ? error.message : String(error));
+      throw processError(error, 'models');
     }
+    if (result.timedOut) throw new BridgeError('AGY_TIMEOUT', 'agy models timed out');
     if (isAuthError(result.stdout + result.stderr)) throw new BridgeError('AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
-    if (result.code !== 0) throw new BridgeError('AGY_PROCESS_FAILED', `agy models exited ${result.code}`);
+    if (result.code !== 0) {
+      const diag = redactDiagnostic((result.stderr || result.stdout).trim());
+      throw new BridgeError('AGY_PROCESS_FAILED', `agy models exited ${result.code}${diag ? ': ' + diag : ''}`);
+    }
     const models = result.stdout.split(/\r?\n/).map(line => line.trim().match(/^([a-zA-Z0-9][a-zA-Z0-9._-]*)\s+(.+)$/))
       .filter((match): match is RegExpMatchArray => Boolean(match))
       .map(match => ({ id: match[1]!, name: match[2]!.trim() }));
@@ -194,15 +270,66 @@ export class CliAdapter {
     const staged = schemaIndex >= 0 && args[schemaIndex + 1]!.length > 8000 ? stageSchemaFile(this.config.stateDirectory, args[schemaIndex + 1]!) : undefined;
     if (staged) args[schemaIndex + 1] = staged.file;
     let child: CliProcess;
-    try { child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], { env: this.environment(), cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }); }
-    catch (error) { staged?.cleanup(); throw error; }
+    try {
+      child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], {
+        env: this.environment(),
+        cwd,
+        windowsHide: true,
+        shell: false,
+        detached: process.platform !== 'win32',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }) as CliProcess;
+      if (process.platform !== 'win32') {
+        registerOwnedProcessGroup(child);
+      }
+    } catch (error) {
+      staged?.cleanup();
+      throw processError(error, 'spawn');
+    }
+    let cleaned = false;
     const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       try { staged?.cleanup(); }
-      catch { child.schemaCleanupError = new BridgeError('SCHEMA_CLEANUP_FAILED', 'Private schema cleanup failed; inspect schema storage'); }
+      catch (error) {
+        child.schemaCleanupError = error instanceof BridgeError ? error : new BridgeError('SCHEMA_CLEANUP_FAILED', 'Private schema cleanup failed; inspect schema storage');
+      }
     };
     child.once('error', cleanup);
     child.once('close', cleanup);
-    child.stdin.end(JSON.stringify({ event: 'user', message: { content } }) + '\n');
+
+    const onCommError = (err: unknown, op: string) => {
+      if (!child.communicationError) {
+        child.communicationError = processError(err, op);
+      }
+      terminateSubprocess(child);
+    };
+    child.stdin.on('error', err => onCommError(err, 'stdin'));
+    child.stdout.on('error', err => onCommError(err, 'stdout'));
+    child.stderr.on('error', err => onCommError(err, 'stderr'));
+    child.on('error', err => {
+      if (!child.startupError && !child.communicationError) {
+        child.startupError = processError(err, 'spawn');
+      }
+      terminateSubprocess(child);
+    });
+
+    const payload = JSON.stringify({ event: 'user', message: { content } }) + '\n';
+    try {
+      child.stdin.write(payload, 'utf8', err => {
+        if (err) {
+          onCommError(err, 'stdin');
+          return;
+        }
+        try {
+          child.stdin.end();
+        } catch (endErr) {
+          onCommError(endErr, 'stdin');
+        }
+      });
+    } catch (err) {
+      onCommError(err, 'stdin');
+    }
     return child;
   }
 

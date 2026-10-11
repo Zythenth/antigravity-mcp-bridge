@@ -8,7 +8,6 @@ import { providedSkillsSchema } from './skills.js';
 import { CliAdapter } from './cli-adapter.js';
 import { TaskManager } from './task-manager.js';
 import { BridgeError } from './types.js';
-import { listProjectFiles } from './isolation.js';
 import { criteriaSchema, reviewSchema } from './verification.js';
 import { testCommandSchema } from './native-tests.js';
 import { outputSchemas } from './output-schemas.js';
@@ -96,9 +95,9 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_list_project_files')) server.registerTool('antigravity_list_project_files', {
     outputSchema: outputSchemas.antigravity_list_project_files,
-    title: 'List files eligible for a project copy', description: 'List tracked and untracked files excluding Git ignore and local exclude matches.',
+    title: 'List files eligible for a project copy', description: 'List tracked and untracked files excluding Git ignore, local exclude matches, and the active secret policy.',
     inputSchema: { workingDirectory: z.string().min(1) }, annotations: readOnly,
-  }, async ({ workingDirectory }) => safe(async () => ({ files: await listProjectFiles(workingDirectory) }))());
+  }, async ({ workingDirectory }) => safe(async () => ({ files: await tasks.listProjectFiles(workingDirectory) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_set_model')) server.registerTool('antigravity_set_model', {
     outputSchema: outputSchemas.antigravity_set_model,

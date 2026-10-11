@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { copyFile, lstat, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, open, readdir, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
@@ -9,6 +9,14 @@ import { BridgeError } from './types.js';
 import { stageExecutionPolicy, verifyExecutionPolicy, discardExecutionPolicy, EXECUTION_POLICY_PATHS, type StagedExecutionPolicy } from './execution-policy.js';
 import type { ResolvedAgentPolicy, McpCatalogEntry } from './agent-policy.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
+import {
+  preflightProjectFiles,
+  type BlockedPath,
+  type PreflightRecord,
+} from './secret-preflight.js';
+import { terminateSubprocess, redactDiagnostic } from './subprocess.js';
+
+export type { BlockedPath } from './secret-preflight.js';
 
 const maxGitOutput = 10_000_000;
 
@@ -23,6 +31,7 @@ export interface ProjectCopy {
   gitDirectory: string;
   baseline: Map<string, string>;
   includedFiles: string[];
+  blockedFiles?: BlockedPath[];
 }
 
 export interface ChangePreview {
@@ -81,26 +90,98 @@ export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
   }
 }
 
-async function git(cwd: string, args: string[], input?: Buffer, allowedCodes = [0]): Promise<Buffer> {
+export async function git(cwd: string, args: string[], input?: Buffer, allowedCodes = [0]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    let childProc: ChildProcessWithoutNullStreams;
+    try {
+      childProc = spawn('git', args, { cwd, windowsHide: true, stdio: 'pipe' });
+    } catch (err) {
+      reject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic((err as Error).message)));
+      return;
+    }
+    const child: ChildProcessWithoutNullStreams = childProc;
+
+    let settled = false;
+    const settleReject = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      terminateSubprocess(child);
+      reject(error);
+    };
+
+    const settleResolve = (result: Buffer) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+
+    let ioError: Error | null = null;
+    const recordIoError = (error: Error) => {
+      if (!ioError) ioError = error;
+      terminateSubprocess(child);
+    };
+
     const chunks: Buffer[] = [];
     let length = 0;
     let stderr = '';
     let overflow = false;
+
     child.stdout.on('data', (chunk: Buffer) => {
       length += chunk.length;
-      if (length > maxGitOutput) { overflow = true; child.kill(); }
-      else chunks.push(chunk);
+      if (length > maxGitOutput) {
+        overflow = true;
+        terminateSubprocess(child);
+      } else {
+        chunks.push(chunk);
+      }
     });
-    child.stderr.on('data', (chunk: Buffer) => { stderr = (stderr + chunk.toString('utf8')).slice(-4000); });
-    child.once('error', reject);
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = (stderr + chunk.toString('utf8')).slice(-4000);
+    });
+
+    child.stdin.on('error', error => {
+      recordIoError(error);
+    });
+
+    child.stdout.on('error', error => {
+      recordIoError(error);
+    });
+
+    child.stderr.on('error', error => {
+      recordIoError(error);
+    });
+
+    child.once('error', error => {
+      settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(error.message)));
+    });
+
     child.once('close', code => {
-      if (overflow) reject(new BridgeError('ISOLATION_TOO_LARGE', 'Git output exceeds the isolation limit'));
-      else if (!allowedCodes.includes(code ?? -1)) reject(new BridgeError('GIT_OPERATION_FAILED', stderr.trim() || 'git exited with code ' + code));
-      else resolve(Buffer.concat(chunks));
+      if (overflow) {
+        settleReject(new BridgeError('ISOLATION_TOO_LARGE', 'Git output exceeds the isolation limit'));
+      } else if (ioError) {
+        settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(ioError.message || 'Git stream communication error')));
+      } else if (!allowedCodes.includes(code ?? -1)) {
+        const diag = stderr.trim() || 'git exited with code ' + code;
+        settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(diag)));
+      } else {
+        settleResolve(Buffer.concat(chunks));
+      }
     });
-    child.stdin.end(input);
+
+    if (input !== undefined) {
+      try {
+        child.stdin.end(input);
+      } catch (err) {
+        recordIoError(err as Error);
+      }
+    } else {
+      try {
+        child.stdin.end();
+      } catch (err) {
+        recordIoError(err as Error);
+      }
+    }
   });
 }
 
@@ -108,14 +189,45 @@ function splitNull(bytes: Buffer): string[] {
   return bytes.toString('utf8').split('\0').filter(Boolean);
 }
 
-function validRelative(input: string): string {
-  const value = input.replaceAll('\\', '/').replace(/\/$/, '');
-  const parts = value.split('/');
-  if (!value || value.startsWith('/') || /^[A-Za-z]:/.test(value) ||
-      parts.some(part => !part || part === '.' || part === '..' || part === '.git')) {
-    throw new BridgeError('INVALID_INCLUDE_PATH', 'includePaths must contain project-relative files or directories');
+const WINDOWS_DEVICE_REGEX = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i;
+
+export function validRelative(input: string): string {
+  if (typeof input !== 'string' || !input || input.includes('\0')) {
+    throw new BridgeError('INVALID_INCLUDE_PATH', 'Path must be a non-empty string without NUL');
   }
-  return value;
+  let norm = input.replaceAll('\\', '/');
+  if (norm.startsWith('/') || /^[A-Za-z]:/.test(norm) || norm.startsWith('//')) {
+    throw new BridgeError('INVALID_INCLUDE_PATH', 'Path must be relative: ' + input);
+  }
+  if (norm.endsWith('/')) {
+    norm = norm.slice(0, -1);
+  }
+  const parts = norm.split('/');
+  if (parts.some(p => !p || p === '.' || p === '..')) {
+    throw new BridgeError('INVALID_INCLUDE_PATH', 'Path must not contain traversal or empty segments: ' + input);
+  }
+
+  // Exact .git is rejected everywhere
+  if (parts.some(p => p === '.git')) {
+    throw new BridgeError('INVALID_INCLUDE_PATH', 'Path must not contain .git: ' + input);
+  }
+
+  // Windows-specific path validations
+  if (process.platform === 'win32') {
+    if (input.includes(':')) {
+      throw new BridgeError('INVALID_INCLUDE_PATH', 'Windows Alternate Data Streams (colons) are forbidden: ' + input);
+    }
+    for (const part of parts) {
+      if (WINDOWS_DEVICE_REGEX.test(part)) {
+        throw new BridgeError('INVALID_INCLUDE_PATH', 'Windows reserved device names are forbidden: ' + input);
+      }
+      if (part.toLowerCase() === '.git' || /^git~\d+$/i.test(part)) {
+        throw new BridgeError('INVALID_INCLUDE_PATH', 'Windows .git aliases are forbidden: ' + input);
+      }
+    }
+  }
+
+  return parts.join('/');
 }
 
 export async function checkedPath(root: string, relative: string, mustExist: boolean): Promise<string> {
@@ -152,30 +264,158 @@ export async function validateProjectRoot(sourceDirectory: string): Promise<void
   }
 }
 
-export async function listProjectFiles(sourceDirectory: string): Promise<string[]> {
+export async function enumerateGitCandidates(sourceDirectory: string): Promise<string[]> {
   await validateProjectRoot(sourceDirectory);
   const candidates = [...new Set(splitNull(await git(sourceDirectory, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
   if (!candidates.length) return [];
   const ignored = new Set(splitNull(await git(sourceDirectory,
     ['check-ignore', '--no-index', '--stdin', '-z'], Buffer.from(candidates.join('\0') + '\0'), [0, 1])));
-  return candidates.filter(file => !ignored.has(file) && !file.split('/').includes('.git')).sort();
+  return candidates.filter(file => {
+    if (ignored.has(file)) return false;
+    const parts = file.split('/');
+    if (parts.some(p => p === '.git')) return false;
+    if (process.platform === 'win32' && parts.some(p => p.toLowerCase() === '.git' || /^git~\d+$/i.test(p))) return false;
+    return true;
+  }).sort();
+}
+
+export async function listProjectFiles(sourceDirectory: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, blockedCollector?: BlockedPath[]): Promise<string[]> {
+  const unignored = await enumerateGitCandidates(sourceDirectory);
+  if (!unignored.length) return [];
+  const preflight = await preflightProjectFiles(sourceDirectory, unignored, limits);
+  if (blockedCollector) {
+    blockedCollector.push(...preflight.blocked);
+  }
+  return preflight.eligible.sort();
+}
+
+export interface WritableHandle {
+  write(buffer: Uint8Array, offset?: number, length?: number, position?: number | null): Promise<{ bytesWritten: number }>;
+}
+
+export async function writeAll(handle: WritableHandle, buffer: Buffer): Promise<void> {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesWritten } = await handle.write(buffer, offset, buffer.length - offset, null);
+    if (bytesWritten <= 0) {
+      throw new BridgeError('COPY_WRITE_FAILED', 'Zero progress while writing file');
+    }
+    offset += bytesWritten;
+  }
+}
+
+export async function copyVerifiedFile(
+  source: string,
+  target: string,
+  relative: string,
+  record: PreflightRecord | undefined,
+  budget: { remainingBytes: number },
+  errorCode: 'SOURCE_CHANGED' | 'CONTEXT_CHANGED'
+): Promise<string> {
+  if (!record) {
+    throw new BridgeError(errorCode, (errorCode === 'SOURCE_CHANGED' ? 'Source changed during copy: ' : 'Context changed during copy: ') + relative);
+  }
+
+  const srcHandle = await open(source, 'r');
+  let dstHandle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    const fstat = await srcHandle.stat();
+    const currentLstat = await lstat(source);
+    if (currentLstat.isSymbolicLink() || !currentLstat.isFile() || !fstat.isFile()) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Project copy cannot use links or non-regular files: ' + relative);
+    }
+    if (currentLstat.ino !== fstat.ino || currentLstat.dev !== fstat.dev || currentLstat.size !== fstat.size) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Project copy detected file replacement: ' + relative);
+    }
+
+    if (fstat.size > budget.remainingBytes) {
+      throw new BridgeError('COPY_LIMIT_EXCEEDED', errorCode === 'SOURCE_CHANGED' ? 'Source grew beyond the copy byte limit during copying' : 'Context copy exceeds configured limits');
+    }
+
+    if (
+      fstat.size !== record.size ||
+      (record.ino !== 0 && fstat.ino !== record.ino) ||
+      (record.dev !== 0 && fstat.dev !== record.dev)
+    ) {
+      throw new BridgeError(errorCode, (errorCode === 'SOURCE_CHANGED' ? 'Source changed during copy: ' : 'Context changed during copy: ') + relative);
+    }
+
+    await mkdir(path.dirname(target), { recursive: true });
+    dstHandle = await open(target, 'w', fstat.mode);
+
+    const CHUNK_SIZE = 64 * 1024;
+    const buf = Buffer.allocUnsafe(CHUNK_SIZE);
+    const hash = createHash('sha256');
+    let copiedBytes = 0;
+
+    for (;;) {
+      const { bytesRead } = await srcHandle.read(buf, 0, CHUNK_SIZE, null);
+      if (bytesRead === 0) break;
+      copiedBytes += bytesRead;
+      if (copiedBytes > budget.remainingBytes) {
+        throw new BridgeError('COPY_LIMIT_EXCEEDED', errorCode === 'SOURCE_CHANGED' ? 'Source grew beyond the copy byte limit during copying' : 'Context copy exceeds configured limits');
+      }
+      const slice = buf.subarray(0, bytesRead);
+      hash.update(slice);
+      await writeAll(dstHandle, slice);
+    }
+
+    const sha256 = hash.digest('hex');
+    if (sha256 !== record.sha256 || copiedBytes !== record.size) {
+      throw new BridgeError(errorCode, (errorCode === 'SOURCE_CHANGED' ? 'Source changed during copy: ' : 'Context changed during copy: ') + relative);
+    }
+
+    budget.remainingBytes -= copiedBytes;
+    return sha256;
+  } finally {
+    if (dstHandle) {
+      await dstHandle.close().catch(() => {});
+    }
+    await srcHandle.close().catch(() => {});
+  }
 }
 
 export async function createProjectCopy(sourceDirectory: string, includePaths?: string[], onCreated?: (project: ProjectCopy) => void, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, skills: readonly ProvidedSkill[] = [], execution?: ExecutionPolicyRequest): Promise<ProjectCopy> {
-  const candidates = await listProjectFiles(sourceDirectory);
-  let selected = candidates;
+  const unignored = await enumerateGitCandidates(sourceDirectory);
+  if (!unignored.length) throw new BridgeError('ISOLATION_EMPTY', 'No eligible project files to copy');
+
+  let candidatesToScan: string[];
   if (includePaths !== undefined) {
     if (!includePaths.length) throw new BridgeError('INVALID_INCLUDE_PATH', 'includePaths cannot be empty');
     const wanted = includePaths.map(validRelative);
     for (const item of wanted) {
-      if (!candidates.some(file => file === item || file.startsWith(item + '/'))) {
+      if (!unignored.some(file => file === item || file.startsWith(item + '/'))) {
         throw new BridgeError('INVALID_INCLUDE_PATH', 'No eligible file matches: ' + item);
       }
     }
-    selected = candidates.filter(file => wanted.some(item => file === item || file.startsWith(item + '/')));
+    candidatesToScan = unignored.filter(file => wanted.some(item => file === item || file.startsWith(item + '/')));
+  } else {
+    candidatesToScan = unignored;
   }
+
+  if (!candidatesToScan.length) throw new BridgeError('ISOLATION_EMPTY', 'No eligible project files to copy');
+  if (candidatesToScan.length > limits.maxCopyFiles) {
+    throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy has ${candidatesToScan.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  }
+
+  // Preflight only the selected candidates
+  const preflight = await preflightProjectFiles(sourceDirectory, candidatesToScan, limits);
+  const selected = preflight.eligible;
+
+  if (includePaths !== undefined) {
+    const wanted = includePaths.map(validRelative);
+    for (const item of wanted) {
+      if (!selected.some(file => file === item || file.startsWith(item + '/'))) {
+        throw new BridgeError('INVALID_INCLUDE_PATH', 'No eligible file matches: ' + item);
+      }
+    }
+  }
+
   if (!selected.length) throw new BridgeError('ISOLATION_EMPTY', 'No eligible project files to copy');
-  if (selected.length > limits.maxCopyFiles) throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  if (selected.length > limits.maxCopyFiles) {
+    throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy has ${selected.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
+  }
+
   let totalBytes = 0;
   for (const relative of selected) {
     totalBytes += (await lstat(await checkedPath(sourceDirectory, relative, true))).size;
@@ -186,18 +426,17 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
   const baseline = new Map<string, string>();
   try {
-    const project: ProjectCopy = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected };
+    const project: ProjectCopy = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected, blockedFiles: preflight.blocked };
     onCreated?.(project);
-    totalBytes = 0;
+    const budget = { remainingBytes: limits.maxCopyBytes };
     for (const relative of selected) {
       const source = await checkedPath(sourceDirectory, relative, true);
       const target = path.join(copyDirectory, ...relative.split('/'));
-      await mkdir(path.dirname(target), { recursive: true });
-      await copyFile(source, target);
-      totalBytes += (await lstat(target)).size;
-      if (totalBytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Source grew beyond the copy byte limit during copying');
-      baseline.set(relative, await sha256File(target));
+      const record = preflight.records.get(relative);
+      const hash = await copyVerifiedFile(source, target, relative, record, budget, 'SOURCE_CHANGED');
+      baseline.set(relative, hash);
     }
+    totalBytes = limits.maxCopyBytes - budget.remainingBytes;
     const staged = await stageProvidedSkills(copyDirectory, skills, { ...limits, maxCopyFiles: limits.maxCopyFiles - selected.length, maxCopyBytes: limits.maxCopyBytes - totalBytes });
     if (staged.length) project.providedSkills = staged;
     await verifyProvidedSkills(copyDirectory, staged);
@@ -317,20 +556,39 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
     for (const file of splitNull(await git(project.copyDirectory, [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
     for (const file of splitNull(await git(project.sourceDirectory, ['check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
   }
+  const eligibleCandidates = candidates.filter(file => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some(managedPath => managedPath === file)) && (!ignored.has(file) || managed.has(file)));
+  const preflight = await preflightProjectFiles(project.copyDirectory, eligibleCandidates, limits);
+  for (const blocked of preflight.blocked) {
+    if (project.baseline.has(blocked.path)) {
+      throw new BridgeError('CONTEXT_CHANGED', 'Baseline file became blocked or unsafe: ' + blocked.path);
+    }
+  }
   const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
   const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
-  const fork: ProjectCopy = { ...project, executionPolicy: undefined, executionStateDirectory: undefined, copyDirectory, gitDirectory, baseline: new Map(project.baseline), includedFiles: [] };
+  const fork: ProjectCopy = {
+    ...project,
+    executionPolicy: undefined,
+    executionStateDirectory: undefined,
+    copyDirectory,
+    gitDirectory,
+    baseline: new Map(project.baseline),
+    includedFiles: [],
+    blockedFiles: preflight.blocked,
+  };
   try {
-    let bytes = 0;
-    for (const relative of candidates.filter(file => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some(managedPath => managedPath === file)) && (!ignored.has(file) || managed.has(file)))) {
+    const budget = { remainingBytes: limits.maxCopyBytes };
+    for (const relative of preflight.eligible) {
       let source: string;
       try { source = await checkedPath(project.copyDirectory, relative, true); }
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
-      bytes += (await lstat(source)).size;
-      if (fork.includedFiles.length >= limits.maxCopyFiles || bytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Context copy exceeds configured limits');
+
+      if (fork.includedFiles.length >= limits.maxCopyFiles) {
+        throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Context copy exceeds configured limits');
+      }
+
       const target = path.join(copyDirectory, ...validRelative(relative).split('/'));
-      await mkdir(path.dirname(target), { recursive: true });
-      await copyFile(source, target);
+      const record = preflight.records.get(relative);
+      await copyVerifiedFile(source, target, relative, record, budget, 'CONTEXT_CHANGED');
       fork.includedFiles.push(relative);
     }
     await git(copyDirectory, ['-c', 'init.templateDir=', 'clone', '--bare', '--no-hardlinks', '--quiet', project.gitDirectory, gitDirectory]);

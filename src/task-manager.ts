@@ -7,15 +7,16 @@ import { groupAdmissionSchema, type GroupAdmission } from './group-contract.js';
 import { GroupManager } from './group-manager.js';
 import { ProjectMemoryStore, type MemorySnapshot } from './project-memory.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
-import { validateProjectRoot } from './isolation.js';
+import { validateProjectRoot, listProjectFiles } from './isolation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { readExecutionPolicyReceipt } from './execution-policy.js';
 import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolicy } from './agent-policy.js';
 import { integrationPreauthorized, type IntegrationApproval } from './integration-policy.js';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
-import { MAX_TOTAL_BUNDLES_BYTES, providedSkillsSchema, verifyProvidedSkills } from './skills.js';
 import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
+import { terminateSubprocess, redactDiagnostic } from './subprocess.js';
+import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import type { Config } from './config.js';
 import { EventStore } from './event-store.js';
 import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
@@ -179,6 +180,14 @@ export class TaskManager {
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
     await validateProjectRoot(directory);
     return directory;
+  }
+
+  async listProjectFiles(workingDirectory: string): Promise<string[]> {
+    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    await validateStateSeparation(directory, this.config.stateDirectory);
+    await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
+    await validateProjectRoot(directory);
+    return listProjectFiles(directory, this.config);
   }
 
   async listMemory(workingDirectory: string) {
@@ -1189,7 +1198,9 @@ export class TaskManager {
       task.owned = false;
       task.releaseProject?.(); task.releaseProject = undefined;
     } else {
-      task.termination = 'cancelled';
+      if (!task.termination) {
+        task.termination = 'cancelled';
+      }
       if (task.nativeAbort) task.nativeAbort.abort();
       else if (task.child) this.terminate(task.child);
     }
@@ -1244,7 +1255,8 @@ export class TaskManager {
       task.releaseProject ??= this.state.acquire(this.projectLock(task.project));
       record.copyDirectory = task.project.copyDirectory;
       record.includedFiles = task.project.includedFiles;
-      this.events.append(record.taskId, 'copy.ready', { copyDirectory: record.copyDirectory });
+      const blockedFiles = (task.project?.blockedFiles ?? []).map(b => ({ path: b.path, reason: b.reason }));
+      this.events.append(record.taskId, 'copy.ready', { copyDirectory: record.copyDirectory, blockedFiles });
       if (record.handoff && !task.options.sessionId) {
         if (await fingerprintProjectCopy(task.project, this.config) !== record.handoff.treeSha256 ||
           (await previewProjectCopy(task.project, this.config)).sha256 !== record.handoff.patchSha256) throw new BridgeError('CONTEXT_CHANGED', 'Queued context copy changed before execution');
@@ -1266,25 +1278,68 @@ export class TaskManager {
       record.status = 'running';
       this.events.append(record.taskId, 'process.started', { pid: child.pid });
       const timeoutMs = task.options.timeoutSeconds! * 1000;
-      task.timer = setTimeout(() => { task.termination = 'timeout'; this.terminate(child); }, timeoutMs);
+      task.timer = setTimeout(() => {
+        task.termination ??= 'timeout';
+        this.terminate(child);
+      }, timeoutMs);
+      task.timer.unref();
       let stderr = '';
+      const stderrRedactor = {};
+      let lastWasRedactedKey = false;
       const stdoutParser = new LineParser(line => this.handleStdout(task, line));
       const stderrParser = new LineParser(line => {
-        stderr = (stderr + '\n' + line).slice(-10000);
-        this.events.append(record.taskId, 'process.stderr', { text: line.slice(0, 4000) });
+        const redacted = redactDiagnostic(line, stderrRedactor);
+        if (redacted === '[private key redacted]') {
+          if (!lastWasRedactedKey) {
+            lastWasRedactedKey = true;
+            stderr = (stderr + '\n' + redacted).slice(-10000);
+            this.events.append(record.taskId, 'process.stderr', { text: redacted });
+          }
+          return;
+        }
+        lastWasRedactedKey = false;
+        stderr = (stderr + '\n' + redacted).slice(-10000);
+        this.events.append(record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
       });
       child.stdout.on('data', chunk => stdoutParser.write(chunk));
       child.stderr.on('data', chunk => stderrParser.write(chunk));
+      child.stdout.on('error', error => {
+        const redacted = redactDiagnostic(error.message);
+        stderr += '\n' + redacted;
+        this.events.append(record.taskId, 'process.error', { message: redacted });
+        if (!task.termination) this.terminate(child);
+      });
+      child.stderr.on('error', error => {
+        const redacted = redactDiagnostic(error.message);
+        stderr += '\n' + redacted;
+        this.events.append(record.taskId, 'process.error', { message: redacted });
+        if (!task.termination) this.terminate(child);
+      });
+      child.stdin.on('error', error => {
+        const redacted = redactDiagnostic(error.message);
+        stderr += '\n' + redacted;
+        this.events.append(record.taskId, 'process.error', { message: redacted });
+        if (!task.termination) this.terminate(child);
+      });
+      child.on('error', error => {
+        const redacted = redactDiagnostic(error.message);
+        stderr += `\n${redacted}`;
+        this.events.append(record.taskId, 'process.error', { message: redacted });
+        if (!task.termination) this.terminate(child);
+      });
       const exitCode = await new Promise<number | null>(resolve => {
-        child.once('error', error => {
-          stderr += `\n${error.message}`;
-          this.events.append(record.taskId, 'process.error', { message: error.message });
-        });
         child.once('close', resolve);
       });
       stdoutParser.end(); stderrParser.end();
-      if (task.timer) clearTimeout(task.timer);
+      if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
+      task.child = undefined;
+      if (task.termination) {
+        this.finish(task, task.termination);
+        return;
+      }
       if ((child as CliProcess).schemaCleanupError) throw (child as CliProcess).schemaCleanupError;
+      if ((child as CliProcess).startupError) throw (child as CliProcess).startupError;
+      if ((child as CliProcess).communicationError) throw (child as CliProcess).communicationError;
       record.exitCode = exitCode;
       if (native) {
         await native.cleanup(); native = undefined;
@@ -1315,14 +1370,18 @@ export class TaskManager {
           if (last.exitCode !== 0) { this.finish(task, 'failed', 'TEST_FAILED', 'Observed test command failed'); return; }
         }
       }
+      if (task.termination) {
+        this.finish(task, task.termination);
+        return;
+      }
       if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project, readOnlyBaseline);
-      if (task.termination) this.finish(task, task.termination);
-      else if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
+      if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
       else if (/no output produced[^\r\n]*["']mcp["'][^\r\n]*permission[^\r\n]*headless/iu.test(stderr)) {
         this.finish(task, 'failed', 'AGY_MCP_PERMISSION_REQUIRED', 'Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.');
       }
       else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {
-        const message = (record.result as { error?: string } | undefined)?.error || `agy exited with code ${exitCode}`;
+        const rawMessage = (record.result as { error?: string } | undefined)?.error || (stderr.trim() ? stderr.trim() : `agy exited with code ${exitCode}`);
+        const message = redactDiagnostic(rawMessage);
         this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
       } else {
         if (task.project.executionPolicy) {
@@ -1344,9 +1403,18 @@ export class TaskManager {
         this.finish(task, 'completed');
       }
     } catch (error) {
-      const code = error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED';
-      this.finish(task, 'failed', code, error instanceof Error ? error.message : String(error));
-    } finally { await native?.cleanup(); }
+      if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
+      if (task.child) { this.terminate(task.child); task.child = undefined; }
+      if (task.termination) this.finish(task, task.termination);
+      else {
+        const code = error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED';
+        this.finish(task, 'failed', code, error instanceof Error ? redactDiagnostic(error.message) : redactDiagnostic(String(error)));
+      }
+    } finally {
+      if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
+      if (task.child) { this.terminate(task.child); task.child = undefined; }
+      await native?.cleanup();
+    }
   }
 
   private windowsRequest(task: InternalTask): WindowsNativeTestRequest {
@@ -1408,6 +1476,7 @@ export class TaskManager {
   }
 
   private async repairWindowsTest(task: InternalTask, request: WindowsNativeTestRequest, observedExitCode: number, timeoutSeconds: number): Promise<void> {
+    if (task.termination) return;
     if (!task.project) throw new BridgeError('TASK_NOT_READY', 'Windows test copy is unavailable');
     const { nativeTest: _nativeTest, outputSchema: _outputSchema, artifactPaths: _artifactPaths, ...baseOptions } = task.options;
     const options: RunOptions = { ...baseOptions, timeoutSeconds,
@@ -1425,30 +1494,73 @@ export class TaskManager {
     task.record.status = 'running';
     this.events.append(task.record.taskId, 'process.started', { pid: child.pid, repair: true });
     let stderr = '';
+    const repairStderrRedactor = {};
+    let lastRepairWasRedactedKey = false;
     const stdoutParser = new LineParser(line => this.handleStdout(task, line));
     const stderrParser = new LineParser(line => {
-      stderr = (stderr + '\n' + line).slice(-10000);
-      this.events.append(task.record.taskId, 'process.stderr', { text: line.slice(0, 4000) });
+      const redacted = redactDiagnostic(line, repairStderrRedactor);
+      if (redacted === '[private key redacted]') {
+        if (!lastRepairWasRedactedKey) {
+          lastRepairWasRedactedKey = true;
+          stderr = (stderr + '\n' + redacted).slice(-10000);
+          this.events.append(task.record.taskId, 'process.stderr', { text: redacted });
+        }
+        return;
+      }
+      lastRepairWasRedactedKey = false;
+      stderr = (stderr + '\n' + redacted).slice(-10000);
+      this.events.append(task.record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
     });
     child.stdout.on('data', chunk => stdoutParser.write(chunk));
     child.stderr.on('data', chunk => stderrParser.write(chunk));
-    const exitCode = await new Promise<number | null>(resolve => {
-      child.once('error', error => {
-        stderr += '\n' + error.message;
-        this.events.append(task.record.taskId, 'process.error', { message: error.message });
-      });
-      child.once('close', resolve);
+    child.stdout.on('error', error => {
+      const redacted = redactDiagnostic(error.message);
+      stderr += '\n' + redacted;
+      this.events.append(task.record.taskId, 'process.error', { message: redacted });
+      if (!task.termination) this.terminate(child);
     });
-    stdoutParser.end(); stderrParser.end();
-    task.child = undefined;
-    task.record.exitCode = exitCode;
-    if (task.termination) return;
-    if (CliAdapter.authError(stderr + JSON.stringify(task.record.result || ''))) {
-      throw new BridgeError('AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
-    }
-    if (exitCode !== 0 || !task.record.result || (task.record.result as { status?: string }).status !== 'SUCCESS') {
-      const message = (task.record.result as { error?: string } | undefined)?.error || `agy repair exited with code ${exitCode}`;
-      throw new BridgeError('AGY_PROCESS_FAILED', message);
+    child.stderr.on('error', error => {
+      const redacted = redactDiagnostic(error.message);
+      stderr += '\n' + redacted;
+      this.events.append(task.record.taskId, 'process.error', { message: redacted });
+      if (!task.termination) this.terminate(child);
+    });
+    child.stdin.on('error', error => {
+      const redacted = redactDiagnostic(error.message);
+      stderr += '\n' + redacted;
+      this.events.append(task.record.taskId, 'process.error', { message: redacted });
+      if (!task.termination) this.terminate(child);
+    });
+    child.on('error', error => {
+      const redacted = redactDiagnostic(error.message);
+      stderr += `\n${redacted}`;
+      this.events.append(task.record.taskId, 'process.error', { message: redacted });
+      if (!task.termination) this.terminate(child);
+    });
+    try {
+      const exitCode = await new Promise<number | null>(resolve => {
+        child.once('close', resolve);
+      });
+      stdoutParser.end(); stderrParser.end();
+      task.child = undefined;
+      task.record.exitCode = exitCode;
+      if (task.termination) return;
+      if ((child as CliProcess).schemaCleanupError) throw (child as CliProcess).schemaCleanupError;
+      if ((child as CliProcess).startupError) throw (child as CliProcess).startupError;
+      if ((child as CliProcess).communicationError) throw (child as CliProcess).communicationError;
+      if (CliAdapter.authError(stderr + JSON.stringify(task.record.result || ''))) {
+        throw new BridgeError('AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
+      }
+      if (exitCode !== 0 || !task.record.result || (task.record.result as { status?: string }).status !== 'SUCCESS') {
+        const rawMessage = (task.record.result as { error?: string } | undefined)?.error || (stderr.trim() ? stderr.trim() : `agy repair exited with code ${exitCode}`);
+        const message = redactDiagnostic(rawMessage);
+        throw new BridgeError('AGY_PROCESS_FAILED', message);
+      }
+    } finally {
+      if (task.child) {
+        this.terminate(task.child);
+        task.child = undefined;
+      }
     }
     if (task.project.executionPolicy) {
       await verifyManagedCopy(task.project);
@@ -1468,15 +1580,16 @@ export class TaskManager {
     const deadline = Date.now() + task.options.timeoutSeconds! * 1000;
     let modelInvoked = false;
     task.timer = setTimeout(() => {
-      task.termination = 'timeout';
+      task.termination ??= 'timeout';
       if (task.nativeAbort) task.nativeAbort.abort();
       else if (task.child) this.terminate(task.child);
     }, task.options.timeoutSeconds! * 1000);
+    task.timer.unref();
     try {
       for (let attempt = 1; attempt <= request.maxAttempts; attempt++) {
         if (task.termination) break;
         const remaining = this.remainingSeconds(deadline);
-        if (!remaining) { task.termination = 'timeout'; break; }
+        if (!remaining) { task.termination ??= 'timeout'; break; }
         const beforePreview = await previewProjectCopy(task.project, this.config);
         const beforeTree = await fingerprintProjectCopy(task.project, this.config);
         if (attempt === 1 && beforePreview.sha256 !== request.expectedSha256) {
@@ -1513,7 +1626,7 @@ export class TaskManager {
           return;
         }
         const repairSeconds = this.remainingSeconds(deadline);
-        if (!repairSeconds) { task.termination = 'timeout'; break; }
+        if (!repairSeconds) { task.termination ??= 'timeout'; break; }
         if (task.record.group) {
           const budgetLock = this.state.acquire('registry');
           try { this.refresh(); this.checkGroupBudget(task.record.group.groupId, { taskId: task.record.taskId, zeroTokens: !modelInvoked }); }
@@ -1528,6 +1641,10 @@ export class TaskManager {
       if (task.timer) clearTimeout(task.timer);
       task.timer = undefined;
       task.nativeAbort = undefined;
+      if (task.child) {
+        this.terminate(task.child);
+        task.child = undefined;
+      }
     }
   }
 
@@ -1540,7 +1657,7 @@ export class TaskManager {
       raw = parsed as Record<string, unknown>;
     } catch {
       task.parseErrors = (task.parseErrors || 0) + 1;
-      this.events.append(record.taskId, 'stream.unparsed', { line: line.slice(0, 4000) });
+      this.events.append(record.taskId, 'stream.unparsed', { line: redactDiagnostic(line).slice(0, 4000) });
       return;
     }
     const sourceType = raw.event;
@@ -1562,7 +1679,7 @@ export class TaskManager {
           task.nativeTest.attempts.push(attempt);
           this.events.append(record.taskId, 'test.executed', { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
           if (task.nativeTest.attempts.length > task.options.nativeTest!.maxAttempts) {
-            task.termination = 'cancelled';
+            task.termination ??= 'cancelled';
             if (task.child) this.terminate(task.child);
           }
         }
@@ -1592,8 +1709,11 @@ export class TaskManager {
       if (step.usage !== undefined) record.usage = step.usage;
       if (record.status === 'running') record.status = 'streaming';
     } else if (sourceType === 'result' && raw.result && typeof raw.result === 'object') {
-      record.result = raw.result;
       const result = raw.result as Record<string, unknown>;
+      if (typeof result.error === 'string') {
+        result.error = redactDiagnostic(result.error);
+      }
+      record.result = raw.result;
       if (typeof result.conversation_id === 'string') record.sessionId = result.conversation_id;
       if (result.usage !== undefined) {
         record.usage = result.usage;
@@ -1640,11 +1760,19 @@ export class TaskManager {
 
   private finish(task: InternalTask, status: 'completed' | 'failed' | 'cancelled' | 'timeout', code?: string, message?: string): void {
     if (terminal.has(task.record.status)) return;
+    if (task.record.result && typeof (task.record.result as Record<string, unknown>).error === 'string') {
+      (task.record.result as Record<string, unknown>).error = redactDiagnostic((task.record.result as { error: string }).error);
+    }
+    if (task.termination && status !== task.termination) {
+      status = task.termination;
+      code = status === 'timeout' ? 'TASK_TIMEOUT' : 'TASK_CANCELLED';
+      message = status === 'timeout' ? 'Task execution timed out' : 'Task cancelled';
+    }
     task.record.status = status;
     task.record.completedAt = new Date().toISOString();
     if (status === 'timeout') code = 'TASK_TIMEOUT';
     if (status === 'cancelled') code = 'TASK_CANCELLED';
-    if (code) task.record.error = { code, message: message || code };
+    if (code) task.record.error = { code, message: redactDiagnostic(message || code) };
     if (status !== 'completed') this.failPendingInbox(task.project?.copyDirectory, task, status === 'cancelled' ? 'cancelled' : 'failed', code ?? 'TASK_NOT_COMPLETED');
     const output = task.record.result as { response?: unknown; structured_output?: { summary?: unknown } } | undefined;
     const reported = typeof output?.structured_output?.summary === 'string' ? output.structured_output.summary : typeof output?.response === 'string' && output.response.trim() ? output.response : task.record.report?.data.summary;
@@ -1657,13 +1785,6 @@ export class TaskManager {
   }
 
   private terminate(child: ChildProcessWithoutNullStreams): void {
-    if (child.exitCode !== null || child.killed) return;
-    child.kill('SIGINT');
-    const grace = setTimeout(() => {
-      if (child.exitCode !== null) return;
-      if (process.platform === 'win32' && child.pid) spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-      else child.kill('SIGKILL');
-    }, 3000);
-    grace.unref();
+    terminateSubprocess(child);
   }
 }

@@ -16,7 +16,7 @@ function positiveInteger(value: string | undefined, fallback: number, max: numbe
 }
 
 export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; maxChangedFiles: number; secretExclusions?: readonly string[]; secretExceptions?: readonly string[] }
-export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
+export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
 
 export interface Config extends ProjectLimits {
   toolProfile: ToolProfile;
@@ -86,6 +86,10 @@ function parseStringArray(value: string | undefined, envName: string): string[] 
   const items = [...new Set((parsed as string[]).map(item => item.trim()))];
   if (envName === 'BRIDGE_ALLOWED_ENV_VARS' && items.some(item => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
     throw new Error(envName + ' must contain exact environment variable names');
+  }
+  if ((envName === 'BRIDGE_SECRET_EXCLUSIONS' || envName === 'BRIDGE_SECRET_EXCEPTIONS') &&
+      items.some(item => item.startsWith('/') || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some(part => part === '..'))) {
+    throw new Error(envName + ' must contain relative glob patterns without traversal');
   }
   return items;
 }

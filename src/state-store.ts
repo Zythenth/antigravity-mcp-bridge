@@ -25,6 +25,10 @@ const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string()
 const integrationApprovalsSchema = z.object({ version: z.literal(1), roots: z.array(z.string().min(1).max(1000).refine(root =>
   !root.includes('\0') && path.isAbsolute(root) && path.resolve(root) === root && root !== path.parse(root).root &&
   (process.platform !== 'win32' || root === root.toLowerCase()))).max(20) }).strict();
+const blockedMetadataSchema = z.object({
+  path: z.string(),
+  reason: z.enum(['SECRET_FILE', 'SECRET_CONTENT', 'SECRET_EXCLUSION', 'UNSAFE_PATH']),
+}).strict();
 const snapshotSchema = z.object({
   version: z.literal(1), ownerPid: z.number().int().positive(),
   record: z.object({ taskId: z.string().uuid(), workingDirectory: z.string(), prompt: z.string(),
@@ -69,6 +73,7 @@ const snapshotSchema = z.object({
   }).passthrough(),
   project: z.object({ executionPolicy: stagedExecutionPolicySchema.optional(), executionStateDirectory: z.string().optional(), sourceDirectory: z.string(), copyDirectory: z.string(), gitDirectory: z.string(),
     baseline: z.array(z.tuple([z.string(), z.string().regex(/^[a-f0-9]{64}$/)])), includedFiles: z.array(z.string()), providedSkills: stagedSkillsSchema.optional(),
+    blockedFiles: z.array(blockedMetadataSchema).optional(),
   }).optional(),
   events: z.array(z.object({ taskId: z.string().uuid(), sequence: z.number().int().positive(), timestamp: z.string(), type: z.string(), data: z.unknown(), raw: z.unknown().optional() })),
   cursor: z.number().int().nonnegative(),
