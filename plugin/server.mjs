@@ -30018,6 +30018,24 @@ function windowsNodeCacheDirectory(value) {
     throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
   return resolved;
 }
+function parseStringArray(value, envName) {
+  if (value === void 0)
+    return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error(envName + " must be a JSON array of strings");
+  }
+  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string" || !item.trim() || item.includes("\0"))) {
+    throw new Error(envName + " must be a JSON array of non-empty strings");
+  }
+  const items = [...new Set(parsed.map((item) => item.trim()))];
+  if (envName === "BRIDGE_ALLOWED_ENV_VARS" && items.some((item) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
+    throw new Error(envName + " must contain exact environment variable names");
+  }
+  return items;
+}
 function loadConfig(env = process.env) {
   const defaultModel = env.BRIDGE_DEFAULT_MODEL;
   if (defaultModel !== void 0 && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
@@ -30054,7 +30072,10 @@ function loadConfig(env = process.env) {
     forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path4.delimiter).filter(Boolean).map((p) => path4.resolve(p)),
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
-    windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY)
+    windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
+    secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, "BRIDGE_SECRET_EXCLUSIONS"),
+    secretExceptions: parseStringArray(env.BRIDGE_SECRET_EXCEPTIONS, "BRIDGE_SECRET_EXCEPTIONS"),
+    allowedEnvVars: parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS")
   };
 }
 

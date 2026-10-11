@@ -15,7 +15,7 @@ function positiveInteger(value: string | undefined, fallback: number, max: numbe
   return n;
 }
 
-export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; maxChangedFiles: number }
+export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; maxChangedFiles: number; secretExclusions?: readonly string[]; secretExceptions?: readonly string[] }
 export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100 };
 
 export interface Config extends ProjectLimits {
@@ -42,6 +42,9 @@ export interface Config extends ProjectLimits {
   testExecutor: TestExecutor;
   windowsNodeRuntime: WindowsNodeRuntime;
   windowsNodeCacheDirectory: string;
+  secretExclusions: string[];
+  secretExceptions: string[];
+  allowedEnvVars: string[];
 }
 
 function testExecutor(value: string | undefined): TestExecutor {
@@ -71,6 +74,20 @@ function windowsNodeCacheDirectory(value: string | undefined): string {
   const resolved = path.resolve(directory);
   if (resolved === path.parse(resolved).root) throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root');
   return resolved;
+}
+
+function parseStringArray(value: string | undefined, envName: string): string[] {
+  if (value === undefined) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(value); } catch { throw new Error(envName + ' must be a JSON array of strings'); }
+  if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string' || !item.trim() || item.includes('\0'))) {
+    throw new Error(envName + ' must be a JSON array of non-empty strings');
+  }
+  const items = [...new Set((parsed as string[]).map(item => item.trim()))];
+  if (envName === 'BRIDGE_ALLOWED_ENV_VARS' && items.some(item => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
+    throw new Error(envName + ' must contain exact environment variable names');
+  }
+  return items;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -109,5 +126,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
+    secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, 'BRIDGE_SECRET_EXCLUSIONS'),
+    secretExceptions: parseStringArray(env.BRIDGE_SECRET_EXCEPTIONS, 'BRIDGE_SECRET_EXCEPTIONS'),
+    allowedEnvVars: parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, 'BRIDGE_ALLOWED_ENV_VARS'),
   };
 }
