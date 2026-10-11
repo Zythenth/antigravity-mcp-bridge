@@ -1,11 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readFile, readdir, rename, rm, unlink } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { BridgeError } from './types.js';
 import { portableNodeDescriptor, type AvailablePortableNodeDescriptor, type PortableNodeAssetDescriptor, type PortableNodeDescriptor } from './portable-node-descriptor.js';
+import { reparseInspectorSource } from './windows-helper-source.js';
 
 export type WindowsNodeRuntime = 'system' | 'portable';
 
@@ -42,7 +44,6 @@ const downloadTimeoutMs = 60_000;
 const redirectLimit = 5;
 const maxAssetBytes = { 'node.exe': 256 * 1024 * 1024, LICENSE: 1024 * 1024, 'build.json': 1024 * 1024 } as const;
 const githubRedirectHosts = new Set(['github.com', 'objects.githubusercontent.com', 'github-releases.githubusercontent.com', 'release-assets.githubusercontent.com']);
-const windowsPowerShell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const releaseRepository = 'https://github.com/Zythenth/antigravity-mcp-bridge';
 const releaseTag = 'runtime-node-v24.21.0-lpac1-win-x64';
 const buildId = 'node-v24.21.0-lpac1-win-x64';
@@ -50,21 +51,6 @@ const nodeVersion = '24.21.0';
 const libuvVersion = '1.52.1';
 const libuvPatch = 'f46e4246b5277fe1c5888b88b24d8b78020dd4f8';
 const cacheRepair = ' Remove the affected portable Node build cache manually, then run --prepare-windows-runtime.';
-const reparsePointScript = [
-  "$ErrorActionPreference='Stop';$PSModuleAutoLoadingPreference='None';",
-  "$decoder=[Text.UnicodeEncoding]::new($false,$false,$true);$count=0;",
-  "while(($line=[Console]::In.ReadLine())-ne $null){",
-  "if($line.Length-eq 0-or $line.Length%4-ne 0-or $line-notmatch '^[A-Za-z0-9+/]+={0,2}$'){throw 'Invalid path record'};",
-  "$target=$decoder.GetString([Convert]::FromBase64String($line));if($target.Length-eq 0){throw 'Empty path'};$count++;",
-  "$root=[IO.Path]::GetPathRoot($target);if([string]::IsNullOrEmpty($root)){throw 'Path must be absolute'};",
-  "$relative=$target.Substring($root.Length);$current=$root;try{$attributes=[IO.File]::GetAttributes($current)}catch{throw 'Could not inspect root'};",
-  "if(($attributes-band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'};",
-  "foreach($part in ($relative-split '[\\\\/]+')){if($part.Length-eq 0){continue};$current=[IO.Path]::Combine($current,$part);",
-  "try{$attributes=[IO.File]::GetAttributes($current)}catch [IO.FileNotFoundException]{break}catch [IO.DirectoryNotFoundException]{break};",
-  "if(($attributes-band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'}}};",
-  "if($count-eq 0){throw 'Missing paths'};[Console]::Out.Write('{\"safe\":true}')",
-].join('');
-const reparsePointCommand = Buffer.from(reparsePointScript, 'utf16le').toString('base64');
 
 function fail(code: string, message: string): never {
   throw new BridgeError(code, message);
@@ -126,33 +112,178 @@ function absoluteCacheDirectory(value: string): string {
   return absolute;
 }
 
+async function verifyOwnedTemporaryDirectory(directory: string, tempRoot: string, prefix: string): Promise<string> {
+  const canonical = await realpath(directory);
+  if (path.dirname(canonical) !== tempRoot || !path.basename(canonical).startsWith(prefix) || (await lstat(directory)).isSymbolicLink()) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'Temporary directory was replaced or linked');
+  }
+  return canonical;
+}
+
+async function removeOwnedDirectory(directory: string, tempRoot: string, prefix: string, expected: Awaited<ReturnType<typeof lstat>>): Promise<void> {
+  const canonical = await realpath(directory).catch(error => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  });
+  if (!canonical) return;
+  const current = await lstat(directory);
+  if (path.dirname(canonical) !== tempRoot || !path.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'Temporary cleanup path escaped its intended location');
+  }
+  await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+}
+
 async function inspectReparsePoints(paths: string[]): Promise<void> {
   if (process.platform !== 'win32' || paths.length === 0) return;
+  if (typeof reparseInspectorSource !== 'string' || reparseInspectorSource.length === 0) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'Native Windows reparse inspector source is unavailable');
+  }
   const started = performance.now();
+  const totalTimeoutMs = 15_000;
+  const deadline = started + totalTimeoutMs;
+  const timeRemainingMs = () => Math.max(0, Math.round(deadline - performance.now()));
+
+  const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+  if (!(await lstat(compiler).catch(() => undefined))?.isFile()) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'The Windows .NET Framework compiler is unavailable');
+  }
+
+  const tempRoot = await realpath(os.tmpdir());
+  const directory = await realpath(await mkdtemp(path.join(tempRoot, 'agy-mcp-inspector-')));
+  const directoryInfo = await lstat(directory);
+  const sourceFile = path.join(directory, 'inspector.cs');
+  const exeFile = path.join(directory, 'inspector.exe');
+
   let stdout = '', stdoutChars = 0, stderrChars = 0;
-  let stopReason: 'timeout' | 'stdout-limit' | 'stderr-limit' | undefined;
-  const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; spawnError: boolean }>(resolve => {
-    const child = spawn(windowsPowerShell, ['-NoProfile', '-NonInteractive', '-EncodedCommand', reparsePointCommand], { windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
-    let spawnError = false;
-    const stop = (reason: NonNullable<typeof stopReason>) => { if (!stopReason) { stopReason = reason; child.kill(); } };
-    const timer = setTimeout(() => stop('timeout'), 15_000);
-    child.stdout.on('data', chunk => {
-      const text = String(chunk);
-      stdoutChars += text.length;
-      stdout = (stdout + text).slice(0, 1024);
-      if (stdoutChars > 1024) stop('stdout-limit');
-    });
-    child.stderr.on('data', chunk => { stderrChars += String(chunk).length; if (stderrChars > 1024) stop('stderr-limit'); });
-    child.once('error', () => { clearTimeout(timer); spawnError = true; });
-    child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, spawnError }); });
-    child.stdin.end(paths.map(value => Buffer.from(value, 'utf16le').toString('base64')).join('\n') + '\n');
-  }).catch(() => ({ code: null, signal: null, spawnError: true }));
-  if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
-    const reason = result.spawnError ? 'spawn-error' : stopReason ?? (result.code !== 0 ? 'exit-nonzero' : 'invalid-safe-output');
-    const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${result.code}; signal=${result.signal}; stdoutChars=${stdoutChars}; stderrChars=${stderrChars}; stdoutTruncated=${stdoutChars > 1024}; stderrTruncated=${stderrChars > 1024}`;
-    throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
+  let stopReason: 'timeout' | 'stdout-limit' | 'stderr-limit' | 'stream-error' | undefined;
+  let executionError: unknown;
+
+  try {
+    await verifyOwnedTemporaryDirectory(directory, tempRoot, 'agy-mcp-inspector-');
+    await writeFile(sourceFile, reparseInspectorSource, { flag: 'wx', mode: 0o600 });
+
+    const compileTimeout = timeRemainingMs();
+    if (compileTimeout <= 0) {
+      stopReason = 'timeout';
+      throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Compilation timed out');
+    }
+
+    const compileResult = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; spawnError: boolean }>(resolve => {
+      const compileChild = spawn(compiler, ['/nologo', '/target:exe', '/platform:x64', '/nowarn:0649', '/out:' + exeFile, sourceFile], {
+        windowsHide: true,
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let compileSpawnError = false;
+      let compileOutputChars = 0;
+      const killCompile = (reason: 'timeout' | 'stdout-limit' | 'stream-error') => {
+        if (!stopReason) {
+          stopReason = reason;
+          compileChild.kill();
+        }
+      };
+      const compileTimer = setTimeout(() => killCompile('timeout'), compileTimeout);
+
+      compileChild.stdout.on('data', chunk => {
+        compileOutputChars += String(chunk).length;
+        if (compileOutputChars > 4000) killCompile('stdout-limit');
+      });
+      compileChild.stderr.on('data', chunk => {
+        compileOutputChars += String(chunk).length;
+        if (compileOutputChars > 4000) killCompile('stdout-limit');
+      });
+      compileChild.stdout.on('error', () => killCompile('stream-error'));
+      compileChild.stderr.on('error', () => killCompile('stream-error'));
+      compileChild.once('error', () => {
+        clearTimeout(compileTimer);
+        compileSpawnError = true;
+      });
+      compileChild.once('close', (code, signal) => {
+        clearTimeout(compileTimer);
+        resolve({ code, signal, spawnError: compileSpawnError });
+      });
+    }).catch(() => ({ code: null, signal: null, spawnError: true }));
+
+    if (compileResult.spawnError || stopReason || compileResult.code !== 0) {
+      const reason = compileResult.spawnError ? 'spawn-error' : stopReason ?? 'exit-nonzero';
+      const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${compileResult.code}; signal=${compileResult.signal}; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
+      throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
+    }
+
+    const exeStat = await lstat(exeFile).catch(() => undefined);
+    if (!exeStat?.isFile()) {
+      const diagnostics = `reason=spawn-error; elapsedMs=${Math.round(performance.now() - started)}; exitCode=null; signal=null; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
+      throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
+    }
+
+    const runTimeout = timeRemainingMs();
+    if (runTimeout <= 0) {
+      stopReason = 'timeout';
+      const diagnostics = `reason=timeout; elapsedMs=${Math.round(performance.now() - started)}; exitCode=null; signal=null; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
+      throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
+    }
+
+    const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null; spawnError: boolean }>(resolve => {
+      const child = spawn(exeFile, [], { windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+      let spawnError = false;
+      const stop = (reason: NonNullable<typeof stopReason>) => {
+        if (!stopReason) {
+          stopReason = reason;
+          child.kill();
+        }
+      };
+      const timer = setTimeout(() => stop('timeout'), runTimeout);
+
+      child.stdout.on('data', chunk => {
+        const text = String(chunk);
+        stdoutChars += text.length;
+        stdout = (stdout + text).slice(0, 1024);
+        if (stdoutChars > 1024) stop('stdout-limit');
+      });
+      child.stderr.on('data', chunk => {
+        stderrChars += String(chunk).length;
+        if (stderrChars > 1024) stop('stderr-limit');
+      });
+
+      child.stdin.on('error', () => stop('stream-error'));
+      child.stdout.on('error', () => stop('stream-error'));
+      child.stderr.on('error', () => stop('stream-error'));
+
+      child.once('error', () => {
+        clearTimeout(timer);
+        spawnError = true;
+      });
+      child.once('close', (code, signal) => {
+        clearTimeout(timer);
+        resolve({ code, signal, spawnError });
+      });
+
+      child.stdin.end(paths.map(value => Buffer.from(value, 'utf16le').toString('base64')).join('\n') + '\n');
+    }).catch(() => ({ code: null, signal: null, spawnError: true }));
+
+    if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
+      const reason = result.spawnError ? 'spawn-error' : stopReason ?? (result.code !== 0 ? 'exit-nonzero' : 'invalid-safe-output');
+      const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${result.code}; signal=${result.signal}; stdoutChars=${stdoutChars}; stderrChars=${stderrChars}; stdoutTruncated=${stdoutChars > 1024}; stderrTruncated=${stderrChars > 1024}`;
+      throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
+    }
+  } catch (error) {
+    executionError = error;
+  } finally {
+    let cleanupError: unknown;
+    try {
+      await removeOwnedDirectory(directory, tempRoot, 'agy-mcp-inspector-', directoryInfo);
+    } catch (error) {
+      cleanupError = error;
+    }
+    if (executionError && cleanupError) {
+      throw new AggregateError([executionError, cleanupError], 'Reparse inspection and temporary cleanup failed');
+    }
+    if (executionError) throw executionError;
+    if (cleanupError) throw cleanupError;
   }
 }
+
+
 
 async function inspectCachePath(value: string, create = false): Promise<void> {
   const absolute = absoluteCacheDirectory(value);

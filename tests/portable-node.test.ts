@@ -3,6 +3,7 @@ import childProcess, { execFileSync, type SpawnOptions } from 'node:child_proces
 import { createHash } from 'node:crypto';
 import { link, lstat, mkdir, mkdtemp, readFile, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
@@ -15,10 +16,10 @@ import type { AvailablePortableNodeDescriptor, PortableNodeDescriptor } from '..
 
 const releaseRepository = 'https://github.com/Zythenth/antigravity-mcp-bridge';
 const releaseTag = 'runtime-node-v24.21.0-lpac1-win-x64';
-const shortTemporaryRoot = path.join(process.cwd(), `.pn-${process.pid}`);
+const shortTemporaryRoot = path.join(os.tmpdir(), `.pn-${process.pid}`);
 
 after(async () => {
-  assert.equal(path.dirname(shortTemporaryRoot), process.cwd());
+  assert.equal(path.dirname(shortTemporaryRoot), path.resolve(os.tmpdir()));
   assert.equal(path.basename(shortTemporaryRoot), `.pn-${process.pid}`);
   await rm(shortTemporaryRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
 });
@@ -195,27 +196,40 @@ test('portable preparation rejects a descriptor for a non-x64 runtime before dow
 
 test('portable inspection reports bounded failure details without exposing process output', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
   const sentinel = 'inspection-output-must-stay-private';
-  const cases = [
-    { reason: 'timeout', prefix: '[Threading.Thread]::Sleep(16000);' },
-    { reason: 'stdout-limit', prefix: `[Console]::Out.Write('${sentinel}'+('x'*2048));[Threading.Thread]::Sleep(6000);` },
-    { reason: 'stderr-limit', prefix: `[Console]::Error.Write('${sentinel}'+('x'*2048));[Threading.Thread]::Sleep(6000);` },
-    { reason: 'exit-nonzero', suffix: ';exit 7' },
-    { reason: 'invalid-safe-output', prefix: `[Console]::Out.Write('${sentinel}');` },
+  const cases: Array<{
+    reason: string;
+    script?: string;
+    missingExecutable?: boolean;
+    stream?: 'stdin' | 'stdout' | 'stderr';
+  }> = [
+    { reason: 'timeout', script: 'setTimeout(() => {}, 20000)' },
+    { reason: 'stdout-limit', script: `process.stdout.write('${sentinel}' + 'x'.repeat(2048)); setTimeout(() => {}, 6000)` },
+    { reason: 'stderr-limit', script: `process.stderr.write('${sentinel}' + 'x'.repeat(2048)); setTimeout(() => {}, 6000)` },
+    { reason: 'exit-nonzero', script: 'process.exit(7)' },
+    { reason: 'invalid-safe-output', script: `process.stdout.write('${sentinel}'); process.exit(0)` },
     { reason: 'spawn-error', missingExecutable: true },
+    ...(['stdin', 'stdout', 'stderr'] as const).map(stream => ({ reason: 'stream-error', stream, script: 'setTimeout(() => {}, 20000)' })),
   ];
   for (const scenario of cases) {
-    await t.test(scenario.reason, async subtest => {
+    await t.test(scenario.stream ? scenario.reason + '-' + scenario.stream : scenario.reason, async subtest => {
       const { descriptor, files } = fixtureDescriptor();
       const cache = path.join(shortTemporaryRoot, 'inspection-diagnostics');
+      const directories = new Set<string>();
       const originalSpawn = childProcess.spawn;
       const mocked = subtest.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
-        assert.ok(Array.isArray(args));
-        const encodedIndex = args.indexOf('-EncodedCommand') + 1;
-        assert.ok(encodedIndex > 0 && typeof args[encodedIndex] === 'string');
-        const script = Buffer.from(args[encodedIndex]!, 'base64').toString('utf16le');
-        const changedArgs = [...args];
-        changedArgs[encodedIndex] = Buffer.from((scenario.prefix ?? '') + script + (scenario.suffix ?? ''), 'utf16le').toString('base64');
-        return originalSpawn(scenario.missingExecutable ? path.join(cache, 'missing-inspector.exe') : command, changedArgs, options);
+        if (command.toLowerCase().endsWith('csc.exe')) {
+          directories.add(path.dirname(args.find(value => value.startsWith('/out:'))!.slice(5)));
+          return originalSpawn(command, args, options);
+        }
+        if (scenario.missingExecutable) {
+          return originalSpawn(path.join(cache, 'missing-inspector.exe'), args, options);
+        }
+        if (scenario.script) {
+          const child = originalSpawn(process.execPath, ['-e', "process.stdin.resume(); process.stdin.on('end', () => {" + scenario.script + '});'], options);
+          if (scenario.stream) queueMicrotask(() => child[scenario.stream!]!.emit('error', new Error(sentinel)));
+          return child;
+        }
+        return originalSpawn(command, args, options);
       });
       syncBuiltinESMExports();
       let requests = 0;
@@ -234,6 +248,8 @@ test('portable inspection reports bounded failure details without exposing proce
         });
         assert.equal(requests, 0);
         await assert.rejects(lstat(cache), { code: 'ENOENT' });
+        assert.ok(directories.size > 0);
+        for (const directory of directories) await assert.rejects(lstat(directory), { code: 'ENOENT' });
       } finally {
         mocked.mock.restore();
         syncBuiltinESMExports();
@@ -243,7 +259,7 @@ test('portable inspection reports bounded failure details without exposing proce
 });
 
 
-test('portable inspection accepts real cache paths without PowerShell modules and tolerates bounded cold startup', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
+test('portable inspection accepts real cache paths without PowerShell and tolerates bounded cold startup', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
   for (const scenario of [
     { name: 'module-free', directory: 'module-free', firstDelay: 0 },
     { name: 'cold-first-inspection', directory: 'cold', firstDelay: 7000 },
@@ -256,13 +272,14 @@ test('portable inspection accepts real cache paths without PowerShell modules an
         const originalSpawn = childProcess.spawn;
         let inspections = 0;
         const mocked = subtest.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
-          const encodedIndex = args.indexOf('-EncodedCommand') + 1;
-          assert.ok(encodedIndex > 0);
-          const script = Buffer.from(args[encodedIndex]!, 'base64').toString('utf16le');
-          const changedArgs = [...args];
-          const delay = inspections++ === 0 && scenario.firstDelay ? '[Threading.Thread]::Sleep(7000);' : '';
-          changedArgs[encodedIndex] = Buffer.from(delay + "$PSModuleAutoLoadingPreference='None';" + script, 'utf16le').toString('base64');
-          return originalSpawn(command, changedArgs, { ...options, env: { ...process.env, PSModulePath: path.join(root, 'missing-modules') } });
+          if (command.toLowerCase().endsWith('csc.exe')) {
+            if (inspections++ === 0 && scenario.firstDelay) {
+              const wrapper = "setTimeout(() => { const result = require('node:child_process').spawnSync(process.argv[1], process.argv.slice(2), {stdio: 'inherit'}); process.exit(result.status ?? 1); }, " + scenario.firstDelay + ');';
+              return originalSpawn(process.execPath, ['-e', wrapper, command, ...args], options);
+            }
+            return originalSpawn(command, args, options);
+          }
+          return originalSpawn(command, args, { ...options, env: { ...process.env, PSModulePath: path.join(root, 'missing-modules') } });
         });
         syncBuiltinESMExports();
         let requests = 0;
@@ -306,6 +323,9 @@ test('portable inspection rejects empty or malformed path records before cache c
         const { descriptor, files } = fixtureDescriptor();
         const originalSpawn = childProcess.spawn;
         const mocked = subtest.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
+          if (command.toLowerCase().endsWith('csc.exe')) {
+            return originalSpawn(command, args, options);
+          }
           const child = originalSpawn(command, args, options);
           const originalEnd = child.stdin!.end.bind(child.stdin!);
           subtest.mock.method(child.stdin!, 'end', () => originalEnd(input));
@@ -410,6 +430,21 @@ test('portable preparation rejects a reparse-point ancestor before it can create
   }
 });
 
+test('portable cache preparation supports the checkout path, including Cloud Files ancestors', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
+  const root = path.resolve(process.cwd());
+  const cache = await mkdtemp(path.join(root, '.pn-cloud-'));
+  try {
+    const { descriptor, files } = fixtureDescriptor();
+    const runtime = await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
+    assert.equal(runtime.nodePath, path.join(cache, cacheLeafName(descriptor), 'node.exe'));
+    assert.equal((await portableNodeStatus('portable', cache, descriptor)).ready, true);
+  } finally {
+    assert.equal(path.dirname(cache), root);
+    assert.ok(path.basename(cache).startsWith('.pn-cloud-'));
+    await rm(cache, { recursive: true, force: true, maxRetries: 3, retryDelay: 25 });
+  }
+});
+
 test('portable preparation recovers a verified dead lock, waits for a live lock, and coalesces concurrent downloads', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
   await cacheFixture(async cache => {
     const { descriptor, files } = fixtureDescriptor();
@@ -454,4 +489,32 @@ test('portable preparation rejects redirect hosts and oversized downloads withou
     await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: oversized }), 'PORTABLE_NODE_DOWNLOAD_REJECTED');
     await assert.rejects(lstat(path.join(cache, cacheLeafName(descriptor))), { code: 'ENOENT' });
   });
+});
+
+test('native reparse inspection uses no PowerShell and cleans up its own temporary directories', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
+  const directories = new Set<string>();
+  const originalSpawn = childProcess.spawn;
+  const mocked = t.mock.method(childProcess, 'spawn', (command: string, args: string[], options: SpawnOptions) => {
+    assert.doesNotMatch(command, /powershell|pwsh/iu);
+    if (command.toLowerCase().endsWith('csc.exe')) {
+      directories.add(path.dirname(args.find(value => value.startsWith('/out:'))!.slice(5)));
+    } else {
+      assert.equal(path.basename(command), 'inspector.exe');
+    }
+    return originalSpawn(command, args, options);
+  });
+  syncBuiltinESMExports();
+  try {
+    await cacheFixture(async cache => {
+      const { descriptor, files } = fixtureDescriptor();
+      const runtime = await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
+      assert.equal((await portableNodeStatus('portable', cache, descriptor)).ready, true);
+      assert.equal(runtime.nodePath, path.join(cache, cacheLeafName(descriptor), 'node.exe'));
+    });
+    assert.ok(directories.size > 0);
+    for (const directory of directories) await assert.rejects(lstat(directory), { code: 'ENOENT' });
+  } finally {
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  }
 });

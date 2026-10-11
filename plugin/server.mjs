@@ -44705,10 +44705,10 @@ import { setTimeout as delay3 } from "node:timers/promises";
 
 // dist/src/windows-executor.js
 import { spawn as spawn5 } from "node:child_process";
-import { lstat as lstat9, mkdir as mkdir7, mkdtemp as mkdtemp2, realpath as realpath5, rm as rm5, writeFile as writeFile4 } from "node:fs/promises";
+import { lstat as lstat9, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath6, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
 import { randomUUID as randomUUID9 } from "node:crypto";
 import path17 from "node:path";
-import os6 from "node:os";
+import os7 from "node:os";
 
 // dist/src/windows-helper-source.js
 var windowsHelperSource = `using System;
@@ -44860,6 +44860,8 @@ internal static class WindowsTestRunner
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);
+    [StructLayout(LayoutKind.Sequential)] struct FileAttributeTagInfo { public uint attributes, tag; }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);
@@ -45187,6 +45189,9 @@ internal static class WindowsTestRunner
         return lease;
     }
 
+    // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.
+    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }
+
     static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)
     {
         RequireLocalAbsolutePath(full, "Permission target");
@@ -45203,7 +45208,12 @@ internal static class WindowsTestRunner
             try
             {
                 ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");
-                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0) throw new Exception("Permission target contains a reparse point");
+                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0)
+                {
+                    FileAttributeTagInfo tagInfo;
+                    Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");
+                    if (!IsCloudTag(tagInfo.tag)) throw new Exception("Permission target contains an unsafe reparse point");
+                }
                 bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;
                 if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");
                 if (index == pieces.Length - 1)
@@ -45671,6 +45681,132 @@ internal static class WindowsTestRunner
     }
 }
 `;
+var reparseInspectorSource = `using System;\r
+using System.ComponentModel;\r
+using System.IO;\r
+using System.Runtime.InteropServices;\r
+using System.Text;\r
+using System.Text.RegularExpressions;\r
+\r
+// Native Windows reparse point inspector for portable Node cache paths.\r
+// Inspects file attributes and reparse tags directly without shell invocations.\r
+internal static class ReparseInspector\r
+{\r
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]\r
+    static extern uint GetFileAttributes(string name);\r
+\r
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]\r
+    static extern IntPtr CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);\r
+    [DllImport("kernel32.dll", SetLastError = true)]\r
+    static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);\r
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);\r
+\r
+    [StructLayout(LayoutKind.Sequential)]\r
+    struct FileAttributeTagInfo { public uint attributes, tag; }\r
+\r
+    const uint InvalidFileAttributes = 0xFFFFFFFF;\r
+    const uint FileAttributeReparsePoint = 0x400;\r
+\r
+    // IO_REPARSE_TAG_CLOUD through IO_REPARSE_TAG_CLOUD_F are placeholders, not name surrogates.\r
+    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }\r
+\r
+    static void InspectReparsePoint(string current, uint attrs)\r
+    {\r
+        if ((attrs & FileAttributeReparsePoint) == 0) return;\r
+        IntPtr handle = CreateFile(current, 0, 3, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);\r
+        if (handle == new IntPtr(-1)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open reparse point");\r
+        try\r
+        {\r
+            FileAttributeTagInfo info;\r
+            if (!GetFileInformationByHandleEx(handle, 9, out info, 8))\r
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Inspect reparse tag");\r
+            if ((info.attributes & FileAttributeReparsePoint) != 0 && !IsCloudTag(info.tag))\r
+                throw new InvalidOperationException("Unsafe reparse point detected: " + current);\r
+        }\r
+        finally { CloseHandle(handle); }\r
+    }\r
+\r
+    public static int Main(string[] args)\r
+    {\r
+        try\r
+        {\r
+            var decoder = new UnicodeEncoding(false, false, true);\r
+            var base64Regex = new Regex("^[A-Za-z0-9+/]+={0,2}$");\r
+            int count = 0;\r
+            string line;\r
+\r
+            while ((line = Console.In.ReadLine()) != null)\r
+            {\r
+                if (line.Length == 0 || line.Length % 4 != 0 || !base64Regex.IsMatch(line))\r
+                {\r
+                    throw new ArgumentException("Invalid path record");\r
+                }\r
+\r
+                byte[] bytes = Convert.FromBase64String(line);\r
+                string target = decoder.GetString(bytes);\r
+                if (target.Length == 0)\r
+                {\r
+                    throw new ArgumentException("Empty path");\r
+                }\r
+                if (target.IndexOf('\\0') >= 0)\r
+                {\r
+                    throw new ArgumentException("NUL character in path");\r
+                }\r
+                count++;\r
+\r
+                string root = Path.GetPathRoot(target);\r
+                if (string.IsNullOrEmpty(root) || !Path.IsPathRooted(target))\r
+                {\r
+                    throw new ArgumentException("Path must be absolute");\r
+                }\r
+\r
+                string relative = target.Substring(root.Length);\r
+                string current = root;\r
+\r
+                uint rootAttrs = GetFileAttributes(current);\r
+                if (rootAttrs == InvalidFileAttributes)\r
+                {\r
+                    int err = Marshal.GetLastWin32Error();\r
+                    throw new Win32Exception(err, "Could not inspect root: " + current);\r
+                }\r
+                InspectReparsePoint(current, rootAttrs);\r
+\r
+                string[] parts = relative.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries);\r
+                foreach (string part in parts)\r
+                {\r
+                    current = Path.Combine(current, part);\r
+                    uint attrs = GetFileAttributes(current);\r
+                    if (attrs == InvalidFileAttributes)\r
+                    {\r
+                        int err = Marshal.GetLastWin32Error();\r
+                        // Allow non-existent suffix only after all ancestors are verified\r
+                        if (err == 2 || err == 3) // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND\r
+                        {\r
+                            break;\r
+                        }\r
+                        // Conservative failure on Access Denied (5) or any unexpected error\r
+                        throw new Win32Exception(err, "Failed to inspect path component: " + current);\r
+                    }\r
+                    InspectReparsePoint(current, attrs);\r
+                }\r
+            }\r
+\r
+            if (count == 0)\r
+            {\r
+                throw new ArgumentException("Missing paths");\r
+            }\r
+\r
+            Console.Out.Write("{\\"safe\\":true}");\r
+            return 0;\r
+        }\r
+        catch (Exception ex)\r
+        {\r
+            Console.Error.WriteLine(ex.Message);\r
+            return 1;\r
+        }\r
+    }\r
+}\r
+`;
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
@@ -45682,7 +45818,8 @@ import path16 from "node:path";
 import { createHash as createHash17, randomUUID as randomUUID8 } from "node:crypto";
 import { spawn as spawn4 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat7, mkdir as mkdir5, open as open3, readFile as readFile4, readdir as readdir5, rename, rm as rm4, unlink as unlink2 } from "node:fs/promises";
+import { lstat as lstat7, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open3, readFile as readFile4, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
+import os6 from "node:os";
 import path15 from "node:path";
 import { setTimeout as delay2 } from "node:timers/promises";
 
@@ -45730,7 +45867,6 @@ var downloadTimeoutMs = 6e4;
 var redirectLimit = 5;
 var maxAssetBytes = { "node.exe": 256 * 1024 * 1024, LICENSE: 1024 * 1024, "build.json": 1024 * 1024 };
 var githubRedirectHosts = /* @__PURE__ */ new Set(["github.com", "objects.githubusercontent.com", "github-releases.githubusercontent.com", "release-assets.githubusercontent.com"]);
-var windowsPowerShell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 var releaseRepository = "https://github.com/Zythenth/antigravity-mcp-bridge";
 var releaseTag = "runtime-node-v24.21.0-lpac1-win-x64";
 var buildId = "node-v24.21.0-lpac1-win-x64";
@@ -45738,21 +45874,6 @@ var nodeVersion = "24.21.0";
 var libuvVersion = "1.52.1";
 var libuvPatch = "f46e4246b5277fe1c5888b88b24d8b78020dd4f8";
 var cacheRepair = " Remove the affected portable Node build cache manually, then run --prepare-windows-runtime.";
-var reparsePointScript = [
-  "$ErrorActionPreference='Stop';$PSModuleAutoLoadingPreference='None';",
-  "$decoder=[Text.UnicodeEncoding]::new($false,$false,$true);$count=0;",
-  "while(($line=[Console]::In.ReadLine())-ne $null){",
-  "if($line.Length-eq 0-or $line.Length%4-ne 0-or $line-notmatch '^[A-Za-z0-9+/]+={0,2}$'){throw 'Invalid path record'};",
-  "$target=$decoder.GetString([Convert]::FromBase64String($line));if($target.Length-eq 0){throw 'Empty path'};$count++;",
-  "$root=[IO.Path]::GetPathRoot($target);if([string]::IsNullOrEmpty($root)){throw 'Path must be absolute'};",
-  "$relative=$target.Substring($root.Length);$current=$root;try{$attributes=[IO.File]::GetAttributes($current)}catch{throw 'Could not inspect root'};",
-  "if(($attributes-band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'};",
-  "foreach($part in ($relative-split '[\\\\/]+')){if($part.Length-eq 0){continue};$current=[IO.Path]::Combine($current,$part);",
-  "try{$attributes=[IO.File]::GetAttributes($current)}catch [IO.FileNotFoundException]{break}catch [IO.DirectoryNotFoundException]{break};",
-  "if(($attributes-band [IO.FileAttributes]::ReparsePoint)-ne 0){throw 'Reparse point'}}};",
-  `if($count-eq 0){throw 'Missing paths'};[Console]::Out.Write('{"safe":true}')`
-].join("");
-var reparsePointCommand = Buffer.from(reparsePointScript, "utf16le").toString("base64");
 function fail(code, message) {
   throw new BridgeError(code, message);
 }
@@ -45808,48 +45929,165 @@ function absoluteCacheDirectory(value) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
+async function verifyOwnedTemporaryDirectory(directory, tempRoot, prefix) {
+  const canonical = await realpath5(directory);
+  if (path15.dirname(canonical) !== tempRoot || !path15.basename(canonical).startsWith(prefix) || (await lstat7(directory)).isSymbolicLink()) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary directory was replaced or linked");
+  }
+  return canonical;
+}
+async function removeOwnedDirectory(directory, tempRoot, prefix, expected) {
+  const canonical = await realpath5(directory).catch((error62) => {
+    if (error62.code === "ENOENT")
+      return void 0;
+    throw error62;
+  });
+  if (!canonical)
+    return;
+  const current = await lstat7(directory);
+  if (path15.dirname(canonical) !== tempRoot || !path15.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary cleanup path escaped its intended location");
+  }
+  await rm4(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+}
 async function inspectReparsePoints(paths2) {
   if (process.platform !== "win32" || paths2.length === 0)
     return;
+  if (typeof reparseInspectorSource !== "string" || reparseInspectorSource.length === 0) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Native Windows reparse inspector source is unavailable");
+  }
   const started = performance.now();
+  const totalTimeoutMs = 15e3;
+  const deadline = started + totalTimeoutMs;
+  const timeRemainingMs = () => Math.max(0, Math.round(deadline - performance.now()));
+  const compiler = path15.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  if (!(await lstat7(compiler).catch(() => void 0))?.isFile()) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "The Windows .NET Framework compiler is unavailable");
+  }
+  const tempRoot = await realpath5(os6.tmpdir());
+  const directory = await realpath5(await mkdtemp2(path15.join(tempRoot, "agy-mcp-inspector-")));
+  const directoryInfo = await lstat7(directory);
+  const sourceFile = path15.join(directory, "inspector.cs");
+  const exeFile = path15.join(directory, "inspector.exe");
   let stdout = "", stdoutChars = 0, stderrChars = 0;
   let stopReason;
-  const result = await new Promise((resolve2) => {
-    const child = spawn4(windowsPowerShell, ["-NoProfile", "-NonInteractive", "-EncodedCommand", reparsePointCommand], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
-    let spawnError = false;
-    const stop = (reason) => {
-      if (!stopReason) {
-        stopReason = reason;
-        child.kill();
-      }
-    };
-    const timer = setTimeout(() => stop("timeout"), 15e3);
-    child.stdout.on("data", (chunk) => {
-      const text = String(chunk);
-      stdoutChars += text.length;
-      stdout = (stdout + text).slice(0, 1024);
-      if (stdoutChars > 1024)
-        stop("stdout-limit");
-    });
-    child.stderr.on("data", (chunk) => {
-      stderrChars += String(chunk).length;
-      if (stderrChars > 1024)
-        stop("stderr-limit");
-    });
-    child.once("error", () => {
-      clearTimeout(timer);
-      spawnError = true;
-    });
-    child.once("close", (code, signal) => {
-      clearTimeout(timer);
-      resolve2({ code, signal, spawnError });
-    });
-    child.stdin.end(paths2.map((value) => Buffer.from(value, "utf16le").toString("base64")).join("\n") + "\n");
-  }).catch(() => ({ code: null, signal: null, spawnError: true }));
-  if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
-    const reason = result.spawnError ? "spawn-error" : stopReason ?? (result.code !== 0 ? "exit-nonzero" : "invalid-safe-output");
-    const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${result.code}; signal=${result.signal}; stdoutChars=${stdoutChars}; stderrChars=${stderrChars}; stdoutTruncated=${stdoutChars > 1024}; stderrTruncated=${stderrChars > 1024}`;
-    throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
+  let executionError;
+  try {
+    await verifyOwnedTemporaryDirectory(directory, tempRoot, "agy-mcp-inspector-");
+    await writeFile4(sourceFile, reparseInspectorSource, { flag: "wx", mode: 384 });
+    const compileTimeout = timeRemainingMs();
+    if (compileTimeout <= 0) {
+      stopReason = "timeout";
+      throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Compilation timed out");
+    }
+    const compileResult = await new Promise((resolve2) => {
+      const compileChild2 = spawn4(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
+        windowsHide: true,
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let compileSpawnError = false;
+      let compileOutputChars = 0;
+      const killCompile = (reason) => {
+        if (!stopReason) {
+          stopReason = reason;
+          compileChild2.kill();
+        }
+      };
+      const compileTimer = setTimeout(() => killCompile("timeout"), compileTimeout);
+      compileChild2.stdout.on("data", (chunk) => {
+        compileOutputChars += String(chunk).length;
+        if (compileOutputChars > 4e3)
+          killCompile("stdout-limit");
+      });
+      compileChild2.stderr.on("data", (chunk) => {
+        compileOutputChars += String(chunk).length;
+        if (compileOutputChars > 4e3)
+          killCompile("stdout-limit");
+      });
+      compileChild2.stdout.on("error", () => killCompile("stream-error"));
+      compileChild2.stderr.on("error", () => killCompile("stream-error"));
+      compileChild2.once("error", () => {
+        clearTimeout(compileTimer);
+        compileSpawnError = true;
+      });
+      compileChild2.once("close", (code, signal) => {
+        clearTimeout(compileTimer);
+        resolve2({ code, signal, spawnError: compileSpawnError });
+      });
+    }).catch(() => ({ code: null, signal: null, spawnError: true }));
+    if (compileResult.spawnError || stopReason || compileResult.code !== 0) {
+      const reason = compileResult.spawnError ? "spawn-error" : stopReason ?? "exit-nonzero";
+      const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${compileResult.code}; signal=${compileResult.signal}; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
+      throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
+    }
+    const exeStat = await lstat7(exeFile).catch(() => void 0);
+    if (!exeStat?.isFile()) {
+      const diagnostics = `reason=spawn-error; elapsedMs=${Math.round(performance.now() - started)}; exitCode=null; signal=null; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
+      throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
+    }
+    const runTimeout = timeRemainingMs();
+    if (runTimeout <= 0) {
+      stopReason = "timeout";
+      const diagnostics = `reason=timeout; elapsedMs=${Math.round(performance.now() - started)}; exitCode=null; signal=null; stdoutChars=0; stderrChars=0; stdoutTruncated=false; stderrTruncated=false`;
+      throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
+    }
+    const result = await new Promise((resolve2) => {
+      const child = spawn4(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+      let spawnError = false;
+      const stop = (reason) => {
+        if (!stopReason) {
+          stopReason = reason;
+          child.kill();
+        }
+      };
+      const timer = setTimeout(() => stop("timeout"), runTimeout);
+      child.stdout.on("data", (chunk) => {
+        const text = String(chunk);
+        stdoutChars += text.length;
+        stdout = (stdout + text).slice(0, 1024);
+        if (stdoutChars > 1024)
+          stop("stdout-limit");
+      });
+      child.stderr.on("data", (chunk) => {
+        stderrChars += String(chunk).length;
+        if (stderrChars > 1024)
+          stop("stderr-limit");
+      });
+      child.stdin.on("error", () => stop("stream-error"));
+      child.stdout.on("error", () => stop("stream-error"));
+      child.stderr.on("error", () => stop("stream-error"));
+      child.once("error", () => {
+        clearTimeout(timer);
+        spawnError = true;
+      });
+      child.once("close", (code, signal) => {
+        clearTimeout(timer);
+        resolve2({ code, signal, spawnError });
+      });
+      child.stdin.end(paths2.map((value) => Buffer.from(value, "utf16le").toString("base64")).join("\n") + "\n");
+    }).catch(() => ({ code: null, signal: null, spawnError: true }));
+    if (result.spawnError || stopReason || result.code !== 0 || stdout !== '{"safe":true}') {
+      const reason = result.spawnError ? "spawn-error" : stopReason ?? (result.code !== 0 ? "exit-nonzero" : "invalid-safe-output");
+      const diagnostics = `reason=${reason}; elapsedMs=${Math.round(performance.now() - started)}; exitCode=${result.code}; signal=${result.signal}; stdoutChars=${stdoutChars}; stderrChars=${stderrChars}; stdoutTruncated=${stdoutChars > 1024}; stderrTruncated=${stderrChars > 1024}`;
+      throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
+    }
+  } catch (error62) {
+    executionError = error62;
+  } finally {
+    let cleanupError;
+    try {
+      await removeOwnedDirectory(directory, tempRoot, "agy-mcp-inspector-", directoryInfo);
+    } catch (error62) {
+      cleanupError = error62;
+    }
+    if (executionError && cleanupError) {
+      throw new AggregateError([executionError, cleanupError], "Reparse inspection and temporary cleanup failed");
+    }
+    if (executionError)
+      throw executionError;
+    if (cleanupError)
+      throw cleanupError;
   }
 }
 async function inspectCachePath(value, create = false) {
@@ -46603,7 +46841,7 @@ function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
-  const canonical = await realpath5(directory);
+  const canonical = await realpath6(directory);
   if (path17.dirname(canonical) !== temp || !path17.basename(canonical).startsWith(prefix) || (await lstat9(directory)).isSymbolicLink()) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
@@ -46663,10 +46901,10 @@ async function compileController(temp, options) {
   const compiler = path17.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat9(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath5(await mkdtemp2(path17.join(temp, "agy-mcp-controller-")));
+  const directory = await realpath6(await mkdtemp3(path17.join(temp, "agy-mcp-controller-")));
   const source = path17.join(directory, "runner.cs"), helper = path17.join(directory, "runner.exe");
   try {
-    await writeFile4(source, windowsHelperSource, { flag: "wx" });
+    await writeFile5(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
     if (built.code !== 0)
       throw new BridgeError("WINDOWS_EXECUTOR_BUILD_FAILED", (built.stdout + built.stderr).slice(-4e3));
@@ -46679,7 +46917,7 @@ async function compileController(temp, options) {
 }
 async function writeRequest(directory, request) {
   const file3 = path17.join(directory, "request-" + randomUUID9() + ".json");
-  await writeFile4(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
+  await writeFile5(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
 async function removeOwned(directories, temp) {
@@ -46698,7 +46936,7 @@ async function removeOwned(directories, temp) {
 async function grantPaths(selection, protectedPaths2, maxFiles) {
   const protectedCanonical = await Promise.all(protectedPaths2.map(async (value) => {
     try {
-      return await realpath5(value);
+      return await realpath6(value);
     } catch {
       return path17.resolve(value);
     }
@@ -46708,7 +46946,7 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     if (!path17.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath5(value), root = path17.parse(canonical).root;
+    const canonical = await realpath6(value), root = path17.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
@@ -46746,7 +46984,7 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
 async function runRecoveryWithController(stateDirectory, options) {
   if (process.platform !== "win32")
     return;
-  const temp = await realpath5(os6.tmpdir()), controller = await compileController(temp, options);
+  const temp = await realpath6(os7.tmpdir()), controller = await compileController(temp, options);
   try {
     const request = await writeRequest(controller.directory, { action: "recover", stateDirectory });
     const observed = await nativeProcess(controller.helper, [request], options);
@@ -46772,13 +47010,13 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
   };
-  const stateDirectory = path17.resolve(options.stateDirectory ?? path17.join(os6.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path17.resolve(options.stateDirectory ?? path17.join(os7.homedir(), ".antigravity-mcp-bridge"));
   await mkdir7(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
-  const temp = await realpath5(os6.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
+  const temp = await realpath6(os7.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath5(await mkdtemp2(path17.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath5(await mkdtemp2(path17.join(temp, "agy-mcp-scratch-")));
+  const runtime = await realpath6(await mkdtemp3(path17.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath6(await mkdtemp3(path17.join(temp, "agy-mcp-scratch-")));
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);

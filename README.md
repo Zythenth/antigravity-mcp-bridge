@@ -67,6 +67,8 @@ npm.cmd test
 
 O servidor iniciado diretamente por npm usa o Node do sistema por padrão. O descritor distribuído com o plugin pede o modo `portable`, para que os testes Windows LPAC usem o runtime preparado no cache. Os modos são escolhidos somente na inicialização confiável do servidor com `BRIDGE_WINDOWS_NODE_RUNTIME=system` ou `portable`; entradas de ferramentas MCP não aceitam URL, hash nem caminho de cache.
 
+No Windows, a inspeção do cache usa um helper nativo incluído no pacote, compilado com o .NET Framework já existente no sistema. O compilador também é necessário para consultar o estado do runtime portátil. Essa verificação lê os atributos e as marcas dos caminhos diretamente, sem iniciar PowerShell. O inspetor e a validação de caminhos de permissões aceitam as marcas `IO_REPARSE_TAG_CLOUD` a `IO_REPARSE_TAG_CLOUD_F`, usadas pelo OneDrive, e rejeitam junctions, links simbólicos e marcas desconhecidas em qualquer ancestral. Arquivos somente na nuvem precisam estar disponíveis para leitura. O cache continua separado do projeto. Compilação e inspeção compartilham um prazo de 15 segundos; os arquivos temporários do helper são removidos ao final.
+
 Consulte o estado sem iniciar MCP, descobrir `agy` ou baixar arquivos:
 
 ```powershell

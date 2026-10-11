@@ -147,6 +147,8 @@ internal static class WindowsTestRunner
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
     [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);
+    [StructLayout(LayoutKind.Sequential)] struct FileAttributeTagInfo { public uint attributes, tag; }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);
@@ -474,6 +476,9 @@ internal static class WindowsTestRunner
         return lease;
     }
 
+    // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.
+    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }
+
     static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)
     {
         RequireLocalAbsolutePath(full, "Permission target");
@@ -490,7 +495,12 @@ internal static class WindowsTestRunner
             try
             {
                 ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");
-                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0) throw new Exception("Permission target contains a reparse point");
+                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0)
+                {
+                    FileAttributeTagInfo tagInfo;
+                    Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");
+                    if (!IsCloudTag(tagInfo.tag)) throw new Exception("Permission target contains an unsafe reparse point");
+                }
                 bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;
                 if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");
                 if (index == pieces.Length - 1)
