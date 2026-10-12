@@ -8,9 +8,12 @@ import { test } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import { CliAdapter, type CliProcess } from '../src/cli-adapter.js';
 import { loadConfig } from '../src/config.js';
 import { TaskManager } from '../src/task-manager.js';
+import type { RunOptions } from '../src/types.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
@@ -42,6 +45,7 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
   client.setRequestHandler(ElicitRequestSchema, async request => {
     requests++;
     assert.equal(request.params.mode, 'form');
+    if (request.params.mode !== 'form') throw new Error('Unexpected elicitation mode');
     assert.equal(request.params.requestedSchema.properties.confirm?.default, false);
     assert.match(request.params.message, /Política anterior/);
     assert.match(request.params.message, /Proposta normalizada/);
@@ -56,7 +60,7 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
   };
   try {
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [fixturePath], stderr: 'pipe',
-      env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') } }));
+      env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') } }));
     const initial = (await call('antigravity_get_sandbox_policy')).body;
     assert.equal(initial.policy.network, false);
     const proposal = { ...initial.policy, childProcesses: false, maxOutputChars: 256 };
@@ -78,7 +82,7 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
     const unavailable = new Client({ name: 'policy-no-form', version: '1' }, { capabilities: {} });
     try {
       await unavailable.connect(new StdioClientTransport({ command: process.execPath, args: [fixturePath], stderr: 'pipe',
-        env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') } }));
+        env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') } }));
       const current = await unavailable.callTool({ name: 'antigravity_get_sandbox_policy', arguments: {} });
       const unavailableSet = await unavailable.callTool({ name: 'antigravity_set_sandbox_policy', arguments: {
         policy: accepted.body.policy, expectedSha256: (current.structuredContent as any).sha256,
@@ -163,24 +167,76 @@ test('a queued Windows test is denied when its frozen global ceiling is revoked'
   const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20', MAX_CONCURRENT_TASKS: '1',
     ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
     ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });
-  const adapter = new CliAdapter(config, [mockPath]);
+  class PolicyTestAdapter extends CliAdapter {
+    releaseBlocker?: () => void;
+
+    override spawnTask(options: RunOptions, model: string | undefined, cwd: string): CliProcess {
+      if (options.prompt === 'hold:policy') {
+        const stdout = new PassThrough();
+        const stderr = new PassThrough();
+        const stdin = new PassThrough();
+        const child = Object.assign(new EventEmitter(), {
+          stdout,
+          stderr,
+          stdin,
+          exitCode: null as number | null,
+          killed: false,
+          kill: () => {
+            if (!child.killed) {
+              child.killed = true;
+              child.exitCode = 0;
+              child.emit('close', 0, null);
+            }
+            return true;
+          },
+        });
+        this.releaseBlocker = () => {
+          if (!child.killed) {
+            child.killed = true;
+            child.stdout.write(JSON.stringify({ event: 'result', result: { status: 'SUCCESS', conversation_id: 'blocker', response: 'done' } }) + '\n');
+            child.exitCode = 0;
+            child.emit('close', 0, null);
+          }
+        };
+        queueMicrotask(() => {
+          child.stdout.write(JSON.stringify({ event: 'init', conversation_id: 'blocker' }) + '\n');
+        });
+        return child as unknown as CliProcess;
+      }
+      return super.spawnTask(options, model, cwd);
+    }
+  }
+
+  const adapter = new PolicyTestAdapter(config, [mockPath]);
   const tasks = new TaskManager(adapter, config);
   try {
     await adapter.discover();
     const source = await tasks.run({ prompt: 'write:test', workingDirectory: sourceDirectory });
     const completed = await waitFor(tasks, source.taskId);
     assert.equal(completed.status, 'completed');
-    const blocker = await tasks.run({ prompt: 'slow:test', workingDirectory: busyDirectory });
+    const blocker = await tasks.run({ prompt: 'hold:policy', workingDirectory: busyDirectory });
+    const blockerDeadline = Date.now() + 5000;
+    while (!['running', 'streaming'].includes(tasks.status(blocker.taskId).status)) {
+      if (done(tasks.status(blocker.taskId).status)) {
+        throw new Error('Blocker terminated unexpectedly with status ' + tasks.status(blocker.taskId).status);
+      }
+      if (Date.now() >= blockerDeadline) {
+        throw new Error('Timed out waiting for blocker task to start');
+      }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
     const preview = await tasks.preview(completed.taskId, false);
     const queued = await tasks.startTests(completed.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'process.exit(0)'] }, 0, 30);
     assert.equal(tasks.status(queued.taskId).status, 'queued');
     const prior = tasks.getSandboxPolicy();
     await tasks.setSandboxPolicy({ ...prior.policy, childProcesses: false, maxOutputChars: 256 }, prior.sha256, async () => true);
+    adapter.releaseBlocker?.();
     await waitFor(tasks, blocker.taskId);
     const denied = await waitFor(tasks, queued.taskId);
     assert.equal(denied.error?.code, 'SANDBOX_POLICY_CHANGED');
     assert.ok(!tasks.readEvents(queued.taskId).events.some(event => event.type === 'process.started'));
   } finally {
+    adapter.releaseBlocker?.();
     await tasks.shutdown();
     await rm(sourceDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     await rm(busyDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

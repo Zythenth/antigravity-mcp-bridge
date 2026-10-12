@@ -7,6 +7,7 @@ import { customRolesSchema, type RoleDefinition } from './roles.js';
 import type { WindowsNodeRuntime } from './portable-node.js';
 
 export type TestExecutor = 'agy' | 'windows-lpac';
+export type ApprovalMode = 'auto' | 'ask';
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
@@ -19,6 +20,7 @@ export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; max
 export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
 
 export interface Config extends ProjectLimits {
+  approvalMode: ApprovalMode;
   toolProfile: ToolProfile;
   preauthorizedIntegrationRoots: string[];
   customRoles: RoleDefinition[];
@@ -45,6 +47,12 @@ export interface Config extends ProjectLimits {
   secretExclusions: string[];
   secretExceptions: string[];
   allowedEnvVars: string[];
+}
+
+function approvalMode(value: string | undefined): ApprovalMode {
+  if (value === undefined) return 'auto';
+  if (value === 'auto' || value === 'ask') return value;
+  throw new Error('BRIDGE_APPROVAL_MODE must be auto or ask');
 }
 
 function testExecutor(value: string | undefined): TestExecutor {
@@ -104,6 +112,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
   if (memoryMaxEntryBytes > memoryMaxBytes) throw new Error('BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES');
   return {
+    approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),

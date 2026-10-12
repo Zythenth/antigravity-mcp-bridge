@@ -29988,6 +29988,13 @@ function positiveInteger(value, fallback, max) {
   return n;
 }
 var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
+function approvalMode(value) {
+  if (value === void 0)
+    return "auto";
+  if (value === "auto" || value === "ask")
+    return value;
+  throw new Error("BRIDGE_APPROVAL_MODE must be auto or ask");
+}
 function testExecutor(value) {
   if (value === void 0)
     return process.platform === "win32" ? "windows-lpac" : "agy";
@@ -30050,6 +30057,7 @@ function loadConfig(env = process.env) {
   if (memoryMaxEntryBytes > memoryMaxBytes)
     throw new Error("BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES");
   return {
+    approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
     preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? "[]")),
@@ -43609,6 +43617,7 @@ var successOutputSchemas = {
   antigravity_memory_remove: external_exports.object({ removed: external_exports.literal(true) }).strict(),
   antigravity_health: external_exports.object({
     toolProfile: toolProfileSchema.optional(),
+    approvalMode: external_exports.enum(["auto", "ask"]).optional(),
     installed: external_exports.boolean(),
     path: external_exports.string(),
     version: external_exports.string().optional(),
@@ -43625,7 +43634,12 @@ var successOutputSchemas = {
       cancel: external_exports.boolean()
     }).strict(),
     error: external_exports.string().optional(),
-    integrationApproval: external_exports.object({ available: external_exports.boolean(), method: external_exports.enum(["mcp-form-elicitation", "project-preauthorization-or-mcp-form"]), preauthorizedProjectCount: count.optional() }).strict(),
+    integrationApproval: external_exports.object({
+      available: external_exports.boolean(),
+      mode: external_exports.enum(["auto", "ask"]).optional(),
+      method: external_exports.enum(["automatic", "mcp-form-elicitation", "project-preauthorization-or-mcp-form"]),
+      preauthorizedProjectCount: count.optional()
+    }).strict(),
     bridgeLimitations: external_exports.object({
       interactiveReplies: external_exports.object({ available: external_exports.literal(false), reason: external_exports.string() }).strict(),
       preflightTokenCount: external_exports.object({ available: external_exports.literal(false), exactTokens: external_exports.null(), reason: external_exports.string() }).strict()
@@ -43855,9 +43869,9 @@ function sandboxPolicyConfirmation(previous, proposed) {
   return "Atualizar o teto global do sandbox para testes Windows LPAC?\nPol\xEDtica anterior (vers\xE3o e digest): " + describe3(previous) + "\nProposta normalizada (vers\xE3o e digest): " + describe3(proposed) + "\nA confirma\xE7\xE3o humana autoriza apenas este teto global; o agente que chama o MCP seleciona concess\xF5es menores por teste e o Gemini delegado n\xE3o pode autoriz\xE1-las nem alter\xE1-las.\nRede habilitada concede internet e conex\xF5es de LAN de entrada e sa\xEDda ao processo LPAC. localhost continua sujeito \xE0s restri\xE7\xF5es do sistema operacional. Processos-filho e o limite de sa\xEDda acima ser\xE3o aplicados como teto. Confirme apenas os caminhos can\xF4nicos, capacidades e limite de sa\xEDda revisados.";
 }
 function createMcpServer(adapter, tasks) {
-  const server = new McpServer({ name: "antigravity-mcp-bridge", version: "0.8.0" }, {
-    instructions: "For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. On Windows, a human authorizes global sandbox ceilings; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; exact projects authorized in server configuration or remembered through human form confirmation skip repeated human forms. All other projects require MCP form elicitation. The original project changes only through confirmed integration."
-  });
+  const approvalInstructions = tasks.approvalMode === "auto" ? "On Windows, global sandbox ceilings default to automatic authorization for validated proposals in automatic mode (BRIDGE_APPROVAL_MODE=auto), or require human form confirmation when configured with BRIDGE_APPROVAL_MODE=ask; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; under default automatic approval mode (BRIDGE_APPROVAL_MODE=auto), verified integration is authorized automatically without human forms. When configured with BRIDGE_APPROVAL_MODE=ask, human confirmation forms are always required even for previously preauthorized or remembered project roots. The original project changes only through verified integration." : "On Windows, human confirmation forms are always required to update global sandbox ceilings under BRIDGE_APPROVAL_MODE=ask; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; human confirmation forms are always required under BRIDGE_APPROVAL_MODE=ask, even if projects were previously preauthorized in server configuration or remembered. The original project changes only through confirmed integration.";
+  const instructions = "For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. " + approvalInstructions;
+  const server = new McpServer({ name: "antigravity-mcp-bridge", version: "0.8.0" }, { instructions });
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   const configuredRoleSchema = external_exports.enum(tasks.roles().map((role) => role.name));
@@ -43868,16 +43882,29 @@ function createMcpServer(adapter, tasks) {
       description: "Inspect installed agy version, authentication and supported capabilities.",
       inputSchema: {},
       annotations: readOnly
-    }, safe(async () => ({
-      ...await adapter.health(),
-      toolProfile: tasks.toolProfile,
-      windowsRuntime: await tasks.windowsRuntimeStatus(),
-      bridgeLimitations: {
-        interactiveReplies: { available: false, reason: "The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures." },
-        preflightTokenCount: { available: false, exactTokens: null, reason: "No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts." }
-      },
-      integrationApproval: { available: toolEnabled(tasks.toolProfile, "antigravity_integrate") && (Boolean(server.server.getClientCapabilities()?.elicitation?.form) || tasks.preauthorizedProjectCount > 0), method: tasks.preauthorizedProjectCount ? "project-preauthorization-or-mcp-form" : "mcp-form-elicitation", preauthorizedProjectCount: tasks.preauthorizedProjectCount }
-    })));
+    }, safe(async () => {
+      const hasElicitation = Boolean(server.server.getClientCapabilities()?.elicitation?.form);
+      const integrateEnabled = toolEnabled(tasks.toolProfile, "antigravity_integrate");
+      const autoMode = tasks.approvalMode === "auto";
+      const available = integrateEnabled && (autoMode || hasElicitation);
+      const method = autoMode ? "automatic" : "mcp-form-elicitation";
+      return {
+        ...await adapter.health(),
+        toolProfile: tasks.toolProfile,
+        approvalMode: tasks.approvalMode,
+        windowsRuntime: await tasks.windowsRuntimeStatus(),
+        bridgeLimitations: {
+          interactiveReplies: { available: false, reason: "The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures." },
+          preflightTokenCount: { available: false, exactTokens: null, reason: "No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts." }
+        },
+        integrationApproval: {
+          available,
+          mode: tasks.approvalMode,
+          method,
+          preauthorizedProjectCount: tasks.preauthorizedProjectCount
+        }
+      };
+    }));
   if (toolEnabled(tasks.toolProfile, "antigravity_list_models"))
     server.registerTool("antigravity_list_models", {
       outputSchema: outputSchemas.antigravity_list_models,
@@ -43930,10 +43957,10 @@ function createMcpServer(adapter, tasks) {
     server.registerTool("antigravity_set_sandbox_policy", {
       outputSchema: outputSchemas.antigravity_set_sandbox_policy,
       title: "Set Windows test sandbox policy",
-      description: "Propose a normalized global ceiling for bridge-owned Windows LPAC tests. A human must confirm the exact prior and proposed digests through an MCP form.",
+      description: "Propose a normalized global ceiling for bridge-owned Windows LPAC tests. In automatic mode (default), validated proposals are applied automatically. With BRIDGE_APPROVAL_MODE=ask, a human must confirm the exact prior and proposed digests through an MCP form.",
       inputSchema: { policy: sandboxPolicySchema, expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
       annotations: action
-    }, async ({ policy, expectedSha256 }) => safe(() => tasks.setSandboxPolicy(policy, expectedSha256, async (previous, proposed) => {
+    }, async ({ policy, expectedSha256 }) => safe(() => tasks.setSandboxPolicy(policy, expectedSha256, tasks.approvalMode === "auto" ? void 0 : async (previous, proposed) => {
       if (!server.server.getClientCapabilities()?.elicitation?.form) {
         throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to update the sandbox policy");
       }
@@ -44224,10 +44251,10 @@ function createMcpServer(adapter, tasks) {
     server.registerTool("antigravity_integrate", {
       outputSchema: outputSchemas.antigravity_integrate,
       title: "Integrate reviewed changes",
-      description: "Apply a currently verified patch bound to its preview SHA-256. The human confirmation form can remember authorization for this exact project. Configured or remembered projects skip repeated forms. Caller text or tool arguments cannot grant authorization.",
+      description: "Apply a currently verified patch bound to its preview SHA-256. In automatic mode (default), verified integration is authorized automatically. With BRIDGE_APPROVAL_MODE=ask, an MCP confirmation form is always required even for previously authorized or remembered roots. Caller text or tool arguments cannot grant authorization.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
       annotations: action
-    }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, async (preview) => {
+    }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, tasks.approvalMode === "auto" ? void 0 : async (preview) => {
       if (!server.server.getClientCapabilities()?.elicitation?.form) {
         throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
       }
@@ -44241,16 +44268,12 @@ SHA-256 revisado: ${preview.sha256}
 ${files}
 A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch e os testes.`,
         requestedSchema: { type: "object", properties: {
-          confirm: { type: "boolean", title: "Confirmo a integra\xE7\xE3o deste patch", default: false },
-          rememberProject: { type: "boolean", title: "N\xE3o pedir novamente neste projeto", description: "Autoriza futuras integra\xE7\xF5es revisadas somente nesta raiz de projeto. A escolha fica salva localmente e pode ser revogada.", default: false }
+          confirm: { type: "boolean", title: "Confirmo a integra\xE7\xE3o deste patch", default: false }
         }, required: ["confirm"] }
       }, { timeout: 3e5 }).catch(() => {
         throw new BridgeError("APPROVAL_FAILED", "Client confirmation failed or timed out; no changes were applied");
       });
-      return {
-        confirmed: answer.action === "accept" && answer.content?.confirm === true,
-        rememberProject: answer.action === "accept" && answer.content?.rememberProject === true
-      };
+      return { confirmed: answer.action === "accept" && answer.content?.confirm === true };
     }))());
   if (toolEnabled(tasks.toolProfile, "antigravity_discard"))
     server.registerTool("antigravity_discard", {
@@ -46783,7 +46806,7 @@ import path18 from "node:path";
 import { createHash as createHash18, randomUUID as randomUUID8 } from "node:crypto";
 import { spawn as spawn5 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readFile as readFile4, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
+import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
 import os6 from "node:os";
 import path17 from "node:path";
 import { setTimeout as delay2 } from "node:timers/promises";
@@ -47233,6 +47256,63 @@ function processAlive3(pid) {
     return error62.code !== "ESRCH";
   }
 }
+var lockRecordVersion = 1;
+var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function sameLockFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size;
+}
+function parsePreparationLock(content) {
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return void 0;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+    return void 0;
+  const keys2 = Object.keys(parsed);
+  if (keys2.length === 1 && keys2[0] === "pid") {
+    const pid = parsed.pid;
+    if (Number.isSafeInteger(pid) && typeof pid === "number" && pid >= 1) {
+      return { pid, isV1: false };
+    }
+    return void 0;
+  }
+  if (keys2.length === 3 && "v" in parsed && "pid" in parsed && "nonce" in parsed) {
+    const record2 = parsed;
+    if (record2.v !== lockRecordVersion)
+      return void 0;
+    const pid = record2.pid;
+    if (!Number.isSafeInteger(pid) || typeof pid !== "number" || pid < 1)
+      return void 0;
+    if (typeof record2.nonce !== "string" || !uuidPattern.test(record2.nonce))
+      return void 0;
+    return { pid, isV1: true };
+  }
+  return void 0;
+}
+async function readBoundedLockFile(handle, expectedStat, expectedBytes, limit) {
+  const openedStat = await handle.stat();
+  if (!openedStat.isFile() || openedStat.isSymbolicLink() || !sameLockFile(openedStat, expectedStat)) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock file descriptor is invalid");
+  }
+  const buffer = Buffer.alloc(Math.min(limit, expectedBytes + 1));
+  let totalRead = 0;
+  while (totalRead < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, totalRead, buffer.length - totalRead, totalRead);
+    if (bytesRead === 0)
+      break;
+    totalRead += bytesRead;
+  }
+  if (totalRead !== expectedBytes) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock file size mismatch");
+  }
+  const afterReadStat = await handle.stat();
+  if (!sameLockFile(afterReadStat, expectedStat)) {
+    fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock changed while reading");
+  }
+  return buffer.subarray(0, totalRead).toString("utf8");
+}
 async function recoverDeadPreparationLock(file3) {
   await inspectReparsePoints([file3]);
   const before = await lstat8(file3).catch((error62) => {
@@ -47242,20 +47322,37 @@ async function recoverDeadPreparationLock(file3) {
   });
   if (!before)
     return true;
-  if (!before.isFile() || before.isSymbolicLink() || before.nlink > 1 || Number(before.size) > 512) {
+  if (!before.isFile() || before.isSymbolicLink() || Number(before.size) <= 0 || Number(before.size) > 512) {
     fail("PORTABLE_NODE_BUSY", "Portable Node preparation lock is not safe to recover");
   }
-  let owner;
+  const handle = await open5(file3, constants2.O_RDONLY).catch((error62) => {
+    if (error62.code === "ENOENT")
+      return void 0;
+    throw error62;
+  });
+  if (!handle)
+    return true;
+  let content;
   try {
-    owner = JSON.parse(await readFile4(file3, "utf8"));
-  } catch {
+    content = await readBoundedLockFile(handle, before, Number(before.size), 513);
+  } catch (error62) {
+    fail("PORTABLE_NODE_BUSY", error62 instanceof Error ? error62.message : "Portable Node preparation lock is not safe to recover");
+  } finally {
+    await handle.close();
+  }
+  const record2 = parsePreparationLock(content);
+  if (!record2) {
     fail("PORTABLE_NODE_BUSY", "Portable Node preparation lock owner is unknown");
   }
-  const pid = typeof owner === "object" && owner !== null ? owner.pid : void 0;
-  if (!Number.isSafeInteger(pid) || typeof pid !== "number" || pid < 1 || processAlive3(pid))
+  if (!record2.isV1 && before.nlink > 1) {
+    fail("PORTABLE_NODE_BUSY", "Portable Node preparation lock is not safe to recover");
+  }
+  if (processAlive3(record2.pid))
     return false;
   const after = await lstat8(file3).catch(() => void 0);
-  if (!after || !sameFile(before, after))
+  if (!after || !sameLockFile(before, after))
+    return false;
+  if (!record2.isV1 && after.nlink !== before.nlink)
     return false;
   await unlink2(file3);
   return true;
@@ -47264,8 +47361,12 @@ async function acquirePreparationLock(root, descriptor) {
   const file3 = path17.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
+      const nonce = randomUUID8();
+      const record2 = { v: lockRecordVersion, pid: process.pid, nonce };
+      const lockPayload = JSON.stringify(record2);
+      const expectedSize = Buffer.byteLength(lockPayload, "utf8");
       const handle = await open5(file3, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
-      await handle.writeFile(JSON.stringify({ pid: process.pid }));
+      await handle.writeFile(lockPayload);
       const expected = await handle.stat();
       await handle.close();
       return async () => {
@@ -47277,8 +47378,32 @@ async function acquirePreparationLock(root, descriptor) {
         });
         if (!current)
           fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock disappeared before release");
-        if (!sameFile(current, expected))
+        if (!current.isFile() || current.isSymbolicLink() || !sameLockFile(current, expected)) {
           fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock was replaced before release");
+        }
+        const readHandle = await open5(file3, constants2.O_RDONLY).catch((error62) => {
+          if (error62.code === "ENOENT") {
+            fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock disappeared before release");
+          }
+          throw error62;
+        });
+        try {
+          const readContent = await readBoundedLockFile(readHandle, expected, expectedSize, 513);
+          if (readContent !== lockPayload) {
+            fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock was replaced before release");
+          }
+        } finally {
+          await readHandle.close();
+        }
+        const finalPathStat = await lstat8(file3).catch((error62) => {
+          if (error62.code === "ENOENT") {
+            fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock disappeared before release");
+          }
+          throw error62;
+        });
+        if (!finalPathStat.isFile() || finalPathStat.isSymbolicLink() || !sameLockFile(finalPathStat, expected)) {
+          fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock was replaced before release");
+        }
         await unlink2(file3);
       };
     } catch (error62) {
@@ -48120,6 +48245,9 @@ var TaskManager = class {
   get toolProfile() {
     return this.config.toolProfile;
   }
+  get approvalMode() {
+    return this.config.approvalMode;
+  }
   integrationRoots() {
     return [.../* @__PURE__ */ new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.loadIntegrationRoots()])];
   }
@@ -48144,10 +48272,12 @@ var TaskManager = class {
       throw new BridgeError("SANDBOX_POLICY_CHANGED", "Reload the current sandbox policy before proposing an update");
     const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
     const proposed = { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
-    if (!confirm)
-      throw new BridgeError("APPROVAL_REQUIRED", "Sandbox policy updates require confirmation through the MCP client");
-    if (!await confirm(previous, proposed))
-      throw new BridgeError("APPROVAL_DENIED", "Sandbox policy update was not confirmed");
+    if (this.config.approvalMode === "ask") {
+      if (!confirm)
+        throw new BridgeError("APPROVAL_REQUIRED", "Sandbox policy updates require confirmation through the MCP client");
+      if (!await confirm(previous, proposed))
+        throw new BridgeError("APPROVAL_DENIED", "Sandbox policy update was not confirmed");
+    }
     const release = this.state.acquire("sandbox-policy");
     try {
       const current = this.state.loadSandboxPolicy();
@@ -49095,12 +49225,12 @@ var TaskManager = class {
         throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
       if (reviewed.sha256 !== expectedSha256)
         throw new BridgeError("REVIEW_CHANGED", "Preview the current patch before requesting confirmation");
-      const preauthorized = this.integrationPreauthorized(taskId);
-      if (!preauthorized && !confirm)
-        throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation or a configured project preauthorization");
+      const auto = this.config.approvalMode === "auto";
+      if (!auto && !confirm)
+        throw new BridgeError("APPROVAL_REQUIRED", "Integration requires confirmation");
       await this.requireVerification(task2, expectedSha256);
-      const approval = preauthorized ? void 0 : await confirm(reviewed);
-      if (!preauthorized && approval !== true && (typeof approval !== "object" || approval?.confirmed !== true)) {
+      const approval = auto ? void 0 : await confirm(reviewed);
+      if (!auto && approval !== true && (typeof approval !== "object" || approval?.confirmed !== true)) {
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
       }
       const releaseSource = this.state.acquire("source-" + createHash20("sha256").update(task2.record.workingDirectory).digest("hex"));
@@ -49113,7 +49243,7 @@ var TaskManager = class {
         for (const related of this.tasks.values())
           if (related.project === task2.project) {
             related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
-            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: preauthorized ? integrationPreauthorized(task2.record.workingDirectory, this.config.preauthorizedIntegrationRoots) ? "configured-project" : "remembered-project" : "mcp-elicitation" });
+            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: auto ? "auto" : "mcp-elicitation" });
           }
         if (typeof approval === "object" && approval.rememberProject === true) {
           try {

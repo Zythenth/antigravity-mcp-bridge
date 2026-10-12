@@ -17,7 +17,7 @@ import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, 
 import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
 import { terminateSubprocess, redactDiagnostic } from './subprocess.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
-import type { Config } from './config.js';
+import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
 import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
@@ -116,6 +116,7 @@ export class TaskManager {
   }
 
   get toolProfile() { return this.config.toolProfile; }
+  get approvalMode(): ApprovalMode { return this.config.approvalMode; }
   private integrationRoots() { return [...new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.loadIntegrationRoots()])]; }
   get preauthorizedProjectCount() { return this.integrationRoots().length; }
   integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.integrationRoots()); }
@@ -130,8 +131,10 @@ export class TaskManager {
     if (previous.sha256 !== expectedSha256) throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Reload the current sandbox policy before proposing an update');
     const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
     const proposed: SandboxPolicySnapshot = { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
-    if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Sandbox policy updates require confirmation through the MCP client');
-    if (!await confirm(previous, proposed)) throw new BridgeError('APPROVAL_DENIED', 'Sandbox policy update was not confirmed');
+    if (this.config.approvalMode === 'ask') {
+      if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Sandbox policy updates require confirmation through the MCP client');
+      if (!await confirm(previous, proposed)) throw new BridgeError('APPROVAL_DENIED', 'Sandbox policy update was not confirmed');
+    }
     const release = this.state.acquire('sandbox-policy');
     try {
       const current = this.state.loadSandboxPolicy();
@@ -851,11 +854,11 @@ export class TaskManager {
       const reviewed = await previewProjectCopy(task.project!, this.config);
       if (!reviewed.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');
       if (reviewed.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before requesting confirmation');
-      const preauthorized = this.integrationPreauthorized(taskId);
-      if (!preauthorized && !confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation or a configured project preauthorization');
+      const auto = this.config.approvalMode === 'auto';
+      if (!auto && !confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Integration requires confirmation');
       await this.requireVerification(task, expectedSha256);
-      const approval = preauthorized ? undefined : await confirm!(reviewed);
-      if (!preauthorized && approval !== true && (typeof approval !== 'object' || approval?.confirmed !== true)) {
+      const approval = auto ? undefined : await confirm!(reviewed);
+      if (!auto && approval !== true && (typeof approval !== 'object' || approval?.confirmed !== true)) {
         throw new BridgeError('APPROVAL_DENIED', 'Integration was not confirmed');
       }
       const releaseSource = this.state.acquire('source-' + createHash('sha256').update(task.record.workingDirectory).digest('hex'));
@@ -866,9 +869,7 @@ export class TaskManager {
         const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();
-          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: preauthorized
-            ? integrationPreauthorized(task.record.workingDirectory, this.config.preauthorizedIntegrationRoots) ? 'configured-project' : 'remembered-project'
-            : 'mcp-elicitation' });
+          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: auto ? 'auto' : 'mcp-elicitation' });
         }
         if (typeof approval === 'object' && approval.rememberProject === true) {
           try { this.state.rememberIntegrationRoot(task.record.workingDirectory); }

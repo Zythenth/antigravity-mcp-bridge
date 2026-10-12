@@ -56,7 +56,7 @@ async function verifyTask(tasks: TaskManager, taskId: string, sha256: string) {
 
 test('a denied concurrent resume preserves the retained task while another server awaits approval', async () => {
   const dir = await repository();
-  const { adapter, tasks, config } = setup([mockPath], { MAX_RETAINED_TASKS: '1' });
+  const { adapter, tasks, config } = setup([mockPath], { MAX_RETAINED_TASKS: '1', BRIDGE_APPROVAL_MODE: 'ask' });
   try {
     await adapter.discover();
     const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
@@ -82,7 +82,7 @@ test('a denied concurrent resume preserves the retained task while another serve
 
 test('integration requires confirmation and rechecks the patch after confirmation', async () => {
   const dir = await repository();
-  const { adapter, tasks } = setup();
+  const { adapter, tasks } = setup([mockPath], { BRIDGE_APPROVAL_MODE: 'ask' });
   try {
     await adapter.discover();
     const task = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
@@ -140,7 +140,7 @@ test('CLI success and fabricated reviews cannot bypass acceptance verification',
 
 test('verification detects changed ignored evidence even when the patch hash stays equal', async () => {
   const dir = await repository();
-  const { adapter, tasks } = setup();
+  const { adapter, tasks } = setup([mockPath], { BRIDGE_APPROVAL_MODE: 'ask' });
   try {
     await writeFile(path.join(dir, '.gitignore'), 'generated.txt\n');
     await adapter.discover();

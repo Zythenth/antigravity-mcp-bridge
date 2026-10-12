@@ -34,10 +34,10 @@ class InboxAdapter extends CliAdapter {
     return child as unknown as ChildProcessWithoutNullStreams;
   }
 }
-async function fixture(hold = true) {
+async function fixture(hold = true, configOverrides: Record<string, string> = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-inbox-test-'));
   const source = path.join(directory, 'source'); execFileSync('git', ['init', '--quiet', source]); await writeFile(path.join(source, 'source.txt'), 'source');
-  const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TEST_EXECUTOR: 'agy' });
+  const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...configOverrides });
   const adapter = new InboxAdapter(config, hold); const managers: TaskManager[] = [new TaskManager(adapter, config)]; const tasks = managers[0]!;
   return { source, config, adapter, tasks, managers, async close() {
     for (const manager of managers) await manager.shutdown();
@@ -129,7 +129,7 @@ test('uncertain interrupted dispatch fails without replay and known correlation 
 
 
 test('a scoped integration review defers queued input and denial resumes it without changing the original', async () => {
-  const f = await fixture(false);
+  const f = await fixture(false, { BRIDGE_APPROVAL_MODE: 'ask' });
   let releaseConfirmation: ((value: boolean) => void) | undefined;
   let integration: Promise<unknown> | undefined;
   try {
@@ -277,8 +277,8 @@ test('persisted duplicate message IDs and dangling dispatch claims are rejected'
 });
 
 
-test('project preauthorization skips only the repeated form and keeps hash, review and mode gates', async () => {
-  const f = await fixture(false);
+test('project preauthorization does not bypass ask mode and keeps hash, review and mode gates', async () => {
+  const f = await fixture(false, { BRIDGE_APPROVAL_MODE: 'ask' });
   try {
     const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed'); await delay(10);
     await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
@@ -286,18 +286,19 @@ test('project preauthorization skips only the repeated form and keeps hash, revi
     await assert.rejects(f.tasks.integrate(id, preview.sha256), { code: 'APPROVAL_REQUIRED' });
     const authorized = new TaskManager(f.adapter, { ...f.config, preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(JSON.stringify([f.source])) }); f.managers.push(authorized);
     assert.equal(authorized.integrationPreauthorized(id), true);
-    await assert.rejects(authorized.integrate(id, '0'.repeat(64)), { code: 'REVIEW_CHANGED' });
-    await assert.rejects(authorized.integrate(id, preview.sha256), { code: 'VERIFICATION_REQUIRED' });
+    await assert.rejects(authorized.integrate(id, '0'.repeat(64), async () => true), { code: 'REVIEW_CHANGED' });
+    await assert.rejects(authorized.integrate(id, preview.sha256, async () => true), { code: 'VERIFICATION_REQUIRED' });
     await authorized.verify(id, preview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'changed', explanation: 'Observed fixture content' }]);
+    await assert.rejects(authorized.integrate(id, preview.sha256), { code: 'APPROVAL_REQUIRED' });
     let prompted = false;
-    await authorized.integrate(id, preview.sha256, async () => { prompted = true; return false; });
-    assert.equal(prompted, false);
+    await authorized.integrate(id, preview.sha256, async () => { prompted = true; return true; });
+    assert.equal(prompted, true);
     assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'changed');
   } finally { await f.close(); }
 });
 
-test('only a successful, explicitly remembered integration authorizes the next task after restart', async () => {
-  const f = await fixture(false);
+test('remembered integration requires confirmation on the next task after restart in ask mode', async () => {
+  const f = await fixture(false, { BRIDGE_APPROVAL_MODE: 'ask' });
   try {
     const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed');
     await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');
@@ -319,20 +320,23 @@ test('only a successful, explicitly remembered integration authorizes the next t
     await until(() => restarted.status(next.taskId).status === 'completed');
     await writeFile(path.join(restarted.status(next.taskId).copyDirectory!, 'source.txt'), 'next');
     const nextPreview = await restarted.preview(next.taskId);
-    await assert.rejects(restarted.integrate(next.taskId, '0'.repeat(64)), { code: 'REVIEW_CHANGED' });
-    await assert.rejects(restarted.integrate(next.taskId, nextPreview.sha256), { code: 'VERIFICATION_REQUIRED' });
+    await assert.rejects(restarted.integrate(next.taskId, '0'.repeat(64), async () => true), { code: 'REVIEW_CHANGED' });
+    await assert.rejects(restarted.integrate(next.taskId, nextPreview.sha256, async () => true), { code: 'VERIFICATION_REQUIRED' });
     await restarted.verify(next.taskId, nextPreview.sha256, [{ criterionId: 'source', verdict: 'passed', path: 'source.txt', line: 1, quote: 'next', explanation: 'Observed fixture content' }]);
-    await restarted.integrate(next.taskId, nextPreview.sha256, async () => { assert.fail('The remembered project must not prompt again'); });
+    await assert.rejects(restarted.integrate(next.taskId, nextPreview.sha256), { code: 'APPROVAL_REQUIRED' });
+    let promptedNext = false;
+    await restarted.integrate(next.taskId, nextPreview.sha256, async () => { promptedNext = true; return true; });
+    assert.equal(promptedNext, true);
     assert.equal(await readFile(path.join(f.source, 'source.txt'), 'utf8'), 'next');
     assert.equal(f.tasks.preauthorizedProjectCount, 1);
     assert.equal(restarted.events.read(next.taskId).events.some(event => event.type === 'copy.integrated' &&
-      (event.data as { approvalSource?: string }).approvalSource === 'remembered-project'), true);
+      (event.data as { approvalSource?: string }).approvalSource === 'mcp-elicitation'), true);
   } finally { await f.close(); }
 });
 
 test('one-time integration stays one-time and preference failures report that the patch was applied', async t => {
   for (const rememberProject of [false, true]) await t.test(String(rememberProject), async subtest => {
-    const f = await fixture(false);
+    const f = await fixture(false, { BRIDGE_APPROVAL_MODE: 'ask' });
     try {
       const id = await runFirst(f, 'write'); await until(() => f.tasks.status(id).status === 'completed');
       await writeFile(path.join(f.tasks.status(id).copyDirectory!, 'source.txt'), 'changed');

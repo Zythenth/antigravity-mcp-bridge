@@ -19,7 +19,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   let client: Client | undefined;
   let decision: 'accept' | 'decline' | 'cancel' = 'accept';
   let confirmation = false;
-  let rememberProject = false;
+
   const confirmations: string[] = [];
   async function connect(withElicitation = false): Promise<Client> {
     const next = new Client({ name: 'bridge-contract-test', version: '1' }, { capabilities: withElicitation ? { elicitation: { form: {} } } : {} });
@@ -28,12 +28,12 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
       if (request.params.mode !== 'form') throw new Error('Unexpected elicitation mode');
       confirmations.push(request.params.message);
       assert.equal(request.params.requestedSchema.properties.confirm?.default, false);
-      assert.equal(request.params.requestedSchema.properties.rememberProject?.default, false);
-      return { action: decision, ...(decision === 'accept' ? { content: { confirm: confirmation, rememberProject } } : {}) };
+      assert.equal(request.params.requestedSchema.properties.rememberProject, undefined);
+      return { action: decision, ...(decision === 'accept' ? { content: { confirm: confirmation } } : {}) };
     });
     await next.connect(new StdioClientTransport({ command: process.execPath,
       args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
-      env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(dir, 'state') }, stderr: 'pipe' }));
+      env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(dir, 'state') }, stderr: 'pipe' }));
     const tools = await next.listTools();
     assert.deepEqual(tools.tools.map(tool => tool.name).sort(), Object.keys(outputSchemas).sort());
     for (const tool of tools.tools) {
@@ -128,7 +128,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal(consumption.byModel[0].model, 'mock-pro');
     await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
-    rememberProject = true;
+
     for (const response of ['decline', 'cancel', 'accept'] as const) {
       decision = response;
       const denied = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.sha256 } });
@@ -138,7 +138,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     }
     confirmation = true;
     await call('antigravity_integrate', { taskId, expectedSha256: preview.sha256 });
-    assert.equal((await call('antigravity_health')).integrationApproval.preauthorizedProjectCount, 1);
+    assert.equal((await call('antigravity_health')).integrationApproval.preauthorizedProjectCount, 0);
     assert.equal(confirmations.length, 4);
     assert.ok(confirmations.every(message => message.includes(preview.sha256) && message.includes(JSON.stringify(canonicalSource))));
     assert.equal(await readFile(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
@@ -147,9 +147,9 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     await client.close();
     client = await connect();
     const approval = (await call('antigravity_health')).integrationApproval;
-    assert.equal(approval.available, true);
-    assert.equal(approval.preauthorizedProjectCount, 1);
-    await rm(path.join(dir, 'state', 'integration-approvals.json'));
+    assert.equal(approval.available, false);
+    assert.equal(approval.preauthorizedProjectCount, 0);
+
     assert.equal((await call('antigravity_health')).integrationApproval.available, false);
   } finally {
     await client?.close();
