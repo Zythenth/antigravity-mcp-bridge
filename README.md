@@ -7,14 +7,16 @@ Codex -- MCP stdio --> bridge -- subprocesso --> agy oficial --> Antigravity
 Codex <-- eventos e resultado estruturados <-- bridge <-- stdout/stderr
 ```
 
-O bridge não acessa endpoints privados, cookies ou arquivos de autenticação. A comunicação com o serviço é feita pelo próprio `agy`.
+O bridge não acessa endpoints privados, cookies ou os armazenamentos de autenticação do CLI. Para candidatos a arquivos do projeto, o bridge realiza apenas inspeção local durante o preflight preventivo antes da cópia. A comunicação com o serviço é feita pelo próprio `agy`.
 
 ## Requisitos
 
 - Node.js 24 ou mais recente e npm. Esse requisito inicia o servidor; no Windows LPAC, ele não garante a compatibilidade de todos os subprocessos Node.
 - Git instalado e disponível no `PATH`.
-- [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/overview/) instalado e disponível no `PATH`. Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
-- Autenticação concluída no `agy` interativo. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
+- [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/install/) instalado e disponível no `PATH` (fonte primária de instalação). Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
+- Autenticação oficial concluída no `agy`. O CLI gerencia credenciais por meio dos mecanismos nativos do sistema operacional: Windows Credential Manager, macOS Keychain ou Linux Secret Service (via D-Bus). O bridge preserva diretórios de perfil e configuração, sessão de segurança, D-Bus, proxy, certificados, `GEMINI_API_KEY` e `GOOGLE_GEMINI_BASE_URL`. Variáveis de Google Application Default Credentials (ADC) e de ambientes corporativos (`GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, `GOOGLE_CLOUD_UNIVERSE_DOMAIN`) são preservadas no ambiente por compatibilidade; o fluxo Enterprise não foi validado ponta a ponta. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
+
+A descoberta (`discover`) do CLI executa `--version` e `--help`, exigindo exit code 0 em ambas as chamadas, saída não vazia e anúncio obrigatório das capacidades `stream-json` e `--sandbox`. Se o executável não for encontrado, a permissão for negada, a sondagem falhar ou o CLI não for compatível, o bridge emite os diagnósticos `AGY_NOT_FOUND`, `AGY_PERMISSION_DENIED`, `AGY_PROBE_FAILED` ou `AGY_INCOMPATIBLE`.
 
 O bridge foi validado com `agy` 1.3.2 e `@modelcontextprotocol/sdk` 1.30.1. As tarefas delegadas exigem que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. No Windows, `antigravity_test` usa por padrão o executor local do bridge em AppContainer/LPAC; nos demais sistemas, usa o sandbox oficial do `agy`.
 
@@ -473,9 +475,13 @@ Passe `model: null` para Auto: por tarefa, ignora os padrões do bridge; em `ant
 
 `antigravity_resume` usa o `conversation_id` de uma tarefa concluída, inclusive após reinício, e reutiliza sua cópia isolada. Use `antigravity_tasks` para recuperar IDs e `antigravity_sessions` para consultar sessões persistidas. Execuções interrompidas não são repetidas automaticamente: recebem `SERVER_RESTARTED` quando o processo anterior já terminou. Se o PID registrado ainda estiver vivo, a cópia fica bloqueada com `ORPHAN_PROCESS_RUNNING`; o bridge não encerra processos recuperados apenas por PID. Tarefas de outro servidor ativo podem ser acompanhadas, mas devem ser canceladas no servidor que as iniciou. Locks locais impedem uso simultâneo da mesma cópia. O cancelamento encerra o subprocesso local; alterações parciais na cópia podem permanecer e devem ser revisadas.
 
+Em cancelamentos e timeouts, a primeira intenção registrada prevalece (`TASK_CANCELLED` ou `TASK_TIMEOUT`), acionando o encerramento do processo e descendentes, sem garantia perfeita para processos que escapem do grupo de processos ou de permissões do sistema operacional. Diagnósticos estruturados diferenciam falhas de execução e ciclo de vida: `AGY_NOT_FOUND` (executável ausente), `AGY_PERMISSION_DENIED` (acesso negado ao binário), `AGY_PROBE_FAILED` (falha na sondagem inicial), `AGY_INCOMPATIBLE` (falta de suporte a `stream-json` ou `--sandbox`), `CLI_INPUT_FAILED` (falhas de stdin, EPIPE ou EOF prematuro), `AGY_IO_FAILED` (erros de I/O em streams) e `AGY_PROCESS_FAILED` (saída anômala do processo). Mensagens de erro de ferramentas externas podem conter segredos desconhecidos; o bridge aplica redaction a formas e padrões conhecidos de erro e suas operações não adicionam valores de credenciais aos logs nem passam tokens como argumentos, sem prometer ausência absoluta.
+
 ## Cópia, revisão e integração
 
 Antes de chamar `agy`, o bridge cria uma cópia temporária dos arquivos elegíveis e mantém um baseline Git separado da cópia. O CLI recebe a cópia como diretório de trabalho e a opção `--sandbox`. O projeto original só muda por `antigravity_integrate`, depois da revisão do patch. O bridge não faz commit, merge nem push.
+
+Antes de copiar, o bridge executa um preflight preventivo de segredos APÓS as exclusões do Git e a seleção por `includePaths`, e ANTES da cópia dos arquivos. O preflight bloqueia `.env`, `.env.local` e outras variantes `.env.*` (exceto `.env.example`, `.env.sample`, `.env.template` e `.env.dist`, que ainda passam por inspeção de conteúdo), `.envrc`, chaves privadas, keystores, autenticação conhecida e padrões de credenciais com alta confiança por conteúdo. Certificados, chaves públicas e fixtures sintéticas para testes permanecem permitidos. O evento `copy.ready` informa `blockedFiles` contendo apenas `path` e `reason` (`SECRET_FILE`, `SECRET_CONTENT`, `SECRET_EXCLUSION`, `UNSAFE_PATH`), nunca expondo o conteúdo do arquivo. O preflight não garante detectar segredos arbitrários em código, formatos desconhecidos ou dados criptografados.
 
 Quando o CLI anuncia `--add-dir` e `--new-project`, o bridge declara a cópia como workspace e cria um projeto CLI separado na primeira execução. A retomada preserva o projeto da conversa. Essas opções não equivalem a uma comprovação de todas as fronteiras do sandbox; permissões negadas continuam sendo respeitadas.
 
@@ -483,7 +489,7 @@ O resultado informa `copyDirectory` e `includedFiles`. Cópias temporárias perm
 
 `antigravity_preview` preserva `files`, `patch` e `sha256` e acrescenta `summary` (totais A/M/D, linhas e arquivos binários), `fileSummaries` (inserções/remoções por caminho) e `tests`. Binários usam `null` nas contagens de linhas. Registros de `antigravity_record_test` têm `source: "client-reported"`: são relatos cujo comando o bridge não executou. Registros capturados por `antigravity_test` indicam o executor que os observou. Cada registro leva hash, data, exit code e saída limitada pela seleção do teste; o padrão é 4.000 caracteres. Resultados antigos recebem `stale: true` quando a evidência já não corresponde aos arquivos atuais. Falhas são preservadas e devem ser apresentadas na revisão.
 
-A cópia aceita até 10.000 arquivos e 256 MiB por padrão. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
+A cópia aceita até 10.000 arquivos e 256 MiB por padrão (`MAX_COPY_FILES` e `MAX_COPY_BYTES`), limites estritamente respeitados durante o scan preliminar e durante a cópia. A seleção é medida antes da criação e os bytes efetivamente copiados são conferidos novamente para detectar crescimento da origem. Qualquer mudança de identidade, tamanho ou hash falha a operação com `SOURCE_CHANGED` ou `CONTEXT_CHANGED`, e a criação da cópia (fork) não omite silenciosamente arquivos de baseline que venham a virar credencial. `includePaths` pode reduzir a seleção. Mais de 100 arquivos alterados gera `CHANGE_LIMIT_EXCEEDED` ao finalizar, revisar ou integrar. O original permanece intacto; reduza a tarefa ou ajuste os limites explicitamente no ambiente do servidor.
 
 ### Executar testes sem Docker
 
@@ -537,6 +543,9 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `BRIDGE_MEMORY_MAX_ENTRY_BYTES` | `65536` | Texto por entrada; até 1 MiB, sem exceder o limite global |
 | `BRIDGE_STATE_DIRECTORY` | `~/.antigravity-mcp-bridge` | Diretório privado de tarefas e sessões |
 | `BRIDGE_DEFAULT_MODEL` | vazio | Modelo inicial, usado quando não há preferência salva |
+| `BRIDGE_SECRET_EXCLUSIONS` | `[]` | Array JSON de padrões relativos de arquivos que devem ficar fora das cópias |
+| `BRIDGE_SECRET_EXCEPTIONS` | `[]` | Array JSON de exceções explícitas à detecção padrão de credenciais; não supera ignores, exclusões personalizadas nem segurança de caminhos |
+| `BRIDGE_ALLOWED_ENV_VARS` | `[]` | Array JSON de nomes exatos adicionais de variáveis permitidas nos subprocessos do CLI |
 | `MAX_COPY_FILES` | `10000` | Máximo de arquivos selecionados para a cópia |
 | `MAX_COPY_BYTES` | `268435456` | Máximo de bytes copiados (256 MiB) |
 | `MAX_CHANGED_FILES` | `100` | Máximo de arquivos alterados para revisão e integração |
@@ -546,7 +555,40 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 
 Entradas e diretórios são validados. Tarefas delegadas usam `spawn` sem shell e exigem `--sandbox`; não passam `--dangerously-skip-permissions`. Testes Windows usam o executor LPAC do bridge por padrão. Não inclua credenciais ou documentos privados nos prompts. Mantenha arquivos sensíveis fora da cópia por regras de ignore e selecione apenas os caminhos necessários com `includePaths`. Consulte a [documentação do sandbox](https://antigravity.google/docs/sandbox/) e [do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
-Erros comuns incluem `AGY_NOT_FOUND`, `AGY_AUTH_REQUIRED`, `MODEL_NOT_AVAILABLE`, `INVALID_WORKING_DIRECTORY`, `QUEUE_FULL` e `AGY_PROCESS_FAILED`. Se houver `AGY_AUTH_REQUIRED`, faça login no `agy` interativo. Se as ferramentas não aparecerem no Codex, confirme a instalação com `codex plugin list --json` e abra uma conversa nova.
+### Padrões de exclusão e exceção de segredos
+
+Os padrões em `BRIDGE_SECRET_EXCLUSIONS` e `BRIDGE_SECRET_EXCEPTIONS` são definidos como um array JSON de strings com caminhos relativos à raiz do projeto. Ambos suportam curingas glob: `*` (segmento individual), `?` (um caractere) e `**` (múltiplos diretórios), sem permitir travessia de diretório (`..`). Nomes sem barra correspondem ao nome base (basename) em qualquer diretório; `**/` e `/**/` correspondem a zero ou mais diretórios intermediários. A comparação é insensível a maiúsculas e minúsculas (case-insensitive).
+
+Prefira exceções restritas a arquivos revisados e sem credenciais reais (como o exemplo sintético `BRIDGE_SECRET_EXCEPTIONS='["fixtures/.env.local"]'`), evitando padrões glob amplos. Exceções explícitas pulam os bloqueios padrão de nome e de conteúdo e exigem cautela.
+
+A ordem de precedência e segurança é estrita:
+
+1. Regras de ignore do Git e verificações de caminhos inseguros (`UNSAFE_PATH`) SEMPRE vencem e têm prioridade máxima sobre qualquer exceção.
+2. Deny explícito (`BRIDGE_SECRET_EXCLUSIONS` gerando `SECRET_EXCLUSION`) sempre vence qualquer exceção (`BRIDGE_SECRET_EXCEPTIONS`).
+3. Exceção explícita (`BRIDGE_SECRET_EXCEPTIONS`) pula os bloqueios padrão de nome (`SECRET_FILE`) e conteúdo (`SECRET_CONTENT`), devendo ser configurada com extremo cuidado.
+
+O preflight preventivo não garante a detecção de segredos arbitrários embutidos em código-fonte, formatos proprietários ou desconhecidos, dados criptografados ou arquivos ofuscados.
+
+### Ambiente do subprocesso do CLI (`cliEnvironment`)
+
+O subprocesso do CLI utiliza um ambiente estritamente filtrado por `cliEnvironment` em vez de herdar o ambiente do host indiscriminadamente. O bridge não registra valores de variáveis de ambiente nem passa tokens como argumentos. A variável `BRIDGE_ALLOWED_ENV_VARS` aceita um array JSON de nomes exatos adicionais para inclusão (opt-in), por exemplo `BRIDGE_ALLOWED_ENV_VARS='["MY_TOOL_SETTING"]'`. Por padrão, nenhuma injeção ou variável arbitrária é permitida; a inclusão de variáveis é estritamente opt-in e não é o comportamento padrão. A correspondência é case-insensitive no Windows e exata (case-sensitive) no Unix/Linux/macOS.
+
+Por padrão, credenciais de provedores e APIs de terceiros (como AWS, GitHub/GH, OpenAI e Stripe) e variáveis de injeção de runtime, bibliotecas dinâmicas ou agentes locais (`NODE_OPTIONS`, `NODE_PATH`, `LD_*`, `DYLD_*`, `SSH_AUTH_SOCK`, `GPG_AGENT_INFO`) são omitidas do subprocesso.
+
+As variáveis padrão permitidas são agrupadas exatamente conforme definido no `cliEnvironment`:
+
+- **Resolução de sistema e executáveis**: `PATH`, `PATHEXT`, `SystemRoot`, `SystemDrive`, `ComSpec`, `WINDIR`, `SHELL`, `TERM`, `COLORTERM`.
+- **Diretórios de usuário e perfil**: `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `HOMEDRIVE`, `HOMEPATH`, `USER`, `LOGNAME`, `USERNAME`.
+- **Diretórios temporários**: `TEMP`, `TMP`, `TMPDIR`.
+- **Localidade, idioma e fuso horário**: `LANG`, `LC_ALL`, `LC_CTYPE`, `LC_MESSAGES`, `TZ`.
+- **Diretórios base XDG e autenticação de sessão / keyring nativo**: `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_RUNTIME_DIR`, `XDG_DATA_DIRS`, `XDG_CONFIG_DIRS`, `DBUS_SESSION_BUS_ADDRESS`, `GNOME_KEYRING_CONTROL`, `GNOME_KEYRING_PID`, `SECURITYSESSIONID`.
+- **Contexto de sessão remota SSH (sem credenciais)**: `SSH_CONNECTION`, `SSH_CLIENT`, `SSH_TTY`.
+- **Configurações de rede e proxy**: `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `http_proxy`, `https_proxy`, `all_proxy`, `no_proxy`.
+- **Certificados SSL/TLS (corporativos e raízes customizadas)**: `SSL_CERT_FILE`, `SSL_CERT_DIR`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS`.
+- **Autenticação oficial Google / Gemini e endpoints customizados**: `GEMINI_API_KEY`, `GOOGLE_GEMINI_BASE_URL`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, `GOOGLE_CLOUD_UNIVERSE_DOMAIN`.
+- **Ambiente Windows, arquitetura e contexto de domínio**: `OS`, `PROCESSOR_ARCHITECTURE`, `PROCESSOR_ARCHITEW6432`, `NUMBER_OF_PROCESSORS`, `ProgramData`, `ProgramFiles`, `ProgramFiles(x86)`, `CommonProgramFiles`, `CommonProgramFiles(x86)`, `USERDOMAIN`, `USERDNSDOMAIN`, `COMPUTERNAME`.
+
+Erros comuns e diagnósticos estruturados incluem `AGY_NOT_FOUND`, `AGY_PERMISSION_DENIED`, `AGY_PROBE_FAILED`, `AGY_INCOMPATIBLE`, `CLI_INPUT_FAILED`, `AGY_IO_FAILED`, `AGY_PROCESS_FAILED`, `TASK_CANCELLED`, `TASK_TIMEOUT`, `AGY_AUTH_REQUIRED`, `MODEL_NOT_AVAILABLE`, `INVALID_WORKING_DIRECTORY` e `QUEUE_FULL`. Se houver `AGY_AUTH_REQUIRED`, faça login no `agy` interativo. Se as ferramentas não aparecerem no Codex, confirme a instalação com `codex plugin list --json` e abra uma conversa nova.
 
 ## Testes
 

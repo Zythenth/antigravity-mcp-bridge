@@ -1,5 +1,18 @@
 # Histórico de versões
 
+## Não publicado
+
+- Descoberta do CLI oficial (`discover`) com validação estrita de exit code 0 para `--version` e `--help`, saída não vazia e verificação de capacidades `stream-json` e `--sandbox`.
+- Diagnósticos estruturados e códigos de encerramento de subprocesso: `AGY_NOT_FOUND`, `AGY_PERMISSION_DENIED`, `AGY_PROBE_FAILED`, `AGY_INCOMPATIBLE`, `CLI_INPUT_FAILED` (stdin fechado, EPIPE ou EOF prematuro), `AGY_IO_FAILED`, `AGY_PROCESS_FAILED`, `TASK_CANCELLED` e `TASK_TIMEOUT`.
+- Prevalência da primeira intenção registrada em cancelamentos e timeouts, acionando o encerramento do processo e descendentes (sem garantir encerramento de processos que escapem do grupo de processos ou de permissões do sistema operacional); redaction preventiva de `stderr` e mensagens de erro conhecidas, sem adicionar credenciais aos logs e sem prometer ausência absoluta de segredos externos desconhecidos.
+- Preflight preventivo de segredos executado após exclusões do Git e `includePaths` e antes da cópia, bloqueando `.env`, `.env.local` e outras variantes `.env.*` (exceto `.env.example`, `.env.sample`, `.env.template` e `.env.dist`, que passam por inspeção de conteúdo), `.envrc`, chaves privadas, keystores, credenciais conhecidas e padrões de alta confiança no conteúdo; certificados, chaves públicas e fixtures de teste sintéticas permanecem permitidos.
+- Configuração de exclusões (`BRIDGE_SECRET_EXCLUSIONS`) e exceções explícitas (`BRIDGE_SECRET_EXCEPTIONS`) como JSON array com suporte a globs (`*`, `?`, `**`), correspondência de basename sem barra e case-insensitive; uso recomendado de exceções restritas a arquivos revisados e sem credenciais reais (ex.: fixture sintética `["fixtures/.env.local"]`), com precedência estrita onde Git ignores e caminhos inseguros sempre vencem, deny explícito vence exceções e exceções pulam bloqueios padrão de nome/conteúdo.
+- Limitações declaradas do preflight, sem garantia de detecção de segredos arbitrários em código-fonte, formatos desconhecidos ou dados criptografados.
+- Relato de `blockedFiles` no evento `copy.ready`, contendo apenas caminho e motivo (`SECRET_FILE`, `SECRET_CONTENT`, `SECRET_EXCLUSION`, `UNSAFE_PATH`) sem expor conteúdo do arquivo.
+- Verificação rigorosa de limites de arquivos e bytes durante scan e cópia, falha com `SOURCE_CHANGED` ou `CONTEXT_CHANGED` em caso de mutação de identidade, tamanho ou hash, e prevenção de omissão silenciosa de baseline que se torne credencial.
+- Ambiente de execução do CLI isolado via `cliEnvironment`, com variáveis padrão permitidas agrupadas, opt-in explícito via `BRIDGE_ALLOWED_ENV_VARS` (ex.: `["MY_TOOL_SETTING"]`, injeção não sendo default) e omissão por padrão de credenciais de provedores e APIs de terceiros (AWS, GitHub, OpenAI, Stripe) e variáveis de injeção/agentes (`NODE_OPTIONS`, `NODE_PATH`, `LD_*`, `DYLD_*`, `SSH_AUTH_SOCK`, `GPG_AGENT_INFO`).
+- Autenticação oficial do `agy` preservada via gerenciadores nativos de credenciais do sistema operacional (Windows Credential Manager, macOS Keychain, Linux Secret Service), variáveis e endpoints Gemini, e variáveis ADC/Enterprise por compatibilidade (fluxo Enterprise não validado ponta a ponta).
+
 ## 0.8.0
 
 - Workflows com intermediários JSON privados, síntese final, herança explícita de arquivos, checkpoints verificáveis e retomada sem repetir trabalho concluído.
