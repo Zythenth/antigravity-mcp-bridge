@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { constants } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, open, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -444,6 +444,70 @@ function processAlive(pid: number): boolean {
   catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
 }
 
+interface PreparationLockRecord {
+  v: 1;
+  pid: number;
+  nonce: string;
+}
+
+const lockRecordVersion = 1;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function sameLockFile(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size;
+}
+
+function parsePreparationLock(content: string): { pid: number; isV1: boolean } | undefined {
+  let parsed: unknown;
+  try { parsed = JSON.parse(content) as unknown; }
+  catch { return undefined; }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined;
+  const keys = Object.keys(parsed);
+
+  // Exact legacy format: ONLY { pid }
+  if (keys.length === 1 && keys[0] === 'pid') {
+    const pid = (parsed as { pid?: unknown }).pid;
+    if (Number.isSafeInteger(pid) && typeof pid === 'number' && pid >= 1) {
+      return { pid, isV1: false };
+    }
+    return undefined;
+  }
+
+  // Exact v1 format: ONLY { v: 1, pid, nonce }
+  if (keys.length === 3 && 'v' in parsed && 'pid' in parsed && 'nonce' in parsed) {
+    const record = parsed as Record<string, unknown>;
+    if (record.v !== lockRecordVersion) return undefined;
+    const pid = record.pid;
+    if (!Number.isSafeInteger(pid) || typeof pid !== 'number' || pid < 1) return undefined;
+    if (typeof record.nonce !== 'string' || !uuidPattern.test(record.nonce)) return undefined;
+    return { pid, isV1: true };
+  }
+
+  return undefined;
+}
+
+async function readBoundedLockFile(handle: Awaited<ReturnType<typeof open>>, expectedStat: Awaited<ReturnType<typeof lstat>>, expectedBytes: number, limit: number): Promise<string> {
+  const openedStat = await handle.stat();
+  if (!openedStat.isFile() || openedStat.isSymbolicLink() || !sameLockFile(openedStat, expectedStat)) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock file descriptor is invalid');
+  }
+  const buffer = Buffer.alloc(Math.min(limit, expectedBytes + 1));
+  let totalRead = 0;
+  while (totalRead < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, totalRead, buffer.length - totalRead, totalRead);
+    if (bytesRead === 0) break;
+    totalRead += bytesRead;
+  }
+  if (totalRead !== expectedBytes) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock file size mismatch');
+  }
+  const afterReadStat = await handle.stat();
+  if (!sameLockFile(afterReadStat, expectedStat)) {
+    fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock changed while reading');
+  }
+  return buffer.subarray(0, totalRead).toString('utf8');
+}
+
 async function recoverDeadPreparationLock(file: string): Promise<boolean> {
   await inspectReparsePoints([file]);
   const before = await lstat(file).catch(error => {
@@ -451,16 +515,41 @@ async function recoverDeadPreparationLock(file: string): Promise<boolean> {
     throw error;
   });
   if (!before) return true;
-  if (!before.isFile() || before.isSymbolicLink() || before.nlink > 1 || Number(before.size) > 512) {
+  if (!before.isFile() || before.isSymbolicLink() || Number(before.size) <= 0 || Number(before.size) > 512) {
     fail('PORTABLE_NODE_BUSY', 'Portable Node preparation lock is not safe to recover');
   }
-  let owner: unknown;
-  try { owner = JSON.parse(await readFile(file, 'utf8')) as unknown; }
-  catch { fail('PORTABLE_NODE_BUSY', 'Portable Node preparation lock owner is unknown'); }
-  const pid = typeof owner === 'object' && owner !== null ? (owner as { pid?: unknown }).pid : undefined;
-  if (!Number.isSafeInteger(pid) || typeof pid !== 'number' || pid < 1 || processAlive(pid)) return false;
+
+  const handle = await open(file, constants.O_RDONLY).catch(error => {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  });
+  if (!handle) return true;
+
+  let content: string;
+  try {
+    content = await readBoundedLockFile(handle, before, Number(before.size), 513);
+  } catch (error) {
+    fail('PORTABLE_NODE_BUSY', error instanceof Error ? error.message : 'Portable Node preparation lock is not safe to recover');
+  } finally {
+    await handle.close();
+  }
+
+  const record = parsePreparationLock(content);
+  if (!record) {
+    fail('PORTABLE_NODE_BUSY', 'Portable Node preparation lock owner is unknown');
+  }
+
+  // Legacy format (pid-only, no v1 marker): only recoverable when nlink === 1
+  if (!record.isV1 && before.nlink > 1) {
+    fail('PORTABLE_NODE_BUSY', 'Portable Node preparation lock is not safe to recover');
+  }
+
+  if (processAlive(record.pid)) return false;
+
   const after = await lstat(file).catch(() => undefined);
-  if (!after || !sameFile(before, after)) return false;
+  if (!after || !sameLockFile(before, after)) return false;
+  if (!record.isV1 && after.nlink !== before.nlink) return false;
+
   await unlink(file);
   return true;
 }
@@ -469,8 +558,12 @@ async function acquirePreparationLock(root: string, descriptor: AvailablePortabl
   const file = path.join(root, '.portable-node-' + descriptor.buildId + '-' + descriptor.assets.node.sha256 + '.lock');
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
+      const nonce = randomUUID();
+      const record: PreparationLockRecord = { v: lockRecordVersion, pid: process.pid, nonce };
+      const lockPayload = JSON.stringify(record);
+      const expectedSize = Buffer.byteLength(lockPayload, 'utf8');
       const handle = await open(file, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-      await handle.writeFile(JSON.stringify({ pid: process.pid }));
+      await handle.writeFile(lockPayload);
       const expected = await handle.stat();
       await handle.close();
       return async () => {
@@ -480,7 +573,35 @@ async function acquirePreparationLock(root: string, descriptor: AvailablePortabl
           throw error;
         });
         if (!current) fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock disappeared before release');
-        if (!sameFile(current, expected)) fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock was replaced before release');
+        if (!current.isFile() || current.isSymbolicLink() || !sameLockFile(current, expected)) {
+          fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock was replaced before release');
+        }
+
+        const readHandle = await open(file, constants.O_RDONLY).catch(error => {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock disappeared before release');
+          }
+          throw error;
+        });
+        try {
+          const readContent = await readBoundedLockFile(readHandle, expected, expectedSize, 513);
+          if (readContent !== lockPayload) {
+            fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock was replaced before release');
+          }
+        } finally {
+          await readHandle.close();
+        }
+
+        const finalPathStat = await lstat(file).catch(error => {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock disappeared before release');
+          }
+          throw error;
+        });
+        if (!finalPathStat.isFile() || finalPathStat.isSymbolicLink() || !sameLockFile(finalPathStat, expected)) {
+          fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node preparation lock was replaced before release');
+        }
+
         await unlink(file);
       };
     } catch (error) {

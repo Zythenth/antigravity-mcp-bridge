@@ -64,9 +64,9 @@ function fixtureDescriptor() {
   return { descriptor, files };
 }
 
-function assetFetch(files: Map<string, Buffer>, onRequest?: () => void): typeof globalThis.fetch {
+function assetFetch(files: Map<string, Buffer>, onRequest?: () => void | Promise<void>): typeof globalThis.fetch {
   return async input => {
-    onRequest?.();
+    await onRequest?.();
     const url = input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
     const name = url.pathname.split('/').at(-1)!;
     const contents = files.get(name);
@@ -517,4 +517,173 @@ test('native reparse inspection uses no PowerShell and cleans up its own tempora
     mocked.mock.restore();
     syncBuiltinESMExports();
   }
+});
+
+test('portable preparation lock tolerates OneDrive-like link count changes while preserving alias, and rejects tampering and replacements', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
+  await cacheFixture(async cache => {
+    const { descriptor, files } = fixtureDescriptor();
+    const lockPath = path.join(cache, `.portable-node-${descriptor.buildId}-${descriptor.assets.node.sha256}.lock`);
+    const lockAlias = path.join(cache, `.portable-node-${descriptor.buildId}-${descriptor.assets.node.sha256}.alias`);
+
+    // 1. Hardlink created during synthetic fetch: verify same dev/ino/size, release succeeds, and alias intact
+    let hardlinkCreated = false;
+    let initialLockContent = '';
+    const fetchWithHardlink = assetFetch(files, async () => {
+      if (!hardlinkCreated) {
+        hardlinkCreated = true;
+        initialLockContent = await readFile(lockPath, 'utf8');
+        const lockStat = await lstat(lockPath);
+        assert.equal(lockStat.nlink, 1);
+        await link(lockPath, lockAlias);
+        const linkedStat = await lstat(lockPath);
+        assert.equal(linkedStat.nlink, 2);
+        assert.equal(linkedStat.dev, lockStat.dev);
+        assert.equal(linkedStat.ino, lockStat.ino);
+        assert.equal(linkedStat.size, lockStat.size);
+      }
+    });
+
+    const runtime = await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: fetchWithHardlink });
+    assert.ok(runtime);
+    assert.equal(hardlinkCreated, true);
+    // Lock file should be removed upon release
+    await assert.rejects(lstat(lockPath), { code: 'ENOENT' });
+    // Other hardlink alias must remain intact with nlink reduced to 1 and identical content
+    const aliasStat = await lstat(lockAlias);
+    assert.equal(aliasStat.isFile(), true);
+    assert.equal(aliasStat.nlink, 1);
+    assert.equal(await readFile(lockAlias, 'utf8'), initialLockContent);
+    await unlink(lockAlias);
+
+    // Clean cache leaf for next tests
+    await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
+
+    // 2. Real file replacement during preparation
+    const fetchWithFileReplacement = assetFetch(files, async () => {
+      await unlink(lockPath);
+      await writeFile(lockPath, JSON.stringify({ v: 1, pid: process.pid, nonce: '11111111-2222-4333-8444-555555555555' }));
+    });
+    await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: fetchWithFileReplacement }), 'UNSAFE_PORTABLE_NODE_CACHE');
+
+    await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
+    await unlink(lockPath).catch(() => {});
+
+    // 3. Content / Nonce tampering with exact same size
+    const fetchWithContentTampering = assetFetch(files, async () => {
+      const original = await readFile(lockPath, 'utf8');
+      const parsed = JSON.parse(original) as { v: number; pid: number; nonce: string };
+      // Construct tampered payload of exact same byte length preserving all fields
+      const tamperedNonce = 'x'.repeat(String(parsed.nonce).length);
+      const tampered = JSON.stringify({ ...parsed, nonce: tamperedNonce });
+      assert.equal(Buffer.byteLength(tampered), Buffer.byteLength(original));
+      await writeFile(lockPath, tampered);
+    });
+    await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: fetchWithContentTampering }), 'UNSAFE_PORTABLE_NODE_CACHE');
+
+    await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
+    await unlink(lockPath).catch(() => {});
+
+    // 4. Asset protections still strictly reject hardlinks
+    await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
+    const nodeExe = path.join(cache, cacheLeafName(descriptor), 'node.exe');
+    const assetHardlink = path.join(cache, 'node-hardlink-test.exe');
+    await link(nodeExe, assetHardlink);
+    await rejectsCode(resolvePortableNodeRuntime(cache, descriptor), 'UNSAFE_PORTABLE_NODE_CACHE');
+    await unlink(assetHardlink);
+  });
+});
+
+test('portable preparation lock recovery handles interrupted v1 locks with hardlinks, rejects legacy foreign hardlinks and live owners', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async t => {
+  await cacheFixture(async cache => {
+    const { descriptor, files } = fixtureDescriptor();
+    const lockPath = path.join(cache, `.portable-node-${descriptor.buildId}-${descriptor.assets.node.sha256}.lock`);
+    const lockAlias = path.join(cache, `.portable-node-${descriptor.buildId}-${descriptor.assets.node.sha256}.alias`);
+    const deadPid = 2_147_483_647;
+
+    // A. Interrupted v1 lock with nlink > 1 and dead owner: recovered, lock removed, alias preserved intact
+    const v1DeadPayload = JSON.stringify({ v: 1, pid: deadPid, nonce: '11111111-2222-4333-8444-555555555555' });
+    await writeFile(lockPath, v1DeadPayload);
+    await link(lockPath, lockAlias);
+    const beforeV1Recovery = await lstat(lockPath);
+    assert.equal(beforeV1Recovery.nlink, 2);
+    await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
+    // lockPath should have been unlinked
+    await assert.rejects(lstat(lockPath), { code: 'ENOENT' });
+    // lockAlias must remain intact on disk
+    const afterV1RecoveryAlias = await lstat(lockAlias);
+    assert.equal(afterV1RecoveryAlias.isFile(), true);
+    assert.equal(afterV1RecoveryAlias.nlink, 1);
+    assert.equal(await readFile(lockAlias, 'utf8'), v1DeadPayload);
+    await unlink(lockAlias);
+
+    await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
+
+    // B. Legacy lock (pid-only, no v: 1) with nlink > 1 and dead owner: must be rejected
+    const legacyPayload = JSON.stringify({ pid: deadPid });
+    await writeFile(lockPath, legacyPayload);
+    await link(lockPath, lockAlias);
+    await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) }), 'PORTABLE_NODE_BUSY');
+    await unlink(lockAlias);
+    await unlink(lockPath);
+
+    // C. Legacy lock with nlink === 1 and dead owner: recovered successfully
+    await writeFile(lockPath, legacyPayload);
+    await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
+    await assert.rejects(lstat(lockPath), { code: 'ENOENT' });
+
+    await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
+
+    // D. Foreign or malformed lock: must be rejected
+    for (const badContent of [
+      'not-json',
+      JSON.stringify({}),
+      JSON.stringify({ pid: 'invalid' }),
+      JSON.stringify({ pid: deadPid, extra: 1 }),
+      JSON.stringify({ v: 2, pid: deadPid }),
+      JSON.stringify({ v: 1, pid: deadPid }),
+      JSON.stringify({ v: 1, pid: deadPid, nonce: 'not-a-uuid' }),
+      JSON.stringify({ v: 1, pid: deadPid, nonce: '11111111-2222-4333-8444-555555555555', extra: true }),
+      JSON.stringify({ pid: deadPid, nonce: '11111111-2222-4333-8444-555555555555' }),
+    ]) {
+      await writeFile(lockPath, badContent);
+      await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) }), 'PORTABLE_NODE_BUSY');
+      await unlink(lockPath);
+    }
+
+    // E. Live owner with v1 lock and hardlink: verified with process.kill spy, content preserved, zero fetch
+    const liveV1Payload = JSON.stringify({ v: 1, pid: process.pid, nonce: '11111111-2222-4333-8444-555555555555' });
+    await writeFile(lockPath, liveV1Payload);
+    await link(lockPath, lockAlias);
+
+    let observedLivePidQuery = false;
+    const originalKill = process.kill;
+    const killMock = t.mock.method(process, 'kill', (pid: number, signal?: string | number) => {
+      if (pid === process.pid && (signal === 0 || signal === undefined)) {
+        observedLivePidQuery = true;
+      }
+      return originalKill.call(process, pid, signal);
+    });
+
+    let liveLockRequests = 0;
+    const pending = preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files, () => { liveLockRequests++; }) });
+
+    // Poll until process.kill is observed proving live owner check occurred
+    const pollStart = performance.now();
+    while (!observedLivePidQuery && performance.now() - pollStart < 15_000) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(observedLivePidQuery, true, 'processAlive must check the live owner PID');
+    assert.equal(liveLockRequests, 0, 'live owner must retain lock without triggering any downloads');
+
+    // Verify lock and alias remain intact
+    assert.equal(await readFile(lockPath, 'utf8'), liveV1Payload);
+    assert.equal(await readFile(lockAlias, 'utf8'), liveV1Payload);
+    const lockStatAfterPoll = await lstat(lockPath);
+    assert.equal(lockStatAfterPoll.nlink, 2);
+
+    killMock.mock.restore();
+    await unlink(lockAlias);
+    await unlink(lockPath);
+    await pending;
+  });
 });
