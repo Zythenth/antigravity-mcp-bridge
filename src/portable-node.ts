@@ -60,6 +60,10 @@ function sameFile(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<Return
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
 }
 
+function sameAssetFile(left: Awaited<ReturnType<typeof lstat>>, right: Awaited<ReturnType<typeof lstat>>): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size;
+}
+
 function assetPath(root: string, descriptor: AvailablePortableNodeDescriptor, asset: PortableNodeAssetDescriptor): string {
   return path.join(root, cacheLeafName(descriptor), asset.fileName);
 }
@@ -298,27 +302,29 @@ async function inspectCachePath(value: string, create = false): Promise<void> {
   await inspectReparsePoints([absolute]);
 }
 
-async function regularCacheFile(file: string, expectedSize?: number): Promise<Awaited<ReturnType<typeof lstat>>> {
+async function regularCacheFile(file: string, expectedSize?: number, allowMultipleLinks = false): Promise<Awaited<ReturnType<typeof lstat>>> {
   await inspectReparsePoints([file]);
   const info = await lstat(file).catch(error => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') fail('PORTABLE_NODE_NOT_PREPARED', 'Portable Node runtime is incomplete; run --prepare-windows-runtime');
     throw error;
   });
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1 || !Number.isSafeInteger(info.size) || info.size < 0 ||
+  if (!info.isFile() || info.isSymbolicLink() || (!allowMultipleLinks && info.nlink > 1) || !Number.isSafeInteger(info.size) || info.size < 0 ||
       (expectedSize !== undefined && info.size !== expectedSize)) {
     fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node cache contains an unsafe or unexpected file.' + cacheRepair);
   }
   return info;
 }
 
-async function sha256File(file: string, expectedSize?: number): Promise<string> {
-  const before = await regularCacheFile(file, expectedSize);
+async function sha256File(file: string, expectedSize?: number, allowMultipleLinks = false): Promise<string> {
+  const before = await regularCacheFile(file, expectedSize, allowMultipleLinks);
   const size = Number(before.size);
   if (!Number.isSafeInteger(size) || size < 0) fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node cache file has an invalid size');
   const handle = await open(file, 'r');
   try {
     const opened = await handle.stat();
-      if (!sameFile(opened, before)) fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node cache file changed while it was verified.' + cacheRepair);
+    if (allowMultipleLinks ? !sameAssetFile(opened, before) : !sameFile(opened, before)) {
+      fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node cache file changed while it was verified.' + cacheRepair);
+    }
     const hash = createHash('sha256');
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
@@ -329,14 +335,16 @@ async function sha256File(file: string, expectedSize?: number): Promise<string> 
       offset += bytesRead;
     }
     const after = await handle.stat();
-    if (!sameFile(after, before)) fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node cache file changed while it was verified.' + cacheRepair);
+    if (allowMultipleLinks ? !sameAssetFile(after, before) : !sameFile(after, before)) {
+      fail('UNSAFE_PORTABLE_NODE_CACHE', 'Portable Node cache file changed while it was verified.' + cacheRepair);
+    }
     return hash.digest('hex');
   } finally { await handle.close(); }
 }
 
 async function verifyAsset(root: string, descriptor: AvailablePortableNodeDescriptor, asset: PortableNodeAssetDescriptor): Promise<void> {
   const file = assetPath(root, descriptor, asset);
-  if (await sha256File(file, asset.bytes) !== asset.sha256) {
+  if (await sha256File(file, asset.bytes, true) !== asset.sha256) {
     fail('PORTABLE_NODE_HASH_MISMATCH', 'Portable Node cache asset hash does not match the embedded descriptor.' + cacheRepair);
   }
 }

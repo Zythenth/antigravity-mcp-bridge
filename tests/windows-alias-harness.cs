@@ -308,6 +308,48 @@ public static class AliasHarness
         var result = new Dictionary<string, object>(); Invoke("Recover", state, result, new JavaScriptSerializer()); return result;
     }
 
+    static void CleanStateDirectory(string path)
+    {
+        if (String.IsNullOrEmpty(path)) throw new ArgumentException("Path cannot be empty", "path");
+        string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string tempPath = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string parent = Path.GetDirectoryName(fullPath);
+        if (String.IsNullOrEmpty(parent) || !String.Equals(parent, tempPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Path escape or invalid parent: " + path);
+        string name = Path.GetFileName(fullPath);
+        const string prefix = "agy-mcp-alias-state-";
+        if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Invalid state directory prefix: " + path);
+        string suffix = name.Substring(prefix.Length);
+        Guid parsed;
+        if (suffix.Length != 32 || !Guid.TryParseExact(suffix, "N", out parsed)) throw new InvalidOperationException("Invalid state directory GUID suffix: " + path);
+        for (int attempt = 1; attempt <= 5; attempt++)
+        {
+            try
+            {
+                if (!Directory.Exists(fullPath))
+                {
+                    if (File.Exists(fullPath)) throw new InvalidOperationException("Unexpected file at state path: " + fullPath);
+                    return;
+                }
+                FileAttributes attributes = File.GetAttributes(fullPath);
+                if ((attributes & FileAttributes.Directory) == 0) throw new InvalidOperationException("Expected directory at state path: " + fullPath);
+                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Reparse points are not permitted: " + fullPath);
+                Directory.Delete(fullPath, true);
+                return;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                if (File.Exists(fullPath)) throw new InvalidOperationException("Unexpected file at state path: " + fullPath);
+                if (!Directory.Exists(fullPath)) return;
+                throw;
+            }
+            catch (IOException)
+            {
+                if (attempt == 5) throw;
+                Thread.Sleep(attempt == 1 ? 25 : 50);
+            }
+        }
+    }
+
     static void RecoveryLuid()
     {
         object controller = Invoke("CurrentControllerIdentity");
@@ -323,7 +365,7 @@ public static class AliasHarness
             Dictionary<string, object> result = RecoverState(retainedState);
             if (!result.ContainsKey("error") || !File.Exists(retained.file) || File.ReadAllText(retained.file).IndexOf("cleanup-failed", StringComparison.Ordinal) < 0) throw new Exception("Existing logon session did not retain its alias lease");
         }
-        finally { retained.Dispose(); Directory.Delete(retainedState, true); }
+        finally { retained.Dispose(); CleanStateDirectory(retainedState); }
 
         string state = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-state-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(state);
         string absentLogon = MissingLogon(), foreign = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-harness-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(foreign);
@@ -385,7 +427,7 @@ public static class AliasHarness
         }
         finally
         {
-            Directory.Delete(foreign); Directory.Delete(state, true);
+            Directory.Delete(foreign); CleanStateDirectory(state);
         }
     }
 

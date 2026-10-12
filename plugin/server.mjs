@@ -46868,6 +46868,9 @@ function fail(code, message) {
 function sameFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size && left.nlink === right.nlink;
 }
+function sameAssetFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino && left.size === right.size;
+}
 function assetPath(root, descriptor, asset) {
   return path17.join(root, cacheLeafName(descriptor), asset.fileName);
 }
@@ -47092,28 +47095,29 @@ async function inspectCachePath(value, create = false) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache must be a regular directory");
   await inspectReparsePoints([absolute]);
 }
-async function regularCacheFile(file3, expectedSize) {
+async function regularCacheFile(file3, expectedSize, allowMultipleLinks = false) {
   await inspectReparsePoints([file3]);
   const info = await lstat8(file3).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is incomplete; run --prepare-windows-runtime");
     throw error62;
   });
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink > 1 || !Number.isSafeInteger(info.size) || info.size < 0 || expectedSize !== void 0 && info.size !== expectedSize) {
+  if (!info.isFile() || info.isSymbolicLink() || !allowMultipleLinks && info.nlink > 1 || !Number.isSafeInteger(info.size) || info.size < 0 || expectedSize !== void 0 && info.size !== expectedSize) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache contains an unsafe or unexpected file." + cacheRepair);
   }
   return info;
 }
-async function sha256File3(file3, expectedSize) {
-  const before = await regularCacheFile(file3, expectedSize);
+async function sha256File3(file3, expectedSize, allowMultipleLinks = false) {
+  const before = await regularCacheFile(file3, expectedSize, allowMultipleLinks);
   const size = Number(before.size);
   if (!Number.isSafeInteger(size) || size < 0)
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file has an invalid size");
   const handle = await open5(file3, "r");
   try {
     const opened = await handle.stat();
-    if (!sameFile(opened, before))
+    if (allowMultipleLinks ? !sameAssetFile(opened, before) : !sameFile(opened, before)) {
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
+    }
     const hash3 = createHash18("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
@@ -47125,8 +47129,9 @@ async function sha256File3(file3, expectedSize) {
       offset += bytesRead;
     }
     const after = await handle.stat();
-    if (!sameFile(after, before))
+    if (allowMultipleLinks ? !sameAssetFile(after, before) : !sameFile(after, before)) {
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
+    }
     return hash3.digest("hex");
   } finally {
     await handle.close();
@@ -47134,7 +47139,7 @@ async function sha256File3(file3, expectedSize) {
 }
 async function verifyAsset(root, descriptor, asset) {
   const file3 = assetPath(root, descriptor, asset);
-  if (await sha256File3(file3, asset.bytes) !== asset.sha256) {
+  if (await sha256File3(file3, asset.bytes, true) !== asset.sha256) {
     fail("PORTABLE_NODE_HASH_MISMATCH", "Portable Node cache asset hash does not match the embedded descriptor." + cacheRepair);
   }
 }
@@ -47548,6 +47553,9 @@ async function assertSafePath(file3) {
 function isSameFile(observed, expected) {
   return observed.dev === expected.dev && observed.ino === expected.ino && observed.size === expected.size && observed.nlink === expected.nlink;
 }
+function isSameSourceFile(observed, expected) {
+  return observed.dev === expected.dev && observed.ino === expected.ino && observed.size === expected.size;
+}
 async function regularFile(file3, allowMultipleLinks = false) {
   await assertSafePath(file3);
   const info = await lstat9(file3);
@@ -47673,7 +47681,8 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   let created = false;
   try {
     const observed = await sourceHandle.stat();
-    if (!observed.isFile() || !allowMultipleLinks && observed.nlink > 1 || !isSameFile(observed, expected))
+    const sourceMatches = expectedSha256 ? isSameSourceFile(observed, expected) : isSameFile(observed, expected);
+    if (!observed.isFile() || !allowMultipleLinks && observed.nlink > 1 || !sourceMatches)
       fail2("UNSAFE_RUNTIME_PATH", "Runtime file changed while it was staged: " + source);
     if (requirePe) {
       const dosHeader = Buffer.alloc(64);
@@ -47709,7 +47718,8 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
       offset += bytesRead;
     }
     const after = await sourceHandle.stat();
-    if (!after.isFile() || !allowMultipleLinks && after.nlink > 1 || !isSameFile(after, expected))
+    const afterMatches = expectedSha256 ? isSameSourceFile(after, expected) : isSameFile(after, expected);
+    if (!after.isFile() || !allowMultipleLinks && after.nlink > 1 || !afterMatches)
       fail2("UNSAFE_RUNTIME_PATH", "Runtime file changed while it was staged: " + source);
     if (hash3 && hash3.digest("hex") !== expectedSha256)
       fail2("PORTABLE_NODE_HASH_MISMATCH", "Portable Node cache executable changed while it was staged");
@@ -47753,7 +47763,8 @@ async function hashStagedFile(file3) {
   }
 }
 async function stageNativeExecutable(source, destination, state, expectedSha256) {
-  const executable = await stageFile(source, destination, state, true, false, expectedSha256);
+  const allowMultipleLinks = typeof expectedSha256 === "string" && expectedSha256.length > 0;
+  const executable = await stageFile(source, destination, state, true, allowMultipleLinks, expectedSha256);
   if (expectedSha256 && await hashStagedFile(executable) !== expectedSha256) {
     fail2("PORTABLE_NODE_HASH_MISMATCH", "Staged portable Node executable hash does not match the embedded descriptor");
   }

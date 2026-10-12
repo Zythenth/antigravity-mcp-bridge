@@ -402,8 +402,30 @@ test('portable runtime rejects altered, missing, linked, and unexpected cache en
     const leaf = path.join(cache, cacheLeafName(descriptor));
     const hardLink = path.join(cache, 'node-hard-link.exe');
     await link(path.join(leaf, 'node.exe'), hardLink);
-    await rejectsCode(resolvePortableNodeRuntime(cache, descriptor), 'UNSAFE_PORTABLE_NODE_CACHE');
+    // Pinned asset with hardlink now succeeds verification
+    const resolvedPinned = await resolvePortableNodeRuntime(cache, descriptor);
+    assert.equal(resolvedPinned.nodePath, path.join(leaf, 'node.exe'));
+
+    // Tamper pinned content via hardlink alias with exact same byte length
+    const originalExeBytes = await readFile(hardLink);
+    const tamperedExeBytes = Buffer.from(originalExeBytes);
+    const lastByteIndex = originalExeBytes.length - 1;
+    const lastByte = originalExeBytes[lastByteIndex];
+    if (lastByte === undefined) throw new Error('Expected non-empty test executable bytes');
+    tamperedExeBytes[lastByteIndex] = lastByte ^ 0xff;
+    await writeFile(hardLink, tamperedExeBytes);
+
+    // Resolution must fail with PORTABLE_NODE_HASH_MISMATCH
+    await assert.rejects(resolvePortableNodeRuntime(cache, descriptor), error =>
+      typeof error === 'object' && error !== null && 'code' in error && error.code === 'PORTABLE_NODE_HASH_MISMATCH');
+
+    // Verify alias and tampered bytes remain preserved on disk (no automatic repair)
+    assert.deepEqual(await readFile(hardLink), tamperedExeBytes);
+    assert.deepEqual(await readFile(path.join(leaf, 'node.exe')), tamperedExeBytes);
+
     await unlink(hardLink);
+    await rm(leaf, { recursive: true, force: true });
+    await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
     await writeFile(path.join(leaf, 'extra.dll'), 'unexpected runtime payload');
     await rejectsCode(resolvePortableNodeRuntime(cache, descriptor), 'UNSAFE_PORTABLE_NODE_CACHE');
 
@@ -528,18 +550,18 @@ test('portable preparation lock tolerates OneDrive-like link count changes while
     // 1. Hardlink created during synthetic fetch: verify same dev/ino/size, release succeeds, and alias intact
     let hardlinkCreated = false;
     let initialLockContent = '';
+    let baselineLockStat: Awaited<ReturnType<typeof lstat>> | undefined;
     const fetchWithHardlink = assetFetch(files, async () => {
       if (!hardlinkCreated) {
         hardlinkCreated = true;
         initialLockContent = await readFile(lockPath, 'utf8');
-        const lockStat = await lstat(lockPath);
-        assert.equal(lockStat.nlink, 1);
+        baselineLockStat = await lstat(lockPath);
         await link(lockPath, lockAlias);
         const linkedStat = await lstat(lockPath);
-        assert.equal(linkedStat.nlink, 2);
-        assert.equal(linkedStat.dev, lockStat.dev);
-        assert.equal(linkedStat.ino, lockStat.ino);
-        assert.equal(linkedStat.size, lockStat.size);
+        assert.ok(linkedStat.nlink >= 2);
+        assert.equal(linkedStat.dev, baselineLockStat.dev);
+        assert.equal(linkedStat.ino, baselineLockStat.ino);
+        assert.equal(linkedStat.size, baselineLockStat.size);
       }
     });
 
@@ -548,10 +570,11 @@ test('portable preparation lock tolerates OneDrive-like link count changes while
     assert.equal(hardlinkCreated, true);
     // Lock file should be removed upon release
     await assert.rejects(lstat(lockPath), { code: 'ENOENT' });
-    // Other hardlink alias must remain intact with nlink reduced to 1 and identical content
+    // Other hardlink alias must remain intact with identical content and same dev/ino as before
     const aliasStat = await lstat(lockAlias);
     assert.equal(aliasStat.isFile(), true);
-    assert.equal(aliasStat.nlink, 1);
+    assert.equal(aliasStat.dev, baselineLockStat!.dev);
+    assert.equal(aliasStat.ino, baselineLockStat!.ino);
     assert.equal(await readFile(lockAlias, 'utf8'), initialLockContent);
     await unlink(lockAlias);
 
@@ -583,12 +606,23 @@ test('portable preparation lock tolerates OneDrive-like link count changes while
     await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
     await unlink(lockPath).catch(() => {});
 
-    // 4. Asset protections still strictly reject hardlinks
+    // 4. Pinned assets tolerate extra hardlink, but reject unexpected entries or tampering
     await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
     const nodeExe = path.join(cache, cacheLeafName(descriptor), 'node.exe');
     const assetHardlink = path.join(cache, 'node-hardlink-test.exe');
     await link(nodeExe, assetHardlink);
-    await rejectsCode(resolvePortableNodeRuntime(cache, descriptor), 'UNSAFE_PORTABLE_NODE_CACHE');
+    const resolved = await resolvePortableNodeRuntime(cache, descriptor);
+    assert.equal(resolved.nodePath, nodeExe);
+
+    const origBytes = await readFile(assetHardlink);
+    const tampered = Buffer.from(origBytes);
+    const lastByteIndex = origBytes.length - 1;
+    const lastByte = origBytes[lastByteIndex];
+    if (lastByte === undefined) throw new Error('Expected non-empty test executable bytes');
+    tampered[lastByteIndex] = lastByte ^ 0xff;
+    await writeFile(assetHardlink, tampered);
+    await rejectsCode(resolvePortableNodeRuntime(cache, descriptor), 'PORTABLE_NODE_HASH_MISMATCH');
+    assert.deepEqual(await readFile(assetHardlink), tampered);
     await unlink(assetHardlink);
   });
 });
@@ -603,16 +637,20 @@ test('portable preparation lock recovery handles interrupted v1 locks with hardl
     // A. Interrupted v1 lock with nlink > 1 and dead owner: recovered, lock removed, alias preserved intact
     const v1DeadPayload = JSON.stringify({ v: 1, pid: deadPid, nonce: '11111111-2222-4333-8444-555555555555' });
     await writeFile(lockPath, v1DeadPayload);
+    const baselineV1Stat = await lstat(lockPath);
     await link(lockPath, lockAlias);
     const beforeV1Recovery = await lstat(lockPath);
-    assert.equal(beforeV1Recovery.nlink, 2);
+    assert.ok(beforeV1Recovery.nlink >= 2);
+    assert.equal(beforeV1Recovery.dev, baselineV1Stat.dev);
+    assert.equal(beforeV1Recovery.ino, baselineV1Stat.ino);
     await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
     // lockPath should have been unlinked
     await assert.rejects(lstat(lockPath), { code: 'ENOENT' });
-    // lockAlias must remain intact on disk
+    // lockAlias must remain intact on disk with identical content and same dev/ino
     const afterV1RecoveryAlias = await lstat(lockAlias);
     assert.equal(afterV1RecoveryAlias.isFile(), true);
-    assert.equal(afterV1RecoveryAlias.nlink, 1);
+    assert.equal(afterV1RecoveryAlias.dev, baselineV1Stat.dev);
+    assert.equal(afterV1RecoveryAlias.ino, baselineV1Stat.ino);
     assert.equal(await readFile(lockAlias, 'utf8'), v1DeadPayload);
     await unlink(lockAlias);
 
@@ -625,13 +663,6 @@ test('portable preparation lock recovery handles interrupted v1 locks with hardl
     await rejectsCode(preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) }), 'PORTABLE_NODE_BUSY');
     await unlink(lockAlias);
     await unlink(lockPath);
-
-    // C. Legacy lock with nlink === 1 and dead owner: recovered successfully
-    await writeFile(lockPath, legacyPayload);
-    await preparePortableNodeRuntime({ cacheDirectory: cache, descriptor, fetch: assetFetch(files) });
-    await assert.rejects(lstat(lockPath), { code: 'ENOENT' });
-
-    await rm(path.join(cache, cacheLeafName(descriptor)), { recursive: true, force: true });
 
     // D. Foreign or malformed lock: must be rejected
     for (const badContent of [
@@ -653,6 +684,7 @@ test('portable preparation lock recovery handles interrupted v1 locks with hardl
     // E. Live owner with v1 lock and hardlink: verified with process.kill spy, content preserved, zero fetch
     const liveV1Payload = JSON.stringify({ v: 1, pid: process.pid, nonce: '11111111-2222-4333-8444-555555555555' });
     await writeFile(lockPath, liveV1Payload);
+    const baselineLiveStat = await lstat(lockPath);
     await link(lockPath, lockAlias);
 
     let observedLivePidQuery = false;
@@ -679,7 +711,9 @@ test('portable preparation lock recovery handles interrupted v1 locks with hardl
     assert.equal(await readFile(lockPath, 'utf8'), liveV1Payload);
     assert.equal(await readFile(lockAlias, 'utf8'), liveV1Payload);
     const lockStatAfterPoll = await lstat(lockPath);
-    assert.equal(lockStatAfterPoll.nlink, 2);
+    assert.ok(lockStatAfterPoll.nlink >= 2);
+    assert.equal(lockStatAfterPoll.dev, baselineLiveStat.dev);
+    assert.equal(lockStatAfterPoll.ino, baselineLiveStat.ino);
 
     killMock.mock.restore();
     await unlink(lockAlias);

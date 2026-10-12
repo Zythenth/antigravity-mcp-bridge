@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { copyFile, link, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { chmod, copyFile, link, lstat, mkdir, mkdtemp, open, readFile, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { loadConfig } from '../src/config.js';
+import { cacheLeafName, resolvePortableNodeRuntime } from '../src/portable-node.js';
+import { portableNodeDescriptor } from '../src/portable-node-descriptor.js';
 import { stageWindowsCommand } from '../src/windows-runtime.js';
 
 const limits = { maxBytes: 256 * 1024 * 1024, maxFiles: 10_000 };
@@ -248,5 +252,106 @@ test('Windows runtime enforces byte and file limits before execution', { skip: p
   });
   await runtimeFixture(async runtime => {
     await assert.rejects(stageWindowsCommand({ executable: 'npm.cmd', args: [] }, runtime, { maxBytes: limits.maxBytes, maxFiles: 1 }), { code: 'ISOLATION_TOO_LARGE' });
+  });
+});
+
+test('Windows runtime stages pinned source with hardlink, enforces single-link read-only destination, rejects tampering, and keeps generic multi-link rejection', { skip: process.platform !== 'win32' }, async t => {
+  if (!portableNodeDescriptor.available) {
+    t.skip('Portable Node descriptor is not available; skipping integration test');
+    return;
+  }
+  const descriptor = portableNodeDescriptor;
+  const config = loadConfig();
+  const configuredCache = config.windowsNodeCacheDirectory;
+  let trustedRuntime: Awaited<ReturnType<typeof resolvePortableNodeRuntime>>;
+  try {
+    trustedRuntime = await resolvePortableNodeRuntime(configuredCache, descriptor);
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'PORTABLE_NODE_NOT_PREPARED') {
+      t.skip('Portable Node cache has not been prepared; skipping integration test');
+      return;
+    }
+    throw error;
+  }
+
+  await runtimeFixture(async (runtime, outside) => {
+    // 1. Generic executable with hardlink must be rejected
+    const genericExe = path.join(outside, 'generic.exe');
+    const genericHardlink = path.join(outside, 'generic-alias.exe');
+    await writeFile(genericExe, 'MZ\0\0PE\0\0');
+    await link(genericExe, genericHardlink);
+    await assert.rejects(stageWindowsCommand({ executable: genericHardlink, args: [] }, runtime, limits), { code: 'UNSAFE_RUNTIME_PATH' });
+    await unlink(genericHardlink);
+    await unlink(genericExe);
+
+    // 2. Clone the 3 trusted pinned assets to a new local cache outside the original cache
+    const testCache = path.join(outside, 'portable-cache');
+    const leaf = cacheLeafName(descriptor);
+    const trustedLeafDir = path.join(configuredCache, leaf);
+    const testLeafDir = path.join(testCache, leaf);
+    await mkdir(testLeafDir, { recursive: true });
+
+    for (const assetName of ['node.exe', 'LICENSE', 'build.json'] as const) {
+      await copyFile(path.join(trustedLeafDir, assetName), path.join(testLeafDir, assetName));
+    }
+
+    // Set clone node.exe mode to 0o600 so it can be tampered later
+    const cloneNode = path.join(testLeafDir, 'node.exe');
+    await chmod(cloneNode, 0o600);
+
+    // Create an alias outside the leaf directory (nlink >= 2 on cloneNode)
+    const cloneAlias = path.join(outside, 'node-alias.exe');
+    await link(cloneNode, cloneAlias);
+
+    // Stage using exact process.execPath with mode: 'portable' and testCache
+    const staged = await stageWindowsCommand({ executable: process.execPath, args: ['--version'] }, runtime, limits, {
+      mode: 'portable',
+      portableNodeCacheDirectory: testCache,
+    });
+
+    assert.equal(staged.portableNode?.sha256, descriptor.assets.node.sha256);
+    const destStat = await lstat(staged.executable);
+    assert.equal(destStat.isFile(), true);
+    assert.equal(destStat.nlink, 1);
+    assert.equal((destStat.mode & 0o222), 0, 'destination must be read-only');
+    assert.equal(createHash('sha256').update(await readFile(staged.executable)).digest('hex'), descriptor.assets.node.sha256);
+
+    // Verify alias and clone source remain intact on disk with nlink >= 2
+    const cloneAliasStat = await lstat(cloneAlias);
+    assert.equal(cloneAliasStat.isFile(), true);
+    assert.ok(cloneAliasStat.nlink >= 2);
+
+    // 3. Tamper clone via alias with exact same size (modify last byte)
+    const handle = await open(cloneAlias, 'r+');
+    try {
+      const buffer = Buffer.alloc(1);
+      await handle.read(buffer, 0, 1, descriptor.assets.node.bytes - 1);
+      const byteVal = buffer[0];
+      if (byteVal === undefined) throw new Error('Expected byte to be read');
+      buffer[0] = byteVal ^ 0xff;
+      await handle.write(buffer, 0, 1, descriptor.assets.node.bytes - 1);
+    } finally {
+      await handle.close();
+    }
+
+    // Staging must fail with PORTABLE_NODE_HASH_MISMATCH
+    await runtimeFixture(async secondRuntime => {
+      await assert.rejects(stageWindowsCommand({ executable: process.execPath, args: ['--version'] }, secondRuntime, limits, {
+        mode: 'portable',
+        portableNodeCacheDirectory: testCache,
+      }), { code: 'PORTABLE_NODE_HASH_MISMATCH' });
+    });
+
+    // Verify tampered bytes and alias are preserved on disk without repair
+    const tamperedAliasBytes = await readFile(cloneAlias);
+    const tamperedCloneBytes = await readFile(cloneNode);
+    assert.deepEqual(tamperedAliasBytes, tamperedCloneBytes);
+    assert.notEqual(createHash('sha256').update(tamperedAliasBytes).digest('hex'), descriptor.assets.node.sha256);
+
+    // Original cache remains completely untouched
+    const originalNodeBytes = await readFile(trustedRuntime.nodePath);
+    assert.equal(createHash('sha256').update(originalNodeBytes).digest('hex'), descriptor.assets.node.sha256);
+
+    await unlink(cloneAlias);
   });
 });

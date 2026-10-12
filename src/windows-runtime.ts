@@ -88,6 +88,10 @@ function isSameFile(observed: Stats, expected: Stats): boolean {
   return observed.dev === expected.dev && observed.ino === expected.ino && observed.size === expected.size && observed.nlink === expected.nlink;
 }
 
+function isSameSourceFile(observed: Stats, expected: Stats): boolean {
+  return observed.dev === expected.dev && observed.ino === expected.ino && observed.size === expected.size;
+}
+
 async function regularFile(file: string, allowMultipleLinks = false): Promise<Stats> {
   await assertSafePath(file);
   const info = await lstat(file);
@@ -204,7 +208,8 @@ async function stageFile(sourcePath: string, targetPath: string, state: CopyStat
   let created = false;
   try {
     const observed = await sourceHandle.stat();
-    if (!observed.isFile() || (!allowMultipleLinks && observed.nlink > 1) || !isSameFile(observed, expected)) fail('UNSAFE_RUNTIME_PATH', 'Runtime file changed while it was staged: ' + source);
+    const sourceMatches = expectedSha256 ? isSameSourceFile(observed, expected) : isSameFile(observed, expected);
+    if (!observed.isFile() || (!allowMultipleLinks && observed.nlink > 1) || !sourceMatches) fail('UNSAFE_RUNTIME_PATH', 'Runtime file changed while it was staged: ' + source);
     if (requirePe) {
       const dosHeader = Buffer.alloc(64);
       const dosRead = await sourceHandle.read(dosHeader, 0, dosHeader.length, 0);
@@ -237,7 +242,8 @@ async function stageFile(sourcePath: string, targetPath: string, state: CopyStat
       offset += bytesRead;
     }
     const after = await sourceHandle.stat();
-    if (!after.isFile() || (!allowMultipleLinks && after.nlink > 1) || !isSameFile(after, expected)) fail('UNSAFE_RUNTIME_PATH', 'Runtime file changed while it was staged: ' + source);
+    const afterMatches = expectedSha256 ? isSameSourceFile(after, expected) : isSameFile(after, expected);
+    if (!after.isFile() || (!allowMultipleLinks && after.nlink > 1) || !afterMatches) fail('UNSAFE_RUNTIME_PATH', 'Runtime file changed while it was staged: ' + source);
     if (hash && hash.digest('hex') !== expectedSha256) fail('PORTABLE_NODE_HASH_MISMATCH', 'Portable Node cache executable changed while it was staged');
     await chmod(target, 0o444);
     state.entries++;
@@ -274,7 +280,8 @@ async function hashStagedFile(file: string): Promise<string> {
 }
 
 async function stageNativeExecutable(source: string, destination: string, state: CopyState, expectedSha256?: string): Promise<string> {
-  const executable = await stageFile(source, destination, state, true, false, expectedSha256);
+  const allowMultipleLinks = typeof expectedSha256 === 'string' && expectedSha256.length > 0;
+  const executable = await stageFile(source, destination, state, true, allowMultipleLinks, expectedSha256);
   if (expectedSha256 && await hashStagedFile(executable) !== expectedSha256) {
     fail('PORTABLE_NODE_HASH_MISMATCH', 'Staged portable Node executable hash does not match the embedded descriptor');
   }
