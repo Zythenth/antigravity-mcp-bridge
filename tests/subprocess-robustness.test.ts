@@ -221,19 +221,44 @@ test('task execution handles startup failure after successful discovery', async 
   assert.ok(final.error?.message.includes('127') || final.error?.message.includes('startup fatal failure'));
 });
 
-test('task execution handles stdin EPIPE / early exit without marking completed even if result says SUCCESS', async () => {
+test('task execution handles stdin EPIPE / early exit without marking completed even if result says SUCCESS', async t => {
   const dir = await createRepo();
   const { adapter, tasks } = setup([fixturePath, '--scenario', 'early-exit-epipe']);
   await adapter.discover();
-  const backpressurePrompt = 'Backpressure prompt data: ' + 'X'.repeat(100000);
-  const task = await tasks.run({ prompt: backpressurePrompt, workingDirectory: dir });
-  const final = await until(tasks, task.taskId, done);
-  assert.equal(final.status, 'failed');
-  assert.equal(final.error?.code, 'CLI_INPUT_FAILED');
-  assert.notEqual(final.status, 'completed');
-  const events = tasks.readEvents(task.taskId).events;
-  assert.ok(!events.some(e => e.type === 'task.completed'), 'Should not emit task.completed');
-  assert.ok(events.some(e => e.type === 'task.failed'), 'Should emit task.failed');
+  const originalSpawn = child_process.spawn;
+  let removeEndListener: (() => void) | undefined;
+  t.mock.method(child_process, 'spawn', ((...args: Parameters<typeof child_process.spawn>) => {
+    const child = originalSpawn(...args);
+    if (Array.isArray(args[1]) && args[1].includes('early-exit-epipe')) {
+      const { stdin, stdout } = child;
+      assert.ok(stdin);
+      assert.ok(stdout);
+      t.mock.method(stdin, 'write', ((_chunk: unknown, _encoding: unknown, callback: (error?: Error | null) => void) => {
+        const onEnd = () => queueMicrotask(() => callback(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })));
+        stdout.once('end', onEnd);
+        removeEndListener = () => { stdout.off('end', onEnd); };
+        return true;
+      }) as typeof stdin.write);
+    }
+    return child;
+  }) as typeof child_process.spawn);
+  syncBuiltinESMExports();
+  try {
+    const task = await tasks.run({ prompt: 'test early-exit stdin error', workingDirectory: dir });
+    const final = await until(tasks, task.taskId, done);
+    assert.equal(final.status, 'failed');
+    assert.equal(final.error?.code, 'CLI_INPUT_FAILED');
+    assert.notEqual(final.status, 'completed');
+    assert.equal((final.result as { status?: string } | undefined)?.status, 'SUCCESS');
+    const events = tasks.readEvents(task.taskId).events;
+    assert.ok(events.some(e => e.type === 'agy.result'), 'Fixture result must be received before the input error wins');
+    assert.ok(!events.some(e => e.type === 'task.completed'), 'Should not emit task.completed');
+    assert.ok(events.some(e => e.type === 'task.failed'), 'Should emit task.failed');
+  } finally {
+    removeEndListener?.();
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
 });
 
 test('cancellation wins over expected pipe error when task is cancelled during large write', async () => {
