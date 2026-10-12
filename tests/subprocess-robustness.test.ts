@@ -483,3 +483,179 @@ test('processError correctly maps error types', () => {
   assert.equal(processError(new Error('other'), 'stdin').code, 'CLI_INPUT_FAILED');
   assert.equal(processError(new Error('other'), 'stdout').code, 'AGY_IO_FAILED');
 });
+
+test('task execution drains final stderr before stream close even without trailing newline', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'final-stderr-no-newline']);
+  await adapter.discover();
+
+  const task = await tasks.run({ prompt: 'test final stderr', workingDirectory: dir });
+  const final = await until(tasks, task.taskId, done);
+  assert.equal(final.status, 'failed');
+  assert.equal(final.exitCode, 42);
+  assert.equal(final.error?.code, 'AGY_PROCESS_FAILED');
+  assert.equal(final.error?.message, 'synthetic fatal crash without newline');
+
+  const stderrEvents = tasks.readEvents(task.taskId).events.filter(e => e.type === 'process.stderr');
+  assert.equal(stderrEvents.length, 1);
+  assert.equal((stderrEvents[0]!.data as { text?: string })?.text, 'synthetic fatal crash without newline');
+});
+
+test('task execution fails with STREAM_PARSE_ERROR on malformed stream json output', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'malformed-stream-json']);
+  await adapter.discover();
+
+  const task = await tasks.run({ prompt: 'test malformed stream json', workingDirectory: dir });
+  const final = await until(tasks, task.taskId, done);
+  assert.equal(final.status, 'failed');
+  assert.equal(final.exitCode, 0);
+  assert.equal(final.error?.code, 'STREAM_PARSE_ERROR');
+  assert.notEqual(final.status, 'completed');
+
+  const events = tasks.readEvents(task.taskId).events;
+  const unparsed = events.filter(e => e.type === 'stream.unparsed');
+  assert.equal(unparsed.length, 1);
+  assert.ok(((unparsed[0]!.data as { line?: string })?.line ?? '').includes('{corrupted-json-line'));
+  assert.ok(!events.some(e => e.type === 'task.completed'));
+  assert.ok(events.some(e => e.type === 'task.failed'));
+});
+
+test('task execution fails when process exits 0 without producing result event (incomplete protocol)', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'incomplete-result-exit-zero']);
+  await adapter.discover();
+
+  const task = await tasks.run({ prompt: 'test incomplete protocol', workingDirectory: dir });
+  const final = await until(tasks, task.taskId, done);
+  assert.equal(final.status, 'failed');
+  assert.equal(final.exitCode, 0);
+  assert.equal(final.error?.code, 'AGY_PROCESS_FAILED');
+  assert.ok(final.error?.message.includes('code 0'));
+  assert.notEqual(final.status, 'completed');
+
+  const events = tasks.readEvents(task.taskId).events;
+  assert.ok(!events.some(e => e.type === 'task.completed'));
+  assert.ok(events.some(e => e.type === 'task.failed'));
+});
+
+test('task execution fails when result protocol status is not SUCCESS', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'result-non-success-status']);
+  await adapter.discover();
+
+  const task = await tasks.run({ prompt: 'test non-success status', workingDirectory: dir });
+  const final = await until(tasks, task.taskId, done);
+  assert.equal(final.status, 'failed');
+  assert.equal(final.exitCode, 0);
+  assert.equal(final.error?.code, 'AGY_PROCESS_FAILED');
+  assert.equal(final.error?.message, 'Upstream generation rejected');
+  assert.notEqual(final.status, 'completed');
+
+  const events = tasks.readEvents(task.taskId).events;
+  assert.ok(!events.some(e => e.type === 'task.completed'));
+  assert.ok(events.some(e => e.type === 'task.failed'));
+});
+
+test('synchronous stdin write failure cannot produce completion and fails with CLI_INPUT_FAILED', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup();
+  await adapter.discover();
+
+  const originalSpawn = child_process.spawn;
+  const mockSpawn = mock.method(child_process, 'spawn', ((...args: Parameters<typeof child_process.spawn>) => {
+    const child = originalSpawn(...args);
+    const procArgs = args[1];
+    if (Array.isArray(procArgs) && procArgs.includes(fixturePath)) {
+      assert.ok(child.stdin);
+      mock.method(child.stdin, 'write', () => {
+        const err = new Error('synchronous stream write failure');
+        Object.assign(err, { code: 'ERR_STREAM_DESTROYED' });
+        throw err;
+      });
+    }
+    return child;
+  }) as typeof child_process.spawn);
+  syncBuiltinESMExports();
+
+  try {
+    const task = await tasks.run({ prompt: 'test sync stdin failure', workingDirectory: dir });
+    const final = await until(tasks, task.taskId, done);
+    assert.equal(final.status, 'failed');
+    assert.equal(final.error?.code, 'CLI_INPUT_FAILED');
+    assert.notEqual(final.status, 'completed');
+
+    const events = tasks.readEvents(task.taskId).events;
+    assert.ok(!events.some(e => e.type === 'task.completed'), 'Should not emit task.completed');
+    assert.ok(events.some(e => e.type === 'task.failed'), 'Should emit task.failed');
+  } finally {
+    mockSpawn.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
+
+test('task failure finalizes once and ignores subsequent cancellation', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'startup-fail']);
+  await adapter.discover();
+
+  const task = await tasks.run({ prompt: 'test fail finalization', workingDirectory: dir });
+  const final = await until(tasks, task.taskId, done);
+  assert.equal(final.status, 'failed');
+  assert.equal(final.error?.code, 'AGY_PROCESS_FAILED');
+  assert.ok(final.completedAt);
+
+  // Cancel after failure must not mutate status or emit cancelled event
+  await tasks.cancel(task.taskId);
+  const afterCancel = tasks.status(task.taskId);
+  assert.equal(afterCancel.status, 'failed');
+  assert.equal(afterCancel.completedAt, final.completedAt);
+  assert.equal(afterCancel.error?.code, 'AGY_PROCESS_FAILED');
+
+  const events = tasks.readEvents(task.taskId).events;
+  assert.equal(events.filter(e => e.type === 'task.failed').length, 1);
+  assert.equal(events.filter(e => e.type === 'task.cancelled').length, 0);
+
+  const errorMessages = (afterCancel.messages ?? []).filter(m => m.kind === 'error');
+  assert.equal(errorMessages.length, 1);
+});
+
+test('queued task cancellation finalizes once with idempotent repeated cancel', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'hang'], {
+    DEFAULT_TIMEOUT_SECONDS: '10',
+    MAX_CONCURRENT_TASKS: '1',
+  });
+  await adapter.discover();
+
+  // Task 1 occupies the single concurrency slot
+  const task1 = await tasks.run({ prompt: 'running task 1', workingDirectory: dir });
+  await until(tasks, task1.taskId, t => t.status === 'running');
+
+  // Task 2 stays queued
+  const task2 = await tasks.run({ prompt: 'queued task 2', workingDirectory: dir });
+  assert.equal(tasks.status(task2.taskId).status, 'queued');
+
+  // First cancellation transitions queued task to cancelled
+  const cancel1 = await tasks.cancel(task2.taskId);
+  assert.equal(cancel1.status, 'cancelled');
+  assert.equal(cancel1.error?.code, 'TASK_CANCELLED');
+  assert.ok(cancel1.completedAt);
+
+  // Second cancellation is idempotent and does not duplicate finalization
+  const cancel2 = await tasks.cancel(task2.taskId);
+  assert.equal(cancel2.status, 'cancelled');
+  assert.equal(cancel2.completedAt, cancel1.completedAt);
+
+  const events = tasks.readEvents(task2.taskId).events;
+  assert.equal(events.filter(e => e.type === 'task.cancelled').length, 1);
+  assert.equal(events.filter(e => e.type === 'task.failed').length, 0);
+  assert.equal(events.filter(e => e.type === 'task.completed').length, 0);
+
+  const messages = (tasks.status(task2.taskId).messages ?? []).filter(m => m.kind === 'error');
+  assert.equal(messages.length, 1);
+
+  // Clean up Task 1
+  await tasks.cancel(task1.taskId);
+  await until(tasks, task1.taskId, done);
+});
