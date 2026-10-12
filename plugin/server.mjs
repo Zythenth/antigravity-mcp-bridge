@@ -45699,975 +45699,1052 @@ import path19 from "node:path";
 import os7 from "node:os";
 
 // dist/src/windows-helper-source.js
-var windowsHelperSource = `using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Globalization;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Security.AccessControl;
-using System.Security.Principal;
-using System.Text;
-using System.Threading;
-using System.Web.Script.Serialization;
-using Microsoft.Win32.SafeHandles;
-
-internal static class WindowsTestRunner
-{
-    const uint FileShareRead = 1, FileShareWrite = 2, OpenExisting = 3, FileFlagBackupSemantics = 0x02000000, FileFlagOpenReparsePoint = 0x00200000, InvalidFileAttributes = 0xffffffff;
-    const uint WaitObject0 = 0, WaitTimeout = 0x102, ProcessQueryLimitedInformation = 0x1000, Synchronize = 0x100000;
-    const uint DosRawTargetPath = 1, DosRemoveDefinition = 2, DosExactMatchOnRemove = 4, DosNoBroadcast = 8;
-    const int ProcThreadAttributeSecurityCapabilities = 0x20009, ProcThreadAttributeHandleList = 0x20002, ProcThreadAttributeJobList = 0x2000D, ProcThreadAttributeAllApplicationPackagesPolicy = 0x2000F;
-    const uint AllApplicationPackagesPolicyLpac = 1, JobObjectExtendedLimitInformation = 9, JobObjectLimitKillOnJobClose = 0x2000, JobObjectLimitActiveProcess = 0x8, JobObjectLimitBreakawayOk = 0x800, JobObjectLimitSilentBreakawayOk = 0x1000;
-    public sealed class Request
-    {
-        public string action;
-        public string nonce;
-        public string profile;
-        public string cwd;
-        public string runtime;
-        public string scratch;
-        public string executable;
-        public string[] args;
-        public int timeoutSeconds;
-        public int maxFiles;
-        public int maxOutputChars;
-        public bool network;
-        public bool childProcesses;
-        public string stateDirectory;
-        public Grant[] grants;
-        public Dictionary<string, string> environment;
-    }
-
-    public sealed class Grant
-    {
-        public string path;
-        public string rights;
-        public bool directory;
-        public uint volume;
-        public uint fileIndexHigh;
-        public uint fileIndexLow;
-    }
-
-    public sealed class Lease
-    {
-        public int version;
-        public string nonce;
-        public string profile;
-        public string sid;
-        public string phase;
-        public int controllerPid;
-        public long controllerStarted;
-        public string cwd;
-        public string runtime;
-        public string scratch;
-        public Grant[] grants;
-        public string logon;
-        public AliasPlan[] aliases;
-    }
-
-    public sealed class AliasPlan
-    {
-        public string kind;
-        public string physicalRoot;
-        public string customName;
-        public string drive;
-        public string aliasRoot;
-        public string customTarget;
-        public string driveTarget;
-        public uint volume;
-        public uint fileIndexHigh;
-        public uint fileIndexLow;
-        internal Mutex gate;
-    }
-
-    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }
-    [StructLayout(LayoutKind.Sequential)] struct SecurityCapabilities { public IntPtr sid, capabilities; public uint count, reserved; }
-    [StructLayout(LayoutKind.Sequential)] struct SidAndAttributes { public IntPtr sid; public uint attributes; }
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct StartupInfo
-    {
-        public int cb; public string reserved, desktop, title;
-        public uint x, y, xSize, ySize, xChars, yChars, fill, flags;
-        public short showWindow, reservedSize; public IntPtr reservedBytes, input, output, error;
-    }
-    [StructLayout(LayoutKind.Sequential)] struct StartupInfoEx { public StartupInfo startup; public IntPtr attributes; }
-    [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process, thread; public uint pid, threadId; }
-    [StructLayout(LayoutKind.Sequential)] struct BasicLimits
-    {
-        public long processTime, jobTime; public uint flags; public UIntPtr minimumWorkingSet, maximumWorkingSet;
-        public uint activeProcesses; public UIntPtr affinity; public uint priority, scheduling;
-    }
-    [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong readOps, writeOps, otherOps, readBytes, writeBytes, otherBytes; }
-    [StructLayout(LayoutKind.Sequential)] struct ExtendedLimits { public BasicLimits basic; public IoCounters io; public UIntPtr processMemory, jobMemory, peakProcessMemory, peakJobMemory; }
-    [StructLayout(LayoutKind.Sequential)] struct FileTime { public uint low, high; }
-    [StructLayout(LayoutKind.Sequential)] struct Luid { public uint low; public int high; }
-    [StructLayout(LayoutKind.Sequential)] struct TokenStatistics
-    {
-        public Luid tokenId, authenticationId; public long expiration; public uint tokenType, impersonationLevel, dynamicCharged, dynamicAvailable, groupCount, privilegeCount; public Luid modifiedId;
-    }
-    [StructLayout(LayoutKind.Sequential)] struct ByHandleFileInformation
-    {
-        public uint attributes; public FileTime created, accessed, written; public uint volume, sizeHigh, sizeLow, links, indexHigh, indexLow;
-    }
-
-    sealed class PinnedTarget : IDisposable
-    {
-        public Grant grant;
-        public int maxFiles;
-        readonly List<IntPtr> handles = new List<IntPtr>();
-        public void Add(IntPtr value) { handles.Add(value); }
-        public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }
-    }
-
-    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string display, string description, IntPtr capabilities, uint count, out IntPtr sid);
-    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);
-    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeriveAppContainerSidFromAppContainerName(string name, out IntPtr sid);
-    [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);
-    [DllImport("kernelbase.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DeriveCapabilitySidsFromName(string name, out IntPtr groups, out uint groupCount, out IntPtr capabilities, out uint capabilityCount);
-    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, uint flags, ref UIntPtr size);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, UIntPtr size, IntPtr previous, IntPtr returned);
-    [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcess(string app, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string cwd, ref StartupInfoEx startup, out ProcessInfo process);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes attributes, uint size);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateJobObject(IntPtr attributes, string name);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int info, IntPtr limits, uint size);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr job, uint code);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint code);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern uint ResumeThread(IntPtr thread);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);
-    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string path, uint information, byte[] descriptor, uint length, out uint needed);
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string path, uint information, byte[] descriptor);
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);
-    [StructLayout(LayoutKind.Sequential)] struct FileAttributeTagInfo { public uint attributes, tag; }
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);
-    [DllImport("secur32.dll")] static extern int LsaEnumerateLogonSessions(out uint count, out IntPtr sessions);
-    [DllImport("secur32.dll")] static extern int LsaFreeReturnBuffer(IntPtr buffer);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint desiredAccess, bool inherit, uint processId);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetProcessTimes(IntPtr process, out FileTime creation, out FileTime exit, out FileTime kernel, out FileTime user);
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int info, IntPtr limits, uint size, IntPtr returned);
-
-    static readonly IntPtr InvalidHandle = new IntPtr(-1);
-
-    static void Check(bool success, string operation)
-    {
-        if (!success) { int code = Marshal.GetLastWin32Error(); throw new Win32Exception(code, operation + " (Win32 " + code + "): " + new Win32Exception(code).Message); }
-    }
-    static void CheckHr(int result, string operation) { if (result < 0) throw new Exception(operation + ": 0x" + result.ToString("x8")); }
-    static bool IsNotFoundHresult(int value) { return value == unchecked((int)0x80070002) || value == unchecked((int)0x80070003); }
-    static long FileTimeValue(FileTime value) { return ((long)value.high << 32) | value.low; }
-
-    sealed class ControllerIdentity
-    {
-        public SecurityIdentifier user;
-        public string logon;
-    }
-
-    static ControllerIdentity CurrentControllerIdentity()
-    {
-        IntPtr token;
-        Check(OpenProcessToken(Process.GetCurrentProcess().Handle, 8, out token), "Open controller token");
-        try
-        {
-            uint returned;
-            GetTokenInformation(token, 1, IntPtr.Zero, 0, out returned);
-            if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid controller user token size");
-            IntPtr userData = Marshal.AllocHGlobal(checked((int)returned));
-            try
-            {
-                Check(GetTokenInformation(token, 1, userData, returned, out returned), "Read controller user token");
-                var user = new SecurityIdentifier(Marshal.ReadIntPtr(userData));
-                if (user.IsWellKnown(WellKnownSidType.LocalSystemSid)) throw new Exception("LocalSystem cannot create local DOS aliases");
-                int size = Marshal.SizeOf(typeof(TokenStatistics)); IntPtr statisticsData = Marshal.AllocHGlobal(size);
-                try
-                {
-                    Check(GetTokenInformation(token, 10, statisticsData, (uint)size, out returned), "Read controller logon token");
-                    var statistics = (TokenStatistics)Marshal.PtrToStructure(statisticsData, typeof(TokenStatistics));
-                    return new ControllerIdentity { user = user, logon = ((uint)statistics.authenticationId.high).ToString("x8") + "." + statistics.authenticationId.low.ToString("x8") };
-                }
-                finally { Marshal.FreeHGlobal(statisticsData); }
-            }
-            finally { Marshal.FreeHGlobal(userData); }
-        }
-        finally { CloseHandle(token); }
-    }
-
-    static bool TryParseLogon(string value, out Luid logon)
-    {
-        logon = new Luid();
-        if (String.IsNullOrEmpty(value) || value.Length != 17 || value[8] != '.') return false;
-        for (int index = 0; index < value.Length; index++) if (index != 8 && !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f') || (value[index] >= 'A' && value[index] <= 'F'))) return false;
-        uint high, low;
-        if (!UInt32.TryParse(value.Substring(0, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out high) || !UInt32.TryParse(value.Substring(9, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out low)) return false;
-        logon.high = unchecked((int)high); logon.low = low; return true;
-    }
-
-    static string DriveGateName(string logon, char letter)
-    {
-        Luid parsed; if (!TryParseLogon(logon, out parsed)) throw new Exception("Invalid logon identifier for DOS alias mutex");
-        return "Global\\\\AGY.TEST.DOS." + logon + "." + letter;
-    }
-
-    static bool LogonSessionExists(string value)
-    {
-        Luid expected; if (!TryParseLogon(value, out expected)) throw new Exception("Invalid logon identifier for DOS alias recovery");
-        uint count; IntPtr sessions; int status = LsaEnumerateLogonSessions(out count, out sessions);
-        if (status != 0) throw new Exception("Enumerate logon sessions: 0x" + status.ToString("x8"));
-        try
-        {
-            if (count > 1048576) throw new Exception("Logon session enumeration exceeded its bounded count");
-            int size = Marshal.SizeOf(typeof(Luid));
-            for (uint index = 0; index < count; index++)
-            {
-                var candidate = (Luid)Marshal.PtrToStructure(IntPtr.Add(sessions, checked((int)(index * (uint)size))), typeof(Luid));
-                if (candidate.high == expected.high && candidate.low == expected.low) return true;
-            }
-            return false;
-        }
-        finally
-        {
-            if (sessions != IntPtr.Zero)
-            {
-                int released = LsaFreeReturnBuffer(sessions);
-                if (released != 0) throw new Exception("Free logon session enumeration: 0x" + released.ToString("x8"));
-            }
-        }
-    }
-
-    static string[] QueryDosTargets(string name)
-    {
-        for (uint capacity = 256; capacity <= 65536; capacity *= 2)
-        {
-            var buffer = new char[checked((int)capacity)];
-            uint length = QueryDosDevice(name, buffer, capacity);
-            if (length != 0) return new String(buffer, 0, checked((int)length)).Split(new char[] { '\\0' }, StringSplitOptions.RemoveEmptyEntries);
-            int error = Marshal.GetLastWin32Error();
-            if (error == 2) return null;
-            if (error == 122) continue;
-            throw new Win32Exception(error, "Query DOS device " + name);
-        }
-        throw new Exception("DOS device query exceeded its bounded buffer");
-    }
-
-    static void RequireDosAbsent(string name)
-    {
-        string[] targets = QueryDosTargets(name);
-        if (targets != null) throw new Exception("DOS device is already defined: " + name);
-    }
-
-    static void RequireDosExact(string name, string target)
-    {
-        string[] targets = QueryDosTargets(name);
-        if (targets == null || targets.Length != 1 || !String.Equals(targets[0], target, StringComparison.Ordinal)) throw new Exception("DOS device definition is missing, foreign, or stacked: " + name);
-    }
-
-    static Mutex AcquireDriveGate(char letter, ControllerIdentity controller)
-    {
-        var security = new MutexSecurity(); security.SetOwner(controller.user);
-        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
-        bool created; Mutex gate = new Mutex(true, DriveGateName(controller.logon, letter), out created, security);
-        if (created) return gate;
-        gate.Close(); return null;
-    }
-
-    static Mutex AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)
-    {
-        var security = new MutexSecurity(); security.SetOwner(controller.user);
-        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
-        bool created, owned = false; Mutex gate = null;
-        try
-        {
-            gate = new Mutex(false, DriveGateName(logon, letter), out created, security);
-            try { owned = gate.WaitOne(0); }
-            catch (AbandonedMutexException) { owned = true; }
-            if (!owned) throw new Exception("DOS drive mutex is held: " + letter);
-            return gate;
-        }
-        catch
-        {
-            if (gate != null) { if (owned) gate.ReleaseMutex(); gate.Close(); }
-            throw;
-        }
-    }
-
-    static string RawDosTarget(string value) { return "\\\\??\\\\" + value; }
-
-    static AliasPlan[] CreateAliasPlan(Guid nonce, ControllerIdentity controller, PinnedTarget[] roots)
-    {
-        if (roots == null || roots.Length != 3) throw new Exception("Exactly three owned roots are required for DOS aliases");
-        string[] kinds = new string[] { "copy", "runtime", "scratch" };
-        var aliases = new AliasPlan[3]; int selected = 0;
-        try
-        {
-            for (char letter = 'Z'; letter >= 'D' && selected < aliases.Length; letter--)
-            {
-                string drive = letter + ":"; if (QueryDosTargets(drive) != null) continue;
-                Mutex gate = AcquireDriveGate(letter, controller); if (gate == null) continue;
-                try
-                {
-                    if (QueryDosTargets(drive) != null) continue;
-                    Grant root = roots[selected].grant;
-                    if (!root.directory) throw new Exception("Owned DOS alias root is not a directory");
-                    string custom = "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();
-                    RequireDosAbsent(custom);
-                    aliases[selected] = new AliasPlan { kind = kinds[selected], physicalRoot = root.path, customName = custom, drive = drive, aliasRoot = drive + "\\\\", customTarget = RawDosTarget(root.path), driveTarget = RawDosTarget(custom), volume = root.volume, fileIndexHigh = root.fileIndexHigh, fileIndexLow = root.fileIndexLow, gate = gate };
-                    gate = null; selected++;
-                }
-                finally { if (gate != null) { gate.ReleaseMutex(); gate.Close(); } }
-            }
-            if (selected != aliases.Length) throw new Exception("Fewer than three unused DOS drive letters are available");
-            return aliases;
-        }
-        catch { ReleaseAliasGates(aliases); throw; }
-    }
-
-    static void ReleaseAliasGates(AliasPlan[] aliases)
-    {
-        if (aliases == null) return;
-        for (int index = aliases.Length - 1; index >= 0; index--) if (aliases[index] != null && aliases[index].gate != null)
-        {
-            aliases[index].gate.ReleaseMutex(); aliases[index].gate.Close(); aliases[index].gate = null;
-        }
-    }
-
-    static void AcquireRecoveryAliasGates(AliasPlan[] aliases, ControllerIdentity controller, string logon)
-    {
-        try
-        {
-            for (int index = 0; index < aliases.Length; index++) aliases[index].gate = AcquireRecoveryDriveGate(aliases[index].drive[0], controller, logon);
-        }
-        catch { ReleaseAliasGates(aliases); throw; }
-    }
-
-    static void VerifyAliasRoot(AliasPlan alias)
-    {
-        IntPtr handle = CreateFile(alias.aliasRoot, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
-        if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open DOS alias root");
-        try
-        {
-            ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect DOS alias root");
-            if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0 || (info.attributes & (uint)FileAttributes.Directory) == 0 || info.volume != alias.volume || info.indexHigh != alias.fileIndexHigh || info.indexLow != alias.fileIndexLow) throw new Exception("DOS alias root identity changed");
-        }
-        finally { CloseHandle(handle); }
-    }
-
-    static void DefineAlias(AliasPlan alias, bool drive)
-    {
-        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;
-        RequireDosAbsent(name); Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast, name, target), "Define DOS device " + name); RequireDosExact(name, target);
-    }
-
-    static void ApplyAliases(AliasPlan[] aliases)
-    {
-        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], false);
-        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], true);
-        for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
-    }
-
-    static void RemoveAlias(AliasPlan alias, bool drive)
-    {
-        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;
-        string[] current = QueryDosTargets(name); if (current == null) return;
-        if (current.Length != 1 || !String.Equals(current[0], target, StringComparison.Ordinal)) throw new Exception("DOS alias cleanup found a foreign or stacked definition: " + name);
-        Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast | DosRemoveDefinition | DosExactMatchOnRemove, name, target), "Remove DOS device " + name);
-        if (QueryDosTargets(name) != null) throw new Exception("DOS alias remained after exact cleanup: " + name);
-    }
-
-    static void RemoveAliases(AliasPlan[] aliases)
-    {
-        if (aliases == null) return;
-        var failures = new List<string>();
-        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], true); } catch (Exception error) { failures.Add(error.Message); }
-        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], false); } catch (Exception error) { failures.Add(error.Message); }
-        if (failures.Count != 0) throw new Exception(String.Join("; ", failures.ToArray()));
-    }
-
-    static bool IsPhysicalAbsolutePath(string value)
-    {
-        return !String.IsNullOrEmpty(value) && value.Length >= 3 && Char.IsLetter(value[0]) && value[1] == ':' && (value[2] == '\\\\' || value[2] == '/') && !value.StartsWith("\\\\\\\\", StringComparison.Ordinal) && value.IndexOf(':', 2) < 0;
-    }
-
-    static string ProjectOwnedPath(string value, AliasPlan[] aliases)
-    {
-        if (!IsPhysicalAbsolutePath(value)) return value;
-        for (int index = 0; index < aliases.Length; index++)
-        {
-            string root = aliases[index].physicalRoot;
-            if (value.Length < root.Length) continue;
-            bool match = true;
-            for (int character = 0; character < root.Length; character++)
-            {
-                char actual = value[character], expected = root[character];
-                if ((actual == '\\\\' || actual == '/') && (expected == '\\\\' || expected == '/')) continue;
-                if (Char.ToUpperInvariant(actual) != Char.ToUpperInvariant(expected)) { match = false; break; }
-            }
-            if (!match || (value.Length > root.Length && value[root.Length] != '\\\\' && value[root.Length] != '/')) continue;
-            string tail = value.Substring(root.Length).TrimStart('\\\\', '/');
-            foreach (string part in tail.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries)) if (part == "." || part == "..") return value;
-            return aliases[index].aliasRoot + tail.Replace('/', '\\\\');
-        }
-        return value;
-    }
-
-    static string[] ProjectArguments(string[] arguments, AliasPlan[] aliases)
-    {
-        var projected = new string[arguments.Length]; for (int index = 0; index < arguments.Length; index++) projected[index] = ProjectOwnedPath(arguments[index], aliases); return projected;
-    }
-
-    static Dictionary<string, string> ProjectEnvironment(Request request, AliasPlan[] aliases)
-    {
-        string systemRoot = Environment.GetEnvironmentVariable("SystemRoot"); RequireLocalAbsolutePath(systemRoot, "SystemRoot");
-        var projected = new Dictionary<string, string>(request.environment, StringComparer.OrdinalIgnoreCase);
-        AliasPlan runtime = aliases[1], scratch = aliases[2];
-        projected["PATH"] = runtime.aliasRoot + ";" + Path.Combine(systemRoot, "System32");
-        foreach (string key in new string[] { "TEMP", "TMP", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA" }) projected[key] = scratch.aliasRoot;
-        string comspec; if (!projected.TryGetValue("COMSPEC", out comspec)) comspec = Path.Combine(systemRoot, "System32", "cmd.exe"); projected["COMSPEC"] = ProjectOwnedPath(comspec, aliases);
-        return projected;
-    }
-
-    static List<Dictionary<string, string>> PathMappings(AliasPlan[] aliases)
-    {
-        var mappings = new List<Dictionary<string, string>>(); foreach (AliasPlan alias in aliases) mappings.Add(new Dictionary<string, string> { { "kind", alias.kind }, { "aliasRoot", alias.aliasRoot }, { "physicalRoot", alias.physicalRoot } }); return mappings;
-    }
-
-    static void RequireLocalAbsolutePath(string value, string description)
-    {
-        if (String.IsNullOrEmpty(value) || value.IndexOf('\\0') >= 0 || value.StartsWith("\\\\\\\\", StringComparison.Ordinal) || value.StartsWith("//", StringComparison.Ordinal) ||
-            value.StartsWith("\\\\\\\\?\\\\", StringComparison.Ordinal) || value.StartsWith("\\\\\\\\.\\\\", StringComparison.Ordinal) || value.Length < 3 ||
-            !Char.IsLetter(value[0]) || value[1] != ':' || (value[2] != '\\\\' && value[2] != '/')) throw new Exception(description + " must be a local absolute path");
-        if (value.IndexOf(':', 2) >= 0) throw new Exception(description + " cannot use an alternate data stream");
-    }
-
-    static string OwnedTemporaryPath(string directory, string prefix)
-    {
-        RequireLocalAbsolutePath(directory, "Directory");
-        string full = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);
-        string parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
-        if (!String.Equals(Path.GetDirectoryName(full), parent, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith(prefix, StringComparison.Ordinal)) throw new Exception("Directory is not owned temporary storage");
-        return full;
-    }
-
-    static string OwnedDirectory(string directory, string prefix)
-    {
-        string full = OwnedTemporaryPath(directory, prefix);
-        if (!Directory.Exists(full) || (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0) throw new Exception("Directory was replaced or linked");
-        return full;
-    }
-
-    static string StateLeaseDirectory(string stateDirectory)
-    {
-        RequireLocalAbsolutePath(stateDirectory, "State directory");
-        string state = Path.GetFullPath(stateDirectory).TrimEnd(Path.DirectorySeparatorChar);
-        if (!Directory.Exists(state) || (File.GetAttributes(state) & FileAttributes.ReparsePoint) != 0) throw new Exception("State directory is unavailable or linked");
-        string lease = Path.Combine(state, "windows-lpac-leases");
-        if (!Directory.Exists(lease)) Directory.CreateDirectory(lease);
-        if ((File.GetAttributes(lease) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease directory is linked");
-        return lease;
-    }
-
-    // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.
-    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }
-
-    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)
-    {
-        RequireLocalAbsolutePath(full, "Permission target");
-        string canonical = Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar);
-        if (String.Equals(canonical + Path.DirectorySeparatorChar, Path.GetPathRoot(canonical), StringComparison.OrdinalIgnoreCase)) throw new Exception("Permission target cannot be a volume root");
-        string root = Path.GetPathRoot(canonical), tail = canonical.Substring(root.Length), current = root;
-        if (tail.Length == 0) throw new Exception("Permission target cannot be a volume root");
-        string[] pieces = tail.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
-        for (int index = 0; index < pieces.Length; index++)
-        {
-            current = Path.Combine(current, pieces[index]);
-            IntPtr handle = CreateFile(current, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
-            if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open permission target");
-            try
-            {
-                ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");
-                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0)
-                {
-                    FileAttributeTagInfo tagInfo;
-                    Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");
-                    if (!IsCloudTag(tagInfo.tag)) throw new Exception("Permission target contains an unsafe reparse point");
-                }
-                bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;
-                if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");
-                if (index == pieces.Length - 1)
-                {
-                    if (!directory && info.links > 1) throw new Exception("Permission target file has multiple hard links");
-                    target.grant.path = canonical; target.grant.directory = directory; target.grant.volume = info.volume; target.grant.fileIndexHigh = info.indexHigh; target.grant.fileIndexLow = info.indexLow;
-                }
-                target.Add(handle); handle = IntPtr.Zero;
-            }
-            finally { if (handle != IntPtr.Zero && handle != InvalidHandle) CloseHandle(handle); }
-        }
-        if (walkTree && target.grant.directory) ScanTree(canonical, maxFiles, new int[] { 0 });
-    }
-
-    static void ScanTree(string directory, int maxFiles, int[] count)
-    {
-        foreach (string child in Directory.GetFileSystemEntries(directory))
-        {
-            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
-            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };
-            try { ValidatePathComponents(child, temporary, false, maxFiles); if (temporary.grant.directory) ScanTree(child, maxFiles, count); }
-            finally { temporary.Dispose(); }
-        }
-    }
-
-    static PinnedTarget PinGrant(Grant supplied, int maxFiles)
-    {
-        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
-        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };
-        try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }
-        catch { target.Dispose(); throw; }
-    }
-
-    static bool SameIdentity(Grant expected, Grant actual)
-    {
-        return expected.directory == actual.directory && expected.volume == actual.volume && expected.fileIndexHigh == actual.fileIndexHigh && expected.fileIndexLow == actual.fileIndexLow;
-    }
-
-    static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }
-
-    static RawSecurityDescriptor ReadDacl(string path)
-    {
-        uint needed;
-        if (!GetFileSecurity(path, 4, null, 0, out needed) && Marshal.GetLastWin32Error() != 122) Check(false, "Measure target DACL");
-        if (needed == 0 || needed > 1024 * 1024) throw new Exception("Invalid target DACL size");
-        var data = new byte[needed];
-        Check(GetFileSecurity(path, 4, data, needed, out needed), "Read target DACL");
-        return new RawSecurityDescriptor(data, 0);
-    }
-
-    static bool SameDacl(RawSecurityDescriptor expected, RawSecurityDescriptor actual)
-    {
-        if (expected.ControlFlags != actual.ControlFlags || expected.DiscretionaryAcl == null || actual.DiscretionaryAcl == null || expected.DiscretionaryAcl.BinaryLength != actual.DiscretionaryAcl.BinaryLength) return false;
-        var left = new byte[expected.DiscretionaryAcl.BinaryLength]; var right = new byte[actual.DiscretionaryAcl.BinaryLength];
-        expected.DiscretionaryAcl.GetBinaryForm(left, 0); actual.DiscretionaryAcl.GetBinaryForm(right, 0);
-        for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;
-        return true;
-    }
-
-    static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)
-    {
-        AccessTree(target, identity, grant, true, target.maxFiles, new int[] { 0 });
-    }
-
-    static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)
-    {
-        // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.
-        RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);
-        if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;
-        RawAcl acl = descriptor.DiscretionaryAcl;
-        bool changed = false;
-        if (acl == null && grant) throw new Exception("Permission target has no DACL");
-        if (acl != null)
-        {
-            int rights = (int)RightsFor(target.grant); CommonAce existing = null;
-            for (int index = acl.Count - 1; index >= 0; index--)
-            {
-                KnownAce ace = acl[index] as KnownAce;
-                if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;
-                if (!grant) { acl.RemoveAce(index); changed = true; }
-                else
-                {
-                    CommonAce allow = ace as CommonAce;
-                    if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");
-                    existing = allow;
-                    if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }
-                }
-            }
-            if (grant && existing == null)
-            {
-                AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;
-                if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;
-                int insert = acl.Count;
-                if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }
-                acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;
-            }
-            if (changed)
-            {
-                ControlFlags storedFlags = descriptor.ControlFlags;
-                // AR preserves AI in this non-propagating write; Windows consumes AR.
-                if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);
-                var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);
-                Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");
-                descriptor.SetFlags(storedFlags);
-                if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");
-            }
-        }
-        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.
-        if (!target.grant.directory) return;
-        foreach (string child in Directory.GetFileSystemEntries(target.grant.path))
-        {
-            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
-            using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })
-            {
-                ValidatePathComponents(child, pin, false, maxFiles);
-                AccessTree(pin, identity, grant, false, maxFiles, count);
-            }
-        }
-    }
-
-    static string Quote(string argument)
-    {
-        var result = new StringBuilder("\\""); int slashes = 0;
-        foreach (char character in argument)
-        {
-            if (character == '\\\\') { slashes++; continue; }
-            if (character == '"') result.Append('\\\\', slashes * 2 + 1);
-            else result.Append('\\\\', slashes);
-            result.Append(character); slashes = 0;
-        }
-        result.Append('\\\\', slashes * 2); return result.Append('"').ToString();
-    }
-
-    static long CurrentProcessStart()
-    {
-        FileTime created, exited, kernel, user;
-        Check(GetProcessTimes(Process.GetCurrentProcess().Handle, out created, out exited, out kernel, out user), "Read controller start time");
-        return FileTimeValue(created);
-    }
-
-    static void WriteLease(string path, Lease lease, bool initial, JavaScriptSerializer serializer)
-    {
-        byte[] data = new UTF8Encoding(false).GetBytes(serializer.Serialize(lease));
-        if (initial)
-        {
-            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }
-            return;
-        }
-        string temporary = path + ".update." + Process.GetCurrentProcess().Id.ToString() + ".tmp";
-        using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }
-        try { File.Replace(temporary, path, null); }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }
-    }
-
-    static void ValidateLease(Lease lease, string expectedFile)
-    {
-        Guid nonce;
-        if (lease == null || (lease.version != 1 && lease.version != 2) || !Guid.TryParseExact(lease.nonce, "D", out nonce) || String.IsNullOrEmpty(lease.profile) ||
-            !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||
-            lease.controllerPid <= 0 || lease.controllerStarted <= 0 || lease.grants == null || (lease.phase != "creating" && lease.phase != "active" && lease.phase != "cleanup-failed")) throw new Exception("Invalid Windows LPAC lease");
-        if (lease.phase != "creating" && String.IsNullOrEmpty(lease.sid)) throw new Exception("Lease has no profile identity");
-        OwnedTemporaryPath(lease.cwd, "agy-mcp-copy-"); OwnedTemporaryPath(lease.runtime, "agy-mcp-runtime-"); OwnedTemporaryPath(lease.scratch, "agy-mcp-scratch-");
-        if (lease.version == 2) ValidateLeaseAliases(lease, nonce);
-    }
-
-    static void ValidateLeaseAliases(Lease lease, Guid nonce)
-    {
-        Luid logon; if (!TryParseLogon(lease.logon, out logon) || lease.aliases == null || lease.aliases.Length != 3) throw new Exception("Invalid Windows LPAC alias lease");
-        string[] kinds = new string[] { "copy", "runtime", "scratch" }, roots = new string[] { lease.cwd, lease.runtime, lease.scratch }; var drives = new HashSet<char>();
-        for (int index = 0; index < lease.aliases.Length; index++)
-        {
-            AliasPlan alias = lease.aliases[index];
-            if (alias == null || !String.Equals(alias.kind, kinds[index], StringComparison.Ordinal) || !String.Equals(alias.physicalRoot, roots[index], StringComparison.OrdinalIgnoreCase) ||
-                !String.Equals(alias.customName, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||
-                String.IsNullOrEmpty(alias.drive) || alias.drive.Length != 2 || alias.drive[0] < 'D' || alias.drive[0] > 'Z' || alias.drive[1] != ':' || !drives.Add(alias.drive[0]) || (index != 0 && alias.drive[0] >= lease.aliases[index - 1].drive[0]) || !String.Equals(alias.aliasRoot, alias.drive + "\\\\", StringComparison.Ordinal) ||
-                !String.Equals(alias.customTarget, RawDosTarget(roots[index]), StringComparison.Ordinal) || !String.Equals(alias.driveTarget, RawDosTarget(alias.customName), StringComparison.Ordinal)) throw new Exception("Invalid Windows LPAC alias plan");
-        }
-    }
-
-    static bool ControllerIsActive(Lease lease)
-    {
-        IntPtr process = OpenProcess(ProcessQueryLimitedInformation | Synchronize, false, (uint)lease.controllerPid);
-        if (process == IntPtr.Zero)
-        {
-            int error = Marshal.GetLastWin32Error();
-            if (error == 87 || error == 1168) return false;
-            throw new Win32Exception(error, "Cannot verify lease controller");
-        }
-        try
-        {
-            FileTime created, exited, kernel, user;
-            Check(GetProcessTimes(process, out created, out exited, out kernel, out user), "Verify lease controller start time");
-            uint state = WaitForSingleObject(process, 0);
-            if (state == WaitTimeout) return FileTimeValue(created) == lease.controllerStarted;
-            if (state == WaitObject0) return false;
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Verify lease controller state");
-        }
-        finally { CloseHandle(process); }
-    }
-
-    static SecurityIdentifier LeaseIdentity(Lease lease)
-    {
-        if (lease.phase == "creating") return null;
-        var identity = new SecurityIdentifier(lease.sid);
-        IntPtr derived; int result = DeriveAppContainerSidFromAppContainerName(lease.profile, out derived);
-        if (result >= 0 && derived != IntPtr.Zero)
-        {
-            try { if (!identity.Equals(new SecurityIdentifier(derived))) throw new Exception("Lease profile SID does not match its profile name"); }
-            finally { FreeSid(derived); }
-        }
-        else if (!IsNotFoundHresult(result)) CheckHr(result, "Verify lease profile SID");
-        return identity;
-    }
-
-    static bool IsMissingOwnedTemporaryGrant(Lease lease, Grant grant)
-    {
-        if (grant == null || !grant.directory) return false;
-        string directory = null, prefix = null;
-        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = "agy-mcp-copy-"; }
-        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = "agy-mcp-runtime-"; }
-        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = "agy-mcp-scratch-"; }
-        else return false;
-        directory = OwnedTemporaryPath(directory, prefix);
-        if (GetFileAttributes(directory) != InvalidFileAttributes) return false;
-        int error = Marshal.GetLastWin32Error();
-        return error == 2 || error == 3;
-    }
-
-    static void DeleteProfile(string profile)
-    {
-        int result = DeleteAppContainerProfile(profile);
-        if (result < 0 && !IsNotFoundHresult(result)) CheckHr(result, "Delete AppContainer profile");
-    }
-
-    static void Recover(string stateDirectory, Dictionary<string, object> result, JavaScriptSerializer serializer)
-    {
-        string directory = StateLeaseDirectory(stateDirectory); var failures = new List<string>(); int recovered = 0, active = 0;
-        foreach (string file in Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
-        {
-            try
-            {
-                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease file is linked");
-                Lease lease = serializer.Deserialize<Lease>(File.ReadAllText(file, Encoding.UTF8)); ValidateLease(lease, file);
-                if (ControllerIsActive(lease)) { active++; continue; }
-                SecurityIdentifier identity = LeaseIdentity(lease); var pins = new List<PinnedTarget>(); var cleanupFailures = new List<string>();
-                try
-                {
-                    if (lease.version == 2)
-                    {
-                        try
-                        {
-                            ControllerIdentity controller = CurrentControllerIdentity();
-                            if (String.Equals(controller.logon, lease.logon, StringComparison.Ordinal))
-                            {
-                                AcquireRecoveryAliasGates(lease.aliases, controller, lease.logon);
-                                try { RemoveAliases(lease.aliases); }
-                                finally { ReleaseAliasGates(lease.aliases); }
-                            }
-                            else if (LogonSessionExists(lease.logon)) throw new Exception("Lease logon session remains active");
-                        }
-                        catch (Exception error) { cleanupFailures.Add("DOS aliases: " + error.Message); }
-                    }
-                    if (identity != null)
-                    {
-                        for (int index = lease.grants.Length - 1; index >= 0; index--)
-                        {
-                            if (IsMissingOwnedTemporaryGrant(lease, lease.grants[index])) continue;
-                            PinnedTarget pin = null;
-                            try { pin = PinGrant(lease.grants[index], 1000000); if (!SameIdentity(lease.grants[index], pin.grant)) throw new Exception("Granted target identity changed"); Access(pin, identity, false); pins.Add(pin); pin = null; }
-                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); if (pin != null) pin.Dispose(); }
-                        }
-                    }
-                    try { DeleteProfile(lease.profile); } catch (Exception error) { cleanupFailures.Add("Profile: " + error.Message); }
-                }
-                finally { for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose(); }
-                if (cleanupFailures.Count != 0)
-                {
-                    lease.phase = "cleanup-failed"; try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }
-                    throw new Exception(String.Join("; ", cleanupFailures.ToArray()));
-                }
-                File.Delete(file); recovered++;
-            }
-            catch (Exception error) { failures.Add(Path.GetFileName(file) + ": " + error.Message); }
-        }
-        result["recovered"] = recovered; result["active"] = active;
-        if (failures.Count != 0) result["error"] = "Windows LPAC recovery failed: " + String.Join("; ", failures.ToArray());
-    }
-
-    static IntPtr DeriveCapability(string name, List<IntPtr> allocations)
-    {
-        IntPtr groups, caps; uint groupCount, capabilityCount;
-        Check(DeriveCapabilitySidsFromName(name, out groups, out groupCount, out caps, out capabilityCount), "Derive " + name + " capability");
-        try
-        {
-            if (capabilityCount != 1) throw new Exception("Unexpected " + name + " capability count");
-            IntPtr sid = Marshal.ReadIntPtr(caps); allocations.Add(sid); return sid;
-        }
-        finally
-        {
-            for (int index = 0; index < (int)groupCount; index++) LocalFree(Marshal.ReadIntPtr(groups, index * IntPtr.Size));
-            if (groups != IntPtr.Zero) LocalFree(groups);
-            if (caps != IntPtr.Zero) LocalFree(caps);
-        }
-    }
-
-    static void AddGrant(List<Grant> grants, string path, string rights)
-    {
-        if (String.IsNullOrEmpty(path)) throw new Exception("Missing owned permission target");
-        foreach (Grant existing in grants) if (String.Equals(existing.path, path, StringComparison.OrdinalIgnoreCase)) { if (rights == "modify") existing.rights = "modify"; return; }
-        grants.Add(new Grant { path = path, rights = rights });
-    }
-
-    static bool IsBridgeOwnedTemporaryPath(string value)
-    {
-        foreach (string part in value.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (part.StartsWith("agy-mcp-copy-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-baseline-", StringComparison.OrdinalIgnoreCase) ||
-                part.StartsWith("agy-mcp-runtime-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-controller-", StringComparison.OrdinalIgnoreCase) ||
-                part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;
-        }
-        return false;
-    }
-
-    static int Main(string[] arguments)
-    {
-        Console.OutputEncoding = new UTF8Encoding(false);
-        var serializer = new JavaScriptSerializer { MaxJsonLength = 2 * 1024 * 1024 };
-        var result = new Dictionary<string, object>();
-        string profile = null, leaseFile = null, cwd = null, runtime = null, scratch = null;
-        SecurityIdentifier identity = null; Lease lease = null;
-        ControllerIdentity controller = null; AliasPlan[] aliases = null;
-        IntPtr sid = IntPtr.Zero, job = IntPtr.Zero, attributes = IntPtr.Zero, capabilityData = IntPtr.Zero, lpacData = IntPtr.Zero, handleData = IntPtr.Zero, jobData = IntPtr.Zero, envData = IntPtr.Zero, capabilityList = IntPtr.Zero;
-        IntPtr read = IntPtr.Zero, write = IntPtr.Zero, inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero;
-        ProcessInfo child = new ProcessInfo(); bool attributesInitialized = false, profileCreated = false;
-        var pins = new List<PinnedTarget>(); var applied = new List<PinnedTarget>();
-        var capabilitySids = new List<IntPtr>();
-        var output = new StringBuilder(); bool truncated = false; Thread reader = null; object jobGate = new object(); int cancellation = 0;
-        try
-        {
-            if (arguments.Length != 1) throw new Exception("One controller request file is required");
-            var request = serializer.Deserialize<Request>(File.ReadAllText(arguments[0], Encoding.UTF8));
-            if (request == null || String.IsNullOrEmpty(request.action)) throw new Exception("Invalid controller request");
-            if (request.action == "recover")
-            {
-                Recover(request.stateDirectory, result, serializer); result["output"] = ""; result["truncated"] = false;
-                Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
-            }
-            if (request.action != "write" && request.action != "read-only") throw new Exception("Invalid controller action");
-            Guid nonce; if (!Guid.TryParseExact(request.nonce, "D", out nonce)) throw new Exception("Invalid nonce");
-            if (!String.Equals(request.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");
-            result["nonce"] = request.nonce;
-            if (request.timeoutSeconds < 1 || request.timeoutSeconds > 86400 || request.maxFiles < 1 || request.maxFiles > 1000000 || request.maxOutputChars < 256 || request.maxOutputChars > 64000 || request.args == null || request.environment == null || request.grants == null) throw new Exception("Invalid request");
-            if (request.args.Length > 50) throw new Exception("Too many command arguments");
-            foreach (string argument in request.args) if (argument == null || argument.Length > 4000 || argument.IndexOf('\\0') >= 0) throw new Exception("Invalid command argument");
-            cwd = OwnedDirectory(request.cwd, "agy-mcp-copy-"); runtime = OwnedDirectory(request.runtime, "agy-mcp-runtime-"); scratch = OwnedDirectory(request.scratch, "agy-mcp-scratch-");
-            string executable = Path.GetFullPath(request.executable);
-            if (!executable.StartsWith(runtime + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(executable) || (File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0) throw new Exception("Executable must be staged inside the runtime");
-            var requestedGrants = new List<Grant>();
-            AddGrant(requestedGrants, cwd, request.action == "read-only" ? "read" : "modify");
-            AddGrant(requestedGrants, runtime, "read"); AddGrant(requestedGrants, scratch, "modify");
-            foreach (Grant grant in request.grants)
-            {
-                if (grant == null || IsBridgeOwnedTemporaryPath(grant.path)) throw new Exception("External permission grant targets bridge-owned temporary storage");
-                AddGrant(requestedGrants, grant.path, grant.rights);
-            }
-            if (requestedGrants.Count > 23) throw new Exception("Too many permission grants");
-            foreach (Grant grant in requestedGrants) pins.Add(PinGrant(grant, request.maxFiles));
-            string state = StateLeaseDirectory(request.stateDirectory);
-            profile = request.profile; leaseFile = Path.Combine(state, nonce.ToString("N") + ".json");
-            controller = CurrentControllerIdentity(); aliases = CreateAliasPlan(nonce, controller, new PinnedTarget[] { pins[0], pins[1], pins[2] });
-            lease = new Lease { version = 2, nonce = request.nonce, profile = profile, phase = "creating", controllerPid = Process.GetCurrentProcess().Id, controllerStarted = CurrentProcessStart(), cwd = cwd, runtime = runtime, scratch = scratch, grants = new Grant[0], logon = controller.logon, aliases = aliases };
-            WriteLease(leaseFile, lease, true, serializer);
-            CheckHr(CreateAppContainerProfile(profile, profile, "Isolated test process", IntPtr.Zero, 0, out sid), "CreateAppContainerProfile");
-            profileCreated = true; identity = new SecurityIdentifier(sid);
-            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Temp"));
-            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Local"));
-            var recorded = new List<Grant>(); foreach (PinnedTarget pin in pins) recorded.Add(pin.grant);
-            lease.sid = identity.Value; lease.grants = recorded.ToArray(); lease.phase = "active"; WriteLease(leaseFile, lease, false, serializer);
-            foreach (PinnedTarget pin in pins) { applied.Add(pin); Access(pin, identity, true); }
-            ApplyAliases(aliases); result["pathMappings"] = PathMappings(aliases);
-
-            var inheritable = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), inherit = 1 };
-            Check(CreatePipe(out read, out write, ref inheritable, 0), "Create output pipe"); Check(SetHandleInformation(read, 1, 0), "Protect output reader");
-            Check(CreatePipe(out inputRead, out inputWrite, ref inheritable, 0), "Create input pipe"); CloseHandle(inputWrite); inputWrite = IntPtr.Zero;
-            job = CreateJobObject(IntPtr.Zero, null); Check(job != IntPtr.Zero, "Create job");
-            var limits = new ExtendedLimits(); limits.basic.flags = JobObjectLimitKillOnJobClose | (request.childProcesses ? 0u : JobObjectLimitActiveProcess); limits.basic.activeProcesses = request.childProcesses ? 0u : 1u; IntPtr limitData = Marshal.AllocHGlobal(Marshal.SizeOf(limits));
-            try { Marshal.StructureToPtr(limits, limitData, false); Check(SetInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits)), "Require job cleanup"); Marshal.DestroyStructure(limitData, typeof(ExtendedLimits)); Check(QueryInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits), IntPtr.Zero), "Verify job limits"); var observed = (ExtendedLimits)Marshal.PtrToStructure(limitData, typeof(ExtendedLimits)); if ((observed.basic.flags & JobObjectLimitKillOnJobClose) == 0 || (observed.basic.flags & (JobObjectLimitBreakawayOk | JobObjectLimitSilentBreakawayOk)) != 0 || (!request.childProcesses && ((observed.basic.flags & JobObjectLimitActiveProcess) == 0 || observed.basic.activeProcesses != 1))) throw new Exception("Job limits were not applied"); }
-            finally { Marshal.FreeHGlobal(limitData); }
-            DeriveCapability("registryRead", capabilitySids);
-            if (request.network) { DeriveCapability("internetClient", capabilitySids); DeriveCapability("privateNetworkClientServer", capabilitySids); }
-                int sidAndAttributesSize = Marshal.SizeOf(typeof(SidAndAttributes)); capabilityList = Marshal.AllocHGlobal(sidAndAttributesSize * capabilitySids.Count);
-                for (int index = 0; index < capabilitySids.Count; index++) Marshal.StructureToPtr(new SidAndAttributes { sid = capabilitySids[index], attributes = 4 }, IntPtr.Add(capabilityList, index * sidAndAttributesSize), false);
-                var caps = new SecurityCapabilities { sid = sid, capabilities = capabilityList, count = (uint)capabilitySids.Count };
-                capabilityData = Marshal.AllocHGlobal(Marshal.SizeOf(caps)); Marshal.StructureToPtr(caps, capabilityData, false);
-                int attributeCount = 4; UIntPtr size = UIntPtr.Zero; InitializeProcThreadAttributeList(IntPtr.Zero, attributeCount, 0, ref size);
-                attributes = Marshal.AllocHGlobal(checked((int)size.ToUInt64())); Check(InitializeProcThreadAttributeList(attributes, attributeCount, 0, ref size), "Initialize attributes"); attributesInitialized = true;
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeSecurityCapabilities), capabilityData, new UIntPtr((uint)Marshal.SizeOf(caps)), IntPtr.Zero, IntPtr.Zero), "Set AppContainer");
-                lpacData = Marshal.AllocHGlobal(4); Marshal.WriteInt32(lpacData, (int)AllApplicationPackagesPolicyLpac);
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeAllApplicationPackagesPolicy), lpacData, new UIntPtr(4), IntPtr.Zero, IntPtr.Zero), "Require LPAC");
-                handleData = Marshal.AllocHGlobal(IntPtr.Size * 2); Marshal.WriteIntPtr(handleData, write); Marshal.WriteIntPtr(handleData, IntPtr.Size, inputRead);
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeHandleList), handleData, new UIntPtr((uint)(IntPtr.Size * 2)), IntPtr.Zero, IntPtr.Zero), "Restrict inherited handles");
-                jobData = Marshal.AllocHGlobal(IntPtr.Size); Marshal.WriteIntPtr(jobData, job);
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeJobList), jobData, new UIntPtr((uint)IntPtr.Size), IntPtr.Zero, IntPtr.Zero), "Assign job at process creation");
-            var startup = new StartupInfoEx(); startup.startup.cb = Marshal.SizeOf(startup); startup.startup.flags = 0x100; startup.startup.input = inputRead; startup.startup.output = write; startup.startup.error = write; startup.attributes = attributes;
-            string aliasExecutable = ProjectOwnedPath(executable, aliases), aliasCwd = ProjectOwnedPath(cwd, aliases); if (String.Equals(aliasExecutable, executable, StringComparison.OrdinalIgnoreCase) || String.Equals(aliasCwd, cwd, StringComparison.OrdinalIgnoreCase)) throw new Exception("Owned paths were not projected to DOS aliases");
-            var command = new StringBuilder(Quote(aliasExecutable)); foreach (string argument in ProjectArguments(request.args, aliases)) command.Append(' ').Append(Quote(argument));
-            Dictionary<string, string> projectedEnvironment = ProjectEnvironment(request, aliases); var environment = new StringBuilder(); var keys = new List<string>(projectedEnvironment.Keys); keys.Sort(StringComparer.OrdinalIgnoreCase);
-            foreach (string key in keys) { string value = projectedEnvironment[key]; if (String.IsNullOrEmpty(key) || value == null || key.IndexOfAny(new char[] { '=', '\\0' }) >= 0 || value.IndexOf('\\0') >= 0) throw new Exception("Invalid environment"); environment.Append(key).Append('=').Append(value).Append('\\0'); }
-            environment.Append('\\0'); envData = Marshal.StringToHGlobalUni(environment.ToString());
-            Check(CreateProcess(aliasExecutable, command, IntPtr.Zero, IntPtr.Zero, true, 0x80000 | 0x400 | 0x4 | 0x8000000, envData, aliasCwd, ref startup, out child), "Create isolated process");
-            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);
-            capabilitySids.Clear();
-            bool inJob; Check(IsProcessInJob(child.process, job, out inJob) && inJob, "Verify isolated job");
-            IntPtr token; Check(OpenProcessToken(child.process, 8, out token), "Inspect child token");
-            try
-            {
-                IntPtr info = Marshal.AllocHGlobal(IntPtr.Size); uint returned;
-                try
-                {
-                    Check(GetTokenInformation(token, 29, info, (uint)IntPtr.Size, out returned), "Verify AppContainer token"); if (Marshal.ReadInt32(info) != 1) throw new Exception("AppContainer token missing");
-                    GetTokenInformation(token, 31, IntPtr.Zero, 0, out returned); if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid package identity size"); IntPtr packageInfo = Marshal.AllocHGlobal(checked((int)returned));
-                    try { Check(GetTokenInformation(token, 31, packageInfo, returned, out returned), "Verify package identity"); if (!identity.Equals(new SecurityIdentifier(Marshal.ReadIntPtr(packageInfo)))) throw new Exception("Package identity mismatch"); }
-                    finally { Marshal.FreeHGlobal(packageInfo); }
-                }
-                finally { Marshal.FreeHGlobal(info); }
-            }
-            finally { CloseHandle(token); }
-            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
-            var cancelReader = new Thread(delegate() { string message = Console.ReadLine(); if (message == null || message == "cancel " + request.nonce) { Interlocked.Exchange(ref cancellation, 1); lock (jobGate) { if (job != IntPtr.Zero) TerminateJobObject(job, 125); } } }); cancelReader.IsBackground = true; cancelReader.Start();
-            CloseHandle(write); write = IntPtr.Zero; CloseHandle(inputRead); inputRead = IntPtr.Zero; IntPtr outputHandle = read; read = IntPtr.Zero;
-            reader = new Thread(delegate() { using (var stream = new FileStream(new SafeFileHandle(outputHandle, true), FileAccess.Read)) using (var text = new StreamReader(stream, Encoding.UTF8)) { char[] buffer = new char[2048]; int count; while ((count = text.Read(buffer, 0, buffer.Length)) != 0) { output.Append(buffer, 0, count); if (output.Length > request.maxOutputChars) { truncated = true; output.Remove(0, output.Length - request.maxOutputChars); } } } }); reader.Start();
-            if (ResumeThread(child.thread) == UInt32.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error(), "Resume isolated process");
-            result["pid"] = child.pid; result["sandbox"] = "windows-lpac";
-            uint wait = WaitForSingleObject(child.process, checked((uint)request.timeoutSeconds * 1000));
-            if (wait == WaitTimeout) { result["error"] = "Command timed out"; Check(TerminateJobObject(job, 124), "Terminate timed out job"); if (WaitForSingleObject(child.process, 5000) != WaitObject0) throw new Exception("Timed out process did not terminate"); }
-            else if (wait != WaitObject0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Wait for isolated process");
-            uint exit; Check(GetExitCodeProcess(child.process, out exit), "Read exit code"); result["exitCode"] = exit;
-            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
-            if (Interlocked.CompareExchange(ref cancellation, 0, 0) != 0) result["error"] = "Command cancelled";
-        }
-        catch (Exception error) { result["error"] = error.Message; result["exitCode"] = null; }
-        finally
-        {
-            if (child.process != IntPtr.Zero) TerminateProcess(child.process, 125);
-            lock (jobGate) { if (job != IntPtr.Zero) { CloseHandle(job); job = IntPtr.Zero; } }
-            if (write != IntPtr.Zero) CloseHandle(write); if (reader != null && !reader.Join(5000)) result["error"] = "Output reader did not terminate";
-            if (child.thread != IntPtr.Zero) CloseHandle(child.thread); if (child.process != IntPtr.Zero) CloseHandle(child.process); if (read != IntPtr.Zero) CloseHandle(read); if (inputRead != IntPtr.Zero) CloseHandle(inputRead); if (inputWrite != IntPtr.Zero) CloseHandle(inputWrite);
-            if (attributesInitialized) DeleteProcThreadAttributeList(attributes);
-            foreach (IntPtr pointer in new IntPtr[] { attributes, capabilityData, capabilityList, lpacData, handleData, jobData, envData }) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer);
-            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);
-            var failures = new List<string>();
-            if (aliases != null) try { RemoveAliases(aliases); result["aliasesDeleted"] = true; } catch (Exception error) { failures.Add("DOS aliases: " + error.Message); } finally { ReleaseAliasGates(aliases); }
-            for (int index = applied.Count - 1; index >= 0; index--) try { Access(applied[index], identity, false); } catch (Exception error) { failures.Add("ACL " + index.ToString() + ": " + error.Message); }
-            if (profileCreated) try { DeleteProfile(profile); result["profileDeleted"] = true; } catch (Exception error) { failures.Add("Profile: " + error.Message); }
-            for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose();
-            if (sid != IntPtr.Zero) FreeSid(sid);
-            if (leaseFile != null)
-            {
-                if (failures.Count == 0 && profileCreated) { try { File.Delete(leaseFile); } catch (Exception error) { failures.Add("Lease: " + error.Message); } }
-                if (failures.Count != 0) try { if (lease != null) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }
-            }
-            if (failures.Count != 0) result["error"] = "Cleanup failed: " + String.Join("; ", failures.ToArray());
-        }
-        result["output"] = output.ToString(); result["truncated"] = truncated; Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
-    }
-}
+var windowsHelperSource = `using System;\r
+using System.Collections.Generic;\r
+using System.ComponentModel;\r
+using System.Diagnostics;\r
+using System.Globalization;\r
+using System.IO;\r
+using System.Runtime.InteropServices;\r
+using System.Security.AccessControl;\r
+using System.Security.Principal;\r
+using System.Text;\r
+using System.Threading;\r
+using System.Web.Script.Serialization;\r
+using Microsoft.Win32.SafeHandles;\r
+\r
+internal static class WindowsTestRunner\r
+{\r
+    const uint FileShareRead = 1, FileShareWrite = 2, OpenExisting = 3, FileFlagBackupSemantics = 0x02000000, FileFlagOpenReparsePoint = 0x00200000, InvalidFileAttributes = 0xffffffff;\r
+    const uint WaitObject0 = 0, WaitTimeout = 0x102, ProcessQueryLimitedInformation = 0x1000, Synchronize = 0x100000;\r
+    const uint DosRawTargetPath = 1, DosRemoveDefinition = 2, DosExactMatchOnRemove = 4, DosNoBroadcast = 8;\r
+    const int ProcThreadAttributeSecurityCapabilities = 0x20009, ProcThreadAttributeHandleList = 0x20002, ProcThreadAttributeJobList = 0x2000D, ProcThreadAttributeAllApplicationPackagesPolicy = 0x2000F;\r
+    const uint AllApplicationPackagesPolicyLpac = 1, JobObjectExtendedLimitInformation = 9, JobObjectLimitKillOnJobClose = 0x2000, JobObjectLimitActiveProcess = 0x8, JobObjectLimitBreakawayOk = 0x800, JobObjectLimitSilentBreakawayOk = 0x1000;\r
+    public sealed class Request\r
+    {\r
+        public string action;\r
+        public string nonce;\r
+        public string profile;\r
+        public string cwd;\r
+        public string runtime;\r
+        public string scratch;\r
+        public string executable;\r
+        public string[] args;\r
+        public int timeoutSeconds;\r
+        public int maxFiles;\r
+        public int maxOutputChars;\r
+        public bool network;\r
+        public bool childProcesses;\r
+        public string stateDirectory;\r
+        public Grant[] grants;\r
+        public Dictionary<string, string> environment;\r
+    }\r
+\r
+    public sealed class Grant\r
+    {\r
+        public string path;\r
+        public string rights;\r
+        public bool directory;\r
+        public uint volume;\r
+        public uint fileIndexHigh;\r
+        public uint fileIndexLow;\r
+    }\r
+\r
+    public sealed class Lease\r
+    {\r
+        public int version;\r
+        public string nonce;\r
+        public string profile;\r
+        public string sid;\r
+        public string phase;\r
+        public int controllerPid;\r
+        public long controllerStarted;\r
+        public string cwd;\r
+        public string runtime;\r
+        public string scratch;\r
+        public Grant[] grants;\r
+        public string logon;\r
+        public AliasPlan[] aliases;\r
+    }\r
+\r
+    public sealed class AliasPlan\r
+    {\r
+        public string kind;\r
+        public string physicalRoot;\r
+        public string customName;\r
+        public string drive;\r
+        public string aliasRoot;\r
+        public string customTarget;\r
+        public string driveTarget;\r
+        public uint volume;\r
+        public uint fileIndexHigh;\r
+        public uint fileIndexLow;\r
+        internal Mutex gate;\r
+    }\r
+\r
+    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }\r
+    [StructLayout(LayoutKind.Sequential)] struct SecurityCapabilities { public IntPtr sid, capabilities; public uint count, reserved; }\r
+    [StructLayout(LayoutKind.Sequential)] struct SidAndAttributes { public IntPtr sid; public uint attributes; }\r
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct StartupInfo\r
+    {\r
+        public int cb; public string reserved, desktop, title;\r
+        public uint x, y, xSize, ySize, xChars, yChars, fill, flags;\r
+        public short showWindow, reservedSize; public IntPtr reservedBytes, input, output, error;\r
+    }\r
+    [StructLayout(LayoutKind.Sequential)] struct StartupInfoEx { public StartupInfo startup; public IntPtr attributes; }\r
+    [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process, thread; public uint pid, threadId; }\r
+    [StructLayout(LayoutKind.Sequential)] struct BasicLimits\r
+    {\r
+        public long processTime, jobTime; public uint flags; public UIntPtr minimumWorkingSet, maximumWorkingSet;\r
+        public uint activeProcesses; public UIntPtr affinity; public uint priority, scheduling;\r
+    }\r
+    [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong readOps, writeOps, otherOps, readBytes, writeBytes, otherBytes; }\r
+    [StructLayout(LayoutKind.Sequential)] struct ExtendedLimits { public BasicLimits basic; public IoCounters io; public UIntPtr processMemory, jobMemory, peakProcessMemory, peakJobMemory; }\r
+    [StructLayout(LayoutKind.Sequential)] struct FileTime { public uint low, high; }\r
+    [StructLayout(LayoutKind.Sequential)] struct Luid { public uint low; public int high; }\r
+    [StructLayout(LayoutKind.Sequential)] struct TokenStatistics\r
+    {\r
+        public Luid tokenId, authenticationId; public long expiration; public uint tokenType, impersonationLevel, dynamicCharged, dynamicAvailable, groupCount, privilegeCount; public Luid modifiedId;\r
+    }\r
+    [StructLayout(LayoutKind.Sequential)] struct ByHandleFileInformation\r
+    {\r
+        public uint attributes; public FileTime created, accessed, written; public uint volume, sizeHigh, sizeLow, links, indexHigh, indexLow;\r
+    }\r
+\r
+    sealed class PinnedTarget : IDisposable\r
+    {\r
+        public Grant grant;\r
+        public int maxFiles;\r
+        readonly List<IntPtr> handles = new List<IntPtr>();\r
+        public void Add(IntPtr value) { handles.Add(value); }\r
+        public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }\r
+    }\r
+\r
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string display, string description, IntPtr capabilities, uint count, out IntPtr sid);\r
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);\r
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeriveAppContainerSidFromAppContainerName(string name, out IntPtr sid);\r
+    [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);\r
+    [DllImport("kernelbase.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DeriveCapabilitySidsFromName(string name, out IntPtr groups, out uint groupCount, out IntPtr capabilities, out uint capabilityCount);\r
+    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, uint flags, ref UIntPtr size);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, UIntPtr size, IntPtr previous, IntPtr returned);\r
+    [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);\r
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcess(string app, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string cwd, ref StartupInfoEx startup, out ProcessInfo process);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes attributes, uint size);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateJobObject(IntPtr attributes, string name);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int info, IntPtr limits, uint size);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr job, uint code);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint code);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint ResumeThread(IntPtr thread);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);\r
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);\r
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string path, uint information, byte[] descriptor, uint length, out uint needed);\r
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string path, uint information, byte[] descriptor);\r
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);\r
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);\r
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);\r
+    [StructLayout(LayoutKind.Sequential)] struct FileAttributeTagInfo { public uint attributes, tag; }\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);\r
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);\r
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);\r
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);\r
+    [DllImport("secur32.dll")] static extern int LsaEnumerateLogonSessions(out uint count, out IntPtr sessions);\r
+    [DllImport("secur32.dll")] static extern int LsaFreeReturnBuffer(IntPtr buffer);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint desiredAccess, bool inherit, uint processId);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetProcessTimes(IntPtr process, out FileTime creation, out FileTime exit, out FileTime kernel, out FileTime user);\r
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int info, IntPtr limits, uint size, IntPtr returned);\r
+\r
+    static readonly IntPtr InvalidHandle = new IntPtr(-1);\r
+\r
+    static void Check(bool success, string operation)\r
+    {\r
+        if (!success) { int code = Marshal.GetLastWin32Error(); throw new Win32Exception(code, operation + " (Win32 " + code + "): " + new Win32Exception(code).Message); }\r
+    }\r
+    static void CheckHr(int result, string operation) { if (result < 0) throw new Exception(operation + ": 0x" + result.ToString("x8")); }\r
+    static bool IsNotFoundHresult(int value) { return value == unchecked((int)0x80070002) || value == unchecked((int)0x80070003); }\r
+    static long FileTimeValue(FileTime value) { return ((long)value.high << 32) | value.low; }\r
+\r
+    sealed class ControllerIdentity\r
+    {\r
+        public SecurityIdentifier user;\r
+        public string logon;\r
+    }\r
+\r
+    static ControllerIdentity CurrentControllerIdentity()\r
+    {\r
+        IntPtr token;\r
+        Check(OpenProcessToken(Process.GetCurrentProcess().Handle, 8, out token), "Open controller token");\r
+        try\r
+        {\r
+            uint returned;\r
+            GetTokenInformation(token, 1, IntPtr.Zero, 0, out returned);\r
+            if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid controller user token size");\r
+            IntPtr userData = Marshal.AllocHGlobal(checked((int)returned));\r
+            try\r
+            {\r
+                Check(GetTokenInformation(token, 1, userData, returned, out returned), "Read controller user token");\r
+                var user = new SecurityIdentifier(Marshal.ReadIntPtr(userData));\r
+                if (user.IsWellKnown(WellKnownSidType.LocalSystemSid)) throw new Exception("LocalSystem cannot create local DOS aliases");\r
+                int size = Marshal.SizeOf(typeof(TokenStatistics)); IntPtr statisticsData = Marshal.AllocHGlobal(size);\r
+                try\r
+                {\r
+                    Check(GetTokenInformation(token, 10, statisticsData, (uint)size, out returned), "Read controller logon token");\r
+                    var statistics = (TokenStatistics)Marshal.PtrToStructure(statisticsData, typeof(TokenStatistics));\r
+                    return new ControllerIdentity { user = user, logon = ((uint)statistics.authenticationId.high).ToString("x8") + "." + statistics.authenticationId.low.ToString("x8") };\r
+                }\r
+                finally { Marshal.FreeHGlobal(statisticsData); }\r
+            }\r
+            finally { Marshal.FreeHGlobal(userData); }\r
+        }\r
+        finally { CloseHandle(token); }\r
+    }\r
+\r
+    static bool TryParseLogon(string value, out Luid logon)\r
+    {\r
+        logon = new Luid();\r
+        if (String.IsNullOrEmpty(value) || value.Length != 17 || value[8] != '.') return false;\r
+        for (int index = 0; index < value.Length; index++) if (index != 8 && !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f') || (value[index] >= 'A' && value[index] <= 'F'))) return false;\r
+        uint high, low;\r
+        if (!UInt32.TryParse(value.Substring(0, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out high) || !UInt32.TryParse(value.Substring(9, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out low)) return false;\r
+        logon.high = unchecked((int)high); logon.low = low; return true;\r
+    }\r
+\r
+    static string DriveGateName(string logon, char letter)\r
+    {\r
+        Luid parsed; if (!TryParseLogon(logon, out parsed)) throw new Exception("Invalid logon identifier for DOS alias mutex");\r
+        return "Global\\\\AGY.TEST.DOS." + logon + "." + letter;\r
+    }\r
+\r
+    static bool LogonSessionExists(string value)\r
+    {\r
+        Luid expected; if (!TryParseLogon(value, out expected)) throw new Exception("Invalid logon identifier for DOS alias recovery");\r
+        uint count; IntPtr sessions; int status = LsaEnumerateLogonSessions(out count, out sessions);\r
+        if (status != 0) throw new Exception("Enumerate logon sessions: 0x" + status.ToString("x8"));\r
+        try\r
+        {\r
+            if (count > 1048576) throw new Exception("Logon session enumeration exceeded its bounded count");\r
+            int size = Marshal.SizeOf(typeof(Luid));\r
+            for (uint index = 0; index < count; index++)\r
+            {\r
+                var candidate = (Luid)Marshal.PtrToStructure(IntPtr.Add(sessions, checked((int)(index * (uint)size))), typeof(Luid));\r
+                if (candidate.high == expected.high && candidate.low == expected.low) return true;\r
+            }\r
+            return false;\r
+        }\r
+        finally\r
+        {\r
+            if (sessions != IntPtr.Zero)\r
+            {\r
+                int released = LsaFreeReturnBuffer(sessions);\r
+                if (released != 0) throw new Exception("Free logon session enumeration: 0x" + released.ToString("x8"));\r
+            }\r
+        }\r
+    }\r
+\r
+    static string[] QueryDosTargets(string name)\r
+    {\r
+        for (uint capacity = 256; capacity <= 65536; capacity *= 2)\r
+        {\r
+            var buffer = new char[checked((int)capacity)];\r
+            uint length = QueryDosDevice(name, buffer, capacity);\r
+            if (length != 0) return new String(buffer, 0, checked((int)length)).Split(new char[] { '\\0' }, StringSplitOptions.RemoveEmptyEntries);\r
+            int error = Marshal.GetLastWin32Error();\r
+            if (error == 2) return null;\r
+            if (error == 122) continue;\r
+            throw new Win32Exception(error, "Query DOS device " + name);\r
+        }\r
+        throw new Exception("DOS device query exceeded its bounded buffer");\r
+    }\r
+\r
+    static void RequireDosAbsent(string name)\r
+    {\r
+        string[] targets = QueryDosTargets(name);\r
+        if (targets != null) throw new Exception("DOS device is already defined: " + name);\r
+    }\r
+\r
+    static void RequireDosExact(string name, string target)\r
+    {\r
+        string[] targets = QueryDosTargets(name);\r
+        if (targets == null || targets.Length != 1 || !String.Equals(targets[0], target, StringComparison.Ordinal)) throw new Exception("DOS device definition is missing, foreign, or stacked: " + name);\r
+    }\r
+\r
+    static Mutex AcquireDriveGate(char letter, ControllerIdentity controller)\r
+    {\r
+        var security = new MutexSecurity(); security.SetOwner(controller.user);\r
+        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));\r
+        bool created; Mutex gate = new Mutex(true, DriveGateName(controller.logon, letter), out created, security);\r
+        if (created) return gate;\r
+        gate.Close(); return null;\r
+    }\r
+\r
+    static Mutex AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)\r
+    {\r
+        var security = new MutexSecurity(); security.SetOwner(controller.user);\r
+        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));\r
+        bool created, owned = false; Mutex gate = null;\r
+        try\r
+        {\r
+            gate = new Mutex(false, DriveGateName(logon, letter), out created, security);\r
+            try { owned = gate.WaitOne(0); }\r
+            catch (AbandonedMutexException) { owned = true; }\r
+            if (!owned) throw new Exception("DOS drive mutex is held: " + letter);\r
+            return gate;\r
+        }\r
+        catch\r
+        {\r
+            if (gate != null) { if (owned) gate.ReleaseMutex(); gate.Close(); }\r
+            throw;\r
+        }\r
+    }\r
+\r
+    static string RawDosTarget(string value) { return "\\\\??\\\\" + value; }\r
+\r
+    static AliasPlan[] CreateAliasPlan(Guid nonce, ControllerIdentity controller, PinnedTarget[] roots)\r
+    {\r
+        if (roots == null || roots.Length != 3) throw new Exception("Exactly three owned roots are required for DOS aliases");\r
+        string[] kinds = new string[] { "copy", "runtime", "scratch" };\r
+        var aliases = new AliasPlan[3]; int selected = 0;\r
+        try\r
+        {\r
+            for (char letter = 'Z'; letter >= 'D' && selected < aliases.Length; letter--)\r
+            {\r
+                string drive = letter + ":"; if (QueryDosTargets(drive) != null) continue;\r
+                Mutex gate = AcquireDriveGate(letter, controller); if (gate == null) continue;\r
+                try\r
+                {\r
+                    if (QueryDosTargets(drive) != null) continue;\r
+                    Grant root = roots[selected].grant;\r
+                    if (!root.directory) throw new Exception("Owned DOS alias root is not a directory");\r
+                    string custom = "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();\r
+                    RequireDosAbsent(custom);\r
+                    aliases[selected] = new AliasPlan { kind = kinds[selected], physicalRoot = root.path, customName = custom, drive = drive, aliasRoot = drive + "\\\\", customTarget = RawDosTarget(root.path), driveTarget = RawDosTarget(custom), volume = root.volume, fileIndexHigh = root.fileIndexHigh, fileIndexLow = root.fileIndexLow, gate = gate };\r
+                    gate = null; selected++;\r
+                }\r
+                finally { if (gate != null) { gate.ReleaseMutex(); gate.Close(); } }\r
+            }\r
+            if (selected != aliases.Length) throw new Exception("Fewer than three unused DOS drive letters are available");\r
+            return aliases;\r
+        }\r
+        catch { ReleaseAliasGates(aliases); throw; }\r
+    }\r
+\r
+    static void ReleaseAliasGates(AliasPlan[] aliases)\r
+    {\r
+        if (aliases == null) return;\r
+        for (int index = aliases.Length - 1; index >= 0; index--) if (aliases[index] != null && aliases[index].gate != null)\r
+        {\r
+            aliases[index].gate.ReleaseMutex(); aliases[index].gate.Close(); aliases[index].gate = null;\r
+        }\r
+    }\r
+\r
+    static void AcquireRecoveryAliasGates(AliasPlan[] aliases, ControllerIdentity controller, string logon)\r
+    {\r
+        try\r
+        {\r
+            for (int index = 0; index < aliases.Length; index++) aliases[index].gate = AcquireRecoveryDriveGate(aliases[index].drive[0], controller, logon);\r
+        }\r
+        catch { ReleaseAliasGates(aliases); throw; }\r
+    }\r
+\r
+    static void VerifyAliasRoot(AliasPlan alias)\r
+    {\r
+        IntPtr handle = CreateFile(alias.aliasRoot, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);\r
+        if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open DOS alias root");\r
+        try\r
+        {\r
+            ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect DOS alias root");\r
+            if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0 || (info.attributes & (uint)FileAttributes.Directory) == 0 || info.volume != alias.volume || info.indexHigh != alias.fileIndexHigh || info.indexLow != alias.fileIndexLow) throw new Exception("DOS alias root identity changed");\r
+        }\r
+        finally { CloseHandle(handle); }\r
+    }\r
+\r
+    static void DefineAlias(AliasPlan alias, bool drive)\r
+    {\r
+        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;\r
+        RequireDosAbsent(name); Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast, name, target), "Define DOS device " + name); RequireDosExact(name, target);\r
+    }\r
+\r
+    static void ApplyAliases(AliasPlan[] aliases)\r
+    {\r
+        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], false);\r
+        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], true);\r
+        for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }\r
+    }\r
+\r
+    static void RemoveAlias(AliasPlan alias, bool drive)\r
+    {\r
+        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;\r
+        string[] current = QueryDosTargets(name); if (current == null) return;\r
+        if (current.Length != 1 || !String.Equals(current[0], target, StringComparison.Ordinal)) throw new Exception("DOS alias cleanup found a foreign or stacked definition: " + name);\r
+        Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast | DosRemoveDefinition | DosExactMatchOnRemove, name, target), "Remove DOS device " + name);\r
+        if (QueryDosTargets(name) != null) throw new Exception("DOS alias remained after exact cleanup: " + name);\r
+    }\r
+\r
+    static void RemoveAliases(AliasPlan[] aliases)\r
+    {\r
+        if (aliases == null) return;\r
+        var failures = new List<string>();\r
+        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], true); } catch (Exception error) { failures.Add(error.Message); }\r
+        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], false); } catch (Exception error) { failures.Add(error.Message); }\r
+        if (failures.Count != 0) throw new Exception(String.Join("; ", failures.ToArray()));\r
+    }\r
+\r
+    static bool IsPhysicalAbsolutePath(string value)\r
+    {\r
+        return !String.IsNullOrEmpty(value) && value.Length >= 3 && Char.IsLetter(value[0]) && value[1] == ':' && (value[2] == '\\\\' || value[2] == '/') && !value.StartsWith("\\\\\\\\", StringComparison.Ordinal) && value.IndexOf(':', 2) < 0;\r
+    }\r
+\r
+    static string ProjectOwnedPath(string value, AliasPlan[] aliases)\r
+    {\r
+        if (!IsPhysicalAbsolutePath(value)) return value;\r
+        for (int index = 0; index < aliases.Length; index++)\r
+        {\r
+            string root = aliases[index].physicalRoot;\r
+            if (value.Length < root.Length) continue;\r
+            bool match = true;\r
+            for (int character = 0; character < root.Length; character++)\r
+            {\r
+                char actual = value[character], expected = root[character];\r
+                if ((actual == '\\\\' || actual == '/') && (expected == '\\\\' || expected == '/')) continue;\r
+                if (Char.ToUpperInvariant(actual) != Char.ToUpperInvariant(expected)) { match = false; break; }\r
+            }\r
+            if (!match || (value.Length > root.Length && value[root.Length] != '\\\\' && value[root.Length] != '/')) continue;\r
+            string tail = value.Substring(root.Length).TrimStart('\\\\', '/');\r
+            foreach (string part in tail.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries)) if (part == "." || part == "..") return value;\r
+            return aliases[index].aliasRoot + tail.Replace('/', '\\\\');\r
+        }\r
+        return value;\r
+    }\r
+\r
+    static string[] ProjectArguments(string[] arguments, AliasPlan[] aliases)\r
+    {\r
+        var projected = new string[arguments.Length]; for (int index = 0; index < arguments.Length; index++) projected[index] = ProjectOwnedPath(arguments[index], aliases); return projected;\r
+    }\r
+\r
+    static Dictionary<string, string> ProjectEnvironment(Request request, AliasPlan[] aliases)\r
+    {\r
+        string systemRoot = Environment.GetEnvironmentVariable("SystemRoot"); RequireLocalAbsolutePath(systemRoot, "SystemRoot");\r
+        string system32 = Path.Combine(systemRoot, "System32");\r
+        string system32Canonical = Path.GetFullPath(system32);\r
+        var projected = new Dictionary<string, string>(request.environment, StringComparer.OrdinalIgnoreCase);\r
+        AliasPlan runtime = aliases[1], scratch = aliases[2];\r
+\r
+        string runtimePhysical = Path.GetFullPath(runtime.physicalRoot);\r
+        string runtimeSeparator = runtimePhysical.EndsWith("\\\\") ? runtimePhysical : runtimePhysical + "\\\\";\r
+\r
+        var pathEntries = new List<string>();\r
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);\r
+\r
+        pathEntries.Add(runtime.aliasRoot);\r
+        seen.Add(runtime.aliasRoot);\r
+\r
+        string rawPath;\r
+        if (projected.TryGetValue("PATH", out rawPath) && !String.IsNullOrEmpty(rawPath))\r
+        {\r
+            string[] items = rawPath.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);\r
+            foreach (string rawItem in items)\r
+            {\r
+                string item = rawItem.Trim().Trim('"');\r
+                if (String.IsNullOrEmpty(item)) continue;\r
+                if (!IsPhysicalAbsolutePath(item)) continue;\r
+                string full;\r
+                try { full = Path.GetFullPath(item); } catch { continue; }\r
+                if (!IsPhysicalAbsolutePath(full)) continue;\r
+\r
+                if (String.Equals(full, system32Canonical, StringComparison.OrdinalIgnoreCase)) continue;\r
+\r
+                bool isRuntimeOwned = String.Equals(full, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||\r
+                                      full.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);\r
+                if (!isRuntimeOwned) continue;\r
+\r
+                string mapped = ProjectOwnedPath(full, aliases);\r
+                if (!mapped.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) continue;\r
+\r
+                if (seen.Add(mapped))\r
+                {\r
+                    pathEntries.Add(mapped);\r
+                }\r
+            }\r
+        }\r
+\r
+        if (seen.Add(system32))\r
+        {\r
+            pathEntries.Add(system32);\r
+        }\r
+\r
+        projected["PATH"] = String.Join(";", pathEntries.ToArray());\r
+        foreach (string key in new string[] { "TEMP", "TMP", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA" }) projected[key] = scratch.aliasRoot;\r
+        string comspec; if (!projected.TryGetValue("COMSPEC", out comspec)) comspec = Path.Combine(systemRoot, "System32", "cmd.exe"); projected["COMSPEC"] = ProjectOwnedPath(comspec, aliases);\r
+\r
+        string gitExecPath;\r
+        if (projected.TryGetValue("GIT_EXEC_PATH", out gitExecPath) && !String.IsNullOrEmpty(gitExecPath))\r
+        {\r
+            RequireLocalAbsolutePath(gitExecPath, "GIT_EXEC_PATH");\r
+            string fullGitExec = Path.GetFullPath(gitExecPath);\r
+            RequireLocalAbsolutePath(fullGitExec, "GIT_EXEC_PATH");\r
+            bool isInsideRuntime = String.Equals(fullGitExec, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||\r
+                                  fullGitExec.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);\r
+            if (!isInsideRuntime) throw new Exception("GIT_EXEC_PATH must be located inside the runtime directory: " + gitExecPath);\r
+            string projectedGitExec = ProjectOwnedPath(fullGitExec, aliases);\r
+            if (!projectedGitExec.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_EXEC_PATH projection failed: " + gitExecPath);\r
+            projected["GIT_EXEC_PATH"] = projectedGitExec;\r
+        }\r
+\r
+        string gitConfigGlobal;\r
+        if (projected.TryGetValue("GIT_CONFIG_GLOBAL", out gitConfigGlobal) && !String.IsNullOrEmpty(gitConfigGlobal))\r
+        {\r
+            RequireLocalAbsolutePath(gitConfigGlobal, "GIT_CONFIG_GLOBAL");\r
+            string fullGitConfig = Path.GetFullPath(gitConfigGlobal);\r
+            RequireLocalAbsolutePath(fullGitConfig, "GIT_CONFIG_GLOBAL");\r
+            string scratchPhysical = Path.GetFullPath(scratch.physicalRoot);\r
+            string scratchSeparator = scratchPhysical.EndsWith("\\\\") ? scratchPhysical : scratchPhysical + "\\\\";\r
+            bool isInsideScratch = String.Equals(fullGitConfig, scratchPhysical, StringComparison.OrdinalIgnoreCase) ||\r
+                                  fullGitConfig.StartsWith(scratchSeparator, StringComparison.OrdinalIgnoreCase);\r
+            if (!isInsideScratch) throw new Exception("GIT_CONFIG_GLOBAL must be located inside the scratch directory: " + gitConfigGlobal);\r
+            string projectedGitConfig = ProjectOwnedPath(fullGitConfig, aliases);\r
+            if (!projectedGitConfig.StartsWith(scratch.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_CONFIG_GLOBAL projection failed: " + gitConfigGlobal);\r
+            projected["GIT_CONFIG_GLOBAL"] = projectedGitConfig;\r
+        }\r
+\r
+        return projected;\r
+    }\r
+\r
+    static List<Dictionary<string, string>> PathMappings(AliasPlan[] aliases)\r
+    {\r
+        var mappings = new List<Dictionary<string, string>>(); foreach (AliasPlan alias in aliases) mappings.Add(new Dictionary<string, string> { { "kind", alias.kind }, { "aliasRoot", alias.aliasRoot }, { "physicalRoot", alias.physicalRoot } }); return mappings;\r
+    }\r
+\r
+    static void RequireLocalAbsolutePath(string value, string description)\r
+    {\r
+        if (String.IsNullOrEmpty(value) || value.IndexOf('\\0') >= 0 || value.StartsWith("\\\\\\\\", StringComparison.Ordinal) || value.StartsWith("//", StringComparison.Ordinal) ||\r
+            value.StartsWith("\\\\\\\\?\\\\", StringComparison.Ordinal) || value.StartsWith("\\\\\\\\.\\\\", StringComparison.Ordinal) || value.Length < 3 ||\r
+            !Char.IsLetter(value[0]) || value[1] != ':' || (value[2] != '\\\\' && value[2] != '/')) throw new Exception(description + " must be a local absolute path");\r
+        if (value.IndexOf(':', 2) >= 0) throw new Exception(description + " cannot use an alternate data stream");\r
+    }\r
+\r
+    static string OwnedTemporaryPath(string directory, string prefix)\r
+    {\r
+        RequireLocalAbsolutePath(directory, "Directory");\r
+        string full = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);\r
+        string parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);\r
+        if (!String.Equals(Path.GetDirectoryName(full), parent, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith(prefix, StringComparison.Ordinal)) throw new Exception("Directory is not owned temporary storage");\r
+        return full;\r
+    }\r
+\r
+    static string OwnedDirectory(string directory, string prefix)\r
+    {\r
+        string full = OwnedTemporaryPath(directory, prefix);\r
+        if (!Directory.Exists(full) || (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0) throw new Exception("Directory was replaced or linked");\r
+        return full;\r
+    }\r
+\r
+    static string StateLeaseDirectory(string stateDirectory)\r
+    {\r
+        RequireLocalAbsolutePath(stateDirectory, "State directory");\r
+        string state = Path.GetFullPath(stateDirectory).TrimEnd(Path.DirectorySeparatorChar);\r
+        if (!Directory.Exists(state) || (File.GetAttributes(state) & FileAttributes.ReparsePoint) != 0) throw new Exception("State directory is unavailable or linked");\r
+        string lease = Path.Combine(state, "windows-lpac-leases");\r
+        if (!Directory.Exists(lease)) Directory.CreateDirectory(lease);\r
+        if ((File.GetAttributes(lease) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease directory is linked");\r
+        return lease;\r
+    }\r
+\r
+    // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.\r
+    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }\r
+\r
+    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)\r
+    {\r
+        RequireLocalAbsolutePath(full, "Permission target");\r
+        string canonical = Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar);\r
+        if (String.Equals(canonical + Path.DirectorySeparatorChar, Path.GetPathRoot(canonical), StringComparison.OrdinalIgnoreCase)) throw new Exception("Permission target cannot be a volume root");\r
+        string root = Path.GetPathRoot(canonical), tail = canonical.Substring(root.Length), current = root;\r
+        if (tail.Length == 0) throw new Exception("Permission target cannot be a volume root");\r
+        string[] pieces = tail.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);\r
+        for (int index = 0; index < pieces.Length; index++)\r
+        {\r
+            current = Path.Combine(current, pieces[index]);\r
+            IntPtr handle = CreateFile(current, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);\r
+            if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open permission target");\r
+            try\r
+            {\r
+                ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");\r
+                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0)\r
+                {\r
+                    FileAttributeTagInfo tagInfo;\r
+                    Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");\r
+                    if (!IsCloudTag(tagInfo.tag)) throw new Exception("Permission target contains an unsafe reparse point");\r
+                }\r
+                bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;\r
+                if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");\r
+                if (index == pieces.Length - 1)\r
+                {\r
+                    if (!directory && info.links > 1) throw new Exception("Permission target file has multiple hard links");\r
+                    target.grant.path = canonical; target.grant.directory = directory; target.grant.volume = info.volume; target.grant.fileIndexHigh = info.indexHigh; target.grant.fileIndexLow = info.indexLow;\r
+                }\r
+                target.Add(handle); handle = IntPtr.Zero;\r
+            }\r
+            finally { if (handle != IntPtr.Zero && handle != InvalidHandle) CloseHandle(handle); }\r
+        }\r
+        if (walkTree && target.grant.directory) ScanTree(canonical, maxFiles, new int[] { 0 });\r
+    }\r
+\r
+    static void ScanTree(string directory, int maxFiles, int[] count)\r
+    {\r
+        foreach (string child in Directory.GetFileSystemEntries(directory))\r
+        {\r
+            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");\r
+            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };\r
+            try { ValidatePathComponents(child, temporary, false, maxFiles); if (temporary.grant.directory) ScanTree(child, maxFiles, count); }\r
+            finally { temporary.Dispose(); }\r
+        }\r
+    }\r
+\r
+    static PinnedTarget PinGrant(Grant supplied, int maxFiles)\r
+    {\r
+        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");\r
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };\r
+        try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }\r
+        catch { target.Dispose(); throw; }\r
+    }\r
+\r
+    static bool SameIdentity(Grant expected, Grant actual)\r
+    {\r
+        return expected.directory == actual.directory && expected.volume == actual.volume && expected.fileIndexHigh == actual.fileIndexHigh && expected.fileIndexLow == actual.fileIndexLow;\r
+    }\r
+\r
+    static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }\r
+\r
+    static RawSecurityDescriptor ReadDacl(string path)\r
+    {\r
+        uint needed;\r
+        if (!GetFileSecurity(path, 4, null, 0, out needed) && Marshal.GetLastWin32Error() != 122) Check(false, "Measure target DACL");\r
+        if (needed == 0 || needed > 1024 * 1024) throw new Exception("Invalid target DACL size");\r
+        var data = new byte[needed];\r
+        Check(GetFileSecurity(path, 4, data, needed, out needed), "Read target DACL");\r
+        return new RawSecurityDescriptor(data, 0);\r
+    }\r
+\r
+    static bool SameDacl(RawSecurityDescriptor expected, RawSecurityDescriptor actual)\r
+    {\r
+        if (expected.ControlFlags != actual.ControlFlags || expected.DiscretionaryAcl == null || actual.DiscretionaryAcl == null || expected.DiscretionaryAcl.BinaryLength != actual.DiscretionaryAcl.BinaryLength) return false;\r
+        var left = new byte[expected.DiscretionaryAcl.BinaryLength]; var right = new byte[actual.DiscretionaryAcl.BinaryLength];\r
+        expected.DiscretionaryAcl.GetBinaryForm(left, 0); actual.DiscretionaryAcl.GetBinaryForm(right, 0);\r
+        for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;\r
+        return true;\r
+    }\r
+\r
+    static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)\r
+    {\r
+        AccessTree(target, identity, grant, true, target.maxFiles, new int[] { 0 });\r
+    }\r
+\r
+    static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)\r
+    {\r
+        // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.\r
+        RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);\r
+        if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;\r
+        RawAcl acl = descriptor.DiscretionaryAcl;\r
+        bool changed = false;\r
+        if (acl == null && grant) throw new Exception("Permission target has no DACL");\r
+        if (acl != null)\r
+        {\r
+            int rights = (int)RightsFor(target.grant); CommonAce existing = null;\r
+            for (int index = acl.Count - 1; index >= 0; index--)\r
+            {\r
+                KnownAce ace = acl[index] as KnownAce;\r
+                if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;\r
+                if (!grant) { acl.RemoveAce(index); changed = true; }\r
+                else\r
+                {\r
+                    CommonAce allow = ace as CommonAce;\r
+                    if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");\r
+                    existing = allow;\r
+                    if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }\r
+                }\r
+            }\r
+            if (grant && existing == null)\r
+            {\r
+                AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;\r
+                if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;\r
+                int insert = acl.Count;\r
+                if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }\r
+                acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;\r
+            }\r
+            if (changed)\r
+            {\r
+                ControlFlags storedFlags = descriptor.ControlFlags;\r
+                // AR preserves AI in this non-propagating write; Windows consumes AR.\r
+                if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);\r
+                var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);\r
+                Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");\r
+                descriptor.SetFlags(storedFlags);\r
+                if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");\r
+            }\r
+        }\r
+        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.\r
+        if (!target.grant.directory) return;\r
+        foreach (string child in Directory.GetFileSystemEntries(target.grant.path))\r
+        {\r
+            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");\r
+            using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })\r
+            {\r
+                ValidatePathComponents(child, pin, false, maxFiles);\r
+                AccessTree(pin, identity, grant, false, maxFiles, count);\r
+            }\r
+        }\r
+    }\r
+\r
+    static string Quote(string argument)\r
+    {\r
+        var result = new StringBuilder("\\""); int slashes = 0;\r
+        foreach (char character in argument)\r
+        {\r
+            if (character == '\\\\') { slashes++; continue; }\r
+            if (character == '"') result.Append('\\\\', slashes * 2 + 1);\r
+            else result.Append('\\\\', slashes);\r
+            result.Append(character); slashes = 0;\r
+        }\r
+        result.Append('\\\\', slashes * 2); return result.Append('"').ToString();\r
+    }\r
+\r
+    static long CurrentProcessStart()\r
+    {\r
+        FileTime created, exited, kernel, user;\r
+        Check(GetProcessTimes(Process.GetCurrentProcess().Handle, out created, out exited, out kernel, out user), "Read controller start time");\r
+        return FileTimeValue(created);\r
+    }\r
+\r
+    static void WriteLease(string path, Lease lease, bool initial, JavaScriptSerializer serializer)\r
+    {\r
+        byte[] data = new UTF8Encoding(false).GetBytes(serializer.Serialize(lease));\r
+        if (initial)\r
+        {\r
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }\r
+            return;\r
+        }\r
+        string temporary = path + ".update." + Process.GetCurrentProcess().Id.ToString() + ".tmp";\r
+        using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }\r
+        try { File.Replace(temporary, path, null); }\r
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }\r
+    }\r
+\r
+    static void ValidateLease(Lease lease, string expectedFile)\r
+    {\r
+        Guid nonce;\r
+        if (lease == null || (lease.version != 1 && lease.version != 2) || !Guid.TryParseExact(lease.nonce, "D", out nonce) || String.IsNullOrEmpty(lease.profile) ||\r
+            !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||\r
+            lease.controllerPid <= 0 || lease.controllerStarted <= 0 || lease.grants == null || (lease.phase != "creating" && lease.phase != "active" && lease.phase != "cleanup-failed")) throw new Exception("Invalid Windows LPAC lease");\r
+        if (lease.phase != "creating" && String.IsNullOrEmpty(lease.sid)) throw new Exception("Lease has no profile identity");\r
+        OwnedTemporaryPath(lease.cwd, "agy-mcp-copy-"); OwnedTemporaryPath(lease.runtime, "agy-mcp-runtime-"); OwnedTemporaryPath(lease.scratch, "agy-mcp-scratch-");\r
+        if (lease.version == 2) ValidateLeaseAliases(lease, nonce);\r
+    }\r
+\r
+    static void ValidateLeaseAliases(Lease lease, Guid nonce)\r
+    {\r
+        Luid logon; if (!TryParseLogon(lease.logon, out logon) || lease.aliases == null || lease.aliases.Length != 3) throw new Exception("Invalid Windows LPAC alias lease");\r
+        string[] kinds = new string[] { "copy", "runtime", "scratch" }, roots = new string[] { lease.cwd, lease.runtime, lease.scratch }; var drives = new HashSet<char>();\r
+        for (int index = 0; index < lease.aliases.Length; index++)\r
+        {\r
+            AliasPlan alias = lease.aliases[index];\r
+            if (alias == null || !String.Equals(alias.kind, kinds[index], StringComparison.Ordinal) || !String.Equals(alias.physicalRoot, roots[index], StringComparison.OrdinalIgnoreCase) ||\r
+                !String.Equals(alias.customName, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||\r
+                String.IsNullOrEmpty(alias.drive) || alias.drive.Length != 2 || alias.drive[0] < 'D' || alias.drive[0] > 'Z' || alias.drive[1] != ':' || !drives.Add(alias.drive[0]) || (index != 0 && alias.drive[0] >= lease.aliases[index - 1].drive[0]) || !String.Equals(alias.aliasRoot, alias.drive + "\\\\", StringComparison.Ordinal) ||\r
+                !String.Equals(alias.customTarget, RawDosTarget(roots[index]), StringComparison.Ordinal) || !String.Equals(alias.driveTarget, RawDosTarget(alias.customName), StringComparison.Ordinal)) throw new Exception("Invalid Windows LPAC alias plan");\r
+        }\r
+    }\r
+\r
+    static bool ControllerIsActive(Lease lease)\r
+    {\r
+        IntPtr process = OpenProcess(ProcessQueryLimitedInformation | Synchronize, false, (uint)lease.controllerPid);\r
+        if (process == IntPtr.Zero)\r
+        {\r
+            int error = Marshal.GetLastWin32Error();\r
+            if (error == 87 || error == 1168) return false;\r
+            throw new Win32Exception(error, "Cannot verify lease controller");\r
+        }\r
+        try\r
+        {\r
+            FileTime created, exited, kernel, user;\r
+            Check(GetProcessTimes(process, out created, out exited, out kernel, out user), "Verify lease controller start time");\r
+            uint state = WaitForSingleObject(process, 0);\r
+            if (state == WaitTimeout) return FileTimeValue(created) == lease.controllerStarted;\r
+            if (state == WaitObject0) return false;\r
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Verify lease controller state");\r
+        }\r
+        finally { CloseHandle(process); }\r
+    }\r
+\r
+    static SecurityIdentifier LeaseIdentity(Lease lease)\r
+    {\r
+        if (lease.phase == "creating") return null;\r
+        var identity = new SecurityIdentifier(lease.sid);\r
+        IntPtr derived; int result = DeriveAppContainerSidFromAppContainerName(lease.profile, out derived);\r
+        if (result >= 0 && derived != IntPtr.Zero)\r
+        {\r
+            try { if (!identity.Equals(new SecurityIdentifier(derived))) throw new Exception("Lease profile SID does not match its profile name"); }\r
+            finally { FreeSid(derived); }\r
+        }\r
+        else if (!IsNotFoundHresult(result)) CheckHr(result, "Verify lease profile SID");\r
+        return identity;\r
+    }\r
+\r
+    static bool IsMissingOwnedTemporaryGrant(Lease lease, Grant grant)\r
+    {\r
+        if (grant == null || !grant.directory) return false;\r
+        string directory = null, prefix = null;\r
+        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = "agy-mcp-copy-"; }\r
+        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = "agy-mcp-runtime-"; }\r
+        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = "agy-mcp-scratch-"; }\r
+        else return false;\r
+        directory = OwnedTemporaryPath(directory, prefix);\r
+        if (GetFileAttributes(directory) != InvalidFileAttributes) return false;\r
+        int error = Marshal.GetLastWin32Error();\r
+        return error == 2 || error == 3;\r
+    }\r
+\r
+    static void DeleteProfile(string profile)\r
+    {\r
+        int result = DeleteAppContainerProfile(profile);\r
+        if (result < 0 && !IsNotFoundHresult(result)) CheckHr(result, "Delete AppContainer profile");\r
+    }\r
+\r
+    static void Recover(string stateDirectory, Dictionary<string, object> result, JavaScriptSerializer serializer)\r
+    {\r
+        string directory = StateLeaseDirectory(stateDirectory); var failures = new List<string>(); int recovered = 0, active = 0;\r
+        foreach (string file in Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly))\r
+        {\r
+            try\r
+            {\r
+                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease file is linked");\r
+                Lease lease = serializer.Deserialize<Lease>(File.ReadAllText(file, Encoding.UTF8)); ValidateLease(lease, file);\r
+                if (ControllerIsActive(lease)) { active++; continue; }\r
+                SecurityIdentifier identity = LeaseIdentity(lease); var pins = new List<PinnedTarget>(); var cleanupFailures = new List<string>();\r
+                try\r
+                {\r
+                    if (lease.version == 2)\r
+                    {\r
+                        try\r
+                        {\r
+                            ControllerIdentity controller = CurrentControllerIdentity();\r
+                            if (String.Equals(controller.logon, lease.logon, StringComparison.Ordinal))\r
+                            {\r
+                                AcquireRecoveryAliasGates(lease.aliases, controller, lease.logon);\r
+                                try { RemoveAliases(lease.aliases); }\r
+                                finally { ReleaseAliasGates(lease.aliases); }\r
+                            }\r
+                            else if (LogonSessionExists(lease.logon)) throw new Exception("Lease logon session remains active");\r
+                        }\r
+                        catch (Exception error) { cleanupFailures.Add("DOS aliases: " + error.Message); }\r
+                    }\r
+                    if (identity != null)\r
+                    {\r
+                        for (int index = lease.grants.Length - 1; index >= 0; index--)\r
+                        {\r
+                            if (IsMissingOwnedTemporaryGrant(lease, lease.grants[index])) continue;\r
+                            PinnedTarget pin = null;\r
+                            try { pin = PinGrant(lease.grants[index], 1000000); if (!SameIdentity(lease.grants[index], pin.grant)) throw new Exception("Granted target identity changed"); Access(pin, identity, false); pins.Add(pin); pin = null; }\r
+                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); if (pin != null) pin.Dispose(); }\r
+                        }\r
+                    }\r
+                    try { DeleteProfile(lease.profile); } catch (Exception error) { cleanupFailures.Add("Profile: " + error.Message); }\r
+                }\r
+                finally { for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose(); }\r
+                if (cleanupFailures.Count != 0)\r
+                {\r
+                    lease.phase = "cleanup-failed"; try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }\r
+                    throw new Exception(String.Join("; ", cleanupFailures.ToArray()));\r
+                }\r
+                File.Delete(file); recovered++;\r
+            }\r
+            catch (Exception error) { failures.Add(Path.GetFileName(file) + ": " + error.Message); }\r
+        }\r
+        result["recovered"] = recovered; result["active"] = active;\r
+        if (failures.Count != 0) result["error"] = "Windows LPAC recovery failed: " + String.Join("; ", failures.ToArray());\r
+    }\r
+\r
+    static IntPtr DeriveCapability(string name, List<IntPtr> allocations)\r
+    {\r
+        IntPtr groups, caps; uint groupCount, capabilityCount;\r
+        Check(DeriveCapabilitySidsFromName(name, out groups, out groupCount, out caps, out capabilityCount), "Derive " + name + " capability");\r
+        try\r
+        {\r
+            if (capabilityCount != 1) throw new Exception("Unexpected " + name + " capability count");\r
+            IntPtr sid = Marshal.ReadIntPtr(caps); allocations.Add(sid); return sid;\r
+        }\r
+        finally\r
+        {\r
+            for (int index = 0; index < (int)groupCount; index++) LocalFree(Marshal.ReadIntPtr(groups, index * IntPtr.Size));\r
+            if (groups != IntPtr.Zero) LocalFree(groups);\r
+            if (caps != IntPtr.Zero) LocalFree(caps);\r
+        }\r
+    }\r
+\r
+    static void AddGrant(List<Grant> grants, string path, string rights)\r
+    {\r
+        if (String.IsNullOrEmpty(path)) throw new Exception("Missing owned permission target");\r
+        foreach (Grant existing in grants) if (String.Equals(existing.path, path, StringComparison.OrdinalIgnoreCase)) { if (rights == "modify") existing.rights = "modify"; return; }\r
+        grants.Add(new Grant { path = path, rights = rights });\r
+    }\r
+\r
+    static bool IsBridgeOwnedTemporaryPath(string value)\r
+    {\r
+        foreach (string part in value.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))\r
+        {\r
+            if (part.StartsWith("agy-mcp-copy-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-baseline-", StringComparison.OrdinalIgnoreCase) ||\r
+                part.StartsWith("agy-mcp-runtime-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-controller-", StringComparison.OrdinalIgnoreCase) ||\r
+                part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;\r
+        }\r
+        return false;\r
+    }\r
+\r
+    static int Main(string[] arguments)\r
+    {\r
+        Console.OutputEncoding = new UTF8Encoding(false);\r
+        var serializer = new JavaScriptSerializer { MaxJsonLength = 2 * 1024 * 1024 };\r
+        var result = new Dictionary<string, object>();\r
+        string profile = null, leaseFile = null, cwd = null, runtime = null, scratch = null;\r
+        SecurityIdentifier identity = null; Lease lease = null;\r
+        ControllerIdentity controller = null; AliasPlan[] aliases = null;\r
+        IntPtr sid = IntPtr.Zero, job = IntPtr.Zero, attributes = IntPtr.Zero, capabilityData = IntPtr.Zero, lpacData = IntPtr.Zero, handleData = IntPtr.Zero, jobData = IntPtr.Zero, envData = IntPtr.Zero, capabilityList = IntPtr.Zero;\r
+        IntPtr read = IntPtr.Zero, write = IntPtr.Zero, inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero;\r
+        ProcessInfo child = new ProcessInfo(); bool attributesInitialized = false, profileCreated = false;\r
+        var pins = new List<PinnedTarget>(); var applied = new List<PinnedTarget>();\r
+        var capabilitySids = new List<IntPtr>();\r
+        var output = new StringBuilder(); bool truncated = false; Thread reader = null; object jobGate = new object(); int cancellation = 0;\r
+        try\r
+        {\r
+            if (arguments.Length != 1) throw new Exception("One controller request file is required");\r
+            var request = serializer.Deserialize<Request>(File.ReadAllText(arguments[0], Encoding.UTF8));\r
+            if (request == null || String.IsNullOrEmpty(request.action)) throw new Exception("Invalid controller request");\r
+            if (request.action == "recover")\r
+            {\r
+                Recover(request.stateDirectory, result, serializer); result["output"] = ""; result["truncated"] = false;\r
+                Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;\r
+            }\r
+            if (request.action != "write" && request.action != "read-only") throw new Exception("Invalid controller action");\r
+            Guid nonce; if (!Guid.TryParseExact(request.nonce, "D", out nonce)) throw new Exception("Invalid nonce");\r
+            if (!String.Equals(request.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");\r
+            result["nonce"] = request.nonce;\r
+            if (request.timeoutSeconds < 1 || request.timeoutSeconds > 86400 || request.maxFiles < 1 || request.maxFiles > 1000000 || request.maxOutputChars < 256 || request.maxOutputChars > 64000 || request.args == null || request.environment == null || request.grants == null) throw new Exception("Invalid request");\r
+            if (request.args.Length > 50) throw new Exception("Too many command arguments");\r
+            foreach (string argument in request.args) if (argument == null || argument.Length > 4000 || argument.IndexOf('\\0') >= 0) throw new Exception("Invalid command argument");\r
+            cwd = OwnedDirectory(request.cwd, "agy-mcp-copy-"); runtime = OwnedDirectory(request.runtime, "agy-mcp-runtime-"); scratch = OwnedDirectory(request.scratch, "agy-mcp-scratch-");\r
+            string executable = Path.GetFullPath(request.executable);\r
+            if (!executable.StartsWith(runtime + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(executable) || (File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0) throw new Exception("Executable must be staged inside the runtime");\r
+            var requestedGrants = new List<Grant>();\r
+            AddGrant(requestedGrants, cwd, request.action == "read-only" ? "read" : "modify");\r
+            AddGrant(requestedGrants, runtime, "read"); AddGrant(requestedGrants, scratch, "modify");\r
+            foreach (Grant grant in request.grants)\r
+            {\r
+                if (grant == null || IsBridgeOwnedTemporaryPath(grant.path)) throw new Exception("External permission grant targets bridge-owned temporary storage");\r
+                AddGrant(requestedGrants, grant.path, grant.rights);\r
+            }\r
+            if (requestedGrants.Count > 23) throw new Exception("Too many permission grants");\r
+            foreach (Grant grant in requestedGrants) pins.Add(PinGrant(grant, request.maxFiles));\r
+            string state = StateLeaseDirectory(request.stateDirectory);\r
+            profile = request.profile; leaseFile = Path.Combine(state, nonce.ToString("N") + ".json");\r
+            controller = CurrentControllerIdentity(); aliases = CreateAliasPlan(nonce, controller, new PinnedTarget[] { pins[0], pins[1], pins[2] });\r
+            lease = new Lease { version = 2, nonce = request.nonce, profile = profile, phase = "creating", controllerPid = Process.GetCurrentProcess().Id, controllerStarted = CurrentProcessStart(), cwd = cwd, runtime = runtime, scratch = scratch, grants = new Grant[0], logon = controller.logon, aliases = aliases };\r
+            WriteLease(leaseFile, lease, true, serializer);\r
+            CheckHr(CreateAppContainerProfile(profile, profile, "Isolated test process", IntPtr.Zero, 0, out sid), "CreateAppContainerProfile");\r
+            profileCreated = true; identity = new SecurityIdentifier(sid);\r
+            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Temp"));\r
+            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Local"));\r
+            var recorded = new List<Grant>(); foreach (PinnedTarget pin in pins) recorded.Add(pin.grant);\r
+            lease.sid = identity.Value; lease.grants = recorded.ToArray(); lease.phase = "active"; WriteLease(leaseFile, lease, false, serializer);\r
+            foreach (PinnedTarget pin in pins) { applied.Add(pin); Access(pin, identity, true); }\r
+            ApplyAliases(aliases); result["pathMappings"] = PathMappings(aliases);\r
+\r
+            var inheritable = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), inherit = 1 };\r
+            Check(CreatePipe(out read, out write, ref inheritable, 0), "Create output pipe"); Check(SetHandleInformation(read, 1, 0), "Protect output reader");\r
+            Check(CreatePipe(out inputRead, out inputWrite, ref inheritable, 0), "Create input pipe"); CloseHandle(inputWrite); inputWrite = IntPtr.Zero;\r
+            job = CreateJobObject(IntPtr.Zero, null); Check(job != IntPtr.Zero, "Create job");\r
+            var limits = new ExtendedLimits(); limits.basic.flags = JobObjectLimitKillOnJobClose | (request.childProcesses ? 0u : JobObjectLimitActiveProcess); limits.basic.activeProcesses = request.childProcesses ? 0u : 1u; IntPtr limitData = Marshal.AllocHGlobal(Marshal.SizeOf(limits));\r
+            try { Marshal.StructureToPtr(limits, limitData, false); Check(SetInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits)), "Require job cleanup"); Marshal.DestroyStructure(limitData, typeof(ExtendedLimits)); Check(QueryInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits), IntPtr.Zero), "Verify job limits"); var observed = (ExtendedLimits)Marshal.PtrToStructure(limitData, typeof(ExtendedLimits)); if ((observed.basic.flags & JobObjectLimitKillOnJobClose) == 0 || (observed.basic.flags & (JobObjectLimitBreakawayOk | JobObjectLimitSilentBreakawayOk)) != 0 || (!request.childProcesses && ((observed.basic.flags & JobObjectLimitActiveProcess) == 0 || observed.basic.activeProcesses != 1))) throw new Exception("Job limits were not applied"); }\r
+            finally { Marshal.FreeHGlobal(limitData); }\r
+            DeriveCapability("registryRead", capabilitySids);\r
+            if (request.network) { DeriveCapability("internetClient", capabilitySids); DeriveCapability("privateNetworkClientServer", capabilitySids); }\r
+                int sidAndAttributesSize = Marshal.SizeOf(typeof(SidAndAttributes)); capabilityList = Marshal.AllocHGlobal(sidAndAttributesSize * capabilitySids.Count);\r
+                for (int index = 0; index < capabilitySids.Count; index++) Marshal.StructureToPtr(new SidAndAttributes { sid = capabilitySids[index], attributes = 4 }, IntPtr.Add(capabilityList, index * sidAndAttributesSize), false);\r
+                var caps = new SecurityCapabilities { sid = sid, capabilities = capabilityList, count = (uint)capabilitySids.Count };\r
+                capabilityData = Marshal.AllocHGlobal(Marshal.SizeOf(caps)); Marshal.StructureToPtr(caps, capabilityData, false);\r
+                int attributeCount = 4; UIntPtr size = UIntPtr.Zero; InitializeProcThreadAttributeList(IntPtr.Zero, attributeCount, 0, ref size);\r
+                attributes = Marshal.AllocHGlobal(checked((int)size.ToUInt64())); Check(InitializeProcThreadAttributeList(attributes, attributeCount, 0, ref size), "Initialize attributes"); attributesInitialized = true;\r
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeSecurityCapabilities), capabilityData, new UIntPtr((uint)Marshal.SizeOf(caps)), IntPtr.Zero, IntPtr.Zero), "Set AppContainer");\r
+                lpacData = Marshal.AllocHGlobal(4); Marshal.WriteInt32(lpacData, (int)AllApplicationPackagesPolicyLpac);\r
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeAllApplicationPackagesPolicy), lpacData, new UIntPtr(4), IntPtr.Zero, IntPtr.Zero), "Require LPAC");\r
+                handleData = Marshal.AllocHGlobal(IntPtr.Size * 2); Marshal.WriteIntPtr(handleData, write); Marshal.WriteIntPtr(handleData, IntPtr.Size, inputRead);\r
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeHandleList), handleData, new UIntPtr((uint)(IntPtr.Size * 2)), IntPtr.Zero, IntPtr.Zero), "Restrict inherited handles");\r
+                jobData = Marshal.AllocHGlobal(IntPtr.Size); Marshal.WriteIntPtr(jobData, job);\r
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeJobList), jobData, new UIntPtr((uint)IntPtr.Size), IntPtr.Zero, IntPtr.Zero), "Assign job at process creation");\r
+            var startup = new StartupInfoEx(); startup.startup.cb = Marshal.SizeOf(startup); startup.startup.flags = 0x100; startup.startup.input = inputRead; startup.startup.output = write; startup.startup.error = write; startup.attributes = attributes;\r
+            string aliasExecutable = ProjectOwnedPath(executable, aliases), aliasCwd = ProjectOwnedPath(cwd, aliases); if (String.Equals(aliasExecutable, executable, StringComparison.OrdinalIgnoreCase) || String.Equals(aliasCwd, cwd, StringComparison.OrdinalIgnoreCase)) throw new Exception("Owned paths were not projected to DOS aliases");\r
+            var command = new StringBuilder(Quote(aliasExecutable)); foreach (string argument in ProjectArguments(request.args, aliases)) command.Append(' ').Append(Quote(argument));\r
+            Dictionary<string, string> projectedEnvironment = ProjectEnvironment(request, aliases); var environment = new StringBuilder(); var keys = new List<string>(projectedEnvironment.Keys); keys.Sort(StringComparer.OrdinalIgnoreCase);\r
+            foreach (string key in keys) { string value = projectedEnvironment[key]; if (String.IsNullOrEmpty(key) || value == null || key.IndexOfAny(new char[] { '=', '\\0' }) >= 0 || value.IndexOf('\\0') >= 0) throw new Exception("Invalid environment"); environment.Append(key).Append('=').Append(value).Append('\\0'); }\r
+            environment.Append('\\0'); envData = Marshal.StringToHGlobalUni(environment.ToString());\r
+            Check(CreateProcess(aliasExecutable, command, IntPtr.Zero, IntPtr.Zero, true, 0x80000 | 0x400 | 0x4 | 0x8000000, envData, aliasCwd, ref startup, out child), "Create isolated process");\r
+            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);\r
+            capabilitySids.Clear();\r
+            bool inJob; Check(IsProcessInJob(child.process, job, out inJob) && inJob, "Verify isolated job");\r
+            IntPtr token; Check(OpenProcessToken(child.process, 8, out token), "Inspect child token");\r
+            try\r
+            {\r
+                IntPtr info = Marshal.AllocHGlobal(IntPtr.Size); uint returned;\r
+                try\r
+                {\r
+                    Check(GetTokenInformation(token, 29, info, (uint)IntPtr.Size, out returned), "Verify AppContainer token"); if (Marshal.ReadInt32(info) != 1) throw new Exception("AppContainer token missing");\r
+                    GetTokenInformation(token, 31, IntPtr.Zero, 0, out returned); if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid package identity size"); IntPtr packageInfo = Marshal.AllocHGlobal(checked((int)returned));\r
+                    try { Check(GetTokenInformation(token, 31, packageInfo, returned, out returned), "Verify package identity"); if (!identity.Equals(new SecurityIdentifier(Marshal.ReadIntPtr(packageInfo)))) throw new Exception("Package identity mismatch"); }\r
+                    finally { Marshal.FreeHGlobal(packageInfo); }\r
+                }\r
+                finally { Marshal.FreeHGlobal(info); }\r
+            }\r
+            finally { CloseHandle(token); }\r
+            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }\r
+            var cancelReader = new Thread(delegate() { string message = Console.ReadLine(); if (message == null || message == "cancel " + request.nonce) { Interlocked.Exchange(ref cancellation, 1); lock (jobGate) { if (job != IntPtr.Zero) TerminateJobObject(job, 125); } } }); cancelReader.IsBackground = true; cancelReader.Start();\r
+            CloseHandle(write); write = IntPtr.Zero; CloseHandle(inputRead); inputRead = IntPtr.Zero; IntPtr outputHandle = read; read = IntPtr.Zero;\r
+            reader = new Thread(delegate() { using (var stream = new FileStream(new SafeFileHandle(outputHandle, true), FileAccess.Read)) using (var text = new StreamReader(stream, Encoding.UTF8)) { char[] buffer = new char[2048]; int count; while ((count = text.Read(buffer, 0, buffer.Length)) != 0) { output.Append(buffer, 0, count); if (output.Length > request.maxOutputChars) { truncated = true; output.Remove(0, output.Length - request.maxOutputChars); } } } }); reader.Start();\r
+            if (ResumeThread(child.thread) == UInt32.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error(), "Resume isolated process");\r
+            result["pid"] = child.pid; result["sandbox"] = "windows-lpac";\r
+            uint wait = WaitForSingleObject(child.process, checked((uint)request.timeoutSeconds * 1000));\r
+            if (wait == WaitTimeout) { result["error"] = "Command timed out"; Check(TerminateJobObject(job, 124), "Terminate timed out job"); if (WaitForSingleObject(child.process, 5000) != WaitObject0) throw new Exception("Timed out process did not terminate"); }\r
+            else if (wait != WaitObject0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Wait for isolated process");\r
+            uint exit; Check(GetExitCodeProcess(child.process, out exit), "Read exit code"); result["exitCode"] = exit;\r
+            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }\r
+            if (Interlocked.CompareExchange(ref cancellation, 0, 0) != 0) result["error"] = "Command cancelled";\r
+        }\r
+        catch (Exception error) { result["error"] = error.Message; result["exitCode"] = null; }\r
+        finally\r
+        {\r
+            if (child.process != IntPtr.Zero) TerminateProcess(child.process, 125);\r
+            lock (jobGate) { if (job != IntPtr.Zero) { CloseHandle(job); job = IntPtr.Zero; } }\r
+            if (write != IntPtr.Zero) CloseHandle(write); if (reader != null && !reader.Join(5000)) result["error"] = "Output reader did not terminate";\r
+            if (child.thread != IntPtr.Zero) CloseHandle(child.thread); if (child.process != IntPtr.Zero) CloseHandle(child.process); if (read != IntPtr.Zero) CloseHandle(read); if (inputRead != IntPtr.Zero) CloseHandle(inputRead); if (inputWrite != IntPtr.Zero) CloseHandle(inputWrite);\r
+            if (attributesInitialized) DeleteProcThreadAttributeList(attributes);\r
+            foreach (IntPtr pointer in new IntPtr[] { attributes, capabilityData, capabilityList, lpacData, handleData, jobData, envData }) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer);\r
+            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);\r
+            var failures = new List<string>();\r
+            if (aliases != null) try { RemoveAliases(aliases); result["aliasesDeleted"] = true; } catch (Exception error) { failures.Add("DOS aliases: " + error.Message); } finally { ReleaseAliasGates(aliases); }\r
+            for (int index = applied.Count - 1; index >= 0; index--) try { Access(applied[index], identity, false); } catch (Exception error) { failures.Add("ACL " + index.ToString() + ": " + error.Message); }\r
+            if (profileCreated) try { DeleteProfile(profile); result["profileDeleted"] = true; } catch (Exception error) { failures.Add("Profile: " + error.Message); }\r
+            for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose();\r
+            if (sid != IntPtr.Zero) FreeSid(sid);\r
+            if (leaseFile != null)\r
+            {\r
+                if (failures.Count == 0 && profileCreated) { try { File.Delete(leaseFile); } catch (Exception error) { failures.Add("Lease: " + error.Message); } }\r
+                if (failures.Count != 0) try { if (lease != null) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }\r
+            }\r
+            if (failures.Count != 0) result["error"] = "Cleanup failed: " + String.Join("; ", failures.ToArray());\r
+        }\r
+        result["output"] = output.ToString(); result["truncated"] = truncated; Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;\r
+    }\r
+}\r
 `;
 var reparseInspectorSource = `using System;\r
 using System.ComponentModel;\r
@@ -47762,9 +47839,9 @@ async function hashStagedFile(file3) {
     await handle.close();
   }
 }
-async function stageNativeExecutable(source, destination, state, expectedSha256) {
-  const allowMultipleLinks = typeof expectedSha256 === "string" && expectedSha256.length > 0;
-  const executable = await stageFile(source, destination, state, true, allowMultipleLinks, expectedSha256);
+async function stageNativeExecutable(source, destination, state, expectedSha256, allowMultipleLinks = false) {
+  const allowLinks = Boolean(expectedSha256) || allowMultipleLinks;
+  const executable = await stageFile(source, destination, state, true, allowLinks, expectedSha256);
   if (expectedSha256 && await hashStagedFile(executable) !== expectedSha256) {
     fail2("PORTABLE_NODE_HASH_MISMATCH", "Staged portable Node executable hash does not match the embedded descriptor");
   }
@@ -47777,9 +47854,103 @@ async function stageNativeExecutable(source, destination, state, expectedSha256)
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path18.join(directory, entry.name), path18.join(path18.dirname(destination), entry.name), state, true);
+    await stageFile(path18.join(directory, entry.name), path18.join(path18.dirname(destination), entry.name), state, true, allowLinks);
   }
   return executable;
+}
+var gitHelperBinaries = ["git-upload-pack.exe", "git-receive-pack.exe", "git-upload-archive.exe"];
+function isGitCommandName(executable) {
+  const extension = path18.extname(executable).toLocaleLowerCase("en-US");
+  if (extension && extension !== ".exe")
+    return false;
+  const basename2 = path18.win32.basename(executable).toLocaleLowerCase("en-US");
+  return basename2 === "git" || basename2 === "git.exe";
+}
+async function resolveGitExecutable(requested) {
+  const targetFile = requested && path18.isAbsolute(requested) ? path18.extname(requested) ? requested : requested + ".exe" : void 0;
+  const directories = targetFile ? [""] : (process.env.PATH || "").split(path18.delimiter).map((directory) => directory.trim().replace(/^"(.*)"$/, "$1")).filter((directory) => directory && path18.isAbsolute(directory) && !isUnsafeWindowsPath(directory));
+  for (const directory of directories) {
+    const candidate = targetFile ? path18.resolve(targetFile) : path18.resolve(directory, "git.exe");
+    if (isUnsafeWindowsPath(candidate))
+      continue;
+    try {
+      const info = await lstat9(candidate);
+      if (info.isSymbolicLink()) {
+        fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + candidate);
+      }
+      if (!info.isFile())
+        continue;
+      await regularFile(candidate, true);
+    } catch (error62) {
+      if (error62.code === "ENOENT" || error62.code === "ENOTDIR") {
+        continue;
+      }
+      throw error62;
+    }
+    const candidateDir = path18.dirname(candidate);
+    if (path18.basename(candidateDir).toLocaleLowerCase("en-US") === "cmd") {
+      const realCandidates = [
+        path18.resolve(candidateDir, "..", "ucrt64", "bin", "git.exe"),
+        path18.resolve(candidateDir, "..", "mingw64", "bin", "git.exe")
+      ];
+      let realGit;
+      for (const realCandidate of realCandidates) {
+        if (isUnsafeWindowsPath(realCandidate))
+          continue;
+        try {
+          const realInfo = await lstat9(realCandidate);
+          if (realInfo.isSymbolicLink()) {
+            fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + realCandidate);
+          }
+          if (!realInfo.isFile())
+            continue;
+          await regularFile(realCandidate, true);
+          realGit = realCandidate;
+          break;
+        } catch (error62) {
+          if (error62.code === "ENOENT" || error62.code === "ENOTDIR") {
+            continue;
+          }
+          throw error62;
+        }
+      }
+      if (!realGit) {
+        fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "Git wrapper does not contain a real bin layout: " + candidate);
+      }
+      return realGit;
+    }
+    return candidate;
+  }
+  return void 0;
+}
+async function stageGitInstallation(realGit, runtime, state) {
+  const stagedGit = await stageNativeExecutable(realGit, stagedPath(runtime, ["git", "bin", "git.exe"]), state, void 0, true);
+  const realBinDir = path18.dirname(realGit);
+  for (const helper of gitHelperBinaries) {
+    const helperSource = path18.join(realBinDir, helper);
+    try {
+      const info = await lstat9(helperSource);
+      if (info.isSymbolicLink()) {
+        fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + helperSource);
+      }
+      if (!info.isFile())
+        continue;
+      await stageFile(helperSource, stagedPath(runtime, ["git", "bin", helper]), state, true, true);
+    } catch (error62) {
+      if (error62.code === "ENOENT" || error62.code === "ENOTDIR") {
+        continue;
+      }
+      throw error62;
+    }
+  }
+  return stagedGit;
+}
+async function stageGit(runtime, state) {
+  const realGit = await resolveGitExecutable();
+  if (!realGit)
+    return void 0;
+  const stagedGit = await stageGitInstallation(realGit, runtime, state);
+  return path18.dirname(stagedGit);
 }
 function npmPathIsOmitted(parts) {
   const lower = parts.map((part) => part.toLocaleLowerCase("en-US"));
@@ -47824,7 +47995,7 @@ async function stageSystemCmd(systemRoot, runtime, state) {
   const source = path18.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
-async function stageNpm(launcher, runtime, state, args, portableNode) {
+async function stageNpm(launcher, runtime, state, args, portableNode, includeGit = false) {
   const launcherText = (await readBoundedFile(launcher, maxInspectionBytes)).toString("utf8").replaceAll("/", "\\").toLocaleLowerCase("en-US");
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
@@ -47857,7 +48028,19 @@ async function stageNpm(launcher, runtime, state, args, portableNode) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
-  return { executable: node2, args: [cli, ...args], pathEntries: [path18.dirname(node2)], comspec, portableNode: portableNode?.identity };
+  let gitExecPath;
+  if (includeGit) {
+    gitExecPath = await stageGit(runtime, state);
+  }
+  const pathEntries = [path18.dirname(node2)];
+  if (gitExecPath && !pathEntries.includes(gitExecPath)) {
+    pathEntries.push(gitExecPath);
+  }
+  const result = { executable: node2, args: [cli, ...args], pathEntries, comspec, portableNode: portableNode?.identity };
+  if (gitExecPath) {
+    result.gitExecPath = gitExecPath;
+  }
+  return result;
 }
 async function hostNodeIdentity(file3) {
   const [candidate, host] = await Promise.all([regularFile(file3), regularFile(process.execPath)]);
@@ -47885,14 +48068,40 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("UNSAFE_RUNTIME_PATH", "Windows runtime staging requires an empty owned directory");
   }
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
+  if (isGitCommandName(command2.executable)) {
+    const gitSource = await resolveGitExecutable(command2.executable);
+    if (!gitSource) {
+      fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + command2.executable);
+    }
+    const stagedGit = await stageGitInstallation(gitSource, runtime, state);
+    const gitExecPath2 = path18.dirname(stagedGit);
+    return {
+      executable: stagedGit,
+      args: [...command2.args],
+      pathEntries: [gitExecPath2],
+      gitExecPath: gitExecPath2
+    };
+  }
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
     const adjacentNode = path18.join(path18.dirname(resolved.file), "node.exe");
-    return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection));
+    return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection), selection.includeGit ?? false);
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
   const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path18.basename(resolved.file)]), state, portableNode?.identity.sha256);
-  return { executable, args: [...command2.args], pathEntries: [path18.dirname(executable)], portableNode: portableNode?.identity };
+  let gitExecPath;
+  if (selection.includeGit) {
+    gitExecPath = await stageGit(runtime, state);
+  }
+  const pathEntries = [path18.dirname(executable)];
+  if (gitExecPath && !pathEntries.includes(gitExecPath)) {
+    pathEntries.push(gitExecPath);
+  }
+  const result = { executable, args: [...command2.args], pathEntries, portableNode: portableNode?.identity };
+  if (gitExecPath) {
+    result.gitExecPath = gitExecPath;
+  }
+  return result;
 }
 
 // dist/src/windows-executor.js
@@ -48107,9 +48316,15 @@ async function executeWindowsTest(command2, copyDirectory, options) {
   validateWindowsCommand(command2);
   const selection = options.sandbox ?? { readPaths: [], writePaths: [], network: false, childProcesses: true, maxOutputChars: 4e3 };
   const mode = options.mode ?? "write", maxFiles = options.maxFiles ?? 1e4;
+  const exeBasename = path19.win32.basename(command2.executable).toLocaleLowerCase("en-US");
+  const isNodeOrNpm = exeBasename === "node" || exeBasename === "node.exe" || exeBasename === "npm" || exeBasename === "npm.cmd";
+  const isDirectGit = exeBasename === "git" || exeBasename === "git.exe";
+  const autoIncludeGit = isNodeOrNpm || isDirectGit;
+  const includeGit = options.includeGit ?? autoIncludeGit;
   const runtimeSelection = {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
-    portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory
+    portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory,
+    includeGit
   };
   const stateDirectory = path19.resolve(options.stateDirectory ?? path19.join(os7.homedir(), ".antigravity-mcp-bridge"));
   await mkdir7(stateDirectory, { recursive: true, mode: 448 });
@@ -48122,6 +48337,26 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
     const nonce = randomUUID9(), systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const environment = {
+      SystemRoot: systemRoot,
+      WINDIR: systemRoot,
+      PATH: [...staged.pathEntries, path19.join(systemRoot, "System32")].join(path19.delimiter),
+      PATHEXT: ".COM;.EXE;.BAT;.CMD",
+      TEMP: scratch,
+      TMP: scratch,
+      USERPROFILE: scratch,
+      HOME: scratch,
+      APPDATA: scratch,
+      LOCALAPPDATA: scratch,
+      COMSPEC: staged.comspec ?? path19.join(systemRoot, "System32", "cmd.exe")
+    };
+    if (staged.gitExecPath) {
+      environment.GIT_EXEC_PATH = staged.gitExecPath;
+      environment.GIT_CONFIG_NOSYSTEM = "1";
+      environment.GIT_CONFIG_GLOBAL = path19.join(scratch, ".gitconfig");
+      environment.GIT_TERMINAL_PROMPT = "0";
+      environment.GIT_DEFAULT_REF_FORMAT = "reftable";
+    }
     const request = {
       action: mode,
       nonce,
@@ -48138,19 +48373,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       childProcesses: selection.childProcesses,
       stateDirectory,
       grants,
-      environment: {
-        SystemRoot: systemRoot,
-        WINDIR: systemRoot,
-        PATH: [...staged.pathEntries, path19.join(systemRoot, "System32")].join(path19.delimiter),
-        PATHEXT: ".COM;.EXE;.BAT;.CMD",
-        TEMP: scratch,
-        TMP: scratch,
-        USERPROFILE: scratch,
-        HOME: scratch,
-        APPDATA: scratch,
-        LOCALAPPDATA: scratch,
-        COMSPEC: staged.comspec ?? path19.join(systemRoot, "System32", "cmd.exe")
-      }
+      environment
     };
     const file3 = await writeRequest(controller.directory, request);
     let observed;

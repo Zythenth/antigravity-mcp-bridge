@@ -40,6 +40,7 @@ export interface WindowsExecutionOptions {
   protectedPaths?: string[];
   windowsNodeRuntime?: WindowsNodeRuntime;
   portableNodeCacheDirectory?: string;
+  includeGit?: boolean;
   signal?: AbortSignal;
   onProcess?: (child: ChildProcessWithoutNullStreams) => void;
 }
@@ -195,8 +196,16 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
   validateWindowsCommand(command);
   const selection: SandboxSelection = options.sandbox ?? { readPaths: [], writePaths: [], network: false, childProcesses: true, maxOutputChars: 4000 };
   const mode = options.mode ?? 'write', maxFiles = options.maxFiles ?? 10000;
-  const runtimeSelection = { mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
-    portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory };
+  const exeBasename = path.win32.basename(command.executable).toLocaleLowerCase('en-US');
+  const isNodeOrNpm = exeBasename === 'node' || exeBasename === 'node.exe' || exeBasename === 'npm' || exeBasename === 'npm.cmd';
+  const isDirectGit = exeBasename === 'git' || exeBasename === 'git.exe';
+  const autoIncludeGit = isNodeOrNpm || isDirectGit;
+  const includeGit = options.includeGit ?? autoIncludeGit;
+  const runtimeSelection = {
+    mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
+    portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory,
+    includeGit,
+  };
   const stateDirectory = path.resolve(options.stateDirectory ?? path.join(os.homedir(), '.antigravity-mcp-bridge'));
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
   await runRecoveryWithController(stateDirectory, options);
@@ -209,13 +218,31 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
       runtimeSelection);
     const grants = await grantPaths(selection, [...(options.protectedPaths ?? []), stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
     const nonce = randomUUID(), systemRoot = process.env.SystemRoot || 'C:\\Windows';
+    const environment: Record<string, string> = {
+      SystemRoot: systemRoot,
+      WINDIR: systemRoot,
+      PATH: [...staged.pathEntries, path.join(systemRoot, 'System32')].join(path.delimiter),
+      PATHEXT: '.COM;.EXE;.BAT;.CMD',
+      TEMP: scratch,
+      TMP: scratch,
+      USERPROFILE: scratch,
+      HOME: scratch,
+      APPDATA: scratch,
+      LOCALAPPDATA: scratch,
+      COMSPEC: staged.comspec ?? path.join(systemRoot, 'System32', 'cmd.exe'),
+    };
+    if (staged.gitExecPath) {
+      environment.GIT_EXEC_PATH = staged.gitExecPath;
+      environment.GIT_CONFIG_NOSYSTEM = '1';
+      environment.GIT_CONFIG_GLOBAL = path.join(scratch, '.gitconfig');
+      environment.GIT_TERMINAL_PROMPT = '0';
+      environment.GIT_DEFAULT_REF_FORMAT = 'reftable';
+    }
     const request = {
       action: mode, nonce, profile: 'agy.test.' + nonce.replaceAll('-', ''), cwd, runtime, scratch, executable: staged.executable, args: staged.args,
       timeoutSeconds: options.timeoutSeconds, maxFiles, maxOutputChars: selection.maxOutputChars, network: selection.network, childProcesses: selection.childProcesses,
       stateDirectory, grants,
-      environment: { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: [...staged.pathEntries, path.join(systemRoot, 'System32')].join(path.delimiter),
-        PATHEXT: '.COM;.EXE;.BAT;.CMD', TEMP: scratch, TMP: scratch, USERPROFILE: scratch, HOME: scratch, APPDATA: scratch, LOCALAPPDATA: scratch,
-        COMSPEC: staged.comspec ?? path.join(systemRoot, 'System32', 'cmd.exe') },
+      environment,
     };
     const file = await writeRequest(controller.directory, request);
     let observed: NativeInvocation;

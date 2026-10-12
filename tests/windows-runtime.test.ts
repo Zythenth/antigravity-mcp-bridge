@@ -355,3 +355,115 @@ test('Windows runtime stages pinned source with hardlink, enforces single-link r
     await unlink(cloneAlias);
   });
 });
+
+test('Windows runtime stages hardlinked Git sources to singlelink read-only destination and resolves cmd layouts', { skip: process.platform !== 'win32' }, async () => {
+  await runtimeFixture(async (runtime, outside) => {
+    const peStub = Buffer.alloc(128);
+    peStub.write('MZ', 0, 2, 'ascii');
+    peStub.writeUInt32LE(64, 0x3c);
+    peStub.write('PE\0\0', 64, 4, 'ascii');
+    const peHash = createHash('sha256').update(peStub).digest('hex');
+
+    const gitBase = path.join(outside, 'git-mingw');
+    const cmdDir = path.join(gitBase, 'cmd');
+    const binDir = path.join(gitBase, 'mingw64', 'bin');
+    await mkdir(cmdDir, { recursive: true });
+    await mkdir(binDir, { recursive: true });
+
+    const cmdGit = path.join(cmdDir, 'git.exe');
+    const realGit = path.join(binDir, 'git.exe');
+    const gitHardlink = path.join(outside, 'git-alias.exe');
+    await writeFile(realGit, peStub);
+    await writeFile(cmdGit, peStub);
+    await link(realGit, gitHardlink);
+
+    const dll = path.join(binDir, 'libgit.dll');
+    const dllHardlink = path.join(outside, 'libgit-alias.dll');
+    await writeFile(dll, peStub);
+    await link(dll, dllHardlink);
+
+    const helpers = ['git-upload-pack.exe', 'git-receive-pack.exe', 'git-upload-archive.exe'];
+    for (const helper of helpers) {
+      const helperPath = path.join(binDir, helper);
+      const helperLink = path.join(outside, helper + '-alias.exe');
+      await writeFile(helperPath, peStub);
+      await link(helperPath, helperLink);
+    }
+
+    const beforeStat = await lstat(realGit);
+    assert.ok(beforeStat.nlink >= 2);
+
+    const staged = await stageWindowsCommand({ executable: cmdGit, args: ['--version'] }, runtime, limits);
+    assert.equal(staged.executable, path.join(runtime, 'git', 'bin', 'git.exe'));
+    assert.equal(staged.gitExecPath, path.join(runtime, 'git', 'bin'));
+    assert.deepEqual(staged.pathEntries, [path.join(runtime, 'git', 'bin')]);
+
+    const destStat = await lstat(staged.executable);
+    assert.equal(destStat.nlink, 1);
+    assert.equal(destStat.mode & 0o222, 0);
+    assert.equal(createHash('sha256').update(await readFile(staged.executable)).digest('hex'), peHash);
+
+    const destDllStat = await lstat(path.join(runtime, 'git', 'bin', 'libgit.dll'));
+    assert.equal(destDllStat.nlink, 1);
+    assert.equal(destDllStat.mode & 0o222, 0);
+
+    for (const helper of helpers) {
+      const destHelperStat = await lstat(path.join(runtime, 'git', 'bin', helper));
+      assert.equal(destHelperStat.nlink, 1);
+      assert.equal(destHelperStat.mode & 0o222, 0);
+    }
+
+    const afterStat = await lstat(realGit);
+    assert.equal(afterStat.nlink, beforeStat.nlink);
+
+    await runtimeFixture(async ucrtRuntime => {
+      const ucrtBase = path.join(outside, 'git-ucrt');
+      const ucrtCmdDir = path.join(ucrtBase, 'cmd');
+      const ucrtBinDir = path.join(ucrtBase, 'ucrt64', 'bin');
+      await mkdir(ucrtCmdDir, { recursive: true });
+      await mkdir(ucrtBinDir, { recursive: true });
+      await writeFile(path.join(ucrtCmdDir, 'git.exe'), peStub);
+      await writeFile(path.join(ucrtBinDir, 'git.exe'), peStub);
+
+      const ucrtStaged = await stageWindowsCommand({ executable: path.join(ucrtCmdDir, 'git.exe'), args: ['status'] }, ucrtRuntime, limits);
+      assert.equal(ucrtStaged.executable, path.join(ucrtRuntime, 'git', 'bin', 'git.exe'));
+    });
+
+    await runtimeFixture(async brokenRuntime => {
+      const brokenCmdDir = path.join(outside, 'git-broken', 'cmd');
+      await mkdir(brokenCmdDir, { recursive: true });
+      const brokenCmd = path.join(brokenCmdDir, 'git.exe');
+      await writeFile(brokenCmd, peStub);
+      await assert.rejects(stageWindowsCommand({ executable: brokenCmd, args: [] }, brokenRuntime, limits), { code: 'WINDOWS_EXECUTABLE_UNSUPPORTED' });
+    });
+
+    await runtimeFixture(async smallRuntime => {
+      await assert.rejects(stageWindowsCommand({ executable: cmdGit, args: [] }, smallRuntime, { maxBytes: 100, maxFiles: 1000 }), { code: 'ISOLATION_TOO_LARGE' });
+    });
+    await runtimeFixture(async smallRuntime => {
+      await assert.rejects(stageWindowsCommand({ executable: cmdGit, args: [] }, smallRuntime, { maxBytes: 100 * 1024 * 1024, maxFiles: 1 }), { code: 'ISOLATION_TOO_LARGE' });
+    });
+
+    await runtimeFixture(async absentRuntime => {
+      const emptyDir = path.join(outside, 'empty-path');
+      await mkdir(emptyDir, { recursive: true });
+      const prevPath = process.env.PATH;
+      process.env.PATH = emptyDir;
+      try {
+        const stagedAbsent = await stageWindowsCommand({ executable: process.execPath, args: ['--version'] }, absentRuntime, limits, { includeGit: true });
+        assert.equal(stagedAbsent.gitExecPath, undefined);
+        assert.deepEqual(stagedAbsent.pathEntries, [absentRuntime]);
+      } finally {
+        process.env.PATH = prevPath;
+      }
+    });
+
+    await runtimeFixture(async genericRuntime => {
+      const genericExe = path.join(outside, 'generic.exe');
+      const genericLink = path.join(outside, 'generic-alias.exe');
+      await writeFile(genericExe, peStub);
+      await link(genericExe, genericLink);
+      await assert.rejects(stageWindowsCommand({ executable: genericLink, args: [] }, genericRuntime, limits), { code: 'UNSAFE_RUNTIME_PATH' });
+    });
+  });
+});

@@ -330,3 +330,116 @@ test('Windows executor rejects remote executables, device names, streams and tru
   }
   await assert.rejects(executeWindowsTest(command('before\0after'), 'unused', settings), { code: 'INVALID_TEST_COMMAND' });
 });
+
+test('Windows executor stages real Git inside LPAC, isolates host config, verifies aliases, repository operations and source ACL/nlink invariants', { skip: process.platform !== 'win32' }, async t => {
+  const resolveHostGit = async (): Promise<string | undefined> => {
+    const target = 'git.exe';
+    const dirs = (process.env.PATH || '')
+      .split(path.delimiter)
+      .map(d => d.trim().replace(/^"(.*)"$/, '$1'))
+      .filter(d => d && path.isAbsolute(d));
+    for (const d of dirs) {
+      const candidate = path.join(d, target);
+      try {
+        const info = await lstat(candidate);
+        if (info.isFile() && !info.isSymbolicLink()) {
+          const dir = path.dirname(candidate);
+          if (path.basename(dir).toLowerCase() === 'cmd') {
+            for (const sub of ['ucrt64', 'mingw64']) {
+              const real = path.resolve(dir, '..', sub, 'bin', target);
+              try {
+                if ((await lstat(real)).isFile()) return real;
+              } catch {}
+            }
+          }
+          return candidate;
+        }
+      } catch {}
+    }
+    return undefined;
+  };
+
+  const hostGit = await resolveHostGit();
+  if (!hostGit) {
+    t.skip('Git for Windows is not installed on host PATH; skipping live LPAC git test');
+    return;
+  }
+
+  const aclBefore = execFileSync('icacls.exe', [hostGit], { windowsHide: true, encoding: 'utf8' });
+  const statBefore = await lstat(hostGit);
+
+  await fixture(async (copy, outside) => {
+    const marker = path.join(outside, 'private.txt');
+    await writeFile(marker, 'private git marker');
+
+    const existingRepo = path.join(copy, 'existing-repo');
+    await mkdir(path.join(existingRepo, '.git', 'objects'), { recursive: true });
+    await mkdir(path.join(existingRepo, '.git', 'refs', 'heads'), { recursive: true });
+    await writeFile(path.join(existingRepo, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    await writeFile(path.join(existingRepo, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n\tfilemode = false\n\tbare = false\n\tlogallrefupdates = true\n');
+
+    const fakeHostConfig = path.join(outside, 'host.gitconfig');
+    await writeFile(fakeHostConfig, '[user]\n\tname = Host Leaked User\n\temail = leaked@example.invalid\n');
+    const prevGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;
+    process.env.GIT_CONFIG_GLOBAL = fakeHostConfig;
+
+    try {
+      const script = "const fs = require('node:fs');" +
+        "const cp = require('node:child_process');" +
+        "const path = require('node:path');" +
+        "const gitExecPath = process.env.GIT_EXEC_PATH;" +
+        "if (!gitExecPath || !/^[A-Z]:\\\\/i.test(gitExecPath)) { process.stderr.write('Invalid GIT_EXEC_PATH: ' + gitExecPath); process.exit(101); }" +
+        "const gitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;" +
+        "if (!gitConfigGlobal || !/^[A-Z]:\\\\/i.test(gitConfigGlobal)) { process.stderr.write('Invalid GIT_CONFIG_GLOBAL: ' + gitConfigGlobal); process.exit(102); }" +
+        "if (fs.existsSync(gitConfigGlobal)) { process.stderr.write('GIT_CONFIG_GLOBAL exists unexpectedly'); process.exit(103); }" +
+        "if (process.env.GIT_CONFIG_NOSYSTEM !== '1') { process.stderr.write('GIT_CONFIG_NOSYSTEM was not set'); process.exit(104); }" +
+        "if (process.env.GIT_TERMINAL_PROMPT !== '0') { process.stderr.write('GIT_TERMINAL_PROMPT was not set'); process.exit(105); }" +
+        "if (process.env.GIT_DEFAULT_REF_FORMAT !== 'reftable') { process.stderr.write('GIT_DEFAULT_REF_FORMAT was not set to reftable'); process.exit(106); }" +
+        "const versionRes = cp.spawnSync('git.exe', ['--version'], { encoding: 'utf8' });" +
+        "if (versionRes.status !== 0 || !versionRes.stdout.includes('git version')) { process.stderr.write('git --version failed: ' + (versionRes.stderr || versionRes.error)); process.exit(107); }" +
+        "const initRes = cp.spawnSync('git.exe', ['init', '-b', 'main'], { encoding: 'utf8' });" +
+        "if (initRes.status !== 0) { process.stderr.write('git init failed: ' + initRes.stderr); process.exit(108); }" +
+        "const refStorageRes = cp.spawnSync('git.exe', ['config', '--get', 'extensions.refStorage'], { encoding: 'utf8' });" +
+        "if (refStorageRes.status !== 0 || refStorageRes.stdout.trim() !== 'reftable') { process.stderr.write('extensions.refStorage was not reftable: ' + refStorageRes.stdout); process.exit(109); }" +
+        "const refFormatRes = cp.spawnSync('git.exe', ['rev-parse', '--show-ref-format'], { encoding: 'utf8' });" +
+        "if (refFormatRes.status !== 0 || refFormatRes.stdout.trim() !== 'reftable') { process.stderr.write('rev-parse --show-ref-format was not reftable: ' + refFormatRes.stdout); process.exit(110); }" +
+        "const existingFormatRes = cp.spawnSync('git.exe', ['-C', 'existing-repo', 'rev-parse', '--show-ref-format'], { encoding: 'utf8' });" +
+        "if (existingFormatRes.status !== 0 || existingFormatRes.stdout.trim() !== 'files') { process.stderr.write('existing repo did not preserve files format: ' + existingFormatRes.stdout); process.exit(111); }" +
+        "const checkUser = cp.spawnSync('git.exe', ['config', 'user.name'], { encoding: 'utf8' });" +
+        "if (checkUser.status === 0 && checkUser.stdout.includes('Host Leaked User')) { process.stderr.write('Host config was leaked into container'); process.exit(112); }" +
+        "const configName = cp.spawnSync('git.exe', ['config', 'user.name', 'Synthetic LPAC User'], { encoding: 'utf8' });" +
+        "if (configName.status !== 0) process.exit(113);" +
+        "const configEmail = cp.spawnSync('git.exe', ['config', 'user.email', 'synthetic@example.invalid'], { encoding: 'utf8' });" +
+        "if (configEmail.status !== 0) process.exit(114);" +
+        "fs.writeFileSync('sample.txt', 'first version');" +
+        "const addRes = cp.spawnSync('git.exe', ['add', 'sample.txt'], { encoding: 'utf8' });" +
+        "if (addRes.status !== 0) process.exit(115);" +
+        "const commitRes = cp.spawnSync('git.exe', ['commit', '-m', 'synthetic commit'], { encoding: 'utf8' });" +
+        "if (commitRes.status !== 0) { process.stderr.write('git commit failed: ' + commitRes.stderr); process.exit(116); }" +
+        "const lsRes = cp.spawnSync('git.exe', ['ls-files'], { encoding: 'utf8' });" +
+        "if (lsRes.status !== 0 || !lsRes.stdout.includes('sample.txt')) process.exit(117);" +
+        "fs.appendFileSync('sample.txt', '\\nsecond line');" +
+        "const diffRes = cp.spawnSync('git.exe', ['diff'], { encoding: 'utf8' });" +
+        "if (diffRes.status !== 0 || !diffRes.stdout.includes('+second line')) process.exit(118);" +
+        "let denied = false;" +
+        "try { fs.readFileSync(" + JSON.stringify(marker) + "); } catch (e) { if (['EACCES', 'EPERM', 'ENOENT'].includes(e.code)) denied = true; }" +
+        "if (!denied) process.exit(119);" +
+        "console.log('git lpac integration passed successfully');";
+
+      await writeFile(path.join(copy, 'git-flow.cjs'), script);
+      const result = await executeWindowsTest({ executable: process.execPath, args: ['git-flow.cjs'] }, copy, settings);
+      assert.equal(result.sandbox, 'windows-lpac');
+      assert.equal(result.error, undefined, JSON.stringify(result));
+      assert.equal(result.exitCode, 0, result.output);
+      assert.match(result.output, /git lpac integration passed successfully/);
+    } finally {
+      if (prevGitConfigGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+      else process.env.GIT_CONFIG_GLOBAL = prevGitConfigGlobal;
+
+      const aclAfter = execFileSync('icacls.exe', [hostGit], { windowsHide: true, encoding: 'utf8' });
+      assert.equal(aclAfter, aclBefore);
+      const statAfter = await lstat(hostGit);
+      assert.equal(statAfter.nlink, statBefore.nlink);
+    }
+  });
+});

@@ -19,11 +19,13 @@ export interface StagedWindowsCommand {
   pathEntries: string[];
   comspec?: string;
   portableNode?: PortableNodeIdentity;
+  gitExecPath?: string;
 }
 
 export interface WindowsRuntimeSelection {
   mode?: WindowsNodeRuntime;
   portableNodeCacheDirectory?: string;
+  includeGit?: boolean;
 }
 
 interface CopyState extends WindowsRuntimeLimits {
@@ -279,9 +281,9 @@ async function hashStagedFile(file: string): Promise<string> {
   } finally { await handle.close(); }
 }
 
-async function stageNativeExecutable(source: string, destination: string, state: CopyState, expectedSha256?: string): Promise<string> {
-  const allowMultipleLinks = typeof expectedSha256 === 'string' && expectedSha256.length > 0;
-  const executable = await stageFile(source, destination, state, true, allowMultipleLinks, expectedSha256);
+async function stageNativeExecutable(source: string, destination: string, state: CopyState, expectedSha256?: string, allowMultipleLinks = false): Promise<string> {
+  const allowLinks = Boolean(expectedSha256) || allowMultipleLinks;
+  const executable = await stageFile(source, destination, state, true, allowLinks, expectedSha256);
   if (expectedSha256 && await hashStagedFile(executable) !== expectedSha256) {
     fail('PORTABLE_NODE_HASH_MISMATCH', 'Staged portable Node executable hash does not match the embedded descriptor');
   }
@@ -291,9 +293,122 @@ async function stageNativeExecutable(source: string, destination: string, state:
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, 'en-US'))) {
     if (!/\.dll$/iu.test(entry.name)) continue;
     if (!entry.isFile() || entry.isSymbolicLink()) fail('UNSAFE_RUNTIME_PATH', 'Runtime DLLs must be regular files');
-    await stageFile(path.join(directory, entry.name), path.join(path.dirname(destination), entry.name), state, true);
+    await stageFile(path.join(directory, entry.name), path.join(path.dirname(destination), entry.name), state, true, allowLinks);
   }
   return executable;
+}
+
+const gitHelperBinaries = ['git-upload-pack.exe', 'git-receive-pack.exe', 'git-upload-archive.exe'] as const;
+
+function isGitCommandName(executable: string): boolean {
+  const extension = path.extname(executable).toLocaleLowerCase('en-US');
+  if (extension && extension !== '.exe') return false;
+  const basename = path.win32.basename(executable).toLocaleLowerCase('en-US');
+  return basename === 'git' || basename === 'git.exe';
+}
+
+async function resolveGitExecutable(requested?: string): Promise<string | undefined> {
+  const targetFile = requested && path.isAbsolute(requested)
+    ? (path.extname(requested) ? requested : requested + '.exe')
+    : undefined;
+  const directories = targetFile
+    ? ['']
+    : (process.env.PATH || '')
+        .split(path.delimiter)
+        .map(directory => directory.trim().replace(/^"(.*)"$/, '$1'))
+        .filter(directory => directory && path.isAbsolute(directory) && !isUnsafeWindowsPath(directory));
+  for (const directory of directories) {
+    const candidate = targetFile
+      ? path.resolve(targetFile)
+      : path.resolve(directory, 'git.exe');
+    if (isUnsafeWindowsPath(candidate)) continue;
+    try {
+      const info = await lstat(candidate);
+      if (info.isSymbolicLink()) {
+        fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + candidate);
+      }
+      if (!info.isFile()) continue;
+      await regularFile(candidate, true);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+        continue;
+      }
+      throw error;
+    }
+    const candidateDir = path.dirname(candidate);
+    if (path.basename(candidateDir).toLocaleLowerCase('en-US') === 'cmd') {
+      const realCandidates = [
+        path.resolve(candidateDir, '..', 'ucrt64', 'bin', 'git.exe'),
+        path.resolve(candidateDir, '..', 'mingw64', 'bin', 'git.exe'),
+      ];
+      let realGit: string | undefined;
+      for (const realCandidate of realCandidates) {
+        if (isUnsafeWindowsPath(realCandidate)) continue;
+        try {
+          const realInfo = await lstat(realCandidate);
+          if (realInfo.isSymbolicLink()) {
+            fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + realCandidate);
+          }
+          if (!realInfo.isFile()) continue;
+          await regularFile(realCandidate, true);
+          realGit = realCandidate;
+          break;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+            continue;
+          }
+          throw error;
+        }
+      }
+      if (!realGit) {
+        fail('WINDOWS_EXECUTABLE_UNSUPPORTED', 'Git wrapper does not contain a real bin layout: ' + candidate);
+      }
+      return realGit;
+    }
+    return candidate;
+  }
+  return undefined;
+}
+
+async function stageGitInstallation(realGit: string, runtime: string, state: CopyState): Promise<string> {
+  const stagedGit = await stageNativeExecutable(
+    realGit,
+    stagedPath(runtime, ['git', 'bin', 'git.exe']),
+    state,
+    undefined,
+    true
+  );
+  const realBinDir = path.dirname(realGit);
+  for (const helper of gitHelperBinaries) {
+    const helperSource = path.join(realBinDir, helper);
+    try {
+      const info = await lstat(helperSource);
+      if (info.isSymbolicLink()) {
+        fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + helperSource);
+      }
+      if (!info.isFile()) continue;
+      await stageFile(
+        helperSource,
+        stagedPath(runtime, ['git', 'bin', helper]),
+        state,
+        true,
+        true
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+        continue;
+      }
+      throw error;
+    }
+  }
+  return stagedGit;
+}
+
+async function stageGit(runtime: string, state: CopyState): Promise<string | undefined> {
+  const realGit = await resolveGitExecutable();
+  if (!realGit) return undefined;
+  const stagedGit = await stageGitInstallation(realGit, runtime, state);
+  return path.dirname(stagedGit);
 }
 
 function npmPathIsOmitted(parts: string[]): boolean {
@@ -337,7 +452,7 @@ async function stageSystemCmd(systemRoot: string, runtime: string, state: CopySt
   return stageFile(source, stagedPath(runtime, ['system32', 'cmd.exe']), state, true, true);
 }
 
-async function stageNpm(launcher: string, runtime: string, state: CopyState, args: string[], portableNode?: { nodePath: string; identity: PortableNodeIdentity }): Promise<StagedWindowsCommand> {
+async function stageNpm(launcher: string, runtime: string, state: CopyState, args: string[], portableNode?: { nodePath: string; identity: PortableNodeIdentity }, includeGit = false): Promise<StagedWindowsCommand> {
   const launcherText = (await readBoundedFile(launcher, maxInspectionBytes)).toString('utf8').replaceAll('/', '\\').toLocaleLowerCase('en-US');
   if (!launcherText.includes('node_modules\\npm\\bin\\npm-cli.js')) {
     fail('WINDOWS_NPM_LAYOUT_UNSUPPORTED', 'The npm launcher does not reference the expected npm-cli.js layout');
@@ -370,7 +485,19 @@ async function stageNpm(launcher: string, runtime: string, state: CopyState, arg
     fail('WINDOWS_EXECUTOR_UNAVAILABLE', 'SystemRoot does not identify a safe Windows system directory');
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
-  return { executable: node, args: [cli, ...args], pathEntries: [path.dirname(node)], comspec, portableNode: portableNode?.identity };
+  let gitExecPath: string | undefined;
+  if (includeGit) {
+    gitExecPath = await stageGit(runtime, state);
+  }
+  const pathEntries = [path.dirname(node)];
+  if (gitExecPath && !pathEntries.includes(gitExecPath)) {
+    pathEntries.push(gitExecPath);
+  }
+  const result: StagedWindowsCommand = { executable: node, args: [cli, ...args], pathEntries, comspec, portableNode: portableNode?.identity };
+  if (gitExecPath) {
+    result.gitExecPath = gitExecPath;
+  }
+  return result;
 }
 
 async function hostNodeIdentity(file: string): Promise<boolean> {
@@ -398,12 +525,38 @@ export async function stageWindowsCommand(command: TestCommand, runtimeDirectory
     fail('UNSAFE_RUNTIME_PATH', 'Windows runtime staging requires an empty owned directory');
   }
   const state: CopyState = { ...limits, runtime, bytes: 0, entries: 0, sources: new Map(), targets: new Map(), directories: new Set() };
+  if (isGitCommandName(command.executable)) {
+    const gitSource = await resolveGitExecutable(command.executable);
+    if (!gitSource) {
+      fail('WINDOWS_EXECUTABLE_NOT_FOUND', 'Test executable was not found: ' + command.executable);
+    }
+    const stagedGit = await stageGitInstallation(gitSource, runtime, state);
+    const gitExecPath = path.dirname(stagedGit);
+    return {
+      executable: stagedGit,
+      args: [...command.args],
+      pathEntries: [gitExecPath],
+      gitExecPath,
+    };
+  }
   const resolved = await resolveCommand(command.executable);
   if (resolved.kind === 'npm') {
     const adjacentNode = path.join(path.dirname(resolved.file), 'node.exe');
-    return stageNpm(resolved.file, runtime, state, command.args, await portableNodeForHostRuntime(adjacentNode, selection));
+    return stageNpm(resolved.file, runtime, state, command.args, await portableNodeForHostRuntime(adjacentNode, selection), selection.includeGit ?? false);
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
   const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path.basename(resolved.file)]), state, portableNode?.identity.sha256);
-  return { executable, args: [...command.args], pathEntries: [path.dirname(executable)], portableNode: portableNode?.identity };
+  let gitExecPath: string | undefined;
+  if (selection.includeGit) {
+    gitExecPath = await stageGit(runtime, state);
+  }
+  const pathEntries = [path.dirname(executable)];
+  if (gitExecPath && !pathEntries.includes(gitExecPath)) {
+    pathEntries.push(gitExecPath);
+  }
+  const result: StagedWindowsCommand = { executable, args: [...command.args], pathEntries, portableNode: portableNode?.identity };
+  if (gitExecPath) {
+    result.gitExecPath = gitExecPath;
+  }
+  return result;
 }

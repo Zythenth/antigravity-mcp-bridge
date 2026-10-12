@@ -428,11 +428,88 @@ internal static class WindowsTestRunner
     static Dictionary<string, string> ProjectEnvironment(Request request, AliasPlan[] aliases)
     {
         string systemRoot = Environment.GetEnvironmentVariable("SystemRoot"); RequireLocalAbsolutePath(systemRoot, "SystemRoot");
+        string system32 = Path.Combine(systemRoot, "System32");
+        string system32Canonical = Path.GetFullPath(system32);
         var projected = new Dictionary<string, string>(request.environment, StringComparer.OrdinalIgnoreCase);
         AliasPlan runtime = aliases[1], scratch = aliases[2];
-        projected["PATH"] = runtime.aliasRoot + ";" + Path.Combine(systemRoot, "System32");
+
+        string runtimePhysical = Path.GetFullPath(runtime.physicalRoot);
+        string runtimeSeparator = runtimePhysical.EndsWith("\\") ? runtimePhysical : runtimePhysical + "\\";
+
+        var pathEntries = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        pathEntries.Add(runtime.aliasRoot);
+        seen.Add(runtime.aliasRoot);
+
+        string rawPath;
+        if (projected.TryGetValue("PATH", out rawPath) && !String.IsNullOrEmpty(rawPath))
+        {
+            string[] items = rawPath.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string rawItem in items)
+            {
+                string item = rawItem.Trim().Trim('"');
+                if (String.IsNullOrEmpty(item)) continue;
+                if (!IsPhysicalAbsolutePath(item)) continue;
+                string full;
+                try { full = Path.GetFullPath(item); } catch { continue; }
+                if (!IsPhysicalAbsolutePath(full)) continue;
+
+                if (String.Equals(full, system32Canonical, StringComparison.OrdinalIgnoreCase)) continue;
+
+                bool isRuntimeOwned = String.Equals(full, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||
+                                      full.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);
+                if (!isRuntimeOwned) continue;
+
+                string mapped = ProjectOwnedPath(full, aliases);
+                if (!mapped.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (seen.Add(mapped))
+                {
+                    pathEntries.Add(mapped);
+                }
+            }
+        }
+
+        if (seen.Add(system32))
+        {
+            pathEntries.Add(system32);
+        }
+
+        projected["PATH"] = String.Join(";", pathEntries.ToArray());
         foreach (string key in new string[] { "TEMP", "TMP", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA" }) projected[key] = scratch.aliasRoot;
         string comspec; if (!projected.TryGetValue("COMSPEC", out comspec)) comspec = Path.Combine(systemRoot, "System32", "cmd.exe"); projected["COMSPEC"] = ProjectOwnedPath(comspec, aliases);
+
+        string gitExecPath;
+        if (projected.TryGetValue("GIT_EXEC_PATH", out gitExecPath) && !String.IsNullOrEmpty(gitExecPath))
+        {
+            RequireLocalAbsolutePath(gitExecPath, "GIT_EXEC_PATH");
+            string fullGitExec = Path.GetFullPath(gitExecPath);
+            RequireLocalAbsolutePath(fullGitExec, "GIT_EXEC_PATH");
+            bool isInsideRuntime = String.Equals(fullGitExec, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||
+                                  fullGitExec.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);
+            if (!isInsideRuntime) throw new Exception("GIT_EXEC_PATH must be located inside the runtime directory: " + gitExecPath);
+            string projectedGitExec = ProjectOwnedPath(fullGitExec, aliases);
+            if (!projectedGitExec.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_EXEC_PATH projection failed: " + gitExecPath);
+            projected["GIT_EXEC_PATH"] = projectedGitExec;
+        }
+
+        string gitConfigGlobal;
+        if (projected.TryGetValue("GIT_CONFIG_GLOBAL", out gitConfigGlobal) && !String.IsNullOrEmpty(gitConfigGlobal))
+        {
+            RequireLocalAbsolutePath(gitConfigGlobal, "GIT_CONFIG_GLOBAL");
+            string fullGitConfig = Path.GetFullPath(gitConfigGlobal);
+            RequireLocalAbsolutePath(fullGitConfig, "GIT_CONFIG_GLOBAL");
+            string scratchPhysical = Path.GetFullPath(scratch.physicalRoot);
+            string scratchSeparator = scratchPhysical.EndsWith("\\") ? scratchPhysical : scratchPhysical + "\\";
+            bool isInsideScratch = String.Equals(fullGitConfig, scratchPhysical, StringComparison.OrdinalIgnoreCase) ||
+                                  fullGitConfig.StartsWith(scratchSeparator, StringComparison.OrdinalIgnoreCase);
+            if (!isInsideScratch) throw new Exception("GIT_CONFIG_GLOBAL must be located inside the scratch directory: " + gitConfigGlobal);
+            string projectedGitConfig = ProjectOwnedPath(fullGitConfig, aliases);
+            if (!projectedGitConfig.StartsWith(scratch.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_CONFIG_GLOBAL projection failed: " + gitConfigGlobal);
+            projected["GIT_CONFIG_GLOBAL"] = projectedGitConfig;
+        }
+
         return projected;
     }
 
