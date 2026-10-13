@@ -432,6 +432,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "const nullSlash = String.fromCharCode(92); const nullPaths = ['NUL', nullSlash + nullSlash + '.' + nullSlash + 'NUL', nullSlash + nullSlash + '?' + nullSlash + 'GLOBALROOT' + nullSlash + 'Device' + nullSlash + 'Null'];" +
         "const nullProbe = nullPaths.map(name => { let fd; try { fd = fs.openSync(name, 'r+'); const read = fs.readSync(fd, Buffer.alloc(1), 0, 1, null); const written = fs.writeSync(fd, Buffer.from('nul')); return { name, opened: true, eof: read === 0, written }; } catch (error) { return { name, opened: false, code: error.code }; } finally { if (fd !== undefined) fs.closeSync(fd); } });" +
         "process.stdout.write('null device probe: ' + JSON.stringify(nullProbe) + '\\n');" +
+        "process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';" +
         "const versionRes = cp.spawnSync('git.exe', ['--version'], { encoding: 'utf8' });" +
         "if (versionRes.status !== 0 || !versionRes.stdout.includes('git version')) { process.stderr.write('git --version failed: ' + (versionRes.stderr || versionRes.error)); process.exit(107); }" +
         "process.stdout.write('git probe version: ' + versionRes.stdout.trim() + '\\n');" +

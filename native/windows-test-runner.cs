@@ -505,6 +505,50 @@ internal static class WindowsTestRunner
             string projectedGitExec = ProjectOwnedPath(fullGitExec, aliases);
             if (!projectedGitExec.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_EXEC_PATH projection failed: " + gitExecPath);
             projected["GIT_EXEC_PATH"] = projectedGitExec;
+
+            var poisonKeys = new List<string>();
+            foreach (string envKey in projected.Keys)
+            {
+                if (String.Equals(envKey, "GIT_CONFIG_COUNT", StringComparison.OrdinalIgnoreCase) ||
+                    String.Equals(envKey, "GIT_CONFIG_PARAMETERS", StringComparison.OrdinalIgnoreCase) ||
+                    envKey.StartsWith("GIT_CONFIG_KEY_", StringComparison.OrdinalIgnoreCase) ||
+                    envKey.StartsWith("GIT_CONFIG_VALUE_", StringComparison.OrdinalIgnoreCase))
+                {
+                    poisonKeys.Add(envKey);
+                }
+            }
+            foreach (string poisonKey in poisonKeys)
+            {
+                projected.Remove(poisonKey);
+            }
+
+            AliasPlan copyAlias = aliases[0];
+            string copyAliasRoot = copyAlias.aliasRoot;
+            var safeDirectories = new List<string>();
+            safeDirectories.Add("");
+            safeDirectories.Add(copyAliasRoot);
+
+            int copyMaxFiles = request.maxFiles;
+            if (copyMaxFiles < 1) throw new Exception("Invalid repository discovery file limit");
+            string copyPhysicalRoot = Path.GetFullPath(copyAlias.physicalRoot);
+            var nestedRepos = new List<string>();
+            DiscoverNestedGitRepositories(copyPhysicalRoot, copyPhysicalRoot, copyMaxFiles, new int[] { 0 }, nestedRepos);
+            nestedRepos.Sort(StringComparer.OrdinalIgnoreCase);
+            foreach (string nestedRepo in nestedRepos)
+            {
+                string projectedNested = ProjectOwnedPath(nestedRepo, aliases);
+                if (projectedNested.StartsWith(copyAliasRoot, StringComparison.OrdinalIgnoreCase) && !safeDirectories.Contains(projectedNested))
+                {
+                    safeDirectories.Add(projectedNested);
+                }
+            }
+
+            projected["GIT_CONFIG_COUNT"] = safeDirectories.Count.ToString();
+            for (int index = 0; index < safeDirectories.Count; index++)
+            {
+                projected["GIT_CONFIG_KEY_" + index.ToString()] = "safe.directory";
+                projected["GIT_CONFIG_VALUE_" + index.ToString()] = safeDirectories[index];
+            }
         }
 
         string gitConfigGlobal;
@@ -612,6 +656,35 @@ internal static class WindowsTestRunner
             if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
             var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };
             try { ValidatePathComponents(child, temporary, false, maxFiles); if (temporary.grant.directory) ScanTree(child, maxFiles, count); }
+            finally { temporary.Dispose(); }
+        }
+    }
+
+    static void DiscoverNestedGitRepositories(string rootDirectory, string currentDirectory, int maxFiles, int[] count, List<string> discovered)
+    {
+        foreach (string child in Directory.GetFileSystemEntries(currentDirectory))
+        {
+            if (++count[0] > maxFiles) throw new Exception("Copy directory exceeds the configured file limit during repository discovery");
+            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };
+            try
+            {
+                ValidatePathComponents(child, temporary, false, maxFiles);
+                if (temporary.grant.directory)
+                {
+                    string name = Path.GetFileName(child);
+                    if (String.Equals(name, ".git", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!String.Equals(currentDirectory, rootDirectory, StringComparison.OrdinalIgnoreCase))
+                        {
+                            discovered.Add(currentDirectory);
+                        }
+                    }
+                    else
+                    {
+                        DiscoverNestedGitRepositories(rootDirectory, child, maxFiles, count, discovered);
+                    }
+                }
+            }
             finally { temporary.Dispose(); }
         }
     }
