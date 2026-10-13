@@ -46,6 +46,37 @@ return sd.GetSddlForm(AccessControlSections.Access);}}`;
     windowsHide: true, encoding: 'utf8', env: { ...process.env, BRIDGE_ACL_FIXTURE_SOURCE: source, BRIDGE_ACL_FIXTURE_TARGETS: JSON.stringify(targets) },
   })) as string[];
 }
+
+function readHostNullDeviceDacl(): string {
+  const source = `using System;using System.ComponentModel;using System.Runtime.InteropServices;using System.Security.AccessControl;using Microsoft.Win32.SafeHandles;
+public static class HostNullDaclDiagnostic {
+[DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern SafeFileHandle CreateFile(string lpFileName,uint dwDesiredAccess,uint dwShareMode,IntPtr lpSecurityAttributes,uint dwCreationDisposition,uint dwFlagsAndAttributes,IntPtr hTemplateFile);
+[DllImport("advapi32.dll",SetLastError=true)]static extern bool GetKernelObjectSecurity(SafeFileHandle handle,int securityInformation,[Out] byte[] pSecurityDescriptor,uint nLength,out uint lpnLengthNeeded);
+public static string Query(){
+try{
+using(SafeFileHandle handle=CreateFile(@"\\\\?\\GLOBALROOT\\Device\\Null",0x20000,3,IntPtr.Zero,3,0,IntPtr.Zero)){
+if(handle.IsInvalid)return "CreateFile:"+Marshal.GetLastWin32Error();
+uint needed;
+GetKernelObjectSecurity(handle,4,null,0,out needed);
+if(needed<20||needed>65536)return "GetKernelObjectSecurity:size:"+Marshal.GetLastWin32Error();
+byte[] buffer=new byte[needed];
+if(!GetKernelObjectSecurity(handle,4,buffer,needed,out needed))return "GetKernelObjectSecurity:query:"+Marshal.GetLastWin32Error();
+var sd=new RawSecurityDescriptor(buffer,0);
+return sd.GetSddlForm(AccessControlSections.Access);
+}}catch(Win32Exception ex){return "Win32Exception:"+ex.NativeErrorCode;}
+catch(Exception){return "Exception:"+Marshal.GetLastWin32Error();}}}`;
+  const script = "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:BRIDGE_HOST_NULL_DACL_SOURCE; [HostNullDaclDiagnostic]::Query()";
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true, encoding: 'utf8', stdio: 'pipe', timeout: 60000, maxBuffer: 65536,
+      env: { ...process.env, BRIDGE_HOST_NULL_DACL_SOURCE: source },
+    }).trim();
+  } catch (error) {
+    const err = error as { status?: number; code?: string };
+    const code = err.status !== undefined ? err.status : (err.code || 'unknown');
+    return `PowerShell:${code}`;
+  }
+}
 test('Windows executor protects the captured default runtime cache when options omit its path', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async (copy, outside) => {
     const cache = path.join(outside, 'runtime-cache');
@@ -433,6 +464,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "console.log('git lpac integration passed successfully');";
 
       await writeFile(path.join(copy, 'git-flow.cjs'), script);
+      console.log('host null device DACL: ' + readHostNullDeviceDacl());
       const result = await executeWindowsTest({ executable: process.execPath, args: ['git-flow.cjs'] }, copy, settings);
       assert.equal(result.sandbox, 'windows-lpac');
       const nullProbeLine = result.output.split(/\r?\n/).find(line => line.startsWith('null device probe:'));
