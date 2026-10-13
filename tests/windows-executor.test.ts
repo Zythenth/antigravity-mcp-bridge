@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+
 import { copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { loadConfig } from '../src/config.js';
+import { stageWindowsCommand } from '../src/windows-runtime.js';
 import { executeWindowsTest } from '../src/windows-executor.js';
 
 const runtime = loadConfig();
@@ -333,30 +336,29 @@ test('Windows executor rejects remote executables, device names, streams and tru
 
 test('Windows executor stages real Git inside LPAC, isolates host config, verifies aliases, repository operations and source ACL/nlink invariants', { skip: process.platform !== 'win32' }, async t => {
   const resolveHostGit = async (): Promise<string | undefined> => {
-    const target = 'git.exe';
-    const dirs = (process.env.PATH || '')
-      .split(path.delimiter)
-      .map(d => d.trim().replace(/^"(.*)"$/, '$1'))
-      .filter(d => d && path.isAbsolute(d));
-    for (const d of dirs) {
-      const candidate = path.join(d, target);
+    const cleanEnv = { ...process.env };
+    for (const key of Object.keys(cleanEnv)) if (key.toUpperCase() === 'GIT_EXEC_PATH') delete cleanEnv[key];
+    let execPath: string;
+    try {
+      execPath = execFileSync('git.exe', ['--exec-path'], {
+        windowsHide: true, encoding: 'utf8', env: cleanEnv, timeout: 10000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+    assert.ok(execPath, 'Installed Git must announce its executable path');
+    for (const candidate of [path.resolve(execPath, '..', '..', 'bin', 'git.exe'), path.resolve(execPath, 'git.exe')]) {
       try {
         const info = await lstat(candidate);
-        if (info.isFile() && !info.isSymbolicLink()) {
-          const dir = path.dirname(candidate);
-          if (path.basename(dir).toLowerCase() === 'cmd') {
-            for (const sub of ['ucrt64', 'mingw64']) {
-              const real = path.resolve(dir, '..', sub, 'bin', target);
-              try {
-                if ((await lstat(real)).isFile()) return real;
-              } catch {}
-            }
-          }
-          return candidate;
-        }
-      } catch {}
+        assert.ok(info.isFile() && !info.isSymbolicLink(), 'Host Git must be a regular native executable');
+        return candidate;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'ENOTDIR') throw error;
+      }
     }
-    return undefined;
+    throw new Error('Installed Git native executable was not found from --exec-path');
   };
 
   const hostGit = await resolveHostGit();
@@ -365,6 +367,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
     return;
   }
 
+  const hostGitHash = createHash('sha256').update(await readFile(hostGit)).digest('hex');
   const aclBefore = execFileSync('icacls.exe', [hostGit], { windowsHide: true, encoding: 'utf8' });
   const statBefore = await lstat(hostGit);
 
@@ -432,6 +435,24 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.equal(result.exitCode, 0, result.output);
       assert.match(result.output, /git lpac integration passed successfully/);
+
+      // Verify the staged git.exe hash against the independently resolved host native git binary
+      const tempRoot = await realpath(os.tmpdir());
+      const testRuntime = await realpath(await mkdtemp(path.join(tempRoot, 'agy-mcp-verify-git-')));
+      try {
+        const stagedGitCmd = await stageWindowsCommand({ executable: 'git.exe', args: ['--version'] }, testRuntime, {
+          maxBytes: 256 * 1024 * 1024,
+          maxFiles: 10_000,
+        });
+        const stagedGitBytes = await readFile(stagedGitCmd.executable);
+        const stagedGitHash = createHash('sha256').update(stagedGitBytes).digest('hex');
+        assert.equal(stagedGitHash, hostGitHash);
+      } finally {
+        assert.equal(path.dirname(testRuntime), tempRoot);
+        assert.ok(path.basename(testRuntime).startsWith('agy-mcp-verify-git-'));
+        assert.equal((await lstat(testRuntime)).isSymbolicLink(), false);
+        await rm(testRuntime, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
     } finally {
       if (prevGitConfigGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
       else process.env.GIT_CONFIG_GLOBAL = prevGitConfigGlobal;

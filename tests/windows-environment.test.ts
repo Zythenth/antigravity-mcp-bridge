@@ -33,7 +33,9 @@ test('Windows commands resolve when an MCP client omits PATHEXT, preserving expl
         code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
       } finally { clearTimeout(timer); }
       const events = output.trim().split(/\r?\n/).map(line => JSON.parse(line));
-      const lookup = JSON.parse(events.find(event => event.event === 'step_update').step_update.tool_info.output);
+      const step = events.find(event => event.event === 'step_update');
+      assert.ok(step, JSON.stringify({ code, diagnostics, output }));
+      const lookup = JSON.parse(step.step_update.tool_info.output);
       assert.equal(code, pathExt === '' ? 1 : 0, JSON.stringify({ lookup, diagnostics }));
       assert.equal(lookup.exitCode, pathExt === '' ? 42 : 0);
       if (pathExt !== '') assert.equal(path.relative(executable, lookup.source), '');
