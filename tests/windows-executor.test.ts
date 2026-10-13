@@ -434,10 +434,13 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "process.stdout.write('null device probe: ' + JSON.stringify(nullProbe) + '\\n');" +
         "const versionRes = cp.spawnSync('git.exe', ['--version'], { encoding: 'utf8' });" +
         "if (versionRes.status !== 0 || !versionRes.stdout.includes('git version')) { process.stderr.write('git --version failed: ' + (versionRes.stderr || versionRes.error)); process.exit(107); }" +
+        "process.stdout.write('git probe version: ' + versionRes.stdout.trim() + '\\n');" +
         "const initRes = cp.spawnSync('git.exe', ['init', '-b', 'main'], { encoding: 'utf8' });" +
         "if (initRes.status !== 0) { process.stderr.write('git init failed: ' + initRes.stderr); process.exit(108); }" +
         "const refStorageRes = cp.spawnSync('git.exe', ['config', '--get', 'extensions.refStorage'], { encoding: 'utf8' });" +
-        "if (refStorageRes.status !== 0 || refStorageRes.stdout.trim() !== 'reftable') { process.stderr.write('extensions.refStorage was not reftable: ' + refStorageRes.stdout); process.exit(109); }" +
+        "const diskRefStorage = (() => { try { return fs.readFileSync('.git/config', 'utf8').match(/(?:^|[\\r\\n])\\s*refstorage\\s*=\\s*([^\\r\\n]+)/i)?.[1]?.trim() || null; } catch (error) { return { readError: error.code }; } })();" +
+        "process.stdout.write('git probe init: ' + JSON.stringify({ diskRefStorage }) + '\\n');" +
+        "if (refStorageRes.status !== 0 || refStorageRes.stdout.trim() !== 'reftable') { process.stderr.write('extensions.refStorage query failed: ' + JSON.stringify({ status: refStorageRes.status, signal: refStorageRes.signal, stdout: refStorageRes.stdout, stderr: refStorageRes.stderr, code: refStorageRes.error?.code })); process.exit(109); }" +
         "const refFormatRes = cp.spawnSync('git.exe', ['rev-parse', '--show-ref-format'], { encoding: 'utf8' });" +
         "if (refFormatRes.status !== 0 || refFormatRes.stdout.trim() !== 'reftable') { process.stderr.write('rev-parse --show-ref-format was not reftable: ' + refFormatRes.stdout); process.exit(110); }" +
         "const existingFormatRes = cp.spawnSync('git.exe', ['-C', 'existing-repo', 'rev-parse', '--show-ref-format'], { encoding: 'utf8' });" +
@@ -469,8 +472,9 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
       assert.match(nullDaclBefore, /^D:/, 'Null DACL inspection must succeed');
       const result = await executeWindowsTest({ executable: process.execPath, args: ['git-flow.cjs'] }, copy, settings);
       assert.equal(result.sandbox, 'windows-lpac');
-      const nullProbeLine = result.output.split(/\r?\n/).find(line => line.startsWith('null device probe:'));
-      if (nullProbeLine) console.log(nullProbeLine);
+      for (const probeLine of result.output.split(/\r?\n/)) {
+        if (probeLine.startsWith('null device probe:') || probeLine.startsWith('git probe ')) console.log(probeLine);
+      }
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.equal(result.exitCode, 0, result.output);
       assert.match(result.output, /git lpac integration passed successfully/);
