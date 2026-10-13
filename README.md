@@ -516,6 +516,8 @@ Para testes Node/npm e comandos git diretos no Windows, o executor prepara autom
 
 Novos repositórios temporários criados no sandbox usam o formato `reftable` via `GIT_DEFAULT_REF_FORMAT=reftable` definido somente no ambiente isolado quando o Git está preparado. O Git instalado deve suportar esse formato; a configuração não converte repositórios existentes nem altera o Git no host. O backend tradicional `files` e versões do Git sem suporte a reftable possuem limitação no LPAC ao consultar diretórios pais privados (sem alegação de suporte universal). A configuração não afrouxa as proteções de sistema de arquivos: diretórios pais privados continuam com acesso negado, sem novas concessões, sem UAC e sem fallback ao host.
 
+Quando o Git está preparado, o controlador consulta a permissão do dispositivo Null do Windows. Se a regra padrão de LPAC já permite leitura e escrita, essa consulta não altera a ACL nem solicita `WRITE_DAC`. Caso o acesso esteja ausente e o token atual permita `WRITE_DAC`, o controlador registra uma concessão temporária somente para o SID exclusivo da execução. A limpeza verifica que o Job está vazio antes de remover acessos; uma recuperação inconclusiva mantém o lease e bloqueia a execução. A falta de permissão produz um diagnóstico sem solicitar elevação.
+
 #### Compatibilidade de subprocessos Node no Windows LPAC
 
 No Node 24.14.1 com libuv 1.51, `child_process.spawnSync` com pipes padrão de stdin/stdout/stderr cria endpoints globais `\\?\pipe\uv\...`. O LPAC recusa o `CreateNamedPipe` global com erro 5, enquanto endpoints equivalentes `LOCAL\...` abrem. A captura de stdout/stderr do processo pai está corrigida; no Node 24.14.1 do sistema, esse caso com pipes padrão ainda expira com exit code 124.

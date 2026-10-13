@@ -188,7 +188,9 @@ test('Windows recovery preserves a live controller, rejects a reused PID as stal
       await eventually('LPAC heartbeat stopped during active recovery', async () => Number(await readFile(heartbeat, 'utf8')) > firstHeartbeat ? true : undefined);
       await stopController(worker, launched.announcement); worker = undefined;
       assert.equal((await lstat(active.file)).isFile(), true, 'controller crash leaves a lease for a fresh process');
-      await writeFile(active.file, JSON.stringify({ ...active.value, controllerPid: process.pid, controllerStarted: 1 }), 'utf8');
+      // Simulate an interrupted Null grant intent that was never written.
+      assert.equal((active.value as Lease & { version?: number }).version, 3);
+      await writeFile(active.file, JSON.stringify({ ...active.value, controllerPid: process.pid, controllerStarted: 1, nullDeviceGrant: true }), 'utf8');
       await freshRecovery(state);
       process.kill(process.pid, 0);
       await assert.rejects(readFile(active.file));

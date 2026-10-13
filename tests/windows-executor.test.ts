@@ -464,7 +464,9 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "console.log('git lpac integration passed successfully');";
 
       await writeFile(path.join(copy, 'git-flow.cjs'), script);
-      console.log('host null device DACL: ' + readHostNullDeviceDacl());
+      const nullDaclBefore = readHostNullDeviceDacl();
+      console.log('host null device DACL before: ' + nullDaclBefore);
+      assert.match(nullDaclBefore, /^D:/, 'Null DACL inspection must succeed');
       const result = await executeWindowsTest({ executable: process.execPath, args: ['git-flow.cjs'] }, copy, settings);
       assert.equal(result.sandbox, 'windows-lpac');
       const nullProbeLine = result.output.split(/\r?\n/).find(line => line.startsWith('null device probe:'));
@@ -472,6 +474,10 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.equal(result.exitCode, 0, result.output);
       assert.match(result.output, /git lpac integration passed successfully/);
+      const nullDaclAfter = readHostNullDeviceDacl();
+      console.log('host null device DACL after: ' + nullDaclAfter);
+      assert.match(nullDaclAfter, /^D:/, 'Null DACL inspection after cleanup must succeed');
+      assert.equal(nullDaclAfter, nullDaclBefore, 'host null device DACL must remain exact and unchanged after verified cleanup');
 
       // Verify the staged git.exe hash against the independently resolved host native git binary
       const tempRoot = await realpath(os.tmpdir());
