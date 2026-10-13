@@ -398,6 +398,9 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "if (process.env.GIT_CONFIG_NOSYSTEM !== '1') { process.stderr.write('GIT_CONFIG_NOSYSTEM was not set'); process.exit(104); }" +
         "if (process.env.GIT_TERMINAL_PROMPT !== '0') { process.stderr.write('GIT_TERMINAL_PROMPT was not set'); process.exit(105); }" +
         "if (process.env.GIT_DEFAULT_REF_FORMAT !== 'reftable') { process.stderr.write('GIT_DEFAULT_REF_FORMAT was not set to reftable'); process.exit(106); }" +
+        "const nullSlash = String.fromCharCode(92); const nullPaths = ['NUL', nullSlash + nullSlash + '.' + nullSlash + 'NUL', nullSlash + nullSlash + '?' + nullSlash + 'GLOBALROOT' + nullSlash + 'Device' + nullSlash + 'Null'];" +
+        "const nullProbe = nullPaths.map(name => { let fd; try { fd = fs.openSync(name, 'r+'); const read = fs.readSync(fd, Buffer.alloc(1), 0, 1, null); const written = fs.writeSync(fd, Buffer.from('nul')); return { name, opened: true, eof: read === 0, written }; } catch (error) { return { name, opened: false, code: error.code }; } finally { if (fd !== undefined) fs.closeSync(fd); } });" +
+        "process.stdout.write('null device probe: ' + JSON.stringify(nullProbe) + '\\n');" +
         "const versionRes = cp.spawnSync('git.exe', ['--version'], { encoding: 'utf8' });" +
         "if (versionRes.status !== 0 || !versionRes.stdout.includes('git version')) { process.stderr.write('git --version failed: ' + (versionRes.stderr || versionRes.error)); process.exit(107); }" +
         "const initRes = cp.spawnSync('git.exe', ['init', '-b', 'main'], { encoding: 'utf8' });" +
@@ -432,6 +435,8 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
       await writeFile(path.join(copy, 'git-flow.cjs'), script);
       const result = await executeWindowsTest({ executable: process.execPath, args: ['git-flow.cjs'] }, copy, settings);
       assert.equal(result.sandbox, 'windows-lpac');
+      const nullProbeLine = result.output.split(/\r?\n/).find(line => line.startsWith('null device probe:'));
+      if (nullProbeLine) console.log(nullProbeLine);
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.equal(result.exitCode, 0, result.output);
       assert.match(result.output, /git lpac integration passed successfully/);
