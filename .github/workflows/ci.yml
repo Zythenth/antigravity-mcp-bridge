@@ -25,6 +25,11 @@ jobs:
         env:
           BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
       - if: runner.os == 'Windows'
+        run: node --test --test-name-pattern="Windows executor stages real Git inside LPAC" dist/tests/windows-executor.test.js
+        env:
+          BRIDGE_WINDOWS_NODE_RUNTIME: portable
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+      - if: runner.os == 'Windows'
         run: npm test
         env:
           BRIDGE_WINDOWS_NODE_RUNTIME: portable
