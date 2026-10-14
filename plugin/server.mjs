@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path20) {
-      let input2 = path20;
+    function removeDotSegments(path21) {
+      let input2 = path21;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path20 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path20 && path20 !== "/" ? path20 : void 0;
+        const path21 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path21 && path21 !== "/" ? path21 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path20) {
-  if (!path20)
+function getElementAtPath(obj, path21) {
+  if (!path21)
     return obj;
-  return path20.reduce((acc, key) => acc?.[key], obj);
+  return path21.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path20, issues) {
+function prefixIssues(path21, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path20);
+    iss.path.unshift(path21);
     return iss;
   });
 }
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError2 = (error63, path20 = []) => {
+  const processError2 = (error63, path21 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError2({ issues }, [...path20, ...issue2.path]));
+        issue2.errors.map((issues) => processError2({ issues }, [...path21, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else {
-        const fullpath = [...path20, ...issue2.path];
+        const fullpath = [...path21, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8868,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError2 = (error63, path20 = []) => {
+  const processError2 = (error63, path21 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError2({ issues }, [...path20, ...issue2.path]));
+        issue2.errors.map((issues) => processError2({ issues }, [...path21, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else {
-        const fullpath = [...path20, ...issue2.path];
+        const fullpath = [...path21, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8917,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path20 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path20) {
+  const path21 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path21) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path20 = ref.slice(1).split("/").filter(Boolean);
-  if (path20.length === 0) {
+  const path21 = ref.slice(1).split("/").filter(Boolean);
+  if (path21.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path20[0] === defsKey) {
-    const key = path20[1] === void 0 ? void 0 : decodeJSONPointerSegment(path20[1]);
+  if (path21[0] === defsKey) {
+    const key = path21[1] === void 0 ? void 0 : decodeJSONPointerSegment(path21[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28511,7 +28511,7 @@ var StdioServerTransport = class {
 };
 
 // dist/src/cli-adapter.js
-import { spawn as spawn4 } from "node:child_process";
+import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/project-memory.js
 import { createHash, randomUUID } from "node:crypto";
@@ -28620,9 +28620,9 @@ function verifySafeDirectory(targetPath, code) {
   const parsed = path.parse(current);
   const root = parsed.root;
   while (current && current !== root) {
-    let stat3;
+    let stat4;
     try {
-      stat3 = lstatSync(current);
+      stat4 = lstatSync(current);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         current = path.dirname(current);
@@ -28630,7 +28630,7 @@ function verifySafeDirectory(targetPath, code) {
       }
       throw new BridgeError(code, `Failed to inspect path component: ${current}`);
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError(code, `Path component cannot be a link or junction: ${current}`);
     }
     current = path.dirname(current);
@@ -28702,15 +28702,15 @@ var ProjectMemoryStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "Memory storage must be an accessible directory");
     }
-    const stat3 = lstatSync(this.stateDirectory, { bigint: true });
-    if (stat3.isSymbolicLink()) {
+    const stat4 = lstatSync(this.stateDirectory, { bigint: true });
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "State directory cannot be a link");
     }
-    if (!stat3.isDirectory()) {
+    if (!stat4.isDirectory()) {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "State directory must be a directory");
     }
     verifySafeDirectory(this.stateDirectory, "INVALID_STATE_DIRECTORY");
-    this.stateIdentity = stat3.dev.toString() + ":" + stat3.ino.toString();
+    this.stateIdentity = stat4.dev.toString() + ":" + stat4.ino.toString();
     this.canonicalStateDir = realpathSync.native(this.stateDirectory);
     if (isVolumeRoot(this.canonicalStateDir)) {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "Canonical state directory cannot be volume root");
@@ -28777,16 +28777,16 @@ var ProjectMemoryStore = class {
     if (isVolumeRoot(projectDirectory)) {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", "Project directory cannot be volume root");
     }
-    let stat3;
+    let stat4;
     try {
-      stat3 = lstatSync(projectDirectory);
+      stat4 = lstatSync(projectDirectory);
     } catch {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", `Project directory does not exist: ${projectDirectory}`);
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", "Project directory cannot be a link or junction");
     }
-    if (!stat3.isDirectory()) {
+    if (!stat4.isDirectory()) {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", "Project directory must be a directory");
     }
     verifySafeDirectory(projectDirectory, "INVALID_PROJECT_DIRECTORY");
@@ -28834,13 +28834,13 @@ var ProjectMemoryStore = class {
         if (error62.code !== "EEXIST") {
           throw new BridgeError("MEMORY_BUSY", "Failed to acquire memory lock: " + (error62 instanceof Error ? error62.message : String(error62)));
         }
-        let stat3;
+        let stat4;
         try {
-          stat3 = lstatSync(lockFile, { bigint: true });
+          stat4 = lstatSync(lockFile, { bigint: true });
         } catch (inspectError) {
           throw new BridgeError("MEMORY_BUSY", "Failed to inspect existing memory lock: " + (inspectError instanceof Error ? inspectError.message : String(inspectError)));
         }
-        if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.size > 1024n) {
+        if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.nlink !== 1n || stat4.size > 1024n) {
           throw new BridgeError("MEMORY_BUSY", "Memory lock is not a regular file");
         }
         let lockData;
@@ -28876,7 +28876,7 @@ var ProjectMemoryStore = class {
           this.verifyStorageAncestry();
           const current = lstatSync(lockFile, { bigint: true });
           const data = JSON.parse(readFileSync(lockFile, "utf8"));
-          if (current.isSymbolicLink() || !current.isFile() || current.nlink !== 1n || current.size > 1024n || current.dev !== stat3.dev || current.ino !== stat3.ino || data.pid !== lockPid || data.token !== lockToken || processAlive(lockPid))
+          if (current.isSymbolicLink() || !current.isFile() || current.nlink !== 1n || current.size > 1024n || current.dev !== stat4.dev || current.ino !== stat4.ino || data.pid !== lockPid || data.token !== lockToken || processAlive(lockPid))
             throw new BridgeError("MEMORY_BUSY", "Lock identity changed before recovery");
           rmSync(lockFile);
         } catch (error63) {
@@ -28896,15 +28896,15 @@ var ProjectMemoryStore = class {
       }
     }
     return () => {
-      let stat3;
+      let stat4;
       try {
-        stat3 = lstatSync(lockFile, { bigint: true });
+        stat4 = lstatSync(lockFile, { bigint: true });
       } catch (err) {
         if (err.code === "ENOENT")
           throw new BridgeError("MEMORY_BUSY", "Owned lock disappeared before release");
         throw new BridgeError("MEMORY_BUSY", `Failed to stat lock file during release: ${err instanceof Error ? err.message : String(err)}`);
       }
-      if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.dev !== ownedIdentity?.dev || stat3.ino !== ownedIdentity?.ino) {
+      if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.nlink !== 1n || stat4.dev !== ownedIdentity?.dev || stat4.ino !== ownedIdentity?.ino) {
         throw new BridgeError("MEMORY_BUSY", "Lock file is invalid during release");
       }
       let content;
@@ -28931,22 +28931,22 @@ var ProjectMemoryStore = class {
   }
   readRecord(filePath, expectedProjectId, expectedSpecialist) {
     verifySafeDirectory(filePath, "INVALID_MEMORY_STATE");
-    let stat3;
+    let stat4;
     try {
-      stat3 = lstatSync(filePath);
+      stat4 = lstatSync(filePath);
     } catch {
       throw new BridgeError("INVALID_MEMORY_STATE", `Cannot stat memory file: ${filePath}`);
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file cannot be a symbolic link: ${filePath}`);
     }
-    if (!stat3.isFile() || stat3.nlink !== 1) {
+    if (!stat4.isFile() || stat4.nlink !== 1) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file must be a regular file: ${filePath}`);
     }
-    if (stat3.size <= 0) {
+    if (stat4.size <= 0) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file is empty: ${filePath}`);
     }
-    if (stat3.size > this.limits.maxEntryBytes * 6 + 8192) {
+    if (stat4.size > this.limits.maxEntryBytes * 6 + 8192) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file size exceeds allowable entry limit: ${filePath}`);
     }
     let rawJson;
@@ -29640,32 +29640,716 @@ var peerContextSchema = external_exports.object({
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync2, realpathSync as realpathSync3, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { access as access2 } from "node:fs/promises";
-import path12 from "node:path";
+import path13 from "node:path";
 
 // dist/src/roles.js
 import { createHash as createHash10 } from "node:crypto";
-import { readFile as readFile2, stat } from "node:fs/promises";
+import { readFile as readFile2, stat as stat2 } from "node:fs/promises";
 
 // dist/src/isolation.js
 import { createHash as createHash6 } from "node:crypto";
+
+// dist/src/host-git.js
 import { spawn as spawn2 } from "node:child_process";
+import { stat, realpath } from "node:fs/promises";
+import os from "node:os";
+import { StringDecoder } from "node:string_decoder";
+import path3 from "node:path";
+
+// dist/src/subprocess.js
+import { spawn } from "node:child_process";
+import path2 from "node:path";
+var stopping = /* @__PURE__ */ new WeakSet();
+var ownedProcessGroups = /* @__PURE__ */ new WeakSet();
+function registerOwnedProcessGroup(child) {
+  ownedProcessGroups.add(child);
+}
+function processError(error62, operation) {
+  if (error62 instanceof BridgeError)
+    return error62;
+  const code = error62?.code;
+  if (code === "ENOENT")
+    return new BridgeError("AGY_NOT_FOUND", "agy executable not found");
+  if (code === "EACCES" || code === "EPERM")
+    return new BridgeError("AGY_PERMISSION_DENIED", "Permission denied executing agy");
+  if (operation === "stdin" || code === "EPIPE" || code === "EOF" || code === "ECONNRESET" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END")
+    return new BridgeError("CLI_INPUT_FAILED", "Failed writing input to agy");
+  const message = error62 instanceof Error ? error62.message : String(error62);
+  return new BridgeError("AGY_IO_FAILED", `agy ${operation} failed: ${message}`);
+}
+function terminateSubprocess(child, options) {
+  const isOwned = options?.ownedGroup ?? ownedProcessGroups.has(child);
+  if (stopping.has(child))
+    return;
+  if ((child.exitCode != null || child.signalCode != null) && !isOwned)
+    return;
+  stopping.add(child);
+  let closed = false;
+  let killer;
+  const force = () => {
+    if (!closed) {
+      if (process.platform === "win32") {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      } else if (child.pid) {
+        if (isOwned) {
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {
+            try {
+              child.kill("SIGKILL");
+            } catch {
+            }
+          }
+        } else {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+          }
+        }
+      } else {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      }
+    }
+  };
+  const timeoutMs = options?.escalationTimeoutMs ?? 3e3;
+  const timer = setTimeout(() => {
+    force();
+    if (killer && killer.exitCode === null && killer.signalCode === null) {
+      try {
+        killer.kill();
+      } catch {
+      }
+    }
+  }, timeoutMs);
+  timer.unref();
+  const cleanup = () => {
+    closed = true;
+    clearTimeout(timer);
+  };
+  child.once("close", cleanup);
+  if (process.platform === "win32") {
+    if (child.pid) {
+      try {
+        const executable = path2.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
+        killer = spawn(executable, ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, shell: false, stdio: "ignore" });
+        killer.once("error", force);
+        killer.once("close", (code) => {
+          if (code !== 0)
+            force();
+        });
+      } catch {
+        force();
+      }
+    } else {
+      force();
+    }
+  } else {
+    if (child.pid) {
+      if (isOwned) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          try {
+            child.kill("SIGTERM");
+          } catch {
+            force();
+          }
+        }
+      } else {
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          force();
+        }
+      }
+    } else {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        force();
+      }
+    }
+  }
+}
+function redactDiagnostic(value, state) {
+  if (!value)
+    return "";
+  let text = String(value);
+  if (state) {
+    if (state.inPrivateKey) {
+      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
+        state.inPrivateKey = false;
+      }
+      return "[private key redacted]";
+    }
+    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(text)) {
+      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
+        state.inPrivateKey = false;
+      } else {
+        state.inPrivateKey = true;
+      }
+      return "[private key redacted]";
+    }
+  }
+  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[private key redacted]").replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, "[private key redacted]");
+  text = text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, "$1[redacted]@");
+  for (const [name, secret] of Object.entries(process.env)) {
+    if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name))
+      text = text.split(secret).join("[redacted]");
+  }
+  return text.replace(/\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/g, "[redacted]").replace(/(Bearer\s+)[^\s"']+/gi, "$1[redacted]");
+}
+
+// dist/src/host-git.js
+var MAX_GIT_OUTPUT = 1e7;
+var DEFAULT_GIT_TIMEOUT_MS = 12e4;
+var DEFAULT_SHUTDOWN_GRACE_MS = 3250;
+var GIT_NULL_FILE = process.platform === "win32" ? "NUL" : os.devNull;
+var MAX_STDERR_LENGTH = 4e3;
+var TRUNCATION_MARKER = "... [diagnostic truncated]";
+function isInsideOrEqual(parent, target, isWindows) {
+  const normParent = isWindows ? path3.resolve(parent).toLowerCase() : path3.resolve(parent);
+  const normTarget = isWindows ? path3.resolve(target).toLowerCase() : path3.resolve(target);
+  if (normParent === normTarget)
+    return true;
+  const rel = path3.relative(normParent, normTarget);
+  if (rel === "")
+    return true;
+  if (rel !== ".." && !rel.startsWith(".." + path3.sep) && !path3.isAbsolute(rel))
+    return true;
+  return false;
+}
+async function buildSafeGitPath(cwd, rawPath, excludedRoots = []) {
+  const isWindows = process.platform === "win32";
+  let canonicalCwd;
+  try {
+    canonicalCwd = await realpath(cwd);
+  } catch {
+    try {
+      canonicalCwd = path3.resolve(cwd);
+    } catch {
+      canonicalCwd = void 0;
+    }
+  }
+  const allExcluded = [path3.resolve(cwd)];
+  if (canonicalCwd)
+    allExcluded.push(canonicalCwd);
+  for (const root of excludedRoots) {
+    allExcluded.push(path3.resolve(root));
+    try {
+      allExcluded.push(await realpath(root));
+    } catch {
+    }
+  }
+  const pathStr = rawPath ?? process.env.PATH ?? "";
+  const entries = pathStr.split(path3.delimiter);
+  const safeEntries = [];
+  for (const rawEntry of entries) {
+    const entry = rawEntry.trim();
+    if (!entry)
+      continue;
+    if (!path3.isAbsolute(entry))
+      continue;
+    if (allExcluded.some((root) => isInsideOrEqual(root, entry, isWindows))) {
+      continue;
+    }
+    let canonicalEntry;
+    try {
+      canonicalEntry = await realpath(entry);
+    } catch {
+    }
+    if (canonicalEntry && allExcluded.some((root) => isInsideOrEqual(root, canonicalEntry, isWindows))) {
+      continue;
+    }
+    safeEntries.push(entry);
+  }
+  return safeEntries.join(path3.delimiter);
+}
+async function resolveGitExecutable(cwd, pathEnv, excludedRoots = []) {
+  const safePath = await buildSafeGitPath(cwd, pathEnv, excludedRoots);
+  const isWindows = process.platform === "win32";
+  const executableName = isWindows ? "git.exe" : "git";
+  let canonicalCwd;
+  try {
+    canonicalCwd = await realpath(cwd);
+  } catch {
+    try {
+      canonicalCwd = path3.resolve(cwd);
+    } catch {
+      canonicalCwd = void 0;
+    }
+  }
+  const allExcluded = [
+    path3.resolve(cwd),
+    ...canonicalCwd ? [canonicalCwd] : [],
+    ...await Promise.all(excludedRoots.flatMap((root) => [Promise.resolve(path3.resolve(root)), realpath(root).catch(() => path3.resolve(root))]))
+  ];
+  const entries = safePath.split(path3.delimiter);
+  for (const entry of entries) {
+    if (!entry)
+      continue;
+    const candidate = path3.join(entry, executableName);
+    let stats;
+    try {
+      stats = await stat(candidate);
+    } catch {
+      continue;
+    }
+    if (!stats.isFile())
+      continue;
+    if (!isWindows) {
+      if ((stats.mode & 73) === 0)
+        continue;
+    }
+    if (allExcluded.some((root) => isInsideOrEqual(root, candidate, isWindows))) {
+      continue;
+    }
+    let realCandidate;
+    try {
+      realCandidate = await realpath(candidate);
+    } catch {
+      continue;
+    }
+    if (allExcluded.some((root) => isInsideOrEqual(root, realCandidate, isWindows))) {
+      continue;
+    }
+    return candidate;
+  }
+  throw new BridgeError("GIT_OPERATION_FAILED", "Git executable not found in PATH");
+}
+function buildHostGitEnv(source = process.env, allowGlobalConfig = false, safePath) {
+  const isWindows = process.platform === "win32";
+  const env = {};
+  const allowedUpper = /* @__PURE__ */ new Set([
+    "PATH",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "COMSPEC",
+    "WINDIR",
+    "OS",
+    "PROCESSOR_ARCHITECTURE",
+    "PROCESSOR_ARCHITEW6432",
+    "NUMBER_OF_PROCESSORS",
+    "PROGRAMDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "COMMONPROGRAMFILES",
+    "COMMONPROGRAMFILES(X86)",
+    "PATHEXT",
+    "SHELL",
+    "TERM",
+    "COLORTERM",
+    "HOME",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "USER",
+    "LOGNAME",
+    "USERNAME",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "TZ",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_DIRS",
+    "XDG_DATA_DIRS"
+  ]);
+  for (const [key, value] of Object.entries(source)) {
+    if (key === "__proto__" || typeof value !== "string")
+      continue;
+    const upper = key.toUpperCase();
+    if (upper === "PATH")
+      continue;
+    if (upper.startsWith("NODE_") || upper.startsWith("LD_") || upper.startsWith("DYLD_"))
+      continue;
+    if (upper === "GIT_EXEC_PATH" || upper.startsWith("GIT_CONFIG_") || upper === "GIT_CONFIG_PARAMETERS")
+      continue;
+    if (upper === "GIT_DIR" || upper === "GIT_WORK_TREE" || upper === "GIT_INDEX_FILE")
+      continue;
+    if (upper === "GIT_OBJECT_DIRECTORY" || upper === "GIT_ALTERNATE_OBJECT_DIRECTORIES")
+      continue;
+    if (upper === "GIT_SSH" || upper === "GIT_SSH_COMMAND" || upper === "GIT_ASKPASS" || upper === "SSH_ASKPASS")
+      continue;
+    if (upper.startsWith("SSH_"))
+      continue;
+    if (upper.includes("TOKEN") || upper.includes("SECRET") || upper.includes("PASSWORD") || upper.includes("PASSWD") || upper.includes("API_KEY") || upper.includes("CREDENTIAL"))
+      continue;
+    if (upper.includes("PROXY"))
+      continue;
+    if (allowedUpper.has(upper)) {
+      env[key] = value;
+    }
+  }
+  if (safePath !== void 0) {
+    env.PATH = safePath;
+  } else {
+    const rawPath = source.PATH ?? (isWindows ? Object.entries(source).find(([k]) => k.toUpperCase() === "PATH")?.[1] : void 0);
+    if (typeof rawPath === "string") {
+      env.PATH = rawPath.split(path3.delimiter).map((e) => e.trim()).filter((e) => e && path3.isAbsolute(e)).join(path3.delimiter);
+    }
+  }
+  const refFormat = source.GIT_DEFAULT_REF_FORMAT;
+  if (refFormat === "reftable" || refFormat === "files") {
+    env.GIT_DEFAULT_REF_FORMAT = refFormat;
+  }
+  env.GIT_TERMINAL_PROMPT = "0";
+  if (!allowGlobalConfig) {
+    env.GIT_CONFIG_NOSYSTEM = "1";
+    env.GIT_CONFIG_GLOBAL = GIT_NULL_FILE;
+  }
+  if (isWindows && !env.PATHEXT) {
+    env.PATHEXT = ".COM;.EXE;.BAT;.CMD";
+  }
+  return env;
+}
+async function spawnGit(gitBinary, cwd, args, childEnv, input2, allowedCodes = [0], timeoutMs = DEFAULT_GIT_TIMEOUT_MS, spawnFn = spawn2, shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS) {
+  return new Promise((resolve2, reject) => {
+    let childProc;
+    try {
+      childProc = spawnFn(gitBinary, args, {
+        cwd,
+        windowsHide: true,
+        stdio: "pipe",
+        env: childEnv
+      });
+    } catch (err) {
+      reject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(err.message)));
+      return;
+    }
+    const child = childProc;
+    let settled = false;
+    let timedOut = false;
+    let graceTimer = null;
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (graceTimer) {
+        clearTimeout(graceTimer);
+        graceTimer = null;
+      }
+    };
+    const settleReject = (error62) => {
+      if (settled)
+        return;
+      settled = true;
+      cleanup();
+      terminateSubprocess(child);
+      reject(error62);
+    };
+    const settleResolve = (result) => {
+      if (settled)
+        return;
+      settled = true;
+      cleanup();
+      resolve2(result);
+    };
+    const requestTermination = () => {
+      terminateSubprocess(child);
+      if (!graceTimer && !settled) {
+        graceTimer = setTimeout(() => {
+          if (settled)
+            return;
+          settled = true;
+          cleanup();
+          try {
+            child.stdin.destroy();
+          } catch {
+          }
+          try {
+            child.stdout.destroy();
+          } catch {
+          }
+          try {
+            child.stderr.destroy();
+          } catch {
+          }
+          reject(new BridgeError("GIT_CLEANUP_UNVERIFIED", "Git process termination grace expired while streams remained open"));
+        }, shutdownGraceMs);
+        graceTimer.unref();
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      requestTermination();
+    }, timeoutMs);
+    timer.unref();
+    let ioError = null;
+    const recordIoError = (error62) => {
+      if (!ioError)
+        ioError = error62;
+      requestTermination();
+    };
+    const chunks = [];
+    let length = 0;
+    let stderr = "";
+    let stderrTruncated = false;
+    const stderrDecoder = new StringDecoder("utf8");
+    let overflow = false;
+    child.stdout.on("data", (chunk) => {
+      length += chunk.length;
+      if (length > MAX_GIT_OUTPUT) {
+        overflow = true;
+        requestTermination();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    const appendStderr = (text) => {
+      if (stderrTruncated)
+        return;
+      if (stderr.length + text.length > MAX_STDERR_LENGTH) {
+        stderrTruncated = true;
+        stderr = TRUNCATION_MARKER;
+      } else {
+        stderr += text;
+      }
+    };
+    child.stderr.on("data", (chunk) => appendStderr(stderrDecoder.write(chunk)));
+    child.stdin.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.stdout.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.stderr.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.once("error", (error62) => {
+      settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(error62.message)));
+    });
+    child.once("close", (code, signal) => {
+      if (settled)
+        return;
+      cleanup();
+      appendStderr(stderrDecoder.end());
+      if (overflow) {
+        settleReject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      } else if (timedOut) {
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", `Git operation timed out after ${timeoutMs}ms`));
+      } else if (ioError) {
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(ioError.message || "Git stream communication error")));
+      } else if (!allowedCodes.includes(code ?? -1)) {
+        const diag = stderr.trim() || (signal ? "git terminated with signal " + signal : "git exited with code " + code);
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(diag, {})));
+      } else {
+        settleResolve(Buffer.concat(chunks));
+      }
+    });
+    if (input2 !== void 0) {
+      try {
+        child.stdin.end(input2);
+      } catch (err) {
+        recordIoError(err);
+      }
+    } else {
+      try {
+        child.stdin.end();
+      } catch (err) {
+        recordIoError(err);
+      }
+    }
+  });
+}
+var cachedAdmission = null;
+async function ensureGitVersionAdmission(gitBinary, spawnFn = spawn2, envSource = process.env, safePath) {
+  let stats;
+  try {
+    stats = await stat(gitBinary);
+  } catch {
+  }
+  if (spawnFn === spawn2 && cachedAdmission && stats && cachedAdmission.gitBinary === gitBinary && cachedAdmission.size === stats.size && cachedAdmission.mtimeMs === stats.mtimeMs && cachedAdmission.ino === stats.ino && cachedAdmission.dev === stats.dev) {
+    return;
+  }
+  const checkEnv = buildHostGitEnv(envSource, false, safePath);
+  let output2;
+  try {
+    output2 = await spawnGit(gitBinary, os.tmpdir(), ["--version"], checkEnv, void 0, [0], 1e4, spawnFn);
+  } catch (err) {
+    if (err instanceof BridgeError && err.code === "GIT_CLEANUP_UNVERIFIED") {
+      throw err;
+    }
+    throw new BridgeError("GIT_OPERATION_FAILED", "Failed to query Git version: " + redactDiagnostic(err.message));
+  }
+  const versionText = output2.toString("utf8").trim();
+  const match = /git\s+version\s+(\d+)\.(\d+)(?:\.(\d+))?/i.exec(versionText);
+  if (!match) {
+    throw new BridgeError("GIT_OPERATION_FAILED", `Unable to parse Git version from: ${redactDiagnostic(versionText)}`);
+  }
+  const major = parseInt(match[1], 10);
+  const minor = parseInt(match[2], 10);
+  if (major < 2 || major === 2 && minor < 32) {
+    throw new BridgeError("GIT_OPERATION_FAILED", `Git 2.32.0 or newer is required (found ${versionText}). Older Git versions do not support GIT_CONFIG_GLOBAL for global configuration isolation.`);
+  }
+  if (spawnFn === spawn2 && stats) {
+    cachedAdmission = {
+      gitBinary,
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ino: stats.ino,
+      dev: stats.dev
+    };
+  }
+}
+function isProtectedConfigKey(rawKey) {
+  const norm = rawKey.trim().toLowerCase();
+  return norm === "core.fsmonitor" || norm === "core.hookspath";
+}
+async function resolveEffectiveExcludesFile(cwd, gitBinary, envSource, timeoutMs, scope, spawnFn, safePath) {
+  try {
+    await realpath(cwd);
+  } catch {
+    return void 0;
+  }
+  const configEnv = buildHostGitEnv(envSource, true, safePath);
+  const lookupArgs = [
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=" + GIT_NULL_FILE,
+    ...scope,
+    "config",
+    "--null",
+    "--path",
+    "--get",
+    "core.excludesfile"
+  ];
+  let lookupOutput;
+  try {
+    lookupOutput = await spawnGit(gitBinary, cwd, lookupArgs, configEnv, void 0, [0, 1], Math.min(timeoutMs, 1e4), spawnFn);
+  } catch (err) {
+    if (err instanceof BridgeError && err.code === "GIT_CLEANUP_UNVERIFIED") {
+      throw err;
+    }
+    throw new BridgeError("GIT_OPERATION_FAILED", "Failed to resolve Git configuration: " + redactDiagnostic(err.message));
+  }
+  if (!lookupOutput?.length)
+    return void 0;
+  if (lookupOutput[lookupOutput.length - 1] !== 0) {
+    throw new BridgeError("GIT_OPERATION_FAILED", "Invalid core.excludesFile configuration response");
+  }
+  const value = lookupOutput.subarray(0, -1).toString("utf8");
+  return value ? path3.resolve(cwd, value) : GIT_NULL_FILE;
+}
+async function git(cwd, args, input2, allowedCodes = [0], options) {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new BridgeError("GIT_OPERATION_FAILED", "Invalid timeoutMs: must be a finite positive number");
+  }
+  const envSource = options?.env ?? process.env;
+  const safePath = await buildSafeGitPath(cwd, envSource.PATH, options?.excludedRoots);
+  const gitBinary = await resolveGitExecutable(cwd, safePath, options?.excludedRoots);
+  const spawnFn = options?.spawnImpl ?? spawn2;
+  let command2;
+  const scope = [];
+  const callerGlobalArgs = [];
+  let restArgs = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--") {
+      restArgs = args.slice(i);
+      break;
+    }
+    if (arg === "-c" || arg === "--config-env") {
+      const value = args[i + 1];
+      if (value === void 0) {
+        callerGlobalArgs.push(arg);
+        continue;
+      }
+      i++;
+      if (!isProtectedConfigKey(value.split("=")[0])) {
+        callerGlobalArgs.push(arg, value);
+      }
+      continue;
+    }
+    if (arg.startsWith("-c") && arg !== "-c") {
+      if (!isProtectedConfigKey(arg.slice(2).split("=")[0])) {
+        callerGlobalArgs.push(arg);
+      }
+      continue;
+    }
+    if (arg.startsWith("--config-env=")) {
+      if (!isProtectedConfigKey(arg.slice("--config-env=".length).split("=")[0])) {
+        callerGlobalArgs.push(arg);
+      }
+      continue;
+    }
+    if (["-C", "--git-dir", "--work-tree", "--namespace"].includes(arg)) {
+      const value = args[i + 1];
+      if (value !== void 0) {
+        i++;
+        callerGlobalArgs.push(arg, value);
+        if (arg === "--git-dir" || arg === "--work-tree") {
+          scope.push(arg, value);
+        }
+      } else {
+        callerGlobalArgs.push(arg);
+      }
+      continue;
+    }
+    if (arg.startsWith("--git-dir=") || arg.startsWith("--work-tree=")) {
+      callerGlobalArgs.push(arg);
+      scope.push(arg);
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      callerGlobalArgs.push(arg);
+      continue;
+    }
+    command2 = arg;
+    restArgs = args.slice(i);
+    break;
+  }
+  if (command2 !== "version" && args[0] !== "--version") {
+    await ensureGitVersionAdmission(gitBinary, spawnFn, envSource, safePath);
+  }
+  const skipLookup = ["config", "version", "init", "clone"].includes(command2 ?? "") || args[0] === "--version";
+  let effectiveExcludes;
+  if (!skipLookup) {
+    effectiveExcludes = await resolveEffectiveExcludesFile(cwd, gitBinary, envSource, timeoutMs, scope, spawnFn, safePath);
+  }
+  const safeArgs = [
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=" + GIT_NULL_FILE
+  ];
+  if (effectiveExcludes) {
+    safeArgs.push("-c", "core.excludesFile=" + effectiveExcludes);
+  }
+  safeArgs.push(...callerGlobalArgs, ...restArgs);
+  const childEnv = buildHostGitEnv(envSource, false, safePath);
+  return spawnGit(gitBinary, cwd, safeArgs, childEnv, input2, allowedCodes, timeoutMs, spawnFn, options?.shutdownGraceMs);
+}
+
+// dist/src/isolation.js
 import { createReadStream as createReadStream2 } from "node:fs";
-import { lstat as lstat4, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir2, realpath as realpath2, rm as rm2 } from "node:fs/promises";
-import os3 from "node:os";
-import path9 from "node:path";
+import { lstat as lstat4, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir2, realpath as realpath3, rm as rm2, writeFile as writeFile3 } from "node:fs/promises";
+import os4 from "node:os";
+import path10 from "node:path";
 
 // dist/src/skills.js
 import { createHash as createHash3 } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, writeFile } from "node:fs/promises";
-import path5 from "node:path";
+import path7 from "node:path";
 
 // dist/src/config.js
-import path4 from "node:path";
+import path6 from "node:path";
 
 // dist/src/agent-policy.js
 import * as crypto from "node:crypto";
-import * as path2 from "node:path";
+import * as path4 from "node:path";
 var serverIdRegex = /^[a-z][a-z0-9-]{0,31}$/;
 var toolNameRegex = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
 var envKeyRegex = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
@@ -29695,7 +30379,7 @@ function isAbsolutePath(val) {
   if (typeof val !== "string" || val.length === 0 || val.length > 4e3) {
     return false;
   }
-  return path2.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
+  return path4.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
 }
 function isValidServerUrl(urlString) {
   if (typeof urlString !== "string" || urlString.length > 4e3) {
@@ -29907,15 +30591,15 @@ function resolveAgentPolicy(selection, ceilingTools, catalog, mode, namespace) {
 
 // dist/src/integration-policy.js
 import { realpathSync as realpathSync2, statSync } from "node:fs";
-import path3 from "node:path";
+import path5 from "node:path";
 function preauthorizedIntegrationRoots(value) {
   const roots = JSON.parse(value ?? "[]");
-  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path3.isAbsolute(root))) {
+  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path5.isAbsolute(root))) {
     throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
   }
   return [...new Set(roots.map((root) => {
     const canonical = realpathSync2.native(root);
-    if (!statSync(canonical).isDirectory() || canonical === path3.parse(canonical).root)
+    if (!statSync(canonical).isDirectory() || canonical === path5.parse(canonical).root)
       throw new Error("Preauthorization requires a project directory, not a volume root");
     return process.platform === "win32" ? canonical.toLowerCase() : canonical;
   }))];
@@ -29926,7 +30610,7 @@ function integrationPreauthorized(workingDirectory, roots) {
 }
 
 // dist/src/config.js
-import os from "node:os";
+import os2 from "node:os";
 
 // dist/src/tool-profiles.js
 var toolProfileSchema = external_exports.enum(["full", "query", "review", "implementation"]);
@@ -30010,18 +30694,18 @@ function windowsNodeRuntime(value) {
   throw new Error("BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable");
 }
 function windowsNodeCacheDirectory(value) {
-  const directory = value ?? path4.join(os.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
+  const directory = value ?? path6.join(os2.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
   if (value !== void 0) {
     if (process.platform === "win32") {
       if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
         throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path");
       }
-    } else if (!path4.isAbsolute(value)) {
+    } else if (!path6.isAbsolute(value)) {
       throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute");
     }
   }
-  const resolved = path4.resolve(directory);
-  if (resolved === path4.parse(resolved).root)
+  const resolved = path6.resolve(directory);
+  if (resolved === path6.parse(resolved).root)
     throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
   return resolved;
 }
@@ -30073,14 +30757,14 @@ function loadConfig(env = process.env) {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path4.join(os.homedir(), ".antigravity-mcp-bridge"),
+    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path6.join(os2.homedir(), ".antigravity-mcp-bridge"),
     memoryMaxEntries,
     memoryMaxBytes,
     memoryMaxEntryBytes,
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path4.delimiter).filter(Boolean).map((p) => path4.resolve(p)),
+    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path6.delimiter).filter(Boolean).map((p) => path6.resolve(p)),
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
@@ -30362,7 +31046,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `copyDirectory must be a non-link directory: ${copyDirectory}`);
   }
-  const agentsPath = path5.join(copyDirectory, ".agents");
+  const agentsPath = path7.join(copyDirectory, ".agents");
   const agentsStat = await lstat(agentsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -30373,7 +31057,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Existing .agents is not a directory or is a symbolic link");
     }
   }
-  const skillsPath = path5.join(copyDirectory, ".agents", "skills");
+  const skillsPath = path7.join(copyDirectory, ".agents", "skills");
   const skillsStat = await lstat(skillsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -30392,9 +31076,9 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     }
   }
   for (const bundle of bundles) {
-    const relSkillDir = path5.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
+    const relSkillDir = path7.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
     await checkedPath(copyDirectory, relSkillDir, false);
-    const targetSkillDir = path5.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
+    const targetSkillDir = path7.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
     const targetStat = await lstat(targetSkillDir).catch((err) => {
       if (err.code === "ENOENT")
         return void 0;
@@ -30407,10 +31091,10 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   await mkdir(skillsPath, { recursive: true });
   const stagedSkills = [];
   for (const bundle of bundles) {
-    const skillDir = path5.join(skillsPath, bundle.name.toLowerCase());
+    const skillDir = path7.join(skillsPath, bundle.name.toLowerCase());
     await mkdir(skillDir, { recursive: true });
     const files = [];
-    const skillMdTarget = path5.join(skillDir, "SKILL.md");
+    const skillMdTarget = path7.join(skillDir, "SKILL.md");
     await writeFile(skillMdTarget, bundle.content, { encoding: "utf8", flag: "wx" });
     files.push(Object.freeze({
       path: `.agents/skills/${bundle.name.toLowerCase()}/SKILL.md`,
@@ -30419,8 +31103,8 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     if (bundle.resources) {
       for (const res of bundle.resources) {
         const norm = res.path.replaceAll("\\", "/");
-        const targetFile = path5.join(skillDir, ...norm.split("/"));
-        await mkdir(path5.dirname(targetFile), { recursive: true });
+        const targetFile = path7.join(skillDir, ...norm.split("/"));
+        await mkdir(path7.dirname(targetFile), { recursive: true });
         await writeFile(targetFile, res.content, { encoding: "utf8", flag: "wx" });
         files.push(Object.freeze({
           path: `.agents/skills/${bundle.name.toLowerCase()}/${norm}`,
@@ -30529,7 +31213,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
     throw new BridgeError("SKILL_VERIFICATION_FAILED", "copyDirectory must be a directory and not a link");
   }
   for (const rel of [".agents", ".agents/skills"]) {
-    const full = path5.join(copyDirectory, ...rel.split("/"));
+    const full = path7.join(copyDirectory, ...rel.split("/"));
     const st = await lstat(full).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Missing required directory: ${rel}`);
     });
@@ -30540,7 +31224,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
   let totalVerifiedBytes = 0;
   for (const skill of manifest) {
     const skillRelative = `.agents/skills/${skill.name.toLowerCase()}`;
-    const skillDir = path5.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
+    const skillDir = path7.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
     const skillStat = await lstat(skillDir).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Skill directory not found: ${skillRelative}`);
     });
@@ -30584,7 +31268,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
       const entries = await readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         const entryRel = relPrefix + "/" + entry.name;
-        const fullPath = path5.join(dir, entry.name);
+        const fullPath = path7.join(dir, entry.name);
         const st = await lstat(fullPath);
         if (st.isSymbolicLink()) {
           throw new BridgeError("SKILL_VERIFICATION_FAILED", `Symbolic link found in skill: ${entryRel}`);
@@ -30623,9 +31307,9 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
 import * as crypto2 from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import * as path6 from "node:path";
+import * as path8 from "node:path";
 import * as fsp from "node:fs/promises";
-import * as os2 from "node:os";
+import * as os3 from "node:os";
 var EXECUTION_POLICY_PATHS = [
   ".agents/hooks.json",
   ".agents/bridge-execution-hook.mjs",
@@ -30645,7 +31329,7 @@ var stagedExecutionPolicySchema = external_exports.object({
   executionId: external_exports.string().regex(UUID_REGEX3),
   receiptIdentity: external_exports.object({ dev: external_exports.string().regex(/^[0-9]+$/), ino: external_exports.string().regex(/^[0-9]+$/) }).strict(),
   receiptPath: external_exports.string().min(1).max(4e3).refine((val) => {
-    return path6.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
+    return path8.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
   }, { message: "receiptPath must be an absolute path" }),
   files: external_exports.array(stagedExecutionPolicyFileSchema).length(4).refine((files) => {
     const paths2 = new Set(files.map((f) => f.path));
@@ -30688,15 +31372,15 @@ function isWindowsDeviceName3(segment) {
 }
 function pathsEqual(p1, p2) {
   if (process.platform === "win32") {
-    return path6.resolve(p1).toLowerCase() === path6.resolve(p2).toLowerCase();
+    return path8.resolve(p1).toLowerCase() === path8.resolve(p2).toLowerCase();
   }
-  return path6.resolve(p1) === path6.resolve(p2);
+  return path8.resolve(p1) === path8.resolve(p2);
 }
 function validatePathFormat(targetPath, label) {
   if (typeof targetPath !== "string" || !targetPath || targetPath.length > 4e3) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} must be a valid path string`);
   }
-  if (!path6.isAbsolute(targetPath)) {
+  if (!path8.isAbsolute(targetPath)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} must be absolute: ${targetPath}`);
   }
   if (process.platform === "win32") {
@@ -30715,8 +31399,8 @@ function validatePathFormat(targetPath, label) {
   }
   if (targetPath.split(/[\\/]+/).some((part) => part === "." || part === ".."))
     throw new BridgeError("UNSAFE_PROJECT_PATH", "Path traversal segments are not allowed");
-  const resolved = path6.resolve(targetPath);
-  const parsed = path6.parse(resolved);
+  const resolved = path8.resolve(targetPath);
+  const parsed = path8.parse(resolved);
   const relFromRoot = resolved.slice(parsed.root.length);
   const segments = relFromRoot.split(/[\\/]+/).filter(Boolean);
   for (const seg of segments) {
@@ -30733,30 +31417,30 @@ function validatePathFormat(targetPath, label) {
 }
 async function assertNoLinkAncestry(targetPath, label) {
   validatePathFormat(targetPath, label);
-  const resolved = path6.resolve(targetPath);
-  const parsed = path6.parse(resolved);
+  const resolved = path8.resolve(targetPath);
+  const parsed = path8.parse(resolved);
   const relFromRoot = resolved.slice(parsed.root.length);
   const segments = relFromRoot.split(/[\\/]+/).filter(Boolean);
   let current = parsed.root;
   for (const seg of segments) {
-    current = path6.join(current, seg);
-    let stat3;
+    current = path8.join(current, seg);
+    let stat4;
     try {
-      stat3 = await fsp.lstat(current);
+      stat4 = await fsp.lstat(current);
     } catch (err) {
       if (err.code === "ENOENT") {
         break;
       }
       throw err;
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} cannot have symlink or junction in path: ${current}`);
     }
   }
 }
 async function hookMain() {
   const fsp2 = await import("node:fs/promises");
-  const path20 = await import("node:path");
+  const path21 = await import("node:path");
   const crypto3 = await import("node:crypto");
   const url2 = await import("node:url");
   const WINDOWS_DEVICE_NAMES5 = /* @__PURE__ */ new Set([
@@ -30790,20 +31474,20 @@ async function hookMain() {
     return WINDOWS_DEVICE_NAMES5.has(base);
   }
   function isInside(parent, child) {
-    const p = process.platform === "win32" ? path20.resolve(parent).toLowerCase() : path20.resolve(parent);
-    const c = process.platform === "win32" ? path20.resolve(child).toLowerCase() : path20.resolve(child);
-    const rel = path20.relative(p, c);
-    return rel === "" || !rel.startsWith("..") && !path20.isAbsolute(rel);
+    const p = process.platform === "win32" ? path21.resolve(parent).toLowerCase() : path21.resolve(parent);
+    const c = process.platform === "win32" ? path21.resolve(child).toLowerCase() : path21.resolve(child);
+    const rel = path21.relative(p, c);
+    return rel === "" || !rel.startsWith("..") && !path21.isAbsolute(rel);
   }
   function canonicalProtected(target) {
-    const parts = path20.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
+    const parts = path21.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
     return parts.includes(".git") || parts[0] === ".agents";
   }
   function emitDecision(decision2, reason2) {
     console.log(JSON.stringify({ decision: decision2, reason: reason2 }));
     process.exit(0);
   }
-  const manifestPath = path20.resolve(process.cwd(), "bridge-execution-policy.json");
+  const manifestPath = path21.resolve(process.cwd(), "bridge-execution-policy.json");
   let manifestStat;
   try {
     manifestStat = await fsp2.lstat(manifestPath);
@@ -30853,8 +31537,8 @@ async function hookMain() {
   }
   const isWindows = process.platform === "win32";
   try {
-    const expectedCanonical = path20.resolve(manifest.canonicalCopyRoot);
-    const actualCanonical = path20.resolve(await fsp2.realpath(path20.resolve(process.cwd(), "..")));
+    const expectedCanonical = path21.resolve(manifest.canonicalCopyRoot);
+    const actualCanonical = path21.resolve(await fsp2.realpath(path21.resolve(process.cwd(), "..")));
     const match = isWindows ? expectedCanonical.toLowerCase() === actualCanonical.toLowerCase() : expectedCanonical === actualCanonical;
     if (!match) {
       emitDecision("deny", "Denied by execution policy");
@@ -30892,12 +31576,12 @@ async function hookMain() {
     emitDecision("deny", "Denied by execution policy");
   }
   if (Array.isArray(input2.workspacePaths) && input2.workspacePaths.length > 0) {
-    const origRoot = path20.resolve(manifest.originalCopyRoot);
-    const canonRoot = path20.resolve(manifest.canonicalCopyRoot);
+    const origRoot = path21.resolve(manifest.originalCopyRoot);
+    const canonRoot = path21.resolve(manifest.canonicalCopyRoot);
     const matchAny = input2.workspacePaths.some((wp) => {
       if (typeof wp !== "string")
         return false;
-      const res = path20.resolve(wp);
+      const res = path21.resolve(wp);
       return isWindows ? res.toLowerCase() === origRoot.toLowerCase() || res.toLowerCase() === canonRoot.toLowerCase() : res === origRoot || res === canonRoot;
     });
     if (!matchAny) {
@@ -30958,7 +31642,7 @@ async function hookMain() {
       const rawTarget = toolName === "view_file" ? args?.AbsolutePath : args?.TargetFile;
       let pathValid = typeof rawTarget === "string" && rawTarget.length > 0 && rawTarget.length <= 4e3;
       if (pathValid) {
-        if (!path20.isAbsolute(rawTarget)) {
+        if (!path21.isAbsolute(rawTarget)) {
           pathValid = false;
         } else if (isWindows) {
           if (!/^[A-Za-z]:[\\/]/.test(rawTarget) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(rawTarget) || rawTarget.slice(2).includes(":")) {
@@ -30973,7 +31657,7 @@ async function hookMain() {
         decision = "deny";
         reason = "Invalid or non-absolute target file path";
       } else {
-        const resolvedTarget = path20.resolve(rawTarget);
+        const resolvedTarget = path21.resolve(rawTarget);
         const insideOriginal = isInside(manifest.originalCopyRoot, resolvedTarget);
         const insideCanonical = isInside(manifest.canonicalCopyRoot, resolvedTarget);
         if (!insideOriginal && !insideCanonical) {
@@ -30981,9 +31665,9 @@ async function hookMain() {
           reason = "Path is outside copy directory";
         } else {
           const rootUsed = insideOriginal ? manifest.originalCopyRoot : manifest.canonicalCopyRoot;
-          let relToRoot = path20.relative(rootUsed, resolvedTarget);
-          if (isWindows && (relToRoot.startsWith("..") || path20.isAbsolute(relToRoot))) {
-            relToRoot = path20.relative(path20.resolve(rootUsed).toLowerCase(), path20.resolve(resolvedTarget).toLowerCase());
+          let relToRoot = path21.relative(rootUsed, resolvedTarget);
+          if (isWindows && (relToRoot.startsWith("..") || path21.isAbsolute(relToRoot))) {
+            relToRoot = path21.relative(path21.resolve(rootUsed).toLowerCase(), path21.resolve(resolvedTarget).toLowerCase());
           }
           const segs = relToRoot.split(/[\\/]+/).filter(Boolean);
           let segsSafe = true;
@@ -31014,7 +31698,7 @@ async function hookMain() {
                 let ancSafe = true;
                 let current = rootUsed;
                 for (let i = 0; i < segs.length - 1; i++) {
-                  current = path20.join(current, segs[i]);
+                  current = path21.join(current, segs[i]);
                   try {
                     const st = await fsp2.lstat(current);
                     if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31059,7 +31743,7 @@ async function hookMain() {
             let ancSafe = true;
             let current = rootUsed;
             for (let i = 0; i < segs.length - 1; i++) {
-              current = path20.join(current, segs[i]);
+              current = path21.join(current, segs[i]);
               try {
                 const st = await fsp2.lstat(current);
                 if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31186,11 +31870,11 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
   const selectedDefinitions = setup.policy.mcpServers.map((server) => setup.catalog.find((entry) => entry.id === server.serverId));
   if (selectedDefinitions.some((entry) => !entry) || crypto2.createHash("sha256").update(JSON.stringify(selectedDefinitions)).digest("hex") !== setup.policy.catalogSha256)
     throw new BridgeError("AGENT_POLICY_CHANGED", "Trusted MCP catalog changed after task admission");
-  const canonicalTmp = await fsp.realpath(os2.tmpdir());
-  const absoluteCopy = path6.resolve(copyDirectory);
-  const copyParent = path6.dirname(absoluteCopy);
+  const canonicalTmp = await fsp.realpath(os3.tmpdir());
+  const absoluteCopy = path8.resolve(copyDirectory);
+  const copyParent = path8.dirname(absoluteCopy);
   const canonicalParent = await fsp.realpath(copyParent);
-  if (!pathsEqual(canonicalTmp, canonicalParent) || !path6.basename(absoluteCopy).startsWith("agy-mcp-copy-")) {
+  if (!pathsEqual(canonicalTmp, canonicalParent) || !path8.basename(absoluteCopy).startsWith("agy-mcp-copy-")) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory must be an owned temporary copy directly under os.tmpdir()");
   }
   const copyInfo = await fsp.lstat(absoluteCopy).catch(() => void 0);
@@ -31198,12 +31882,12 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory must be an existing non-link directory");
   }
   const canonicalCopy = await fsp.realpath(absoluteCopy);
-  if (!path6.basename(canonicalCopy).startsWith("agy-mcp-copy-")) {
+  if (!path8.basename(canonicalCopy).startsWith("agy-mcp-copy-")) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "canonical copyDirectory basename must start with agy-mcp-copy-");
   }
   await assertNoLinkAncestry(setup.stateDirectory, "stateDirectory");
-  const resolvedState = path6.resolve(setup.stateDirectory);
-  const stateParsed = path6.parse(resolvedState);
+  const resolvedState = path8.resolve(setup.stateDirectory);
+  const stateParsed = path8.parse(resolvedState);
   if (resolvedState === stateParsed.root) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "stateDirectory cannot be a volume root");
   }
@@ -31215,21 +31899,21 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
   if (pathsEqual(canonicalState, stateParsed.root)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "canonical stateDirectory cannot be a root directory");
   }
-  const relCopyState = path6.relative(canonicalCopy, canonicalState);
-  if (relCopyState === "" || !relCopyState.startsWith("..") && !path6.isAbsolute(relCopyState)) {
+  const relCopyState = path8.relative(canonicalCopy, canonicalState);
+  if (relCopyState === "" || !relCopyState.startsWith("..") && !path8.isAbsolute(relCopyState)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "stateDirectory cannot be inside copyDirectory");
   }
-  const relStateCopy = path6.relative(canonicalState, canonicalCopy);
-  if (relStateCopy === "" || !relStateCopy.startsWith("..") && !path6.isAbsolute(relStateCopy)) {
+  const relStateCopy = path8.relative(canonicalState, canonicalCopy);
+  if (relStateCopy === "" || !relStateCopy.startsWith("..") && !path8.isAbsolute(relStateCopy)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory cannot be inside stateDirectory");
   }
   if (typeof setup.executionId !== "string" || !UUID_REGEX3.test(setup.executionId)) {
     throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid executionId UUID: ${String(setup.executionId)}`);
   }
   validatePathFormat(copyDirectory, "copyDirectory");
-  for (const directory of [copyDirectory, path6.join(copyDirectory, ".agents")]) {
+  for (const directory of [copyDirectory, path8.join(copyDirectory, ".agents")]) {
     for (const name of ["node", "node.exe", "node.com", "node.cmd", "node.bat"]) {
-      if (await fsp.lstat(path6.join(directory, name)).then(() => true, (error62) => {
+      if (await fsp.lstat(path8.join(directory, name)).then(() => true, (error62) => {
         if (error62.code === "ENOENT")
           return false;
         throw error62;
@@ -31238,21 +31922,21 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     }
   }
   for (const managedPath of EXECUTION_POLICY_PATHS) {
-    const target = path6.join(copyDirectory, managedPath);
-    let stat3;
+    const target = path8.join(copyDirectory, managedPath);
+    let stat4;
     try {
-      stat3 = await fsp.lstat(target);
+      stat4 = await fsp.lstat(target);
     } catch (err) {
       if (err.code === "ENOENT") {
         continue;
       }
       throw err;
     }
-    if (stat3) {
+    if (stat4) {
       throw new BridgeError("CONFLICTING_EXECUTION_POLICY", `Conflicting managed path exists: ${managedPath}`);
     }
   }
-  const agentsDir = path6.join(copyDirectory, ".agents");
+  const agentsDir = path8.join(copyDirectory, ".agents");
   try {
     const agentsStat = await fsp.lstat(agentsDir);
     if (agentsStat.isSymbolicLink()) {
@@ -31285,9 +31969,9 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       allowedSkillFiles.push(normalized);
     }
   }
-  const receiptsDir = path6.join(canonicalState, "execution-receipts");
+  const receiptsDir = path8.join(canonicalState, "execution-receipts");
   await fsp.mkdir(receiptsDir, { recursive: true, mode: 448 });
-  const receiptPath = path6.join(receiptsDir, `${setup.executionId}.jsonl`);
+  const receiptPath = path8.join(receiptsDir, `${setup.executionId}.jsonl`);
   await assertNoLinkAncestry(receiptPath, "receiptPath");
   const createdFiles = [];
   let receiptIdentity;
@@ -31295,8 +31979,8 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     try {
       const handle = await fsp.open(receiptPath, "wx", 384);
       try {
-        const stat3 = await handle.stat({ bigint: true });
-        receiptIdentity = { dev: stat3.dev.toString(), ino: stat3.ino.toString() };
+        const stat4 = await handle.stat({ bigint: true });
+        receiptIdentity = { dev: stat4.dev.toString(), ino: stat4.ino.toString() };
       } finally {
         await handle.close();
       }
@@ -31378,20 +32062,20 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Staging requires ${totalBytes} bytes, but remaining limit is ${remaining.maxCopyBytes}`);
     }
     await fsp.mkdir(agentsDir, { recursive: true, mode: 448 });
-    const hooksPath = path6.join(copyDirectory, ".agents", "hooks.json");
+    const hooksPath = path8.join(copyDirectory, ".agents", "hooks.json");
     await fsp.writeFile(hooksPath, hooksJsonContent, { flag: "wx", mode: 384 });
     createdFiles.push(hooksPath);
-    const hookScriptPath = path6.join(copyDirectory, ".agents", "bridge-execution-hook.mjs");
+    const hookScriptPath = path8.join(copyDirectory, ".agents", "bridge-execution-hook.mjs");
     await fsp.writeFile(hookScriptPath, hookScriptContent, { flag: "wx", mode: 384 });
     createdFiles.push(hookScriptPath);
-    const manifestPath = path6.join(copyDirectory, ".agents", "bridge-execution-policy.json");
+    const manifestPath = path8.join(copyDirectory, ".agents", "bridge-execution-policy.json");
     await fsp.writeFile(manifestPath, manifestContent, { flag: "wx", mode: 384 });
     createdFiles.push(manifestPath);
-    const mcpConfigPath = path6.join(copyDirectory, ".agents", "mcp_config.json");
+    const mcpConfigPath = path8.join(copyDirectory, ".agents", "mcp_config.json");
     await fsp.writeFile(mcpConfigPath, mcpConfigContent, { flag: "wx", mode: 384 });
     createdFiles.push(mcpConfigPath);
     if (process.platform === "win32") {
-      await promisify(execFile)(path6.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "icacls.exe"), [mcpConfigPath, "/inheritance:d"], { windowsHide: true, timeout: 1e4, maxBuffer: 8192 });
+      await promisify(execFile)(path8.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "icacls.exe"), [mcpConfigPath, "/inheritance:d"], { windowsHide: true, timeout: 1e4, maxBuffer: 8192 });
     }
     const hooksSha256 = crypto2.createHash("sha256").update(hooksJsonContent, "utf8").digest("hex");
     const manifestSha256 = crypto2.createHash("sha256").update(manifestContent, "utf8").digest("hex");
@@ -31423,8 +32107,8 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     for (const created of createdFiles) {
       try {
         await assertNoLinkAncestry(created, "created helper");
-        const relative2 = path6.relative(canonicalCopy, created);
-        if (created !== receiptPath && (!relative2 || relative2.startsWith("..") || path6.isAbsolute(relative2)))
+        const relative2 = path8.relative(canonicalCopy, created);
+        if (created !== receiptPath && (!relative2 || relative2.startsWith("..") || path8.isAbsolute(relative2)))
           throw new Error("Unsafe helper cleanup");
         await fsp.rm(created, { force: true });
       } catch {
@@ -31452,7 +32136,7 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "stateDirectory must be a non-link directory");
   }
   const canonicalState = await fsp.realpath(stateDirectory);
-  const expectedReceiptPath = path6.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const expectedReceiptPath = path8.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "Receipt path boundary mismatch");
   }
@@ -31465,14 +32149,14 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "Receipt file is missing or not a regular file");
   }
   for (const file3 of staged.files) {
-    const fullPath = path6.join(copyDirectory, file3.path);
+    const fullPath = path8.join(copyDirectory, file3.path);
     await assertNoLinkAncestry(fullPath, "managed helper");
-    const stat3 = await fsp.lstat(fullPath).catch(() => void 0);
-    if (!stat3 || stat3.isSymbolicLink() || !stat3.isFile()) {
+    const stat4 = await fsp.lstat(fullPath).catch(() => void 0);
+    if (!stat4 || stat4.isSymbolicLink() || !stat4.isFile()) {
       throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `Managed helper is missing or not a regular file: ${file3.path}`);
     }
-    if (stat3.size !== file3.bytes) {
-      throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File size mismatch for ${file3.path}: expected ${file3.bytes}, got ${stat3.size}`);
+    if (stat4.size !== file3.bytes) {
+      throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File size mismatch for ${file3.path}: expected ${file3.bytes}, got ${stat4.size}`);
     }
     const content = await fsp.readFile(fullPath);
     const sha256 = crypto2.createHash("sha256").update(content).digest("hex");
@@ -31480,7 +32164,7 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
       throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File hash mismatch for ${file3.path}`);
     }
   }
-  const manifestPath = path6.join(copyDirectory, ".agents", "bridge-execution-policy.json");
+  const manifestPath = path8.join(copyDirectory, ".agents", "bridge-execution-policy.json");
   let manifest;
   try {
     const raw = await fsp.readFile(manifestPath, "utf8");
@@ -31502,7 +32186,7 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
     throw new BridgeError("INVALID_RECEIPT", "stateDirectory must be an existing non-link directory");
   }
   const canonicalState = await fsp.realpath(stateDirectory);
-  const expectedReceiptPath = path6.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const expectedReceiptPath = path8.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError("INVALID_RECEIPT", "Receipt path does not match stateDirectory and executionId");
   }
@@ -31535,10 +32219,10 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
   const handle = await fsp.open(staged.receiptPath, "r");
   let fullBuffer;
   try {
-    const stat3 = await handle.stat({ bigint: true });
-    if (stat3.dev !== identity.dev || stat3.ino !== identity.ino || stat3.size > 1048576n)
+    const stat4 = await handle.stat({ bigint: true });
+    if (stat4.dev !== identity.dev || stat4.ino !== identity.ino || stat4.size > 1048576n)
       throw new BridgeError("INVALID_RECEIPT", "Private receipt changed before reading");
-    const buffer = Buffer.alloc(Number(stat3.size) + 1);
+    const buffer = Buffer.alloc(Number(stat4.size) + 1);
     let length = 0;
     while (length < buffer.length) {
       const part = await handle.read(buffer, length, buffer.length - length, length);
@@ -31619,7 +32303,7 @@ async function discardExecutionPolicy(staged, stateDirectory) {
   stagedExecutionPolicySchema.parse(staged);
   await assertNoLinkAncestry(stateDirectory, "stateDirectory");
   const state = await fsp.realpath(stateDirectory);
-  const expected = path6.join(state, "execution-receipts", staged.executionId + ".jsonl");
+  const expected = path8.join(state, "execution-receipts", staged.executionId + ".jsonl");
   if (!pathsEqual(expected, staged.receiptPath))
     throw new BridgeError("INVALID_RECEIPT", "Private receipt cleanup boundary mismatch");
   await assertNoLinkAncestry(expected, "receiptPath");
@@ -31639,7 +32323,7 @@ async function discardExecutionPolicy(staged, stateDirectory) {
 // dist/src/secret-preflight.js
 import { createHash as createHash5 } from "node:crypto";
 import { lstat as lstat3, open as open3 } from "node:fs/promises";
-import path7 from "node:path";
+import path9 from "node:path";
 var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
   ".env",
   ".ini",
@@ -31704,7 +32388,7 @@ function matchProjectRelativeGlob(pattern, relativePath) {
 }
 function isKnownCredentialFile(normalizedRelative) {
   const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
-  const base = path7.posix.basename(norm);
+  const base = path9.posix.basename(norm);
   if (base === ".env" || base === ".envrc")
     return true;
   if (base.startsWith(".env.")) {
@@ -31774,8 +32458,8 @@ var KNOWN_SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
 ]);
 function detectSecretContent(normalizedRelative, content, scanState = {}) {
   const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
-  const base = path7.posix.basename(norm);
-  const ext = path7.posix.extname(norm);
+  const base = path9.posix.basename(norm);
+  const ext = path9.posix.extname(norm);
   const text = content.toString("utf8");
   const trimmed = text.trimStart();
   const isSource = KNOWN_SOURCE_EXTENSIONS.has(ext);
@@ -31944,159 +32628,38 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
   return { eligible, blocked, records };
 }
 
-// dist/src/subprocess.js
-import { spawn } from "node:child_process";
-import path8 from "node:path";
-var stopping = /* @__PURE__ */ new WeakSet();
-var ownedProcessGroups = /* @__PURE__ */ new WeakSet();
-function registerOwnedProcessGroup(child) {
-  ownedProcessGroups.add(child);
-}
-function processError(error62, operation) {
-  if (error62 instanceof BridgeError)
-    return error62;
-  const code = error62?.code;
-  if (code === "ENOENT")
-    return new BridgeError("AGY_NOT_FOUND", "agy executable not found");
-  if (code === "EACCES" || code === "EPERM")
-    return new BridgeError("AGY_PERMISSION_DENIED", "Permission denied executing agy");
-  if (operation === "stdin" || code === "EPIPE" || code === "EOF" || code === "ECONNRESET" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END")
-    return new BridgeError("CLI_INPUT_FAILED", "Failed writing input to agy");
-  const message = error62 instanceof Error ? error62.message : String(error62);
-  return new BridgeError("AGY_IO_FAILED", `agy ${operation} failed: ${message}`);
-}
-function terminateSubprocess(child, options) {
-  const isOwned = options?.ownedGroup ?? ownedProcessGroups.has(child);
-  if (stopping.has(child))
-    return;
-  if ((child.exitCode != null || child.signalCode != null) && !isOwned)
-    return;
-  stopping.add(child);
-  let closed = false;
-  let killer;
-  const force = () => {
-    if (!closed) {
-      if (process.platform === "win32") {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
-      } else if (child.pid) {
-        if (isOwned) {
-          try {
-            process.kill(-child.pid, "SIGKILL");
-          } catch {
-            try {
-              child.kill("SIGKILL");
-            } catch {
-            }
-          }
-        } else {
-          try {
-            child.kill("SIGKILL");
-          } catch {
-          }
-        }
-      } else {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
-      }
-    }
-  };
-  const timeoutMs = options?.escalationTimeoutMs ?? 3e3;
-  const timer = setTimeout(() => {
-    force();
-    if (killer && killer.exitCode === null && killer.signalCode === null) {
-      try {
-        killer.kill();
-      } catch {
-      }
-    }
-  }, timeoutMs);
-  timer.unref();
-  const cleanup = () => {
-    closed = true;
-    clearTimeout(timer);
-  };
-  child.once("close", cleanup);
-  if (process.platform === "win32") {
-    if (child.pid) {
-      try {
-        const executable = path8.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
-        killer = spawn(executable, ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, shell: false, stdio: "ignore" });
-        killer.once("error", force);
-        killer.once("close", (code) => {
-          if (code !== 0)
-            force();
-        });
-      } catch {
-        force();
-      }
-    } else {
-      force();
-    }
-  } else {
-    if (child.pid) {
-      if (isOwned) {
-        try {
-          process.kill(-child.pid, "SIGTERM");
-        } catch {
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            force();
-          }
-        }
-      } else {
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          force();
-        }
-      }
-    } else {
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        force();
-      }
-    }
-  }
-}
-function redactDiagnostic(value, state) {
-  if (!value)
-    return "";
-  let text = String(value);
-  if (state) {
-    if (state.inPrivateKey) {
-      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
-        state.inPrivateKey = false;
-      }
-      return "[private key redacted]";
-    }
-    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(text)) {
-      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
-        state.inPrivateKey = false;
-      } else {
-        state.inPrivateKey = true;
-      }
-      return "[private key redacted]";
-    }
-  }
-  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[private key redacted]").replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, "[private key redacted]");
-  text = text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, "$1[redacted]@");
-  for (const [name, secret] of Object.entries(process.env)) {
-    if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name))
-      text = text.split(secret).join("[redacted]");
-  }
-  return text.replace(/\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/g, "[redacted]").replace(/(Bearer\s+)[^\s"']+/gi, "$1[redacted]");
-}
-
 // dist/src/isolation.js
-var maxGitOutput = 1e7;
+var FENCE_MARKER_NAME = "CLEANUP_UNVERIFIED";
+function getFenceMarkerPath(project) {
+  return path10.join(project.gitDirectory, FENCE_MARKER_NAME);
+}
+async function checkFenceMarker(project) {
+  const markerPath = getFenceMarkerPath(project);
+  let exists = false;
+  try {
+    await lstat4(markerPath);
+    exists = true;
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      exists = false;
+    } else {
+      throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Failed to inspect cleanup fence marker: " + (err.message || String(err)));
+    }
+  }
+  if (exists) {
+    throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Project copy is fenced due to unverified Git cleanup");
+  }
+}
+async function writeFenceMarker(project) {
+  const markerPath = getFenceMarkerPath(project);
+  try {
+    await writeFile3(markerPath, JSON.stringify({ code: "GIT_CLEANUP_UNVERIFIED", version: 1 }) + "\n", { encoding: "utf8", flag: "wx", mode: 384 });
+  } catch (err) {
+    throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Failed to persist cleanup fence marker: " + (err.message || String(err)));
+  }
+}
 async function verifyManagedCopy(project) {
+  await checkFenceMarker(project);
   await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
   if (project.executionPolicy) {
     if (!project.executionStateDirectory)
@@ -32118,14 +32681,15 @@ async function stageProjectExecutionPolicy(project, request, limits) {
   project.executionStateDirectory = request.stateDirectory;
 }
 async function discardProjectCopy(project) {
-  const root = await realpath2(os3.tmpdir());
+  await checkFenceMarker(project);
+  const root = await realpath3(os4.tmpdir());
   const targets = [
     [project.copyDirectory, "agy-mcp-copy-"],
     [project.gitDirectory, "agy-mcp-baseline-"]
   ];
   for (const [directory, prefix] of targets) {
-    const absolute = path9.resolve(directory);
-    if (path9.relative(root, await realpath2(path9.dirname(absolute))) !== "" || !path9.basename(absolute).startsWith(prefix)) {
+    const absolute = path10.resolve(directory);
+    if (path10.relative(root, await realpath3(path10.dirname(absolute))) !== "" || !path10.basename(absolute).startsWith(prefix)) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
     }
     const info = await lstat4(absolute).catch((error62) => {
@@ -32137,97 +32701,34 @@ async function discardProjectCopy(project) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
   }
   for (const [directory] of targets)
-    await rm2(path9.resolve(directory), { recursive: true, force: true });
+    await rm2(path10.resolve(directory), { recursive: true, force: true });
   if (project.executionPolicy) {
     if (!project.executionStateDirectory)
       throw new BridgeError("INVALID_AGENT_POLICY", "Private execution storage binding is missing");
     await discardExecutionPolicy(project.executionPolicy, project.executionStateDirectory);
   }
 }
-async function git(cwd, args, input2, allowedCodes = [0]) {
-  return new Promise((resolve2, reject) => {
-    let childProc;
-    try {
-      childProc = spawn2("git", args, { cwd, windowsHide: true, stdio: "pipe" });
-    } catch (err) {
-      reject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(err.message)));
-      return;
+async function managedGit(project, cwd, args, input2, allowedCodes = [0], options) {
+  await checkFenceMarker(project);
+  const excludedRoots = [
+    project.sourceDirectory,
+    project.copyDirectory,
+    ...options?.excludedRoots ?? []
+  ];
+  try {
+    return await git(cwd, args, input2, allowedCodes, {
+      ...options,
+      excludedRoots
+    });
+  } catch (error62) {
+    if (error62 instanceof BridgeError && error62.code === "GIT_CLEANUP_UNVERIFIED") {
+      await writeFenceMarker(project);
     }
-    const child = childProc;
-    let settled = false;
-    const settleReject = (error62) => {
-      if (settled)
-        return;
-      settled = true;
-      terminateSubprocess(child);
-      reject(error62);
-    };
-    const settleResolve = (result) => {
-      if (settled)
-        return;
-      settled = true;
-      resolve2(result);
-    };
-    let ioError = null;
-    const recordIoError = (error62) => {
-      if (!ioError)
-        ioError = error62;
-      terminateSubprocess(child);
-    };
-    const chunks = [];
-    let length = 0;
-    let stderr = "";
-    let overflow = false;
-    child.stdout.on("data", (chunk) => {
-      length += chunk.length;
-      if (length > maxGitOutput) {
-        overflow = true;
-        terminateSubprocess(child);
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
-    });
-    child.stdin.on("error", (error62) => {
-      recordIoError(error62);
-    });
-    child.stdout.on("error", (error62) => {
-      recordIoError(error62);
-    });
-    child.stderr.on("error", (error62) => {
-      recordIoError(error62);
-    });
-    child.once("error", (error62) => {
-      settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(error62.message)));
-    });
-    child.once("close", (code) => {
-      if (overflow) {
-        settleReject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      } else if (ioError) {
-        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(ioError.message || "Git stream communication error")));
-      } else if (!allowedCodes.includes(code ?? -1)) {
-        const diag = stderr.trim() || "git exited with code " + code;
-        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(diag)));
-      } else {
-        settleResolve(Buffer.concat(chunks));
-      }
-    });
-    if (input2 !== void 0) {
-      try {
-        child.stdin.end(input2);
-      } catch (err) {
-        recordIoError(err);
-      }
-    } else {
-      try {
-        child.stdin.end();
-      } catch (err) {
-        recordIoError(err);
-      }
-    }
-  });
+    throw error62;
+  }
+}
+function copyGit(project, args, input2, allowedCodes = [0], options) {
+  return managedGit(project, project.copyDirectory, args, input2, allowedCodes, options);
 }
 function splitNull(bytes) {
   return bytes.toString("utf8").split("\0").filter(Boolean);
@@ -32270,7 +32771,7 @@ async function checkedPath(root, relative2, mustExist) {
   const parts = validRelative(relative2).split("/");
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path9.join(current, parts[index]);
+    current = path10.join(current, parts[index]);
     let info;
     try {
       info = await lstat4(current);
@@ -32298,7 +32799,7 @@ async function validateProjectRoot(sourceDirectory) {
   } catch {
     throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
   }
-  if (path9.relative(await realpath2(top), await realpath2(sourceDirectory)) !== "") {
+  if (path10.relative(await realpath3(top), await realpath3(sourceDirectory)) !== "") {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
   }
 }
@@ -32360,7 +32861,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
     if (fstat.size !== record2.size || record2.ino !== 0 && fstat.ino !== record2.ino || record2.dev !== 0 && fstat.dev !== record2.dev) {
       throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
     }
-    await mkdir3(path9.dirname(target), { recursive: true });
+    await mkdir3(path10.dirname(target), { recursive: true });
     dstHandle = await open4(target, "w", fstat.mode);
     const CHUNK_SIZE = 64 * 1024;
     const buf = Buffer.allocUnsafe(CHUNK_SIZE);
@@ -32437,8 +32938,8 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     if (totalBytes > limits.maxCopyBytes)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
-  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   try {
     const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected, blockedFiles: preflight.blocked };
@@ -32446,7 +32947,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     const budget = { remainingBytes: limits.maxCopyBytes };
     for (const relative2 of selected) {
       const source = await checkedPath(sourceDirectory, relative2, true);
-      const target = path9.join(copyDirectory, ...relative2.split("/"));
+      const target = path10.join(copyDirectory, ...relative2.split("/"));
       const record2 = preflight.records.get(relative2);
       const hash3 = await copyVerifiedFile(source, target, relative2, record2, budget, "SOURCE_CHANGED");
       baseline.set(relative2, hash3);
@@ -32458,17 +32959,15 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     await verifyProvidedSkills(copyDirectory, staged);
     if (execution)
       await stageProjectExecutionPolicy(project, execution, limits);
-    await git(copyDirectory, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    await copyGit(project, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
     const scope = ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory];
-    await git(copyDirectory, [...scope, "add", "-A", "-f", "--", ".", ...executionExclusions(project)]);
-    await git(copyDirectory, [
+    await copyGit(project, [...scope, "add", "-A", "-f", "--", ".", ...executionExclusions(project)]);
+    await copyGit(project, [
       ...scope,
       "-c",
       "user.name=Bridge Snapshot",
       "-c",
       "user.email=bridge@invalid.local",
-      "-c",
-      "core.hooksPath=" + path9.join(gitDirectory, "disabled-hooks"),
       "commit",
       "--quiet",
       "--allow-empty",
@@ -32477,20 +32976,30 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     ]);
     return project;
   } catch (error62) {
-    if (path9.dirname(copyDirectory) === os3.tmpdir() && path9.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+    if (error62 instanceof BridgeError && error62.code === "GIT_CLEANUP_UNVERIFIED") {
+      throw error62;
+    }
+    if (path10.dirname(copyDirectory) === os4.tmpdir() && path10.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
       await rm2(copyDirectory, { recursive: true, force: true });
     }
-    if (path9.dirname(gitDirectory) === os3.tmpdir() && path9.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+    if (path10.dirname(gitDirectory) === os4.tmpdir() && path10.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
       await rm2(gitDirectory, { recursive: true, force: true });
     }
     throw error62;
   }
 }
+function ensurePatchUtf8RoundTrip(bytes) {
+  const patchText = bytes.toString("utf8");
+  if (!Buffer.from(patchText, "utf8").equals(bytes)) {
+    throw new BridgeError("UNSUPPORTED_PATCH_ENCODING", "Patch contains non-UTF-8 content that cannot safely round-trip. Declare non-UTF-8 files as binary in .gitattributes.");
+  }
+  return patchText;
+}
 async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   await verifyManagedCopy(project);
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  await git(project.copyDirectory, [...scope, "add", "-A", "--", ".", ...executionExclusions(project)]);
-  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
+  await copyGit(project, [...scope, "add", "-A", "--", ".", ...executionExclusions(project)]);
+  const names = splitNull(await copyGit(project, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
   if (names.length / 2 > limits.maxChangedFiles)
     throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files = [];
@@ -32503,15 +33012,15 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
       await checkedPath(project.copyDirectory, relative2, true);
     files.push({ status: status2, path: relative2 });
   }
-  const stats = new Map(splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
+  const stats = new Map(splitNull(await copyGit(project, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
     const [added, removed, ...relative2] = line.split("	");
     return [relative2.join("	"), { insertions: added === "-" ? null : Number(added), deletions: removed === "-" ? null : Number(removed), binary: added === "-" }];
   }));
   const fileSummaries = files.map((file3) => {
-    const stat3 = stats.get(file3.path);
-    if (!stat3)
+    const stat4 = stats.get(file3.path);
+    if (!stat4)
       throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file3.path);
-    return { ...file3, ...stat3 };
+    return { ...file3, ...stat4 };
   });
   const summary = {
     filesChanged: files.length,
@@ -32522,12 +33031,13 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
     deletions: fileSummaries.reduce((total, file3) => total + (file3.deletions ?? 0), 0),
     binaryFiles: fileSummaries.filter((file3) => file3.binary).length
   };
-  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
+  const bytes = await copyGit(project, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
+  const patch = ensurePatchUtf8RoundTrip(bytes);
   return {
     files,
     fileSummaries,
     summary,
-    patch: bytes.toString("utf8"),
+    patch,
     sha256: createHash6("sha256").update(bytes).digest("hex"),
     sourceDirectory: project.sourceDirectory,
     copyDirectory: project.copyDirectory
@@ -32540,10 +33050,10 @@ async function verifyReadOnlyCopy(project, baseline = new Map([...project.baseli
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path9.join(directory, entry.name), relative2 + "/");
+        await visit2(path10.join(directory, entry.name), relative2 + "/");
       else {
         seen.add(relative2);
-        if (!entry.isFile() || baseline.get(relative2) !== await sha256File2(path9.join(directory, entry.name))) {
+        if (!entry.isFile() || baseline.get(relative2) !== await sha256File2(path10.join(directory, entry.name))) {
           throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative2);
         }
       }
@@ -32557,7 +33067,7 @@ async function verifyReadOnlyCopy(project, baseline = new Map([...project.baseli
 }
 async function readProjectPatch(project, relative2) {
   const file3 = validRelative(relative2);
-  return (await git(project.copyDirectory, [
+  const bytes = await copyGit(project, [
     "--git-dir=" + project.gitDirectory,
     "--work-tree=" + project.copyDirectory,
     "diff",
@@ -32569,7 +33079,8 @@ async function readProjectPatch(project, relative2) {
     "HEAD",
     "--",
     file3
-  ])).toString("utf8");
+  ]);
+  return ensurePatchUtf8RoundTrip(bytes);
 }
 async function snapshotCopyFiles(project, limits) {
   await verifyManagedCopy(project);
@@ -32579,7 +33090,7 @@ async function snapshotCopyFiles(project, limits) {
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path9.join(directory, entry.name), relative2 + "/");
+        await visit2(path10.join(directory, entry.name), relative2 + "/");
       else {
         const file3 = await checkedPath(project.copyDirectory, relative2, true);
         bytes += (await lstat4(file3)).size;
@@ -32596,14 +33107,19 @@ async function forkProjectCopy(project, limits) {
   await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => file3.path)));
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
+  const candidates = [...new Set(splitNull(await copyGit(project, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
   const ignored = /* @__PURE__ */ new Set();
   if (candidates.length) {
     const input2 = Buffer.from(candidates.join("\0") + "\0");
-    for (const file3 of splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
+    for (const file3 of splitNull(await copyGit(project, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
       ignored.add(file3);
-    for (const file3 of splitNull(await git(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
+    for (const file3 of splitNull(await managedGit(project, project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
       ignored.add(file3);
+  }
+  for (const file3 of ignored) {
+    if (project.baseline.has(file3) && !managed.has(file3)) {
+      throw new BridgeError("CONTEXT_CHANGED", "Baseline file became ignored: " + file3);
+    }
   }
   const eligibleCandidates = candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)));
   const preflight = await preflightProjectFiles(project.copyDirectory, eligibleCandidates, limits);
@@ -32612,8 +33128,8 @@ async function forkProjectCopy(project, limits) {
       throw new BridgeError("CONTEXT_CHANGED", "Baseline file became blocked or unsafe: " + blocked.path);
     }
   }
-  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-baseline-"));
   const fork = {
     ...project,
     executionPolicy: void 0,
@@ -32625,28 +33141,129 @@ async function forkProjectCopy(project, limits) {
     blockedFiles: preflight.blocked
   };
   try {
-    const budget = { remainingBytes: limits.maxCopyBytes };
-    for (const relative2 of preflight.eligible) {
-      let source;
-      try {
-        source = await checkedPath(project.copyDirectory, relative2, true);
-      } catch (error62) {
-        if (error62.code === "ENOENT")
+    const tempBaselineDir = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-worktree-"));
+    try {
+      const budget = { remainingBytes: limits.maxCopyBytes };
+      for (const relative2 of preflight.eligible) {
+        let source;
+        try {
+          source = await checkedPath(project.copyDirectory, relative2, true);
+        } catch (error62) {
+          if (error62.code === "ENOENT")
+            continue;
+          throw error62;
+        }
+        if (fork.includedFiles.length >= limits.maxCopyFiles) {
+          throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
+        }
+        const target = path10.join(copyDirectory, ...validRelative(relative2).split("/"));
+        const record2 = preflight.records.get(relative2);
+        await copyVerifiedFile(source, target, relative2, record2, budget, "CONTEXT_CHANGED");
+        fork.includedFiles.push(relative2);
+      }
+      const pinnedCommit = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--verify", "HEAD^{commit}"])).toString("utf8").trim();
+      const objectFormat = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--show-object-format"])).toString("utf8").trim();
+      const pinnedTree = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--verify", "HEAD^{tree}"])).toString("utf8").trim();
+      if (!["sha1", "sha256"].includes(objectFormat)) {
+        throw new BridgeError("GIT_OPERATION_FAILED", "Unsupported Git object format: " + objectFormat);
+      }
+      const hashPattern = objectFormat === "sha256" ? /^[0-9a-f]{64}$/ : /^[0-9a-f]{40}$/;
+      if (!hashPattern.test(pinnedCommit) || !hashPattern.test(pinnedTree)) {
+        throw new BridgeError("GIT_OPERATION_FAILED", "Invalid commit or tree object identifier");
+      }
+      const lsTreeRaw = await copyGit(project, ["--git-dir=" + project.gitDirectory, "ls-tree", "-r", "-l", "-z", pinnedCommit]);
+      let baselineFileCount = 0;
+      let baselineByteCount = 0;
+      let offset = 0;
+      while (offset < lsTreeRaw.length) {
+        const nextNull = lsTreeRaw.indexOf(0, offset);
+        if (nextNull === -1)
+          throw new BridgeError("GIT_OPERATION_FAILED", "Unterminated ls-tree record");
+        const entryBuf = lsTreeRaw.subarray(offset, nextNull);
+        offset = nextNull + 1;
+        if (entryBuf.length === 0)
           continue;
-        throw error62;
+        const tabIdx = entryBuf.indexOf(9);
+        if (tabIdx === -1) {
+          throw new BridgeError("GIT_OPERATION_FAILED", "Invalid ls-tree output format");
+        }
+        const meta3 = entryBuf.subarray(0, tabIdx).toString("utf8").trim();
+        const relPath = entryBuf.subarray(tabIdx + 1).toString("utf8");
+        const parts = meta3.split(/\s+/);
+        if (parts.length < 4) {
+          throw new BridgeError("GIT_OPERATION_FAILED", "Invalid ls-tree metadata: " + meta3);
+        }
+        const mode = parts[0];
+        const type = parts[1];
+        const sizeStr = parts[3];
+        if (mode !== "100644" && mode !== "100755") {
+          throw new BridgeError("UNSAFE_PROJECT_PATH", "Baseline contains non-regular file or link: " + relPath);
+        }
+        if (type !== "blob") {
+          throw new BridgeError("UNSAFE_PROJECT_PATH", "Baseline entry is not a blob: " + relPath);
+        }
+        validRelative(relPath);
+        const size = Number(sizeStr);
+        if (!/^\d+$/.test(sizeStr) || !Number.isSafeInteger(size) || size < 0) {
+          throw new BridgeError("GIT_OPERATION_FAILED", "Invalid blob size in baseline ls-tree");
+        }
+        baselineFileCount++;
+        baselineByteCount += size;
+        if (baselineFileCount > limits.maxCopyFiles || baselineByteCount > limits.maxCopyBytes) {
+          throw new BridgeError("COPY_LIMIT_EXCEEDED", "Baseline tree exceeds copy limits");
+        }
       }
-      if (fork.includedFiles.length >= limits.maxCopyFiles) {
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
+      await copyGit(project, [
+        "--git-dir=" + project.gitDirectory,
+        "--work-tree=" + tempBaselineDir,
+        "restore",
+        "--source=" + pinnedCommit,
+        "--worktree",
+        "--",
+        "."
+      ]);
+      await copyGit(fork, [
+        "-c",
+        "init.templateDir=",
+        "init",
+        "--bare",
+        "--object-format=" + objectFormat,
+        "--quiet",
+        gitDirectory
+      ]);
+      const forkBaselineScope = ["--git-dir=" + gitDirectory, "--work-tree=" + tempBaselineDir];
+      await copyGit(fork, [...forkBaselineScope, "add", "-A", "-f", "--", "."]);
+      await copyGit(fork, [
+        ...forkBaselineScope,
+        "-c",
+        "user.name=Bridge Snapshot",
+        "-c",
+        "user.email=bridge@invalid.local",
+        "commit",
+        "--quiet",
+        "--allow-empty",
+        "-m",
+        "baseline"
+      ]);
+      const forkTree = (await copyGit(fork, ["--git-dir=" + gitDirectory, "rev-parse", "--verify", "HEAD^{tree}"])).toString("utf8").trim();
+      if (forkTree !== pinnedTree) {
+        throw new BridgeError("GIT_OPERATION_FAILED", `Fork baseline tree (${forkTree}) does not match source pinned tree (${pinnedTree})`);
       }
-      const target = path9.join(copyDirectory, ...validRelative(relative2).split("/"));
-      const record2 = preflight.records.get(relative2);
-      await copyVerifiedFile(source, target, relative2, record2, budget, "CONTEXT_CHANGED");
-      fork.includedFiles.push(relative2);
+      await copyGit(fork, ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory, "read-tree", "HEAD"]);
+      await fingerprintProjectCopy(fork, limits);
+      const finalHead = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--verify", "HEAD^{commit}"])).toString("utf8").trim();
+      if (finalHead !== pinnedCommit)
+        throw new BridgeError("CONTEXT_CHANGED", "Source baseline HEAD changed during fork");
+      return fork;
+    } finally {
+      const root = await realpath3(os4.tmpdir());
+      const info = await lstat4(tempBaselineDir);
+      const absolute = await realpath3(tempBaselineDir);
+      if (info.isSymbolicLink() || !info.isDirectory() || path10.relative(root, path10.dirname(absolute)) !== "" || !path10.basename(absolute).startsWith("agy-mcp-worktree-")) {
+        throw new BridgeError("UNSAFE_PROJECT_PATH", "Private baseline worktree was replaced or escaped temporary storage");
+      }
+      await rm2(absolute, { recursive: true, force: true });
     }
-    await git(copyDirectory, ["-c", "init.templateDir=", "clone", "--bare", "--no-hardlinks", "--quiet", project.gitDirectory, gitDirectory]);
-    await git(copyDirectory, ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory, "read-tree", "HEAD"]);
-    await fingerprintProjectCopy(fork, limits);
-    return fork;
   } catch (error62) {
     await discardProjectCopy(fork);
     throw error62;
@@ -32656,8 +33273,8 @@ async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) 
   await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => file3.path)));
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
-  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
+  const candidates = [...new Set(splitNull(await copyGit(project, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
+  const ignored = new Set(candidates.length ? splitNull(await copyGit(project, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
   const digest = createHash6("sha256");
   let count2 = 0, bytes = 0;
   for (const relative2 of candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)))) {
@@ -32706,8 +33323,9 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
     }
   }
   const patch = Buffer.from(preview.patch, "utf8");
-  await git(project.sourceDirectory, ["apply", "--check", "--binary", "-"], patch);
-  await git(project.sourceDirectory, ["apply", "--binary", "-"], patch);
+  const sourceScope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.sourceDirectory];
+  await managedGit(project, project.sourceDirectory, [...sourceScope, "apply", "--check", "--binary", "--whitespace=nowarn", "-"], patch, [0]);
+  await managedGit(project, project.sourceDirectory, [...sourceScope, "apply", "--binary", "--whitespace=nowarn", "-"], patch, [0]);
   return preview;
 }
 
@@ -32826,8 +33444,7 @@ function compactTask(task2) {
 import { createHash as createHash8 } from "node:crypto";
 import { createReadStream as createReadStream3 } from "node:fs";
 import { lstat as lstat5, readdir as readdir3 } from "node:fs/promises";
-import { spawn as spawn3 } from "node:child_process";
-import path10 from "node:path";
+import path11 from "node:path";
 var WINDOWS_DEVICE_NAMES4 = /* @__PURE__ */ new Set([
   "CON",
   "PRN",
@@ -32916,37 +33533,6 @@ var artifactReferenceSchema = external_exports.object({
   sha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
   bytes: external_exports.number().int().nonnegative()
 }).strict();
-async function git2(cwd, args, input2, allowedCodes = [0]) {
-  return new Promise((resolve2, reject) => {
-    const child = spawn3("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    const chunks = [];
-    let length = 0;
-    let stderr = "";
-    let overflow = false;
-    child.stdout.on("data", (chunk) => {
-      length += chunk.length;
-      if (length > 1e7) {
-        overflow = true;
-        child.kill();
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
-    });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (overflow)
-        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      else if (!allowedCodes.includes(code ?? -1))
-        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
-      else
-        resolve2(Buffer.concat(chunks));
-    });
-    child.stdin.end(input2);
-  });
-}
 function splitNull2(bytes) {
   return bytes.toString("utf8").split("\0").filter(Boolean);
 }
@@ -32982,11 +33568,12 @@ async function verifyExactDiskCase(rootDir, relativePath) {
       }
       throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
     }
-    current = path10.join(current, seg);
+    current = path11.join(current, seg);
   }
   return current;
 }
 async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS) {
+  await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
   const parsed = artifactPathsSchema.safeParse(paths2);
   if (!parsed.success) {
@@ -33005,7 +33592,7 @@ async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS
     }
   }
   const stdinBuf = Buffer.from(normalizedPaths.join("\0") + "\0");
-  const ignoreOutput = await git2(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
+  const ignoreOutput = await managedGit(project, project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
   const ignoredSet = new Set(splitNull2(ignoreOutput));
   for (const p of normalizedPaths) {
     if (ignoredSet.has(p)) {
@@ -33074,6 +33661,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
   if (expectedSha256 !== reference.sha256) {
     throw new BridgeError("CONTENT_CHANGED", "expectedSha256 does not match reference sha256");
   }
+  await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
   const relative2 = validArtifactRelative(reference.path);
   let filePath;
@@ -33758,7 +34346,7 @@ async function validateRoleReport(role, raw, copyDirectory) {
     if (!parsed.data.reviewedFiles.includes(finding.path))
       throw new BridgeError("ROLE_OUTPUT_INVALID", "Finding refers to a file outside reviewedFiles");
     const file3 = await checkedPath(copyDirectory, finding.path, true);
-    if ((await stat(file3)).size > 1e7)
+    if ((await stat2(file3)).size > 1e7)
       throw new BridgeError("VERIFICATION_TOO_LARGE", "Review citation exceeds the text file limit");
     const lines = (await readFile2(file3, "utf8")).split(/\r?\n/);
     const quote = finding.quote.split(/\r?\n/);
@@ -33771,22 +34359,22 @@ async function validateRoleReport(role, raw, copyDirectory) {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access, lstat as lstat6, realpath as realpath3, stat as stat2 } from "node:fs/promises";
-import path11 from "node:path";
+import { access, lstat as lstat6, realpath as realpath4, stat as stat3 } from "node:fs/promises";
+import path12 from "node:path";
 function within(root, candidate) {
-  const relative2 = path11.relative(root, candidate);
-  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path11.sep}`) && !path11.isAbsolute(relative2);
+  const relative2 = path12.relative(root, candidate);
+  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path12.sep}`) && !path12.isAbsolute(relative2);
 }
 async function validateWorkingDirectory(input2, forbidden) {
-  if (!path11.isAbsolute(input2))
+  if (!path12.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
-    const directory = await realpath3(input2);
-    if (!(await stat2(directory)).isDirectory())
+    const directory = await realpath4(input2);
+    if (!(await stat3(directory)).isDirectory())
       throw new Error("not a directory");
     await access(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath3(excluded).catch(() => path11.resolve(excluded));
+      const resolved = await realpath4(excluded).catch(() => path12.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -33798,7 +34386,7 @@ async function validateWorkingDirectory(input2, forbidden) {
   }
 }
 async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
-  let existing = path11.resolve(cacheDirectory);
+  let existing = path12.resolve(cacheDirectory);
   const missing = [];
   try {
     for (; ; ) {
@@ -33806,14 +34394,14 @@ async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) 
         await lstat6(existing);
         break;
       } catch (error62) {
-        const parent = path11.dirname(existing);
+        const parent = path12.dirname(existing);
         if (error62.code !== "ENOENT" || parent === existing)
           throw error62;
-        missing.unshift(path11.basename(existing));
+        missing.unshift(path12.basename(existing));
         existing = parent;
       }
     }
-    const cache = path11.join(await realpath3(existing), ...missing);
+    const cache = path12.join(await realpath4(existing), ...missing);
     if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
       throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
     }
@@ -33829,7 +34417,7 @@ function validatePrompt(prompt, maxChars) {
   }
 }
 async function validateStateSeparation(workingDirectory, stateDirectory) {
-  const state = await realpath3(stateDirectory);
+  const state = await realpath4(stateDirectory);
   if (within(workingDirectory, state) || within(state, workingDirectory)) {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps private bridge state; keep that storage outside projects");
   }
@@ -33989,14 +34577,14 @@ function taskPrompt(options, maxChars) {
   return content;
 }
 function stageSchemaFile(stateDirectory, content) {
-  if (!path12.isAbsolute(stateDirectory))
+  if (!path13.isAbsolute(stateDirectory))
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage must be absolute");
   mkdirSync2(stateDirectory, { recursive: true, mode: 448 });
   if (lstatSync2(stateDirectory).isSymbolicLink())
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage cannot be a link");
   const root = realpathSync3.native(stateDirectory);
   const identity = lstatSync2(root);
-  const file3 = path12.join(root, "cli-schema-" + randomUUID3() + ".json");
+  const file3 = path13.join(root, "cli-schema-" + randomUUID3() + ".json");
   writeFileSync2(file3, content, { flag: "wx", mode: 384 });
   let cleaned = false;
   return { file: file3, cleanup() {
@@ -34014,14 +34602,14 @@ function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
 async function resolveExecutable(command2) {
-  if (path12.isAbsolute(command2))
-    return path12.resolve(command2);
+  if (path13.isAbsolute(command2))
+    return path13.resolve(command2);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
-  for (const directory of (process.env.PATH || "").split(path12.delimiter)) {
+  for (const directory of (process.env.PATH || "").split(path13.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path12.join(directory, command2 + extension);
+      const candidate = path13.join(directory, command2 + extension);
       try {
         await access2(candidate);
         return candidate;
@@ -34048,7 +34636,7 @@ var CliAdapter = class {
     return new Promise((resolve2, reject) => {
       let child;
       try {
-        child = spawn4(this.config.agyPath, [...this.prefixArgs, ...args], {
+        child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], {
           env: this.environment(),
           windowsHide: true,
           shell: false,
@@ -34248,7 +34836,7 @@ var CliAdapter = class {
       args[schemaIndex + 1] = staged.file;
     let child;
     try {
-      child = spawn4(this.config.agyPath, [...this.prefixArgs, ...args], {
+      child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], {
         env: this.environment(),
         cwd,
         windowsHide: true,
@@ -34756,8 +35344,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path20, text } = criterion.check;
-      const content = await file3(path20);
+      const { kind, path: path21, text } = criterion.check;
+      const content = await file3(path21);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -35429,8 +36017,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path20, errorMaps, issueData } = params;
-  const fullPath = [...path20, ...issueData.path || []];
+  const { data, path: path21, errorMaps, issueData } = params;
+  const fullPath = [...path21, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -35545,11 +36133,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path20, key) {
+  constructor(parent, value, path21, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path20;
+    this._path = path21;
     this._key = key;
   }
   get path() {
@@ -39100,11 +39688,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path20) {
-  if (path20.length === 0) {
+function getDotPath(path21) {
+  if (path21.length === 0) {
     return "object root";
   }
-  return path20.reduce((acc, seg, index) => {
+  return path21.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -42961,8 +43549,8 @@ var EMPTY_COMPLETION_RESULT = {
 
 // dist/src/native-tests.js
 import { createHash as createHash14, randomUUID as randomUUID4 } from "node:crypto";
-import { appendFile, mkdir as mkdir4, readFile as readFile3, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
-import path13 from "node:path";
+import { appendFile, mkdir as mkdir4, readFile as readFile3, rm as rm3, writeFile as writeFile4 } from "node:fs/promises";
+import path14 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
   args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
@@ -43062,13 +43650,13 @@ async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID4();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path13.join(project.copyDirectory, file3);
+  const absolute = path14.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
   const hash3 = createHash14("sha256").update(script).digest("hex");
-  const exclude = path13.join(project.gitDirectory, "info", "exclude");
-  await mkdir4(path13.dirname(exclude), { recursive: true });
+  const exclude = path14.join(project.gitDirectory, "info", "exclude");
+  await mkdir4(path14.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
-  await writeFile3(absolute, script, { flag: "wx", mode: 384 });
+  await writeFile4(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
   let commandLine;
   if (process.platform === "win32") {
@@ -43087,7 +43675,7 @@ async function prepareNativeTest(project, request, settings) {
     async cleanup() {
       await rm3(absolute, { force: true });
       const content = await readFile3(exclude, "utf8");
-      await writeFile3(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
+      await writeFile4(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
     }
   };
 }
@@ -43191,10 +43779,10 @@ function compareFindings(tasks, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path20, line, quote } = opinions[0].finding;
+    const { path: path21, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path20,
+      path: path21,
       line,
       quote,
       opinions,
@@ -43206,9 +43794,9 @@ function compareFindings(tasks, models) {
 
 // dist/src/sandbox-policy.js
 import { createHash as createHash15 } from "node:crypto";
-import { lstat as lstat7, readdir as readdir4, realpath as realpath4 } from "node:fs/promises";
-import os4 from "node:os";
-import path14 from "node:path";
+import { lstat as lstat7, readdir as readdir4, realpath as realpath5 } from "node:fs/promises";
+import os5 from "node:os";
+import path15 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
 var persistedPolicySchema = external_exports.object({
   readRoots: paths,
@@ -43256,8 +43844,8 @@ function comparePaths(left, right) {
   return 0;
 }
 function contains(root, target) {
-  const relative2 = path14.relative(pathKey(root), pathKey(target));
-  return relative2 === "" || !relative2.startsWith(".." + path14.sep) && relative2 !== ".." && !path14.isAbsolute(relative2);
+  const relative2 = path15.relative(pathKey(root), pathKey(target));
+  return relative2 === "" || !relative2.startsWith(".." + path15.sep) && relative2 !== ".." && !path15.isAbsolute(relative2);
 }
 function overlaps(left, right) {
   return contains(left, right) || contains(right, left);
@@ -43323,17 +43911,17 @@ function localAbsolutePath(value) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
       }
     }
-  } else if (!path14.isAbsolute(value) || value.startsWith("//")) {
+  } else if (!path15.isAbsolute(value) || value.startsWith("//")) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
   }
-  return path14.resolve(value);
+  return path15.resolve(value);
 }
 async function inspectExistingPath(absolute) {
-  const root = path14.parse(absolute).root;
-  const parts = path14.relative(root, absolute).split(path14.sep).filter(Boolean);
+  const root = path15.parse(absolute).root;
+  const parts = path15.relative(root, absolute).split(path15.sep).filter(Boolean);
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path14.join(current, parts[index]);
+    current = path15.join(current, parts[index]);
     let info;
     try {
       info = await lstat7(current);
@@ -43349,7 +43937,7 @@ async function inspectExistingPath(absolute) {
   }
   let canonical;
   try {
-    canonical = await realpath4(absolute);
+    canonical = await realpath5(absolute);
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a sandbox permission target");
   }
@@ -43369,7 +43957,7 @@ async function inspectDirectoryGrant(directory, limits) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
     for (const name of children) {
-      const child = path14.join(current, name);
+      const child = path15.join(current, name);
       let info;
       try {
         info = await lstat7(child);
@@ -43399,11 +43987,11 @@ async function inspectSandboxGrant(value) {
 }
 async function canonicalProtectedPath(value) {
   const absolute = localAbsolutePath(value);
-  const root = path14.parse(absolute).root;
-  const parts = path14.relative(root, absolute).split(path14.sep).filter(Boolean);
+  const root = path15.parse(absolute).root;
+  const parts = path15.relative(root, absolute).split(path15.sep).filter(Boolean);
   let current = root, firstMissing = parts.length;
   for (let index = 0; index < parts.length; index++) {
-    const next = path14.join(current, parts[index]);
+    const next = path15.join(current, parts[index]);
     let info;
     try {
       info = await lstat7(next);
@@ -43421,25 +44009,25 @@ async function canonicalProtectedPath(value) {
   }
   let canonical;
   try {
-    canonical = await realpath4(current);
+    canonical = await realpath5(current);
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
-  return path14.join(canonical, ...parts.slice(firstMissing));
+  return path15.join(canonical, ...parts.slice(firstMissing));
 }
 async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
   return Promise.all([
     stateDirectory,
     ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
-    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path14.join(os4.homedir(), name)),
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path15.join(os5.homedir(), name)),
     ...forbidden
   ].map(canonicalProtectedPath));
 }
 async function canonicalPaths(values, protectedRoots, limits) {
-  const temporary = await canonicalProtectedPath(os4.tmpdir());
+  const temporary = await canonicalProtectedPath(os5.tmpdir());
   const canonical = await Promise.all(values.map(async (value) => {
     const target = await inspectSandboxGrant(value);
-    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path14.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path15.sep).some((part) => ownedTemporaryDirectory.test(part))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
     }
     if (target.directory)
@@ -44201,7 +44789,7 @@ function createMcpServer(adapter, tasks) {
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path20, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path20, offset, limit))());
+    }, async ({ taskId, expectedSha256, path: path21, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path21, offset, limit))());
   if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
     server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
@@ -44432,24 +45020,24 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
         limit: external_exports.number().int().min(1).max(65536).optional()
       },
       annotations: readOnly
-    }, async ({ taskId, path: path20, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path20, expectedSha256, offset, limit))());
+    }, async ({ taskId, path: path21, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path21, expectedSha256, offset, limit))());
   return server;
 }
 
 // dist/src/group-store.js
 import { lstatSync as lstatSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync as realpathSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { randomUUID as randomUUID6 } from "node:crypto";
-import path16 from "node:path";
+import path17 from "node:path";
 
 // dist/src/state-store.js
 import { randomUUID as randomUUID5 } from "node:crypto";
 import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import path15 from "node:path";
-import os5 from "node:os";
+import path16 from "node:path";
+import os6 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
-var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path15.isAbsolute(root) && path15.resolve(root) === root && root !== path15.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
+var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path16.isAbsolute(root) && path16.resolve(root) === root && root !== path16.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
 var blockedMetadataSchema = external_exports.object({
   path: external_exports.string(),
   reason: external_exports.enum(["SECRET_FILE", "SECRET_CONTENT", "SECRET_EXCLUSION", "UNSAFE_PATH"])
@@ -44563,7 +45151,7 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path15.isAbsolute(directory))
+    if (!path16.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
     mkdirSync3(directory, { recursive: true, mode: 448 });
     if (lstatSync3(directory).isSymbolicLink())
@@ -44572,13 +45160,13 @@ var StateStore = class {
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path15.join(this.directory, taskId + ".json");
+    return path16.join(this.directory, taskId + ".json");
   }
   loadIntegrationRoots() {
-    const file3 = path15.join(this.directory, "integration-approvals.json");
+    const file3 = path16.join(this.directory, "integration-approvals.json");
     try {
-      const stat3 = lstatSync3(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.nlink !== 1 || stat3.size > 128 * 1024)
+      const stat4 = lstatSync3(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.nlink !== 1 || stat4.size > 128 * 1024)
         throw new Error("Unsafe integration approvals");
       return integrationApprovalsSchema.parse(JSON.parse(readFileSync2(file3, "utf8"))).roots;
     } catch (error62) {
@@ -44590,7 +45178,7 @@ var StateStore = class {
   rememberIntegrationRoot(directory) {
     const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0];
     const release = this.acquire("integration-approvals");
-    const target = path15.join(this.directory, "integration-approvals.json");
+    const target = path16.join(this.directory, "integration-approvals.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       const roots = this.loadIntegrationRoots();
@@ -44605,10 +45193,10 @@ var StateStore = class {
     }
   }
   loadModel() {
-    const file3 = path15.join(this.directory, "model-selection.json");
+    const file3 = path16.join(this.directory, "model-selection.json");
     try {
-      const stat3 = lstatSync3(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
+      const stat4 = lstatSync3(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.size > 1024)
         throw new Error("Unsafe model selection");
       return modelSelectionSchema.parse(JSON.parse(readFileSync2(file3, "utf8")));
     } catch (error62) {
@@ -44618,10 +45206,10 @@ var StateStore = class {
     }
   }
   loadSandboxPolicy() {
-    const file3 = path15.join(this.directory, "sandbox-policy.json");
+    const file3 = path16.join(this.directory, "sandbox-policy.json");
     try {
-      const stat3 = lstatSync3(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > maxSandboxPolicyFileBytes)
+      const stat4 = lstatSync3(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.size > maxSandboxPolicyFileBytes)
         throw new Error("Unsafe sandbox policy");
       return parseSandboxPolicySnapshot(JSON.parse(readFileSync2(file3, "utf8")));
     } catch (error62) {
@@ -44639,7 +45227,7 @@ var StateStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
-    const target = path15.join(this.directory, "sandbox-policy.json");
+    const target = path16.join(this.directory, "sandbox-policy.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       this.loadSandboxPolicy();
@@ -44652,7 +45240,7 @@ var StateStore = class {
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path15.join(this.directory, "model-selection.json");
+    const target = path16.join(this.directory, "model-selection.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       this.loadModel();
@@ -44676,7 +45264,7 @@ var StateStore = class {
   }
   load() {
     return readdirSync2(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path15.join(this.directory, name);
+      const file3 = path16.join(this.directory, name);
       if (lstatSync3(file3).isSymbolicLink() || lstatSync3(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
@@ -44685,7 +45273,7 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path15.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path16.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       const messages = data.record.messages ?? [];
@@ -44710,10 +45298,10 @@ var StateStore = class {
       if (data.record.agentPolicy?.sha256 !== data.options.agentPolicy?.sha256)
         throw new BridgeError("INVALID_STATE", "Persisted task tool policies disagree");
       if (data.project) {
-        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && path15.relative(realpathSync4.native(data.project.executionStateDirectory), realpathSync4.native(this.directory)) !== "" || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
+        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && path16.relative(realpathSync4.native(data.project.executionStateDirectory), realpathSync4.native(this.directory)) !== "" || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
           throw new BridgeError("INVALID_STATE", "Persisted execution policy differs from task or private storage");
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path15.isAbsolute(directory) || path15.relative(os5.tmpdir(), path15.dirname(directory)) !== "" || !path15.basename(directory).startsWith(prefix)) {
+          if (!path16.isAbsolute(directory) || path16.relative(os6.tmpdir(), path16.dirname(directory)) !== "" || !path16.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -44734,7 +45322,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path15.join(this.directory, name + ".lock"), token = randomUUID5();
+    const file3 = path16.join(this.directory, name + ".lock"), token = randomUUID5();
     const root = lstatSync3(this.directory, { bigint: true });
     const busy = () => new BridgeError("STATE_BUSY", "Another operation owns this task or copy, or its lock cannot be verified");
     const checkRoot = () => {
@@ -44745,13 +45333,13 @@ var StateStore = class {
     };
     const inspect = (target) => {
       try {
-        const stat3 = lstatSync3(target, { bigint: true });
-        if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.size < 1n || stat3.size > 1024n)
+        const stat4 = lstatSync3(target, { bigint: true });
+        if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.nlink !== 1n || stat4.size < 1n || stat4.size > 1024n)
           throw busy();
         const data = JSON.parse(readFileSync2(target, "utf8"));
         if (!data || typeof data !== "object" || Array.isArray(data) || typeof data.pid !== "number" || !Number.isSafeInteger(data.pid) || data.pid < 1 || data.token !== void 0 && (typeof data.token !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(data.token)))
           throw busy();
-        return { stat: stat3, pid: data.pid, token: data.token };
+        return { stat: stat4, pid: data.pid, token: data.token };
       } catch {
         throw busy();
       }
@@ -44824,29 +45412,29 @@ var GroupStore = class {
   directoryIdentity() {
     let current = this.root;
     for (; ; ) {
-      const stat4 = lstatSync4(current);
-      if (!stat4.isDirectory() || stat4.isSymbolicLink())
+      const stat5 = lstatSync4(current);
+      if (!stat5.isDirectory() || stat5.isSymbolicLink())
         throw new BridgeError("INVALID_STATE", "Unsafe group storage ancestry");
-      const parent = path16.dirname(current);
+      const parent = path17.dirname(current);
       if (parent === current)
         break;
       current = parent;
     }
-    const stat3 = lstatSync4(this.root, { bigint: true });
-    return stat3.dev.toString() + ":" + stat3.ino.toString();
+    const stat4 = lstatSync4(this.root, { bigint: true });
+    return stat4.dev.toString() + ":" + stat4.ino.toString();
   }
   file(groupId) {
     if (this.directoryIdentity() !== this.identity)
       throw new BridgeError("INVALID_STATE", "Group storage identity changed");
     if (!/^[a-f0-9-]{36}$/i.test(groupId))
       throw new BridgeError("INVALID_GROUP", "Invalid group ID");
-    return path16.join(this.root, "group-" + groupId.toLowerCase() + ".json");
+    return path17.join(this.root, "group-" + groupId.toLowerCase() + ".json");
   }
   read(groupId) {
     const file3 = this.file(groupId);
     try {
-      const stat3 = lstatSync4(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.nlink !== 1 || stat3.size > 5 * 1024 * 1024)
+      const stat4 = lstatSync4(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.nlink !== 1 || stat4.size > 5 * 1024 * 1024)
         throw Error("Unsafe group file");
       const record2 = groupRecordSchema.parse(JSON.parse(readFileSync3(file3, "utf8")));
       if (record2.groupId.toLowerCase() !== groupId.toLowerCase() || record2.definitionSha256 !== groupDefinitionSha256(record2.definition))
@@ -45624,11 +46212,11 @@ var EventStore = class {
 };
 
 // dist/src/stream-parser.js
-import { StringDecoder } from "node:string_decoder";
+import { StringDecoder as StringDecoder2 } from "node:string_decoder";
 var LineParser = class {
   onLine;
   maxLineChars;
-  decoder = new StringDecoder("utf8");
+  decoder = new StringDecoder2("utf8");
   remainder = "";
   constructor(onLine, maxLineChars = 2e6) {
     this.onLine = onLine;
@@ -45692,11 +46280,11 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 import { setTimeout as delay3 } from "node:timers/promises";
 
 // dist/src/windows-executor.js
-import { spawn as spawn6 } from "node:child_process";
-import { lstat as lstat10, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath6, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
+import { spawn as spawn5 } from "node:child_process";
+import { lstat as lstat10, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath7, rm as rm5, writeFile as writeFile6 } from "node:fs/promises";
 import { randomUUID as randomUUID9 } from "node:crypto";
-import path19 from "node:path";
-import os7 from "node:os";
+import path20 from "node:path";
+import os8 from "node:os";
 
 // dist/src/windows-helper-source.js
 var windowsHelperSource = `using System;
@@ -47368,15 +47956,15 @@ internal static class ReparseInspector
 import { constants as constants3 } from "node:fs";
 import { createHash as createHash19 } from "node:crypto";
 import { chmod, lstat as lstat9, mkdir as mkdir6, open as open6, readdir as readdir6, unlink as unlink3 } from "node:fs/promises";
-import path18 from "node:path";
+import path19 from "node:path";
 
 // dist/src/portable-node.js
 import { createHash as createHash18, randomUUID as randomUUID8 } from "node:crypto";
-import { spawn as spawn5 } from "node:child_process";
+import { spawn as spawn4 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
-import os6 from "node:os";
-import path17 from "node:path";
+import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readdir as readdir5, realpath as realpath6, rename, rm as rm4, unlink as unlink2, writeFile as writeFile5 } from "node:fs/promises";
+import os7 from "node:os";
+import path18 from "node:path";
 import { setTimeout as delay2 } from "node:timers/promises";
 
 // dist/src/portable-node-descriptor.js
@@ -47440,7 +48028,7 @@ function sameAssetFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size;
 }
 function assetPath(root, descriptor, asset) {
-  return path17.join(root, cacheLeafName(descriptor), asset.fileName);
+  return path18.join(root, cacheLeafName(descriptor), asset.fileName);
 }
 function cacheLeafName(descriptor) {
   return descriptor.buildId + "-" + descriptor.assets.node.sha256;
@@ -47480,23 +48068,23 @@ function absoluteCacheDirectory(value) {
     if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
       fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
     }
-  } else if (!path17.isAbsolute(value)) {
+  } else if (!path18.isAbsolute(value)) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
   }
-  const absolute = path17.resolve(value);
-  if (absolute === path17.parse(absolute).root)
+  const absolute = path18.resolve(value);
+  if (absolute === path18.parse(absolute).root)
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
 async function verifyOwnedTemporaryDirectory(directory, tempRoot, prefix) {
-  const canonical = await realpath5(directory);
-  if (path17.dirname(canonical) !== tempRoot || !path17.basename(canonical).startsWith(prefix) || (await lstat8(directory)).isSymbolicLink()) {
+  const canonical = await realpath6(directory);
+  if (path18.dirname(canonical) !== tempRoot || !path18.basename(canonical).startsWith(prefix) || (await lstat8(directory)).isSymbolicLink()) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary directory was replaced or linked");
   }
   return canonical;
 }
 async function removeOwnedDirectory(directory, tempRoot, prefix, expected) {
-  const canonical = await realpath5(directory).catch((error62) => {
+  const canonical = await realpath6(directory).catch((error62) => {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
@@ -47504,7 +48092,7 @@ async function removeOwnedDirectory(directory, tempRoot, prefix, expected) {
   if (!canonical)
     return;
   const current = await lstat8(directory);
-  if (path17.dirname(canonical) !== tempRoot || !path17.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
+  if (path18.dirname(canonical) !== tempRoot || !path18.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary cleanup path escaped its intended location");
   }
   await rm4(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
@@ -47519,28 +48107,28 @@ async function inspectReparsePoints(paths2) {
   const totalTimeoutMs = 15e3;
   const deadline = started + totalTimeoutMs;
   const timeRemainingMs = () => Math.max(0, Math.round(deadline - performance.now()));
-  const compiler = path17.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  const compiler = path18.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat8(compiler).catch(() => void 0))?.isFile()) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "The Windows .NET Framework compiler is unavailable");
   }
-  const tempRoot = await realpath5(os6.tmpdir());
-  const directory = await realpath5(await mkdtemp2(path17.join(tempRoot, "agy-mcp-inspector-")));
+  const tempRoot = await realpath6(os7.tmpdir());
+  const directory = await realpath6(await mkdtemp2(path18.join(tempRoot, "agy-mcp-inspector-")));
   const directoryInfo = await lstat8(directory);
-  const sourceFile = path17.join(directory, "inspector.cs");
-  const exeFile = path17.join(directory, "inspector.exe");
+  const sourceFile = path18.join(directory, "inspector.cs");
+  const exeFile = path18.join(directory, "inspector.exe");
   let stdout = "", stdoutChars = 0, stderrChars = 0;
   let stopReason;
   let executionError;
   try {
     await verifyOwnedTemporaryDirectory(directory, tempRoot, "agy-mcp-inspector-");
-    await writeFile4(sourceFile, reparseInspectorSource, { flag: "wx", mode: 384 });
+    await writeFile5(sourceFile, reparseInspectorSource, { flag: "wx", mode: 384 });
     const compileTimeout = timeRemainingMs();
     if (compileTimeout <= 0) {
       stopReason = "timeout";
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Compilation timed out");
     }
     const compileResult = await new Promise((resolve2) => {
-      const compileChild2 = spawn5(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
+      const compileChild2 = spawn4(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
         windowsHide: true,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"]
@@ -47592,7 +48180,7 @@ async function inspectReparsePoints(paths2) {
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
     }
     const result = await new Promise((resolve2) => {
-      const child = spawn5(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn4(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
       let spawnError = false;
       const stop = (reason) => {
         if (!stopReason) {
@@ -47712,7 +48300,7 @@ async function verifyAsset(root, descriptor, asset) {
   }
 }
 async function verifyCacheLayout(root, descriptor) {
-  const leaf = path17.join(root, cacheLeafName(descriptor));
+  const leaf = path18.join(root, cacheLeafName(descriptor));
   const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
   const entries = await readdir5(leaf, { withFileTypes: true });
   if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
@@ -47725,7 +48313,7 @@ async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableN
   const pinned = requireDescriptor(descriptor);
   const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root);
-  const leaf = path17.join(root, cacheLeafName(pinned));
+  const leaf = path18.join(root, cacheLeafName(pinned));
   const leafInfo = await lstat8(leaf).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
@@ -47806,7 +48394,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
   }
 }
 async function removeOwnedTemporary(root, temporary) {
-  if (path17.dirname(temporary) !== root || !path17.basename(temporary).startsWith(".portable-node-")) {
+  if (path18.dirname(temporary) !== root || !path18.basename(temporary).startsWith(".portable-node-")) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
   }
   await inspectReparsePoints([temporary]);
@@ -47931,7 +48519,7 @@ async function recoverDeadPreparationLock(file3) {
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
-  const file3 = path17.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  const file3 = path18.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
       const nonce = randomUUID8();
@@ -48010,7 +48598,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path17.join(root, ".portable-node-" + randomUUID8());
+  const temporary = path18.join(root, ".portable-node-" + randomUUID8());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -48022,9 +48610,9 @@ async function preparePortableNodeRuntime(options) {
     await inspectReparsePoints([temporary]);
     const fetchImpl = options.fetch ?? globalThis.fetch;
     for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
-      await downloadAsset(asset, path17.join(temporary, asset.fileName), fetchImpl);
+      await downloadAsset(asset, path18.join(temporary, asset.fileName), fetchImpl);
     }
-    const final = path17.join(root, cacheLeafName(descriptor));
+    const final = path18.join(root, cacheLeafName(descriptor));
     try {
       await rename(temporary, final);
     } catch (error62) {
@@ -48081,11 +48669,11 @@ function fail2(code, message) {
   throw new BridgeError(code, message);
 }
 function canonicalKey2(file3) {
-  return path18.resolve(file3).toLocaleLowerCase("en-US");
+  return path19.resolve(file3).toLocaleLowerCase("en-US");
 }
 function isUnsafeWindowsPath(value) {
   const normalized = value.replaceAll("/", "\\");
-  const basename2 = path18.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const basename2 = path19.win32.basename(normalized).replace(/[ .]+$/u, "");
   const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
   return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename2) || withoutDrive.includes(":");
 }
@@ -48097,7 +48685,7 @@ function validateWindowsCommand(command2) {
   if (normalized.split("\\").some((part) => part === "." || part === "..")) {
     fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
   }
-  if (!path18.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+  if (!path19.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
     fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
   }
 }
@@ -48107,12 +48695,12 @@ function validateLimits(limits) {
   }
 }
 async function assertSafePath(file3) {
-  const absolute = path18.resolve(file3);
-  const parsed = path18.parse(absolute);
-  const parts = path18.relative(parsed.root, absolute).split(path18.sep).filter(Boolean);
+  const absolute = path19.resolve(file3);
+  const parsed = path19.parse(absolute);
+  const parts = path19.relative(parsed.root, absolute).split(path19.sep).filter(Boolean);
   let current = parsed.root;
   for (const part of parts) {
-    current = path18.join(current, part);
+    current = path19.join(current, part);
     const info = await lstat9(current);
     if (info.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
@@ -48159,11 +48747,11 @@ async function readBoundedFile(file3, limit) {
   }
 }
 function commandNames(executable) {
-  const basename2 = path18.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename2 = path19.win32.basename(executable).toLocaleLowerCase("en-US");
   if (basename2 === "npm" || basename2 === "npm.cmd") {
     return { kind: "npm", names: [basename2 === "npm" ? executable + ".cmd" : executable] };
   }
-  const extension = path18.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path19.extname(executable).toLocaleLowerCase("en-US");
   if (extension === ".cmd" || extension === ".bat") {
     fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
   }
@@ -48174,10 +48762,10 @@ function commandNames(executable) {
 }
 async function resolveCommand(executable) {
   const requested = commandNames(executable);
-  const directories = path18.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path18.delimiter).filter((directory) => directory && path18.isAbsolute(directory));
+  const directories = path19.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path19.delimiter).filter((directory) => directory && path19.isAbsolute(directory));
   for (const directory of directories) {
     for (const name of requested.names) {
-      const candidate = path18.isAbsolute(name) ? path18.resolve(name) : path18.resolve(directory, name);
+      const candidate = path19.isAbsolute(name) ? path19.resolve(name) : path19.resolve(directory, name);
       try {
         const info = await lstat9(candidate);
         if (info.isSymbolicLink())
@@ -48196,17 +48784,17 @@ async function resolveCommand(executable) {
   fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
 }
 function stagedPath(runtime, relative2) {
-  const target = path18.resolve(runtime, ...relative2);
-  const prefix = runtime.endsWith(path18.sep) ? runtime : runtime + path18.sep;
+  const target = path19.resolve(runtime, ...relative2);
+  const prefix = runtime.endsWith(path19.sep) ? runtime : runtime + path19.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   return target;
 }
 async function stageDirectory(directory, state) {
-  const target = path18.resolve(directory);
+  const target = path19.resolve(directory);
   if (target === state.runtime)
     return;
-  const prefix = state.runtime.endsWith(path18.sep) ? state.runtime : state.runtime + path18.sep;
+  const prefix = state.runtime.endsWith(path19.sep) ? state.runtime : state.runtime + path19.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   const targetKey = canonicalKey2(target);
@@ -48214,7 +48802,7 @@ async function stageDirectory(directory, state) {
     return;
   if (state.targets.has(targetKey))
     fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
-  const parent = path18.dirname(target);
+  const parent = path19.dirname(target);
   if (parent === target)
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   await stageDirectory(parent, state);
@@ -48225,8 +48813,8 @@ async function stageDirectory(directory, state) {
   state.directories.add(targetKey);
 }
 async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path18.resolve(sourcePath);
-  const target = path18.resolve(targetPath);
+  const source = path19.resolve(sourcePath);
+  const target = path19.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
   const previousTarget = state.sources.get(sourceKey);
@@ -48243,7 +48831,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
     fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
   }
-  await stageDirectory(path18.dirname(target), state);
+  await stageDirectory(path19.dirname(target), state);
   const sourceHandle = await open6(source, "r");
   let targetHandle;
   let created = false;
@@ -48338,30 +48926,30 @@ async function stageNativeExecutable(source, destination, state, expectedSha256,
   }
   if (expectedSha256)
     return executable;
-  const directory = path18.dirname(source);
+  const directory = path19.dirname(source);
   const siblings = await readdir6(directory, { withFileTypes: true });
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     if (!/\.dll$/iu.test(entry.name))
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path18.join(directory, entry.name), path18.join(path18.dirname(destination), entry.name), state, true, allowLinks);
+    await stageFile(path19.join(directory, entry.name), path19.join(path19.dirname(destination), entry.name), state, true, allowLinks);
   }
   return executable;
 }
 var gitHelperBinaries = ["git-upload-pack.exe", "git-receive-pack.exe", "git-upload-archive.exe"];
 function isGitCommandName(executable) {
-  const extension = path18.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path19.extname(executable).toLocaleLowerCase("en-US");
   if (extension && extension !== ".exe")
     return false;
-  const basename2 = path18.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename2 = path19.win32.basename(executable).toLocaleLowerCase("en-US");
   return basename2 === "git" || basename2 === "git.exe";
 }
-async function resolveGitExecutable(requested) {
-  const targetFile = requested && path18.isAbsolute(requested) ? path18.extname(requested) ? requested : requested + ".exe" : void 0;
-  const directories = targetFile ? [""] : (process.env.PATH || "").split(path18.delimiter).map((directory) => directory.trim().replace(/^"(.*)"$/, "$1")).filter((directory) => directory && path18.isAbsolute(directory) && !isUnsafeWindowsPath(directory));
+async function resolveGitExecutable2(requested) {
+  const targetFile = requested && path19.isAbsolute(requested) ? path19.extname(requested) ? requested : requested + ".exe" : void 0;
+  const directories = targetFile ? [""] : (process.env.PATH || "").split(path19.delimiter).map((directory) => directory.trim().replace(/^"(.*)"$/, "$1")).filter((directory) => directory && path19.isAbsolute(directory) && !isUnsafeWindowsPath(directory));
   for (const directory of directories) {
-    const candidate = targetFile ? path18.resolve(targetFile) : path18.resolve(directory, "git.exe");
+    const candidate = targetFile ? path19.resolve(targetFile) : path19.resolve(directory, "git.exe");
     if (isUnsafeWindowsPath(candidate))
       continue;
     try {
@@ -48378,10 +48966,10 @@ async function resolveGitExecutable(requested) {
       }
       throw error62;
     }
-    const candidateDir = path18.dirname(candidate);
-    const candidateDirName = path18.basename(candidateDir).toLocaleLowerCase("en-US");
-    const parentDir = path18.dirname(candidateDir);
-    const parentDirName = path18.basename(parentDir).toLocaleLowerCase("en-US");
+    const candidateDir = path19.dirname(candidate);
+    const candidateDirName = path19.basename(candidateDir).toLocaleLowerCase("en-US");
+    const parentDir = path19.dirname(candidateDir);
+    const parentDirName = path19.basename(parentDir).toLocaleLowerCase("en-US");
     if (candidateDirName === "bin" && (parentDirName === "mingw64" || parentDirName === "ucrt64")) {
       return candidate;
     }
@@ -48391,9 +48979,9 @@ async function resolveGitExecutable(requested) {
       let hasNativeLayout = false;
       for (const layout of ["ucrt64", "mingw64"]) {
         try {
-          const info = await lstat9(path18.join(parentDir, layout));
+          const info = await lstat9(path19.join(parentDir, layout));
           if (info.isSymbolicLink())
-            fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + path18.join(parentDir, layout));
+            fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + path19.join(parentDir, layout));
           if (info.isDirectory())
             hasNativeLayout = true;
         } catch (error62) {
@@ -48406,7 +48994,7 @@ async function resolveGitExecutable(requested) {
         const nativeLayouts = ["ucrt64", "mingw64"];
         let realGit;
         for (const layout of nativeLayouts) {
-          const nativeCandidate = path18.resolve(parentDir, layout, "bin", "git.exe");
+          const nativeCandidate = path19.resolve(parentDir, layout, "bin", "git.exe");
           if (isUnsafeWindowsPath(nativeCandidate))
             continue;
           try {
@@ -48438,9 +49026,9 @@ async function resolveGitExecutable(requested) {
 }
 async function stageGitInstallation(realGit, runtime, state) {
   const stagedGit = await stageNativeExecutable(realGit, stagedPath(runtime, ["git", "bin", "git.exe"]), state, void 0, true);
-  const realBinDir = path18.dirname(realGit);
+  const realBinDir = path19.dirname(realGit);
   for (const helper of gitHelperBinaries) {
-    const helperSource = path18.join(realBinDir, helper);
+    const helperSource = path19.join(realBinDir, helper);
     try {
       const info = await lstat9(helperSource);
       if (info.isSymbolicLink()) {
@@ -48459,11 +49047,11 @@ async function stageGitInstallation(realGit, runtime, state) {
   return stagedGit;
 }
 async function stageGit(runtime, state) {
-  const realGit = await resolveGitExecutable();
+  const realGit = await resolveGitExecutable2();
   if (!realGit)
     return void 0;
   const stagedGit = await stageGitInstallation(realGit, runtime, state);
-  return path18.dirname(stagedGit);
+  return path19.dirname(stagedGit);
 }
 function npmPathIsOmitted(parts) {
   const lower = parts.map((part) => part.toLocaleLowerCase("en-US"));
@@ -48486,8 +49074,8 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
     const childRelative = [...relative2, entry.name];
     if (npmPathIsOmitted(childRelative))
       continue;
-    const childSource = path18.join(source, entry.name);
-    const childDestination = path18.join(destination, entry.name);
+    const childSource = path19.join(source, entry.name);
+    const childDestination = path19.join(destination, entry.name);
     if (entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
     if (entry.isDirectory()) {
@@ -48505,7 +49093,7 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
   }
 }
 async function stageSystemCmd(systemRoot, runtime, state) {
-  const source = path18.join(systemRoot, "System32", "cmd.exe");
+  const source = path19.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
 async function stageNpm(launcher, runtime, state, args, portableNode, includeGit = false) {
@@ -48513,11 +49101,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode, includeGit
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
   }
-  const nodeDirectory = path18.dirname(launcher);
-  const nodeSource = path18.join(nodeDirectory, "node.exe");
-  const npmSource = path18.join(nodeDirectory, "node_modules", "npm");
-  const manifestPath = path18.join(npmSource, "package.json");
-  const cliSource = path18.join(npmSource, "bin", "npm-cli.js");
+  const nodeDirectory = path19.dirname(launcher);
+  const nodeSource = path19.join(nodeDirectory, "node.exe");
+  const npmSource = path19.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path19.join(npmSource, "package.json");
+  const cliSource = path19.join(npmSource, "bin", "npm-cli.js");
   let manifest;
   try {
     manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
@@ -48537,7 +49125,7 @@ async function stageNpm(launcher, runtime, state, args, portableNode, includeGit
   await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
   const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  if (!path18.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+  if (!path19.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
@@ -48545,7 +49133,7 @@ async function stageNpm(launcher, runtime, state, args, portableNode, includeGit
   if (includeGit) {
     gitExecPath = await stageGit(runtime, state);
   }
-  const pathEntries = [path18.dirname(node2)];
+  const pathEntries = [path19.dirname(node2)];
   if (gitExecPath && !pathEntries.includes(gitExecPath)) {
     pathEntries.push(gitExecPath);
   }
@@ -48574,7 +49162,7 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
   validateWindowsCommand(command2);
   validateLimits(limits);
-  const runtime = path18.resolve(runtimeDirectory);
+  const runtime = path19.resolve(runtimeDirectory);
   await assertSafePath(runtime);
   const runtimeInfo = await lstat9(runtime);
   if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir6(runtime)).length !== 0) {
@@ -48582,12 +49170,12 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
   }
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
   if (isGitCommandName(command2.executable)) {
-    const gitSource = await resolveGitExecutable(command2.executable);
+    const gitSource = await resolveGitExecutable2(command2.executable);
     if (!gitSource) {
       fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + command2.executable);
     }
     const stagedGit = await stageGitInstallation(gitSource, runtime, state);
-    const gitExecPath2 = path18.dirname(stagedGit);
+    const gitExecPath2 = path19.dirname(stagedGit);
     return {
       executable: stagedGit,
       args: [...command2.args],
@@ -48597,16 +49185,16 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
   }
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
-    const adjacentNode = path18.join(path18.dirname(resolved.file), "node.exe");
+    const adjacentNode = path19.join(path19.dirname(resolved.file), "node.exe");
     return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection), selection.includeGit ?? false);
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
-  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path18.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path19.basename(resolved.file)]), state, portableNode?.identity.sha256);
   let gitExecPath;
   if (selection.includeGit) {
     gitExecPath = await stageGit(runtime, state);
   }
-  const pathEntries = [path18.dirname(executable)];
+  const pathEntries = [path19.dirname(executable)];
   if (gitExecPath && !pathEntries.includes(gitExecPath)) {
     pathEntries.push(gitExecPath);
   }
@@ -48643,10 +49231,10 @@ var libraryRuntime = (() => {
   return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
 })();
 function verifyPathMappings(result, roots) {
-  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path19.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path20.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
   const aliases = /* @__PURE__ */ new Set();
   for (const mapping of result.pathMappings) {
-    if (expected.get(mapping.kind) !== path19.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+    if (expected.get(mapping.kind) !== path20.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
     if (aliases.has(mapping.aliasRoot))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
@@ -48657,22 +49245,22 @@ function verifyPathMappings(result, roots) {
     throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
 }
 function contains2(root, target) {
-  const relative2 = path19.relative(root, target);
-  return relative2 === "" || !relative2.startsWith(".." + path19.sep) && relative2 !== ".." && !path19.isAbsolute(relative2);
+  const relative2 = path20.relative(root, target);
+  return relative2 === "" || !relative2.startsWith(".." + path20.sep) && relative2 !== ".." && !path20.isAbsolute(relative2);
 }
 function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
-  const canonical = await realpath6(directory);
-  if (path19.dirname(canonical) !== temp || !path19.basename(canonical).startsWith(prefix) || (await lstat10(directory)).isSymbolicLink()) {
+  const canonical = await realpath7(directory);
+  if (path20.dirname(canonical) !== temp || !path20.basename(canonical).startsWith(prefix) || (await lstat10(directory)).isSymbolicLink()) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
 }
 async function nativeProcess(executable, args, options, input2) {
   options.signal?.throwIfAborted();
-  const child = spawn6(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn5(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   options.onProcess?.(child);
   let stdout = "", stderr = "", oversized = false, stopping2 = false;
   const controllerOutputLimit = Math.max(1e5, Math.min(4e5, (options.sandbox?.maxOutputChars ?? 4e3) * 6 + 12e3));
@@ -48721,13 +49309,13 @@ async function nativeProcess(executable, args, options, input2) {
   }
 }
 async function compileController(temp, options) {
-  const compiler = path19.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  const compiler = path20.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat10(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-controller-")));
-  const source = path19.join(directory, "runner.cs"), helper = path19.join(directory, "runner.exe");
+  const directory = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-controller-")));
+  const source = path20.join(directory, "runner.cs"), helper = path20.join(directory, "runner.exe");
   try {
-    await writeFile5(source, windowsHelperSource, { flag: "wx" });
+    await writeFile6(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
     if (built.code !== 0)
       throw new BridgeError("WINDOWS_EXECUTOR_BUILD_FAILED", (built.stdout + built.stderr).slice(-4e3));
@@ -48739,8 +49327,8 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path19.join(directory, "request-" + randomUUID9() + ".json");
-  await writeFile5(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
+  const file3 = path20.join(directory, "request-" + randomUUID9() + ".json");
+  await writeFile6(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
 async function removeOwned(directories, temp) {
@@ -48759,38 +49347,38 @@ async function removeOwned(directories, temp) {
 async function grantPaths(selection, protectedPaths2, maxFiles) {
   const protectedCanonical = await Promise.all(protectedPaths2.map(async (value) => {
     try {
-      return await realpath6(value);
+      return await realpath7(value);
     } catch {
-      return path19.resolve(value);
+      return path20.resolve(value);
     }
   }));
   const paths2 = /* @__PURE__ */ new Map();
   const inspect = async (value, rights) => {
-    if (!path19.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+    if (!path20.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath6(value), root = path19.parse(canonical).root;
+    const canonical = await realpath7(value), root = path20.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
-    const relative2 = path19.relative(root, canonical).split(path19.sep).filter(Boolean);
+    const relative2 = path20.relative(root, canonical).split(path20.sep).filter(Boolean);
     let current = root, entries = 0;
     const walk = async (candidate) => {
-      const stat3 = await lstat10(candidate);
-      if (stat3.isSymbolicLink() || !stat3.isDirectory() && !stat3.isFile() || stat3.isFile() && stat3.nlink > 1) {
+      const stat4 = await lstat10(candidate);
+      if (stat4.isSymbolicLink() || !stat4.isDirectory() && !stat4.isFile() || stat4.isFile() && stat4.nlink > 1) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets cannot contain links, hard links, or non-regular files");
       }
-      if (stat3.isDirectory())
+      if (stat4.isDirectory())
         for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
           if (++entries > maxFiles)
             throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
-          await walk(path19.join(candidate, name));
+          await walk(path20.join(candidate, name));
         }
     };
     for (const part of relative2) {
-      current = path19.join(current, part);
-      const stat3 = await lstat10(current);
-      if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
+      current = path20.join(current, part);
+      const stat4 = await lstat10(current);
+      if (stat4.isSymbolicLink() || !stat4.isDirectory() && current !== canonical)
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
     }
     await walk(canonical);
@@ -48807,7 +49395,7 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
 async function runRecoveryWithController(stateDirectory, options) {
   if (process.platform !== "win32")
     return;
-  const temp = await realpath6(os7.tmpdir()), controller = await compileController(temp, options);
+  const temp = await realpath7(os8.tmpdir()), controller = await compileController(temp, options);
   try {
     const request = await writeRequest(controller.directory, { action: "recover", stateDirectory });
     const observed = await nativeProcess(controller.helper, [request], options);
@@ -48819,7 +49407,7 @@ async function runRecoveryWithController(stateDirectory, options) {
   }
 }
 async function recoverWindowsExecutions(stateDirectory) {
-  const effective = path19.resolve(stateDirectory);
+  const effective = path20.resolve(stateDirectory);
   await mkdir7(effective, { recursive: true, mode: 448 });
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
@@ -48829,7 +49417,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
   validateWindowsCommand(command2);
   const selection = options.sandbox ?? { readPaths: [], writePaths: [], network: false, childProcesses: true, maxOutputChars: 4e3 };
   const mode = options.mode ?? "write", maxFiles = options.maxFiles ?? 1e4;
-  const exeBasename = path19.win32.basename(command2.executable).toLocaleLowerCase("en-US");
+  const exeBasename = path20.win32.basename(command2.executable).toLocaleLowerCase("en-US");
   const isNodeOrNpm = exeBasename === "node" || exeBasename === "node.exe" || exeBasename === "npm" || exeBasename === "npm.cmd";
   const isDirectGit = exeBasename === "git" || exeBasename === "git.exe";
   const autoIncludeGit = isNodeOrNpm || isDirectGit;
@@ -48839,13 +49427,13 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory,
     includeGit
   };
-  const stateDirectory = path19.resolve(options.stateDirectory ?? path19.join(os7.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path20.resolve(options.stateDirectory ?? path20.join(os8.homedir(), ".antigravity-mcp-bridge"));
   await mkdir7(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
-  const temp = await realpath6(os7.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
+  const temp = await realpath7(os8.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-scratch-")));
+  const runtime = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-runtime-")));
+  const scratch = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-scratch-")));
   try {
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
@@ -48853,7 +49441,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     const environment = {
       SystemRoot: systemRoot,
       WINDIR: systemRoot,
-      PATH: [...staged.pathEntries, path19.join(systemRoot, "System32")].join(path19.delimiter),
+      PATH: [...staged.pathEntries, path20.join(systemRoot, "System32")].join(path20.delimiter),
       PATHEXT: ".COM;.EXE;.BAT;.CMD",
       TEMP: scratch,
       TMP: scratch,
@@ -48861,12 +49449,12 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       HOME: scratch,
       APPDATA: scratch,
       LOCALAPPDATA: scratch,
-      COMSPEC: staged.comspec ?? path19.join(systemRoot, "System32", "cmd.exe")
+      COMSPEC: staged.comspec ?? path20.join(systemRoot, "System32", "cmd.exe")
     };
     if (staged.gitExecPath) {
       environment.GIT_EXEC_PATH = staged.gitExecPath;
       environment.GIT_CONFIG_NOSYSTEM = "1";
-      environment.GIT_CONFIG_GLOBAL = path19.join(scratch, ".gitconfig");
+      environment.GIT_CONFIG_GLOBAL = path20.join(scratch, ".gitconfig");
       environment.GIT_TERMINAL_PROMPT = "0";
       environment.GIT_DEFAULT_REF_FORMAT = "reftable";
     }

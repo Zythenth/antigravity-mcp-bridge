@@ -14,9 +14,13 @@ import {
   discardProjectCopy,
   forkProjectCopy,
   git,
+  integrateProjectCopy,
   listProjectFiles,
+  previewProjectCopy,
+  readProjectPatch,
   validRelative,
   writeAll,
+  getFenceMarkerPath,
 } from '../src/isolation.js';
 import { BridgeError } from '../src/types.js';
 import {
@@ -972,4 +976,235 @@ test('performance & limits: preflight checks candidate count before scan and fai
     }
   );
   assert.equal(ioCalled, false, 'Expected preflight to fail before performing any I/O');
+});
+
+test('fork: forkProjectCopy preserves baseline tree and reproduces worktree changes after preview', async () => {
+  const dir = await createRepo();
+  try {
+    await writeFile(path.join(dir, 'file-to-mod.txt'), 'original content\n');
+    await writeFile(path.join(dir, 'file-to-del.txt'), 'content to delete\n');
+    await writeFile(path.join(dir, 'file-unchanged.txt'), 'stays unchanged\n');
+
+    const copy = await createProjectCopy(dir);
+    try {
+      // Modify, add, delete, and add secret
+      await writeFile(path.join(copy.copyDirectory, 'file-to-mod.txt'), 'modified content in copy\n');
+      await rm(path.join(copy.copyDirectory, 'file-to-del.txt'));
+      await writeFile(path.join(copy.copyDirectory, 'file-new.txt'), 'brand new file\n');
+
+      // Stage and preview source copy
+      const copyPreview = await previewProjectCopy(copy);
+      assert.ok(copyPreview.files.some(f => f.path === 'file-to-mod.txt' && f.status === 'M'));
+      assert.ok(copyPreview.files.some(f => f.path === 'file-to-del.txt' && f.status === 'D'));
+      assert.ok(copyPreview.files.some(f => f.path === 'file-new.txt' && f.status === 'A'));
+      assert.ok(!copyPreview.files.some(f => f.path === '.env'));
+
+      // Record source copy commit, tree and index before fork
+      const sourceHeadBefore = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD'])).toString('utf8').trim();
+      const sourceTreeBefore = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD^{tree}'])).toString('utf8').trim();
+      const sourceIndexBefore = await readFile(path.join(copy.gitDirectory, 'index'));
+      await writeFile(path.join(copy.copyDirectory, '.env'), 'SYNTHETIC_TEST_VALUE=fixture\n');
+
+      // Fork the project copy
+      const fork = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+      try {
+        // Verify source copy HEAD, tree and index are unchanged
+        const sourceHeadAfter = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD'])).toString('utf8').trim();
+        const sourceTreeAfter = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD^{tree}'])).toString('utf8').trim();
+        const sourceIndexAfter = await readFile(path.join(copy.gitDirectory, 'index'));
+        assert.equal(sourceHeadAfter, sourceHeadBefore, 'Source HEAD must be unchanged');
+        assert.equal(sourceTreeAfter, sourceTreeBefore, 'Source tree must be unchanged');
+        assert.deepEqual(sourceIndexAfter, sourceIndexBefore, 'Source index must be unchanged');
+
+        // Verify fork content
+        assert.equal(await readFile(path.join(fork.copyDirectory, 'file-to-mod.txt'), 'utf8'), 'modified content in copy\n');
+        assert.equal(await readFile(path.join(fork.copyDirectory, 'file-new.txt'), 'utf8'), 'brand new file\n');
+        assert.equal(existsSync(path.join(fork.copyDirectory, 'file-to-del.txt')), false);
+        assert.equal(existsSync(path.join(fork.copyDirectory, '.env')), false);
+        assert.ok(fork.blockedFiles?.some(b => b.path === '.env' && b.reason === 'SECRET_FILE'));
+
+        // Verify fork preview reproduces changes
+        const forkPreview = await previewProjectCopy(fork);
+        assert.deepEqual(forkPreview.files, copyPreview.files);
+        assert.equal(forkPreview.summary.filesChanged, 3);
+        assert.equal(forkPreview.summary.added, 1);
+        assert.equal(forkPreview.summary.modified, 1);
+        assert.equal(forkPreview.summary.deleted, 1);
+      } finally {
+        await discardProjectCopy(fork);
+      }
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('patch integrity: non-UTF8 Latin1 text change fails closed with UNSUPPORTED_PATCH_ENCODING; binary attribute integrates exact bytes', async () => {
+  const dir = await createRepo();
+  try {
+    // Latin1 text with \xe9
+    const originalLatin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x74, 0x65, 0x73, 0x74, 0x0a]);
+    await writeFile(path.join(dir, 'latin1.dat'), originalLatin1);
+    execFileSync('git', ['add', 'latin1.dat'], { cwd: dir });
+    await git(dir, ['-c', 'user.name=Bridge Test', '-c', 'user.email=test@invalid.local', 'commit', '-m', 'adiciona arquivo Latin1']);
+
+    const copy = await createProjectCopy(dir);
+    try {
+      // Modify latin1 file: replace \xe9 with \xe8
+      const modifiedLatin1 = Buffer.from([0x63, 0x61, 0x66, 0xe8, 0x20, 0x74, 0x65, 0x73, 0x74, 0x0a]);
+      await writeFile(path.join(copy.copyDirectory, 'latin1.dat'), modifiedLatin1);
+
+      // 1. Without binary attribute, git diff produces raw Latin1 text diff, which cannot round-trip UTF-8.
+      // previewProjectCopy and readProjectPatch must fail closed with UNSUPPORTED_PATCH_ENCODING.
+      await assert.rejects(
+        previewProjectCopy(copy),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'UNSUPPORTED_PATCH_ENCODING');
+          assert.ok(err.message.includes('.gitattributes') && /binary/i.test(err.message));
+          return true;
+        }
+      );
+      await assert.rejects(
+        readProjectPatch(copy, 'latin1.dat'),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'UNSUPPORTED_PATCH_ENCODING');
+          return true;
+        }
+      );
+
+      // Verify source file in dir is completely untouched
+      const sourceContent = await readFile(path.join(dir, 'latin1.dat'));
+      assert.deepEqual(sourceContent, originalLatin1);
+    } finally {
+      await discardProjectCopy(copy);
+    }
+
+    // 2. Now declare *.dat as binary in .gitattributes
+    await writeFile(path.join(dir, '.gitattributes'), '*.dat binary\n');
+    execFileSync('git', ['add', '.gitattributes'], { cwd: dir });
+    await git(dir, ['-c', 'user.name=Bridge Test', '-c', 'user.email=test@invalid.local', 'commit', '-m', 'declara dat como binário']);
+
+    const copy2 = await createProjectCopy(dir);
+    try {
+      const modifiedLatin1 = Buffer.from([0x63, 0x61, 0x66, 0xe8, 0x20, 0x74, 0x65, 0x73, 0x74, 0x0a]);
+      await writeFile(path.join(copy2.copyDirectory, 'latin1.dat'), modifiedLatin1);
+
+      // With binary attribute, git produces a standard ASCII binary patch which round-trips UTF-8
+      const preview = await previewProjectCopy(copy2);
+      assert.ok(preview.patch.length > 0);
+      assert.ok(preview.summary.binaryFiles >= 1 || preview.fileSummaries.some(f => f.path === 'latin1.dat' && f.binary));
+
+      const singlePatch = await readProjectPatch(copy2, 'latin1.dat');
+      assert.ok(singlePatch.includes('GIT binary patch'));
+
+      // Integrate the patch
+      const integrated = await integrateProjectCopy(copy2, preview.sha256);
+      assert.ok(integrated);
+
+      // Verify the integrated file in source repo matches modified bytes exactly
+      const integratedContent = await readFile(path.join(dir, 'latin1.dat'));
+      assert.deepEqual(integratedContent, modifiedLatin1);
+    } finally {
+      await discardProjectCopy(copy2);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+
+test('integration: source Git filters and whitespace policy cannot execute code or change approved bytes', async () => {
+  const dir = await createRepo();
+  const auxiliary = await mkdtemp(path.join(os.tmpdir(), 'agy-apply-policy-'));
+  let copy;
+  try {
+    const marker = path.join(auxiliary, 'synthetic-filter-ran');
+    const script = path.join(auxiliary, 'filter.cjs');
+    await writeFile(script, "const fs=require('node:fs');fs.writeFileSync(" + JSON.stringify(marker) + ", 'synthetic filter');process.stdin.pipe(process.stdout);");
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    const command = quote(process.execPath.replaceAll('\\', '/')) + ' ' + quote(script.replaceAll('\\', '/'));
+    await writeFile(path.join(dir, '.gitattributes'), '*.txt filter=synthetic_probe\n');
+    await git(dir, ['config', 'filter.synthetic_probe.clean', command]);
+    await git(dir, ['config', 'filter.synthetic_probe.smudge', command]);
+    await git(dir, ['config', 'apply.whitespace', 'fix']);
+    const configBefore = await readFile(path.join(dir, '.git', 'config'));
+    copy = await createProjectCopy(dir);
+    const approved = Buffer.from('legitimate application source code\nsynthetic addition \n');
+    await writeFile(path.join(copy.copyDirectory, 'source.txt'), approved);
+    const preview = await previewProjectCopy(copy);
+    await integrateProjectCopy(copy, preview.sha256);
+    assert.deepEqual(await readFile(path.join(dir, 'source.txt')), approved);
+    assert.equal(existsSync(marker), false, 'Project Git filters must not execute during integration');
+    assert.deepEqual(await readFile(path.join(dir, '.git', 'config')), configBefore);
+  } finally {
+    if (copy) await discardProjectCopy(copy);
+    await rm(dir, { recursive: true, force: true });
+    await rm(auxiliary, { recursive: true, force: true });
+  }
+});
+
+test('fork: newly ignored baseline paths fail closed before exposing deletion content', async () => {
+  for (const policy of ['copy', 'source']) {
+    const dir = await createRepo();
+    let copy;
+    try {
+      await writeFile(path.join(dir, 'protected.txt'), 'synthetic restricted content');
+      copy = await createProjectCopy(dir);
+      if (policy === 'copy') await writeFile(path.join(copy.copyDirectory, '.gitignore'), 'protected.txt\n');
+      else {
+        await mkdir(path.join(dir, '.git', 'info'), { recursive: true });
+        await writeFile(path.join(dir, '.git', 'info', 'exclude'), 'protected.txt\n');
+      }
+      await assert.rejects(forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+      assert.equal(await readFile(path.join(dir, 'protected.txt'), 'utf8'), 'synthetic restricted content');
+    } finally {
+      if (copy) await discardProjectCopy(copy);
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('isolation: managed copy check-ignore and operations exclude both roots and refuse fenced copies', async () => {
+  const dir = await createRepo();
+  let copy;
+  try {
+    await writeFile(path.join(dir, 'app.txt'), 'app content\n');
+    copy = await createProjectCopy(dir);
+
+    // Verify forkProjectCopy succeeds and exercises managed check-ignore on both copy and source
+    const isWindows = process.platform === 'win32';
+    const fakeExeName = isWindows ? 'git.exe' : 'git';
+    await writeFile(path.join(copy.copyDirectory, fakeExeName), 'malicious binary');
+
+    const forked = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+    try {
+      assert.ok(forked.includedFiles.includes('app.txt'));
+    } finally {
+      await discardProjectCopy(forked);
+    }
+
+    // Now verify cleanup unverified fencing on copy
+    const markerPath = getFenceMarkerPath(copy);
+    await writeFile(markerPath, JSON.stringify({ code: 'GIT_CLEANUP_UNVERIFIED', version: 1 }) + '\n', 'utf8');
+
+    // All managed copy operations must fail closed with GIT_CLEANUP_UNVERIFIED
+    await assert.rejects(forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS), { code: 'GIT_CLEANUP_UNVERIFIED' });
+    await assert.rejects(previewProjectCopy(copy), { code: 'GIT_CLEANUP_UNVERIFIED' });
+    await assert.rejects(discardProjectCopy(copy), { code: 'GIT_CLEANUP_UNVERIFIED' });
+
+    // Fixture cleans up its own marker before deletion
+    await rm(markerPath, { force: true });
+    await discardProjectCopy(copy);
+    copy = undefined;
+  } finally {
+    if (copy) {
+      await rm(getFenceMarkerPath(copy), { force: true });
+      await discardProjectCopy(copy).catch(() => {});
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
 });

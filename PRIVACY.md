@@ -12,6 +12,8 @@ Antes de copiar arquivos do projeto, o bridge executa um preflight preventivo de
 
 O subprocesso do CLI recebe um ambiente filtrado via `cliEnvironment`, omitindo por padrão credenciais de serviços de terceiros (AWS, GitHub, OpenAI, Stripe) e variáveis de injeção ou agentes (`NODE_OPTIONS`, `NODE_PATH`, `LD_*`, `DYLD_*`, `SSH_AUTH_SOCK`, `GPG_AGENT_INFO`). O bridge não registra valores de variáveis de ambiente nem passa tokens como argumentos. A autenticação e a comunicação com o Google pertencem ao CLI. O bridge não adiciona telemetria, analytics ou transmissão a um serviço próprio.
 
+As operações locais do Git usam uma lista própria de variáveis, sem credenciais, proxies ou variáveis de injeção. O `PATH` é reduzido a diretórios absolutos fora do projeto e da cópia. Hooks, fsmonitor e configurações globais de execução ficam desativados; as regras de ignore aplicáveis são consultadas separadamente. O ambiente e a autenticação do `agy` mantêm sua política específica.
+
 ## Dados locais e retenção
 
 - A cópia e o baseline Git ficam no diretório temporário do sistema. São removidos pelo descarte, pela expulsão do último registro retido ou após 7 dias da última tarefa finalizada, conforme `COPY_RETENTION_HOURS`. A limpeza ocorre na inicialização e a cada minuto enquanto o servidor está ativo. Cópias em uso são preservadas. O sistema operacional também pode apagar arquivos temporários. Limites de arquivos e bytes (`MAX_COPY_FILES` e `MAX_COPY_BYTES`) são respeitados durante o scan e a cópia; mudanças de identidade, tamanho ou hash falham com `SOURCE_CHANGED` ou `CONTEXT_CHANGED`, e a criação da cópia não omite silenciosamente arquivos de baseline que venham a virar credencial.

@@ -12,13 +12,17 @@ O bridge não acessa endpoints privados, cookies ou os armazenamentos de autenti
 ## Requisitos
 
 - Node.js 24 ou mais recente e npm. Esse requisito inicia o servidor; no Windows LPAC, ele não garante a compatibilidade de todos os subprocessos Node.
-- Git instalado e disponível no `PATH`.
+- Git 2.32 ou mais recente, disponível em uma entrada absoluta do `PATH`. Versões anteriores falham na admissão porque não oferecem o isolamento de configuração global exigido pelo bridge.
 - [Antigravity CLI oficial](https://www.antigravity.google/docs/cli/install/) instalado e disponível no `PATH` (fonte primária de instalação). Você também pode definir `AGY_PATH` com o caminho absoluto do executável.
 - Autenticação oficial concluída no `agy`. O CLI gerencia credenciais por meio dos mecanismos nativos do sistema operacional: Windows Credential Manager, macOS Keychain ou Linux Secret Service (via D-Bus). O bridge preserva diretórios de perfil e configuração, sessão de segurança, D-Bus, proxy, certificados, `GEMINI_API_KEY` e `GOOGLE_GEMINI_BASE_URL`. Variáveis de Google Application Default Credentials (ADC) e de ambientes corporativos (`GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, `GOOGLE_CLOUD_UNIVERSE_DOMAIN`) são preservadas no ambiente por compatibilidade; o fluxo Enterprise não foi validado ponta a ponta. Consulte a [documentação oficial do modo headless](https://www.antigravity.google/docs/cli/headless/).
 
 A descoberta (`discover`) do CLI executa `--version` e `--help`, exigindo exit code 0 em ambas as chamadas, saída não vazia e anúncio obrigatório das capacidades `stream-json` e `--sandbox`. Se o executável não for encontrado, a permissão for negada, a sondagem falhar ou o CLI não for compatível, o bridge emite os diagnósticos `AGY_NOT_FOUND`, `AGY_PERMISSION_DENIED`, `AGY_PROBE_FAILED` ou `AGY_INCOMPATIBLE`.
 
 O bridge foi validado com `agy` 1.3.2 e `@modelcontextprotocol/sdk` 1.30.1. As tarefas delegadas exigem que o CLI anuncie `--sandbox` e `stream-json`; versões futuras podem exigir adaptação. No Windows, `antigravity_test` usa por padrão o executor local do bridge em AppContainer/LPAC; nos demais sistemas, usa o sandbox oficial do `agy`.
+
+O Git local usa um ambiente próprio, com `PATH` restrito a diretórios fora do projeto e da cópia. Hooks, fsmonitor e configurações globais de execução ficam desativados; as regras de ignore são consultadas separadamente. Isso preserva a política de autenticação do `agy`. Quando o encerramento de um processo Git não pode ser comprovado após solicitação de término e janela delimitada de tolerância (pipes retidos), a operação falha com `GIT_CLEANUP_UNVERIFIED`, destruindo stdio e bloqueando a cópia com marcador no baseline privado para impedir reutilização, prévia, integração ou exclusão insegura de recursos potencialmente retidos, sem alegar falsamente limpeza comprovada.
+
+Alterações textuais com bytes não-UTF-8 falham com `UNSUPPORTED_PATCH_ENCODING`, evitando corrupção na aplicação. Declare esses arquivos como `binary` no `.gitattributes` para obter patches binários do Git que preservem os bytes originais.
 
 ## Versões disponíveis
 

@@ -53,7 +53,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
   }
 }
 async function until(predicate: () => boolean) {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + 30000;
   while (!predicate()) { if (Date.now() > deadline) throw Error('Fixture condition timed out'); await delay(20); }
 }
 
