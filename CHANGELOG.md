@@ -2,6 +2,9 @@
 
 ## Não publicado
 
+- Limpeza Windows reconhece temporários próprios já ausentes e verifica a identidade dos diretórios existentes antes da remoção, preservando substituições detectadas.
+- Nova tentativa explícita de teste após falha da infraestrutura local reconcilia leases e aguarda a recuperação inicial, sem alterar o registro anterior nem liberar sessões do CLI expiradas ou canceladas.
+
 - Recuperação Windows separa a admissão de concessões da revogação: reconcilia hardlinks e reparse points finais criados após a concessão sem seguir seus destinos, preserva outras identidades e mantém a limpeza limitada. O SID do perfil é persistido antes das etapas falíveis de preparação; leases sem SID permanecem válidas em `creating` quando a limpeza falha.
 - Resultados nativos Windows validam nonce, encerramento, aliases, raízes e limpeza antes de aceitar a execução. Falhas de preparação ou limpeza retornam `BridgeError` com diagnóstico redigido e limitado; erros secundários são acrescentados ao diagnóstico original.
 

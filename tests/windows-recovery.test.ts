@@ -6,6 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { executeWindowsTest, recoverWindowsExecutions } from '../src/windows-executor.js';
+import { TaskManager } from '../src/task-manager.js';
+import { loadConfig } from '../src/config.js';
+import { CliAdapter } from '../src/cli-adapter.js';
+import { StateStore } from '../src/state-store.js';
+import { discardProjectCopy } from '../src/isolation.js';
 
 const settings = { timeoutSeconds: 20, maxRuntimeBytes: 256 * 1024 * 1024 };
 type Grant = { path: string; rights: 'read' | 'modify'; directory: boolean; volume: number; fileIndexHigh: number; fileIndexLow: number };
@@ -482,6 +487,147 @@ test('Windows cleanup revokes the owned SID from post-grant final reparse point 
       if (worker && worker.exitCode === null) worker.kill('SIGTERM');
       await removeOwned(destination, 'agy-mcp-destination-');
       await removeOwned(controllerDirectory, 'agy-mcp-controller-');
+    }
+  });
+});
+
+test('Windows test admission allows retry of terminal local-executor failure after native recovery while preserving prior failure', { skip: process.platform !== 'win32' }, async () => {
+  const temp = await realpath(os.tmpdir());
+  const repoDir = await realpath(await mkdtemp(path.join(temp, 'agy-retry-repo-')));
+  const stateDir = await realpath(await mkdtemp(path.join(temp, 'agy-retry-state-')));
+  execFileSync('git', ['init', '--quiet', repoDir]);
+  await writeFile(path.join(repoDir, 'source.txt'), 'initial source');
+  const startupLease = path.join(stateDir, 'windows-lpac-leases', 'initial-invalid.json');
+  await mkdir(path.dirname(startupLease), { recursive: true });
+  await writeFile(startupLease, 'invalid-initial-lease');
+  const mockPath = path.resolve('tests/mock-agy.mjs');
+  const config = loadConfig({
+    AGY_PATH: process.execPath,
+    BRIDGE_TEST_EXECUTOR: 'windows-lpac',
+    BRIDGE_STATE_DIRECTORY: stateDir,
+    DEFAULT_TIMEOUT_SECONDS: '180',
+    BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME,
+    BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY,
+  });
+  const adapter = new CliAdapter(config, [mockPath]);
+  const tasks = new TaskManager(adapter, config);
+  const until = async (taskId: string, timeout = 180000) => {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const task = tasks.status(taskId);
+      if (['completed', 'failed', 'cancelled', 'timeout'].includes(task.status)) return task;
+      await pause(25);
+    }
+    throw new Error('Task did not finish: ' + JSON.stringify(tasks.status(taskId)));
+  };
+  try {
+    await adapter.discover();
+    const initTask = await tasks.run({ prompt: 'write:test', workingDirectory: repoDir });
+    const initDone = await until(initTask.taskId);
+    assert.equal(initDone.status, 'completed');
+    const preview = await tasks.preview(initTask.taskId);
+
+    const missingExe = path.join(temp, 'non-existent-executable-' + randomUUID() + '.exe');
+    const failedTest = await tasks.startTests(initTask.taskId, preview.sha256, { executable: missingExe, args: [] }, 0, 120);
+    const failedDone = await until(failedTest.taskId);
+    assert.equal(failedDone.status, 'failed');
+    assert.equal(failedDone.usageProvenance, 'local-executor');
+    assert.equal(failedDone.error?.code, 'WINDOWS_EXECUTION_RECOVERY_FAILED');
+    await rm(startupLease, { force: true });
+
+    const validCommand = { executable: process.execPath, args: ['-e', "process.stdout.write('retry-success')"] };
+    const retryAttempt = await tasks.startTests(failedDone.taskId, preview.sha256, validCommand, 0, 120);
+    assert.notEqual(retryAttempt.taskId, failedDone.taskId, 'retry must create a new task attempt');
+    assert.equal(retryAttempt.parentTaskId, failedDone.taskId, 'new attempt must record parentTaskId');
+
+    const priorTask = tasks.status(failedDone.taskId);
+    assert.equal(priorTask.status, 'failed', 'prior failed record must remain failed');
+    assert.equal(priorTask.usageProvenance, 'local-executor');
+
+    const retryDone = await until(retryAttempt.taskId);
+    assert.equal(retryDone.status, 'completed', JSON.stringify(retryDone));
+    assert.equal(retryDone.tests?.at(-1)?.output, 'retry-success');
+
+    const secondFailure = await tasks.startTests(retryDone.taskId, preview.sha256, { executable: missingExe, args: [] }, 0, 120);
+    const secondFailedDone = await until(secondFailure.taskId);
+    assert.equal(secondFailedDone.status, 'failed');
+    assert.equal(secondFailedDone.usageProvenance, 'local-executor');
+
+    const leaseDir = path.join(stateDir, 'windows-lpac-leases');
+    await mkdir(leaseDir, { recursive: true });
+    const corruptLeaseFile = path.join(leaseDir, 'corrupt-lease.json');
+    await writeFile(corruptLeaseFile, 'invalid-json-content', 'utf8');
+    try {
+      await assert.rejects(
+        tasks.startTests(secondFailedDone.taskId, preview.sha256, validCommand, 0, 120),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.equal((err as { code?: string }).code, 'WINDOWS_EXECUTION_RECOVERY_FAILED');
+          return true;
+        }
+      );
+    } finally {
+      await rm(corruptLeaseFile, { force: true });
+    }
+
+    const recovered = await tasks.startTests(secondFailedDone.taskId, preview.sha256, validCommand, 0, 120);
+    assert.equal((await until(recovered.taskId)).status, 'completed');
+    const modelTask = await tasks.run({ prompt: 'failure:test', workingDirectory: repoDir });
+    const modelDone = await until(modelTask.taskId);
+    assert.equal(modelDone.status, 'failed');
+    assert.notEqual(modelDone.usageProvenance, 'local-executor');
+    await assert.rejects(
+      tasks.startTests(modelDone.taskId, (await tasks.preview(modelDone.taskId)).sha256, validCommand, 0, 120),
+      { code: 'TASK_NOT_READY' }
+    );
+
+    const slowTask = await tasks.run({ prompt: 'cancel:test', workingDirectory: repoDir });
+    await eventually('cancel fixture did not start', async () => ['running', 'streaming'].includes(tasks.status(slowTask.taskId).status) ? true : undefined, 180000);
+    await tasks.cancel(slowTask.taskId);
+    assert.equal((await until(slowTask.taskId)).status, 'cancelled');
+    await assert.rejects(
+      tasks.startTests(slowTask.taskId, (await tasks.preview(slowTask.taskId)).sha256, validCommand, 0, 120),
+      { code: 'TASK_NOT_READY' }
+    );
+    const timed = await tasks.run({ prompt: 'timeout:test', workingDirectory: repoDir, timeoutSeconds: 1 });
+    assert.equal((await until(timed.taskId)).status, 'timeout');
+    await assert.rejects(tasks.startTests(timed.taskId, (await tasks.preview(timed.taskId)).sha256, validCommand, 0, 120), { code: 'TASK_NOT_READY' });
+  } finally {
+    await tasks.shutdown();
+    await rm(startupLease, { force: true });
+    for (const project of new Map(new StateStore(stateDir).load().filter(entry => entry.project).map(entry => [entry.project!.copyDirectory, entry.project!])).values()) await discardProjectCopy(project);
+    await ownedTemporaryDirectory(repoDir, 'agy-retry-repo-');
+    await ownedTemporaryDirectory(stateDir, 'agy-retry-state-');
+    await rm(repoDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await rm(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+
+test('Windows recovery retry refuses active leases until owned execution is cancelled', { skip: process.platform !== 'win32' }, async () => {
+  await crashFixture(async ({ copy, state, ready }) => {
+    const controller = new AbortController();
+    const running = executeWindowsTest({ executable: process.execPath, args: ['-e', "require('node:fs').writeFileSync('ready.txt','ready');setInterval(()=>{},1000)"] }, copy,
+      { ...settings, timeoutSeconds: 60, stateDirectory: state, signal: controller.signal })
+      .then(result => ({ result, error: undefined }), error => ({ result: undefined, error: error as unknown }));
+    try {
+      await eventually('owned LPAC command did not become ready', async () => await readFile(ready, 'utf8').catch(() => '') === 'ready' ? true : undefined, 60000);
+      const active = await readLease(state);
+      await assert.rejects(recoverWindowsExecutions(state, { requireIdle: true }), error => {
+        assert.ok(error instanceof Error);
+        assert.equal((error as { code?: string }).code, 'WINDOWS_EXECUTION_RECOVERY_FAILED');
+        assert.match(error.message, /Active Windows executions/);
+        return true;
+      });
+      assert.equal((await readLease(state)).value.nonce, active.value.nonce);
+      assert.equal(await profileExists(active.value.sid), true);
+    } finally {
+      controller.abort();
+      const outcome = await running;
+      if (outcome.error) throw outcome.error;
+      assert.ok(outcome.result);
+      assert.equal(outcome.result.error, 'Command cancelled');
+      await recoverWindowsExecutions(state, { requireIdle: true });
     }
   });
 });

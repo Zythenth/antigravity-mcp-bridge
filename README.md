@@ -500,6 +500,10 @@ A cópia aceita até 10.000 arquivos e 256 MiB por padrão (`MAX_COPY_FILES` e `
 
 Chame `antigravity_test` com `taskId`, `expectedSha256` e `command: { executable, args }`. A ferramenta inicia uma continuação na mesma cópia e devolve outro `taskId`. Acompanhe esse ID pelos eventos e pelo resultado; revise e integre a tarefa mais recente. `retries` vale 0 por padrão e aceita até 3 tentativas de correção adicionais, solicitadas explicitamente. `timeoutSeconds` vale 600 por padrão.
 
+Se uma tentativa local do Windows falhar na infraestrutura, uma chamada explícita de `antigravity_test` pode criar outra tentativa após a recuperação nativa das leases. O registro anterior permanece falho. Essa repetição exige a prévia e o hash atuais e é recusada enquanto houver execução ativa ou recuperação inconclusiva. Ela não habilita testes de sessões do CLI canceladas, expiradas ou com falhas de modelo.
+
+A limpeza confere o caminho e a identidade dos temporários próprios. Um temporário comprovadamente ausente não invalida os demais resultados de limpeza; substituições ou links detectados impedem sua remoção. As verificações de Job, perfil, aliases e permissões continuam obrigatórias.
+
 No Windows, o bridge cria um processo AppContainer/LPAC por execução e executa o comando diretamente nessa fronteira. O perfil, o SID e as ACLs de acesso são exclusivos da execução; as concessões exatas são removidas ao final. A limpeza e a recuperação de uma execução interrompida são verificadas em processos novos. Uma queda de energia não remove essas ACLs instantaneamente: a recuperação seguinte precisa concluí-la, e uma falha de limpeza impede que o teste seja considerado verificado e bloqueia novo uso daquela concessão.
 
 O executor Windows não instala Docker nem pede elevação UAC. Ele exige o compilador .NET Framework já existente no Windows para criar o controlador. Cada execução é isolada em um perfil novo; a cobertura atual inclui recuperação de processo e nova execução, mas não afirma uma reinicialização física do computador.

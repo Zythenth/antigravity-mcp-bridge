@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { lstatSync, realpathSync, readFileSync, rmSync, mkdirSync, writeFileSync, type BigIntStats } from 'node:fs';
 
 import { copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
@@ -9,7 +10,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { loadConfig } from '../src/config.js';
 import { stageWindowsCommand } from '../src/windows-runtime.js';
-import { executeWindowsTest } from '../src/windows-executor.js';
+import { executeWindowsTest, type WindowsExecutionOptions } from '../src/windows-executor.js';
 
 const runtime = loadConfig();
 const settings = { timeoutSeconds: 15, maxRuntimeBytes: 256 * 1024 * 1024,
@@ -531,5 +532,101 @@ test('Windows executor reports early native failure as bounded redacted BridgeEr
         return true;
       }
     );
+  });
+});
+
+function scratchCleanupFault(replace: boolean) {
+  let directory = '', applied = false;
+  let replacement: BigIntStats | undefined;
+  let failure: unknown;
+  const temporary = realpathSync(os.tmpdir());
+  const owned = (target: string) => {
+    assert.equal(path.dirname(target), temporary);
+    assert.ok(path.basename(target).startsWith('agy-mcp-scratch-'));
+    const info = lstatSync(target, { bigint: true });
+    assert.equal(info.isSymbolicLink(), false);
+    assert.equal(info.isDirectory(), true);
+    assert.equal(realpathSync(target), target);
+    return info;
+  };
+  const same = (actual: BigIntStats, expected: BigIntStats) => {
+    assert.equal(actual.dev, expected.dev);
+    assert.equal(actual.ino, expected.ino);
+    assert.equal(actual.birthtimeNs, expected.birthtimeNs);
+  };
+  const onProcess: NonNullable<WindowsExecutionOptions['onProcess']> = child => {
+    const requestPath = child.spawnargs.at(-1);
+    if (typeof requestPath !== 'string' || !requestPath.endsWith('.json')) return;
+    const request = JSON.parse(readFileSync(requestPath, 'utf8')) as { action: string; scratch: string; nonce: string };
+    if (request.action !== 'write') return;
+    directory = request.scratch;
+    const identity = owned(directory);
+    let output = '';
+    child.stdout.on('data', chunk => { output += String(chunk); });
+    child.once('close', code => {
+      try {
+        const receipt = JSON.parse(output) as { nonce: string; sandbox: string; profileDeleted: boolean; aliasesDeleted: boolean };
+        assert.equal(code, 0);
+        assert.equal(receipt.nonce, request.nonce);
+        assert.equal(receipt.sandbox, 'windows-lpac');
+        assert.equal(receipt.profileDeleted, true);
+        assert.equal(receipt.aliasesDeleted, true);
+        same(owned(directory), identity);
+        rmSync(directory, { recursive: true, force: true });
+        if (replace) {
+          mkdirSync(directory);
+          writeFileSync(path.join(directory, 'marker.txt'), 'preserved-marker');
+          replacement = owned(directory);
+        }
+        applied = true;
+      } catch (error) { failure = error; }
+    });
+  };
+  return {
+    onProcess,
+    assertApplied() { if (failure) throw failure; assert.equal(applied, true, 'controlled cleanup boundary was not exercised'); },
+    async assertPreserved() { assert.ok(replacement); same(owned(directory), replacement); assert.equal(await readFile(path.join(directory, 'marker.txt'), 'utf8'), 'preserved-marker'); },
+    async dispose() {
+      if (!replacement) return;
+      const current = await lstat(directory, { bigint: true }).catch(error => { if (error.code !== 'ENOENT') throw error; });
+      if (!current) return;
+      same(owned(directory), replacement);
+      await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    },
+  };
+}
+
+test('Windows executor succeeds and cleans up remaining directories even if owned scratch is already absent on exit', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    const fault = scratchCleanupFault(false);
+    const result = await executeWindowsTest(command("process.stdout.write('scratch-absent-success')"), copy, { ...settings, onProcess: fault.onProcess });
+    fault.assertApplied();
+    assert.equal(result.exitCode, 0, JSON.stringify(result));
+    assert.equal(result.output, 'scratch-absent-success');
+    assert.equal(result.profileDeleted, true);
+    assert.equal(result.aliasesDeleted, true);
+  });
+});
+
+test('Windows executor preserves distinct nonzero exitCode when owned scratch is already absent on exit', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    const fault = scratchCleanupFault(false);
+    const result = await executeWindowsTest(command("process.stdout.write('scratch-absent-nonzero');process.exit(42)"), copy, { ...settings, onProcess: fault.onProcess });
+    fault.assertApplied();
+    assert.equal(result.exitCode, 42, JSON.stringify(result));
+    assert.equal(result.output, 'scratch-absent-nonzero');
+    assert.equal(result.profileDeleted, true);
+    assert.equal(result.aliasesDeleted, true);
+  });
+});
+
+test('Windows executor rejects replacement directory at owned temporary path during cleanup and preserves replacement', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    const fault = scratchCleanupFault(true);
+    try {
+      await assert.rejects(executeWindowsTest(command("process.stdout.write('replacement-fixture')"), copy, { ...settings, onProcess: fault.onProcess }), { code: 'UNSAFE_RUNTIME_PATH' });
+      fault.assertApplied();
+      await fault.assertPreserved();
+    } finally { await fault.dispose(); }
   });
 });

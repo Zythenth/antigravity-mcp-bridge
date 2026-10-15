@@ -49460,8 +49460,12 @@ function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
+  const stat4 = await lstat10(directory);
+  if (stat4.isSymbolicLink() || !stat4.isDirectory()) {
+    throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+  }
   const canonical = await realpath7(directory);
-  if (path20.dirname(canonical) !== temp || !path20.basename(canonical).startsWith(prefix) || (await lstat10(directory)).isSymbolicLink()) {
+  if (path20.dirname(canonical) !== temp || !path20.basename(canonical).startsWith(prefix)) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
@@ -49521,16 +49525,22 @@ async function compileController(temp, options) {
   if (!(await lstat10(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
   const directory = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-controller-")));
+  const stat4 = await lstat10(directory, { bigint: true });
   const source = path20.join(directory, "runner.cs"), helper = path20.join(directory, "runner.exe");
   try {
     await writeFile6(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
     if (built.code !== 0)
       throw new BridgeError("WINDOWS_EXECUTOR_BUILD_FAILED", (built.stdout + built.stderr).slice(-4e3));
-    return { directory, helper };
+    return { directory, helper, stat: stat4 };
   } catch (error62) {
-    await rm5(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {
-    });
+    try {
+      await removeOwned([[directory, "agy-mcp-controller-", stat4]], temp);
+    } catch (cleanupError) {
+      const original = error62 instanceof Error ? error62.message : String(error62);
+      const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      throw new BridgeError("UNSAFE_RUNTIME_PATH", redactExecutionDiagnostic("Controller build: " + original + "; cleanup: " + cleanup));
+    }
     throw error62;
   }
 }
@@ -49541,10 +49551,51 @@ async function writeRequest(directory, request) {
 }
 async function removeOwned(directories, temp) {
   const failures = [];
-  for (const [directory, prefix] of directories) {
+  for (const [directory, prefix, expectedStat] of directories) {
     try {
-      await ownedDirectory(directory, temp, prefix);
-      await rm5(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      if (typeof directory !== "string" || !path20.isAbsolute(directory)) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage must be an absolute path");
+      }
+      if (!expectedStat?.isDirectory() || expectedStat.isSymbolicLink()) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage ownership was not captured");
+      }
+      const baseName = path20.basename(directory);
+      if (!baseName.startsWith(prefix) || baseName === "." || baseName === ".." || baseName.includes("/") || baseName.includes("\\")) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage prefix mismatch");
+      }
+      const parent = path20.dirname(directory);
+      const parentStat = await lstat10(parent, { bigint: true });
+      if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage parent is invalid or linked");
+      }
+      const canonicalParent = await realpath7(parent);
+      if (canonicalParent !== temp) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage parent is not the trusted temporary directory");
+      }
+      let stat4;
+      try {
+        stat4 = await lstat10(directory, { bigint: true });
+      } catch (error62) {
+        const err = error62;
+        if (err && err.code === "ENOENT" && err.syscall === "lstat" && typeof err.path === "string" && path20.resolve(err.path).toLocaleLowerCase("en-US") === path20.resolve(directory).toLocaleLowerCase("en-US")) {
+          continue;
+        }
+        throw error62;
+      }
+      if (stat4.isSymbolicLink() || !stat4.isDirectory()) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+      }
+      const canonical = await realpath7(directory);
+      if (path20.dirname(canonical) !== temp || !path20.basename(canonical).startsWith(prefix)) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+      }
+      if (path20.resolve(canonical).toLocaleLowerCase("en-US") !== path20.resolve(directory).toLocaleLowerCase("en-US")) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+      }
+      if (stat4.dev !== expectedStat.dev || stat4.ino !== expectedStat.ino || stat4.birthtimeNs !== expectedStat.birthtimeNs) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage identity changed");
+      }
+      await rm5(canonical, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     } catch (error62) {
       failures.push(error62 instanceof Error ? error62.message : String(error62));
     }
@@ -49600,7 +49651,7 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     await inspect(value, "modify");
   return [...paths2.values()];
 }
-async function runRecoveryWithController(stateDirectory, options) {
+async function runRecoveryWithController(stateDirectory, options, requireIdle = false) {
   if (process.platform !== "win32")
     return;
   const temp = await realpath7(os8.tmpdir()), controller = await compileController(temp, options);
@@ -49610,14 +49661,16 @@ async function runRecoveryWithController(stateDirectory, options) {
     const result = recoverySchema.parse(JSON.parse(observed.stdout));
     if (observed.code !== 0 || result.error)
       throw new BridgeError("WINDOWS_EXECUTION_RECOVERY_FAILED", result.error || "Windows LPAC recovery did not complete");
+    if (requireIdle && result.active !== 0)
+      throw new BridgeError("WINDOWS_EXECUTION_RECOVERY_FAILED", "Active Windows executions prevent a recovery retry");
   } finally {
-    await removeOwned([[controller.directory, "agy-mcp-controller-"]], temp);
+    await removeOwned([[controller.directory, "agy-mcp-controller-", controller.stat]], temp);
   }
 }
-async function recoverWindowsExecutions(stateDirectory) {
+async function recoverWindowsExecutions(stateDirectory, options = {}) {
   const effective = path20.resolve(stateDirectory);
   await mkdir7(effective, { recursive: true, mode: 448 });
-  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
+  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 }, options.requireIdle);
 }
 function redactExecutionDiagnostic(value) {
   if (!value)
@@ -49729,9 +49782,13 @@ async function executeWindowsTest(command2, copyDirectory, options) {
   await runRecoveryWithController(stateDirectory, options);
   const temp = await realpath7(os8.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-scratch-")));
+  let runtime = "", scratch = "";
+  let runtimeStat, scratchStat;
   try {
+    runtime = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-runtime-")));
+    runtimeStat = await lstat10(runtime, { bigint: true });
+    scratch = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-scratch-")));
+    scratchStat = await lstat10(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
     const nonce = randomUUID9(), systemRoot = process.env.SystemRoot || "C:\\Windows";
@@ -49787,7 +49844,13 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     });
     return { ...result, portableNode: staged.portableNode };
   } finally {
-    await removeOwned([[scratch, "agy-mcp-scratch-"], [runtime, "agy-mcp-runtime-"], [controller.directory, "agy-mcp-controller-"]], temp);
+    const toClean = [];
+    if (scratch)
+      toClean.push([scratch, "agy-mcp-scratch-", scratchStat]);
+    if (runtime)
+      toClean.push([runtime, "agy-mcp-runtime-", runtimeStat]);
+    toClean.push([controller.directory, "agy-mcp-controller-", controller.stat]);
+    await removeOwned(toClean, temp);
   }
 }
 
@@ -50680,7 +50743,10 @@ var TaskManager = class {
     try {
       this.refresh();
       const current = this.tasks.get(sourceTaskId);
-      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal3.has(current.record.status) || current.record.status !== "completed" && current.record.error?.code !== "TEST_FAILED" || current.record.integratedAt) {
+      const isCompleted = current?.record.status === "completed";
+      const isTestFailed = current?.record.status === "failed" && current?.record.error?.code === "TEST_FAILED";
+      const isLocalExecutorFailure = current?.record.status === "failed" && current?.record.error?.code !== "TEST_FAILED" && current?.record.usageProvenance === "local-executor";
+      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal3.has(current.record.status) || !isCompleted && !isTestFailed && !isLocalExecutorFailure || current.record.integratedAt) {
         throw new BridgeError("TASK_NOT_READY", "Tests require a completed write task with an isolated copy and CLI conversation");
       }
       if ([...this.tasks.values()].filter((candidate) => candidate.project === current.project).at(-1) !== current) {
@@ -50694,6 +50760,11 @@ var TaskManager = class {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks)
         throw new BridgeError("QUEUE_FULL", "Task queue is full");
       releaseProject = this.state.acquire(this.projectLock(current.project));
+      if (isLocalExecutorFailure) {
+        await this.nativeRecovery;
+        await recoverWindowsExecutions(this.config.stateDirectory, { requireIdle: true });
+        this.nativeRecoveryError = void 0;
+      }
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find((candidate) => terminal3.has(candidate.record.status) && candidate !== current && !this.hasPendingInbox(candidate.record)) ?? (this.hasPendingInbox(current.record) ? void 0 : current);
         if (!oldestFinished)
