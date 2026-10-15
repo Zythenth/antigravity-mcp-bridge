@@ -1,3 +1,5 @@
+import { validateAllowedEnvVars } from './hardening-policy.js';
+
 export const WINDOWS_PATHEXT_FALLBACK = '.COM;.EXE;.BAT;.CMD';
 
 export const DEFAULT_ALLOWED_ENV_VAR_RATIONALES: Readonly<Record<string, string>> = {
@@ -103,17 +105,15 @@ export function cliEnvironment(
 ): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
   const isWindows = platform === 'win32';
+  const validatedAllowedEnvVars = validateAllowedEnvVars(allowedEnvVars, 'allowedEnvVars');
 
   if (isWindows) {
     const allowedUpper = new Set<string>();
     for (const name of DEFAULT_ALLOWED_ENV_VARS) {
       allowedUpper.add(name.toUpperCase());
     }
-    for (const name of allowedEnvVars) {
-      const trimmed = name.trim();
-      if (trimmed) {
-        allowedUpper.add(trimmed.toUpperCase());
-      }
+    for (const name of validatedAllowedEnvVars) {
+      allowedUpper.add(name.toUpperCase());
     }
 
     const seenUpper = new Set<string>();
@@ -134,11 +134,8 @@ export function cliEnvironment(
     for (const name of DEFAULT_ALLOWED_ENV_VARS) {
       allowedExact.add(name);
     }
-    for (const name of allowedEnvVars) {
-      const trimmed = name.trim();
-      if (trimmed) {
-        allowedExact.add(trimmed);
-      }
+    for (const name of validatedAllowedEnvVars) {
+      allowedExact.add(name);
     }
 
     for (const [key, value] of Object.entries(source)) {

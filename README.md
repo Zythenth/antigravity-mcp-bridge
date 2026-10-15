@@ -556,7 +556,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `BRIDGE_STATE_DIRECTORY` | `~/.antigravity-mcp-bridge` | Diretório privado de tarefas e sessões |
 | `BRIDGE_DEFAULT_MODEL` | vazio | Modelo inicial, usado quando não há preferência salva |
 | `BRIDGE_SECRET_EXCLUSIONS` | `[]` | Array JSON de padrões relativos de arquivos que devem ficar fora das cópias |
-| `BRIDGE_SECRET_EXCEPTIONS` | `[]` | Array JSON de exceções explícitas à detecção padrão de credenciais; não supera ignores, exclusões personalizadas nem segurança de caminhos |
+| `BRIDGE_SECRET_EXCEPTIONS` | `{"version":2,"namePatterns":[]}` | Objeto JSON estrito na versão 2 contendo padrões glob de nomes relativos que pulam exclusivamente a verificação de nomes de credenciais conhecidas (`SECRET_FILE`), sem nunca pular a detecção incremental de conteúdo (`SECRET_CONTENT`); arrays legados não vazios falham com orientação de migração |
 | `BRIDGE_ALLOWED_ENV_VARS` | `[]` | Array JSON de nomes exatos adicionais de variáveis permitidas nos subprocessos do CLI |
 | `MAX_COPY_FILES` | `10000` | Máximo de arquivos selecionados para a cópia |
 | `MAX_COPY_BYTES` | `268435456` | Máximo de bytes copiados (256 MiB) |
@@ -569,23 +569,23 @@ Entradas e diretórios são validados. Configurações de ambiente devem ser reg
 
 ### Padrões de exclusão e exceção de segredos
 
-Os padrões em `BRIDGE_SECRET_EXCLUSIONS` e `BRIDGE_SECRET_EXCEPTIONS` são definidos como um array JSON de strings com caminhos relativos à raiz do projeto. Ambos suportam curingas glob: `*` (segmento individual), `?` (um caractere) e `**` (múltiplos diretórios), sem permitir travessia de diretório (`..`). Nomes sem barra correspondem ao nome base (basename) em qualquer diretório; `**/` e `/**/` correspondem a zero ou mais diretórios intermediários. A comparação é insensível a maiúsculas e minúsculas (case-insensitive).
+Os padrões em `BRIDGE_SECRET_EXCLUSIONS` são definidos como um array JSON de strings com caminhos relativos à raiz do projeto. Já `BRIDGE_SECRET_EXCEPTIONS` adota formato de objeto JSON versionado estrito: `{"version": 2, "namePatterns": ["fixtures/.env.local"]}`. Ambos suportam curingas glob: `*` (segmento individual), `?` (um caractere) e `**` (múltiplos diretórios), sem permitir travessia de diretório (`..`), caracteres NUL ou caminhos absolutos. Nomes sem barra correspondem ao nome base (basename) em qualquer diretório; `**/` e `/**/` correspondem a zero ou mais diretórios intermediários. A comparação é insensível a maiúsculas e minúsculas (case-insensitive). Arrays legados não vazios são rejeitados com diagnóstico de migração (sem expor valores sensíveis); a omissão ou um array vazio `[]` normaliza para política vazia `{"version": 2, "namePatterns": []}`.
 
-Prefira exceções restritas a arquivos revisados e sem credenciais reais (como o exemplo sintético `BRIDGE_SECRET_EXCEPTIONS='["fixtures/.env.local"]'`), evitando padrões glob amplos. Exceções explícitas pulam os bloqueios padrão de nome e de conteúdo e exigem cautela.
+Prefira exceções restritas a arquivos revisados e sem credenciais reais (como o exemplo sintético `BRIDGE_SECRET_EXCEPTIONS='{"version": 2, "namePatterns": ["fixtures/.env.local"]}'`), evitando padrões glob amplos. Na versão 2, a exceção pula apenas a checagem de nome de arquivo de credencial conhecida (`isKnownCredentialFile` / `SECRET_FILE`); todo o conteúdo permitido continua sendo inspecionado pelo scanner de segredos (`detectSecretContent` / `SECRET_CONTENT`) e nunca é ignorado por exceções de nome.
 
 A ordem de precedência e segurança é estrita:
 
 1. Regras de ignore do Git e verificações de caminhos inseguros (`UNSAFE_PATH`) SEMPRE vencem e têm prioridade máxima sobre qualquer exceção.
 2. Deny explícito (`BRIDGE_SECRET_EXCLUSIONS` gerando `SECRET_EXCLUSION`) sempre vence qualquer exceção (`BRIDGE_SECRET_EXCEPTIONS`).
-3. Exceção explícita (`BRIDGE_SECRET_EXCEPTIONS`) pula os bloqueios padrão de nome (`SECRET_FILE`) e conteúdo (`SECRET_CONTENT`), devendo ser configurada com extremo cuidado.
+3. Exceção explícita v2 (`BRIDGE_SECRET_EXCEPTIONS`) pula unicamente o bloqueio padrão de nome de credencial (`SECRET_FILE`), mantendo integralmente a varredura e bloqueio por conteúdo (`SECRET_CONTENT`).
 
 O preflight preventivo não garante a detecção de segredos arbitrários embutidos em código-fonte, formatos proprietários ou desconhecidos, dados criptografados ou arquivos ofuscados.
 
 ### Ambiente do subprocesso do CLI (`cliEnvironment`)
 
-O subprocesso do CLI utiliza um ambiente estritamente filtrado por `cliEnvironment` em vez de herdar o ambiente do host indiscriminadamente. O bridge não registra valores de variáveis de ambiente nem passa tokens como argumentos. A variável `BRIDGE_ALLOWED_ENV_VARS` aceita um array JSON de nomes exatos adicionais para inclusão (opt-in), por exemplo `BRIDGE_ALLOWED_ENV_VARS='["MY_TOOL_SETTING"]'`. Por padrão, nenhuma injeção ou variável arbitrária é permitida; a inclusão de variáveis é estritamente opt-in e não é o comportamento padrão. A correspondência é case-insensitive no Windows e exata (case-sensitive) no Unix/Linux/macOS.
+O subprocesso do CLI utiliza um ambiente estritamente filtrado por `cliEnvironment` em vez de herdar o ambiente do host indiscriminadamente. O bridge não registra valores de variáveis de ambiente nem passa tokens como argumentos. A variável `BRIDGE_ALLOWED_ENV_VARS` aceita um array JSON de nomes exatos adicionais para inclusão (opt-in), por exemplo `BRIDGE_ALLOWED_ENV_VARS='["MY_TOOL_SETTING"]'`. Por padrão, nenhuma injeção ou variável arbitrária é permitida; a inclusão de variáveis é estritamente opt-in e não é o comportamento padrão. A correspondência respeita as regras de plataforma (case-insensitive no Windows e exata/case-sensitive no Unix/Linux/macOS), preservando a deduplicação e `PATHEXT`.
 
-Por padrão, credenciais de provedores e APIs de terceiros (como AWS, GitHub/GH, OpenAI e Stripe) e variáveis de injeção de runtime, bibliotecas dinâmicas ou agentes locais (`NODE_OPTIONS`, `NODE_PATH`, `LD_*`, `DYLD_*`, `SSH_AUTH_SOCK`, `GPG_AGENT_INFO`) são omitidas do subprocesso.
+Por motivos de segurança, variáveis de injeção de runtime e preload de bibliotecas (`NODE_OPTIONS`, `NODE_PATH` e os namespaces `LD_*` e `DYLD_*`) são estritamente proibidas para opt-in em `BRIDGE_ALLOWED_ENV_VARS` e chamadas diretas a `cliEnvironment`, inclusive com variações de maiúsculas/minúsculas ou espaços em branco em qualquer plataforma. Tentativas de opt-in dessas variáveis falham com erro estruturado nomeando a variável rejeitada, sem jamais ecoar seu valor. Opt-ins de variáveis legítimas não injetáveis, certificados como `NODE_EXTRA_CA_CERTS` e todos os defaults de sistema, perfil, keyring nativo, proxies, certificados corporativos e autenticação oficial Google / ADC continuam preservados. Demais credenciais de provedores e APIs de terceiros (como AWS, GitHub/GH, OpenAI e Stripe) e agentes locais (`SSH_AUTH_SOCK`, `GPG_AGENT_INFO`) continuam omitidos por padrão.
 
 As variáveis padrão permitidas são agrupadas exatamente conforme definido no `cliEnvironment`:
 

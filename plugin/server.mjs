@@ -30662,6 +30662,108 @@ function profileReadOnly(profile) {
   return profile === "query" || profile === "review";
 }
 
+// dist/src/hardening-policy.js
+function isForbiddenAllowedEnvVar(name) {
+  const norm = name.trim().toUpperCase();
+  if (norm === "NODE_OPTIONS" || norm === "NODE_PATH")
+    return true;
+  if (norm.startsWith("LD_") || norm.startsWith("DYLD_"))
+    return true;
+  return false;
+}
+function assertValidAllowedEnvVar(rawName, contextName = "allowedEnvVars") {
+  if (typeof rawName !== "string" || !rawName.trim() || rawName.includes("\0")) {
+    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
+  }
+  const trimmed = rawName.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
+  }
+  if (isForbiddenAllowedEnvVar(trimmed)) {
+    throw new BridgeError("FORBIDDEN_ENV_VAR", `${contextName} cannot include runtime injection variable: ${trimmed}`);
+  }
+  return trimmed;
+}
+function validateAllowedEnvVars(vars, contextName = "allowedEnvVars") {
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of vars) {
+    const valid = assertValidAllowedEnvVar(item, contextName);
+    if (!seen.has(valid)) {
+      seen.add(valid);
+      result.push(valid);
+    }
+  }
+  return result;
+}
+function validateRelativeGlobPattern(pattern, contextName = "Glob pattern") {
+  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
+  }
+  let norm = pattern.replaceAll("\\", "/").trim();
+  while (norm.startsWith("./")) {
+    norm = norm.slice(2);
+  }
+  if (!norm) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
+  }
+  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be project-relative`);
+  }
+  const parts = norm.split("/");
+  if (parts.some((p) => p === "..")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must not contain traversal (..)`);
+  }
+  return norm;
+}
+function normalizeSecretExceptionsPolicy(input2, contextName = "BRIDGE_SECRET_EXCEPTIONS") {
+  if (input2 === void 0) {
+    return { version: 2, namePatterns: [] };
+  }
+  if (Array.isArray(input2)) {
+    if (input2.length === 0) {
+      return { version: 2, namePatterns: [] };
+    }
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} uses legacy array format. Migrate to strict version 2 object format: {"version":2,"namePatterns":[...]}`);
+  }
+  if (typeof input2 !== "object" || input2 === null) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must be a strict JSON object: {"version":2,"namePatterns":[...]}`);
+  }
+  const obj = input2;
+  const keys2 = Object.keys(obj);
+  if (keys2.some((k) => k !== "version" && k !== "namePatterns")) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} contains unexpected fields. Only version and namePatterns are allowed`);
+  }
+  if (!Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns")) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain version and namePatterns fields`);
+  }
+  if (obj.version !== 2) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} specifies an unsupported version. Only version 2 is supported`);
+  }
+  if (!Array.isArray(obj.namePatterns)) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of strings`);
+  }
+  const validatedPatterns = [];
+  const seenPatterns = /* @__PURE__ */ new Set();
+  for (const item of obj.namePatterns) {
+    if (typeof item !== "string" || !item.trim() || item.includes("\0")) {
+      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of non-empty strings without NUL`);
+    }
+    if (item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === "..")) {
+      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain relative glob patterns without traversal`);
+    }
+    const validated = validateRelativeGlobPattern(item, `${contextName}.namePatterns`);
+    if (!seenPatterns.has(validated)) {
+      seenPatterns.add(validated);
+      validatedPatterns.push(validated);
+    }
+  }
+  return {
+    version: 2,
+    namePatterns: validatedPatterns
+  };
+}
+
 // dist/src/config.js
 function positiveInteger(value, fallback, max) {
   if (value === void 0)
@@ -30671,7 +30773,13 @@ function positiveInteger(value, fallback, max) {
     throw new Error(`Invalid numeric configuration: ${value}`);
   return n;
 }
-var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
+var DEFAULT_PROJECT_LIMITS = {
+  maxCopyFiles: 1e4,
+  maxCopyBytes: 256 * 1024 * 1024,
+  maxChangedFiles: 100,
+  secretExclusions: [],
+  secretExceptions: { version: 2, namePatterns: [] }
+};
 function approvalMode(value) {
   if (value === void 0)
     return "auto";
@@ -30709,6 +30817,17 @@ function windowsNodeCacheDirectory(value) {
     throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
   return resolved;
 }
+function parseSecretExceptionsConfig(value) {
+  if (value === void 0)
+    return { version: 2, namePatterns: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error('BRIDGE_SECRET_EXCEPTIONS must be a valid JSON object: {"version":2,"namePatterns":[...]}');
+  }
+  return normalizeSecretExceptionsPolicy(parsed, "BRIDGE_SECRET_EXCEPTIONS");
+}
 function parseStringArray(value, envName) {
   if (value === void 0)
     return [];
@@ -30725,7 +30844,7 @@ function parseStringArray(value, envName) {
   if (envName === "BRIDGE_ALLOWED_ENV_VARS" && items.some((item) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
     throw new Error(envName + " must contain exact environment variable names");
   }
-  if ((envName === "BRIDGE_SECRET_EXCLUSIONS" || envName === "BRIDGE_SECRET_EXCEPTIONS") && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
+  if (envName === "BRIDGE_SECRET_EXCLUSIONS" && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
     throw new Error(envName + " must contain relative glob patterns without traversal");
   }
   return items;
@@ -30769,8 +30888,8 @@ function loadConfig(env = process.env) {
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
     secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, "BRIDGE_SECRET_EXCLUSIONS"),
-    secretExceptions: parseStringArray(env.BRIDGE_SECRET_EXCEPTIONS, "BRIDGE_SECRET_EXCEPTIONS"),
-    allowedEnvVars: parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS")
+    secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
+    allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS"), "BRIDGE_ALLOWED_ENV_VARS")
   };
 }
 
@@ -32335,28 +32454,8 @@ var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
   ".yaml",
   ".yml"
 ]);
-function validateGlobPattern(pattern) {
-  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be a non-empty string without NUL");
-  }
-  let norm = pattern.replaceAll("\\", "/").trim();
-  while (norm.startsWith("./")) {
-    norm = norm.slice(2);
-  }
-  if (!norm) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be a non-empty string without NUL");
-  }
-  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be project-relative: " + pattern);
-  }
-  const parts = norm.split("/");
-  if (parts.some((p) => p === "..")) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must not contain traversal (..): " + pattern);
-  }
-  return norm;
-}
 function globToRegExp(pattern) {
-  let p = validateGlobPattern(pattern);
+  let p = validateRelativeGlobPattern(pattern);
   if (p === "**" || p === "*") {
     return /^.*$/i;
   }
@@ -32527,7 +32626,8 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
   const blocked = [];
   const records = /* @__PURE__ */ new Map();
   const exclusions = (limits.secretExclusions ?? []).filter(Boolean);
-  const exceptions = (limits.secretExceptions ?? []).filter(Boolean);
+  const exceptionsPolicy = normalizeSecretExceptionsPolicy(limits.secretExceptions, "secretExceptions");
+  const namePatterns = exceptionsPolicy.namePatterns;
   let aggregateBytesScanned = 0;
   for (const candidate of candidates) {
     let absolute;
@@ -32547,8 +32647,8 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
       blocked.push({ path: relative2, reason: "SECRET_EXCLUSION" });
       continue;
     }
-    const isExcepted = exceptions.some((pattern) => matchProjectRelativeGlob(pattern, relative2));
-    if (!isExcepted && isKnownCredentialFile(relative2)) {
+    const isNameExcepted = namePatterns.some((pattern) => matchProjectRelativeGlob(pattern, relative2));
+    if (!isNameExcepted && isKnownCredentialFile(relative2)) {
       blocked.push({ path: relative2, reason: "SECRET_FILE" });
       continue;
     }
@@ -32598,7 +32698,7 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
         }
         const slice = buf.subarray(0, bytesRead);
         hash3.update(slice);
-        if (!isExcepted && !hasSecret) {
+        if (!hasSecret) {
           const window = prevOverlap.length > 0 ? Buffer.concat([prevOverlap, slice]) : slice;
           if (detectSecretContent(relative2, window, scanState)) {
             hasSecret = true;
@@ -34511,16 +34611,14 @@ var DEFAULT_ALLOWED_ENV_VARS = Object.freeze(Object.keys(DEFAULT_ALLOWED_ENV_VAR
 function cliEnvironment(allowedEnvVars, source = process.env, platform = process.platform) {
   const result = {};
   const isWindows = platform === "win32";
+  const validatedAllowedEnvVars = validateAllowedEnvVars(allowedEnvVars, "allowedEnvVars");
   if (isWindows) {
     const allowedUpper = /* @__PURE__ */ new Set();
     for (const name of DEFAULT_ALLOWED_ENV_VARS) {
       allowedUpper.add(name.toUpperCase());
     }
-    for (const name of allowedEnvVars) {
-      const trimmed = name.trim();
-      if (trimmed) {
-        allowedUpper.add(trimmed.toUpperCase());
-      }
+    for (const name of validatedAllowedEnvVars) {
+      allowedUpper.add(name.toUpperCase());
     }
     const seenUpper = /* @__PURE__ */ new Set();
     for (const [key, value] of Object.entries(source)) {
@@ -34542,11 +34640,8 @@ function cliEnvironment(allowedEnvVars, source = process.env, platform = process
     for (const name of DEFAULT_ALLOWED_ENV_VARS) {
       allowedExact.add(name);
     }
-    for (const name of allowedEnvVars) {
-      const trimmed = name.trim();
-      if (trimmed) {
-        allowedExact.add(trimmed);
-      }
+    for (const name of validatedAllowedEnvVars) {
+      allowedExact.add(name);
     }
     for (const [key, value] of Object.entries(source)) {
       if (key === "__proto__" || typeof value !== "string")

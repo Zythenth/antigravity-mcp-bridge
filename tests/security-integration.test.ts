@@ -180,9 +180,19 @@ test('Custom exclusion and exception in TaskManager and MCP agree with copy elig
   await writeFile(path.join(repoDir, '.env.local'), 'PORT=3000\nDATABASE_URL=test\n');
   await writeFile(path.join(repoDir, '.env'), 'TOKEN=secret-local-token\n');
 
+  await mkdir(path.join(repoDir, 'fixtures'));
+  const syntheticKeyBody = 'BRIDGE_SYNTHETIC_NOT_A_USABLE_KEY';
+  await writeFile(path.join(repoDir, 'fixtures', '.env.local'),
+    '-----BEGIN PRIVATE KEY-----\n' + syntheticKeyBody + '\n-----END PRIVATE KEY-----\n');
+  const namePatterns = ['.env.local', 'confidential/allowed.txt', '.env'];
+  assert.throws(() => setup([fixturePath], {
+    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(namePatterns),
+  }), (error: unknown) => error instanceof Error
+    && /legacy array.*Migrate.*version 2/.test(error.message));
+
   const { adapter, tasks } = setup([fixturePath], {
     BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['confidential/**', '.env']),
-    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(['.env.local', 'confidential/allowed.txt', '.env']),
+    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns }),
   });
 
   await adapter.discover();
@@ -225,7 +235,8 @@ test('Custom exclusion and exception in TaskManager and MCP agree with copy elig
     blockedFiles: Array<{ path: string; reason: string }>;
   };
   assert.ok(Array.isArray(data.blockedFiles));
-  assert.ok(data.blockedFiles.length >= 3);
+  assert.ok(data.blockedFiles.length >= 4);
+  assert.ok(data.blockedFiles.some(b => b.path === 'fixtures/.env.local' && b.reason === 'SECRET_CONTENT'));
 
   const blockedPaths = data.blockedFiles.map(b => b.path).sort();
   assert.ok(blockedPaths.includes('.env'));
@@ -245,6 +256,7 @@ test('Custom exclusion and exception in TaskManager and MCP agree with copy elig
   const eventPayload = JSON.stringify(copyReady);
   assert.equal(eventPayload.includes('CONFIDENTIAL_SECRET'), false);
   assert.equal(eventPayload.includes('secret-local-token'), false);
+  assert.equal(eventPayload.includes(syntheticKeyBody), false);
 });
 
 test('StateStore restart and resume preserves task metadata including blockedFiles without data leakage', async () => {

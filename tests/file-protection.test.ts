@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
+import { normalizeSecretExceptionsPolicy } from '../src/hardening-policy.js';
 import {
   checkedPath,
   copyVerifiedFile,
@@ -301,7 +302,7 @@ test('policy: secretExclusions, secretExceptions, and precedence hierarchy', asy
     // 3. Explicit exception permits .env.local that is normally blocked by default
     const copy2 = await createProjectCopy(dir, undefined, undefined, {
       ...DEFAULT_PROJECT_LIMITS,
-      secretExceptions: ['.env.local'],
+      secretExceptions: { version: 2, namePatterns: ['.env.local'] },
     });
     try {
       assert.ok(copy2.includedFiles.includes('.env.local'));
@@ -314,7 +315,7 @@ test('policy: secretExclusions, secretExceptions, and precedence hierarchy', asy
     const copy3 = await createProjectCopy(dir, undefined, undefined, {
       ...DEFAULT_PROJECT_LIMITS,
       secretExclusions: ['.env.local'],
-      secretExceptions: ['.env.local'],
+      secretExceptions: { version: 2, namePatterns: ['.env.local'] },
     });
     try {
       assert.ok(!copy3.includedFiles.includes('.env.local'));
@@ -326,7 +327,7 @@ test('policy: secretExclusions, secretExceptions, and precedence hierarchy', asy
     // 5. Explicit exceptions CANNOT override Git ignores
     const copy4 = await createProjectCopy(dir, undefined, undefined, {
       ...DEFAULT_PROJECT_LIMITS,
-      secretExceptions: ['git-ignored.txt'],
+      secretExceptions: { version: 2, namePatterns: ['git-ignored.txt'] },
     });
     try {
       assert.ok(!copy4.includedFiles.includes('git-ignored.txt'));
@@ -374,7 +375,7 @@ test('paths: rejects traversal, NUL bytes, Windows ADS, device paths, and .git a
     // Explicit exception cannot override unsafe paths
     await assert.rejects(createProjectCopy(dir, ['../outside.txt'], undefined, {
       ...DEFAULT_PROJECT_LIMITS,
-      secretExceptions: ['../outside.txt'],
+      secretExceptions: { version: 2, namePatterns: ['../outside.txt'] },
     }), { code: 'INVALID_INCLUDE_PATH' });
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -535,10 +536,10 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
   // Valid JSON array of relative glob patterns
   const valid = loadConfig({
     BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['*.env', 'secrets/**']),
-    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(['.env.template']),
+    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.template'] }),
   });
   assert.deepEqual(valid.secretExclusions, ['*.env', 'secrets/**']);
-  assert.deepEqual(valid.secretExceptions, ['.env.template']);
+  assert.deepEqual(valid.secretExceptions, { version: 2, namePatterns: ['.env.template'] });
 
   // Invalid JSON format
   assert.throws(() => loadConfig({ BRIDGE_SECRET_EXCLUSIONS: 'not-json' }), /must be a JSON array of strings/);
@@ -551,7 +552,7 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
 
   // Invalid absolute path pattern
   assert.throws(
-    () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(['/root/secret']) }),
+    () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/root/secret'] }) }),
     /must contain relative glob patterns without traversal/
   );
 });
@@ -1207,4 +1208,183 @@ test('isolation: managed copy check-ignore and operations exclude both roots and
     }
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('v2 secret exceptions: name exception permits harmless credential filename but never bypasses credential content detection', async () => {
+  const dir = await createRepo();
+  try {
+    // 1. Harmless content in .env.local: allowed under v2 exception
+    await writeFile(path.join(dir, '.env.local'), 'PORT=8080\nFEATURE_FLAG=true\nAPP_NAME=synthetic-app\n');
+
+    // 2. Secret content in another excepted file fixtures/.env.local:
+    // contains an AWS secret access key format
+    await mkdir(path.join(dir, 'fixtures'), { recursive: true });
+    await writeFile(path.join(dir, 'fixtures', '.env.local'), 'AWS_SECRET_ACCESS_KEY=BRIDGESYNTHETICNOTAREALKEY1234567890\n');
+
+    // 3. Secret content in third excepted file server.key:
+    // contains an unquoted private key
+    const privKey = '-----BEGIN PRIVATE KEY-----\nBRIDGE_SYNTHETIC_NOT_A_USABLE_KEY\n-----END PRIVATE KEY-----\n';
+    await writeFile(path.join(dir, 'server.key'), privKey);
+
+    const limits = {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: {
+        version: 2 as const,
+        namePatterns: ['.env.local', 'fixtures/.env.local', 'server.key'],
+      },
+    };
+
+    const copy = await createProjectCopy(dir, undefined, undefined, limits);
+    try {
+      // Harmless .env.local is included
+      assert.ok(copy.includedFiles.includes('.env.local'));
+      assert.equal(await readFile(path.join(copy.copyDirectory, '.env.local'), 'utf8'), 'PORT=8080\nFEATURE_FLAG=true\nAPP_NAME=synthetic-app\n');
+
+      // fixtures/.env.local had credential content -> blocked as SECRET_CONTENT despite name exception
+      assert.ok(!copy.includedFiles.includes('fixtures/.env.local'));
+      assert.ok(copy.blockedFiles?.some(b => b.path === 'fixtures/.env.local' && b.reason === 'SECRET_CONTENT'));
+
+      // server.key had private key content -> blocked as SECRET_CONTENT despite name exception
+      assert.ok(!copy.includedFiles.includes('server.key'));
+      assert.ok(copy.blockedFiles?.some(b => b.path === 'server.key' && b.reason === 'SECRET_CONTENT'));
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 secret exceptions: legacy non-empty arrays fail with migration guidance without echoing secret values', async () => {
+  const dir = await createRepo();
+  try {
+    const sensitivePatternName = 'sensitive-token-file-xyz.local';
+
+    // 1. In environment config: non-empty legacy array fails with migration message without echoing pattern
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify([sensitivePatternName]) }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.match(err.message, /uses legacy array format\. Migrate to strict version 2 object format/);
+        assert.ok(!err.message.includes(sensitivePatternName), 'Diagnostic must never echo values from legacy array');
+        return true;
+      }
+    );
+
+    // 2. Direct runtime API: non-empty legacy array in limits fails with migration message without echoing pattern
+    await assert.rejects(
+      preflightProjectFiles(dir, ['source.txt'], {
+        ...DEFAULT_PROJECT_LIMITS,
+        secretExceptions: [sensitivePatternName],
+      }),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_SECRET_EXCEPTIONS');
+        assert.match(err.message, /uses legacy array format\. Migrate to strict version 2 object format/);
+        assert.ok(!err.message.includes(sensitivePatternName), 'Diagnostic must never echo values from legacy array');
+        return true;
+      }
+    );
+
+    // 3. Direct runtime API: empty array and omitted normalize to empty policy
+    const emptyArrayPreflight = await preflightProjectFiles(dir, ['source.txt'], {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: [],
+    });
+    assert.deepEqual(emptyArrayPreflight.eligible, ['source.txt']);
+
+    const omittedPreflight = await preflightProjectFiles(dir, ['source.txt'], {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: undefined,
+    });
+    assert.deepEqual(omittedPreflight.eligible, ['source.txt']);
+
+    // 4. Env config: empty array and omitted normalize to empty policy
+    const emptyConfig = loadConfig({ BRIDGE_SECRET_EXCEPTIONS: '[]' });
+    assert.deepEqual(emptyConfig.secretExceptions, { version: 2, namePatterns: [] });
+
+    const omittedConfig = loadConfig({});
+    assert.deepEqual(omittedConfig.secretExceptions, { version: 2, namePatterns: [] });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 secret exceptions: strict validation rejects unsupported versions, extra fields, null, and traversal', async () => {
+  const dir = await createRepo();
+  try {
+    // Unsupported versions (v1, v3)
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 1, namePatterns: ['.env.local'] }) }),
+      /unsupported version.*Only version 2 is supported/
+    );
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 3, namePatterns: ['.env.local'] }) }),
+      /unsupported version.*Only version 2 is supported/
+    );
+
+    // Extra fields
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.local'], extraField: true }) }),
+      /contains unexpected fields\. Only version and namePatterns are allowed/
+    );
+
+    // Missing fields
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2 }) }),
+      /must contain version and namePatterns fields/
+    );
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ namePatterns: ['.env.local'] }) }),
+      /must contain version and namePatterns fields/
+    );
+
+    // Malformed / null
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: 'null' }),
+      /must be a strict JSON object/
+    );
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: '123' }),
+      /must be a strict JSON object/
+    );
+
+    // A variable retains extra fields for runtime validation without a type escape.
+    const extraPolicy = { version: 2 as const, namePatterns: ['.env.local'], unexpectedKey: 'bad' };
+    await assert.rejects(
+      preflightProjectFiles(dir, ['source.txt'], {
+        ...DEFAULT_PROJECT_LIMITS,
+        secretExceptions: extraPolicy,
+      }),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_SECRET_EXCEPTIONS'
+    );
+
+    await assert.rejects(
+      preflightProjectFiles(dir, ['source.txt'], {
+        ...DEFAULT_PROJECT_LIMITS,
+        secretExceptions: { version: 2, namePatterns: ['sub/../../outside'] },
+      }),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_SECRET_EXCEPTIONS'
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 policy rejects blank configuration and hides invalid version values', () => {
+  for (const input of ['', ' \t\n', '{']) {
+    assert.throws(() => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: input }), /valid JSON object/);
+  }
+  const hidden = 'BRIDGE_SYNTHETIC_VERSION_SHOULD_NOT_ECHO';
+  assert.throws(() => normalizeSecretExceptionsPolicy({ version: hidden, namePatterns: [] }), (error: unknown) => {
+    assert.ok(error instanceof BridgeError);
+    assert.equal(error.code, 'INVALID_SECRET_EXCEPTIONS');
+    assert.equal(error.message.includes(hidden), false);
+    return true;
+  });
+  const inherited = Object.setPrototypeOf({ namePatterns: [] }, { version: 2 });
+  assert.throws(() => normalizeSecretExceptionsPolicy(inherited), /must contain version and namePatterns/);
+  assert.deepEqual(normalizeSecretExceptionsPolicy({
+    version: 2, namePatterns: [' ./fixtures\\.env.local ', 'fixtures/.env.local'],
+  }), { version: 2, namePatterns: ['fixtures/.env.local'] });
 });
