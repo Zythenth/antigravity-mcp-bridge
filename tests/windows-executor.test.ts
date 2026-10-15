@@ -512,3 +512,24 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
     }
   });
 });
+
+test('Windows executor reports early native failure as bounded redacted BridgeError', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    await assert.rejects(
+      executeWindowsTest(command("process.stdout.write('test')"), copy, {
+        ...settings,
+        maxFiles: 0,
+        maxRuntimeFiles: 10000,
+      }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, 'must throw an Error');
+        const isBridgeError = 'code' in err && (err as { code: string }).code === 'WINDOWS_EXECUTOR_FAILED';
+        assert.ok(isBridgeError, 'must be BridgeError with code WINDOWS_EXECUTOR_FAILED');
+        assert.ok(!err.message.includes('ZodError'), 'must not be raw ZodError');
+        assert.ok(!err.message.includes('aliasesDeleted'), 'must not complain about aliasesDeleted');
+        assert.match(err.message, /Invalid request/);
+        return true;
+      }
+    );
+  });
+});

@@ -2,6 +2,9 @@
 
 ## Não publicado
 
+- Recuperação Windows separa a admissão de concessões da revogação: reconcilia hardlinks e reparse points finais criados após a concessão sem seguir seus destinos, preserva outras identidades e mantém a limpeza limitada. O SID do perfil é persistido antes das etapas falíveis de preparação; leases sem SID permanecem válidas em `creating` quando a limpeza falha.
+- Resultados nativos Windows validam nonce, encerramento, aliases, raízes e limpeza antes de aceitar a execução. Falhas de preparação ou limpeza retornam `BridgeError` com diagnóstico redigido e limitado; erros secundários são acrescentados ao diagnóstico original.
+
 - Descoberta do CLI oficial (`discover`) com validação estrita de exit code 0 para `--version` e `--help`, saída não vazia e verificação de capacidades `stream-json` e `--sandbox`.
 - Diagnósticos estruturados e códigos de encerramento de subprocesso: `AGY_NOT_FOUND`, `AGY_PERMISSION_DENIED`, `AGY_PROBE_FAILED`, `AGY_INCOMPATIBLE`, `CLI_INPUT_FAILED` (stdin fechado, EPIPE ou EOF prematuro), `AGY_IO_FAILED`, `AGY_PROCESS_FAILED`, `TASK_CANCELLED` e `TASK_TIMEOUT`.
 - Prevalência da primeira intenção registrada em cancelamentos e timeouts, acionando o encerramento do processo e descendentes (sem garantir encerramento de processos que escapem do grupo de processos ou de permissões do sistema operacional); redaction preventiva de `stderr` e mensagens de erro conhecidas, sem adicionar credenciais aos logs e sem prometer ausência absoluta de segredos externos desconhecidos.

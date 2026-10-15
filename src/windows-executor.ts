@@ -8,6 +8,7 @@ import { windowsHelperSource } from './windows-helper-source.js';
 import { loadConfig } from './config.js';
 import { stageWindowsCommand, validateWindowsCommand } from './windows-runtime.js';
 import { BridgeError } from './types.js';
+import { redactDiagnostic } from './subprocess.js';
 import type { TestCommand } from './native-tests.js';
 import type { SandboxSelection } from './sandbox-policy.js';
 import type { PortableNodeIdentity, WindowsNodeRuntime } from './portable-node.js';
@@ -191,6 +192,125 @@ export async function recoverWindowsExecutions(stateDirectory: string): Promise<
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
 
+export function redactExecutionDiagnostic(value: string | undefined | null): string {
+  if (!value) return '';
+  const redacted = redactDiagnostic(String(value), {});
+  const limit = 4000;
+  if (redacted.length > limit) {
+    const marker = '... [truncated]';
+    return redacted.slice(0, limit - marker.length) + marker;
+  }
+  return redacted;
+}
+
+const failureEnvelopeSchema = z.object({
+  nonce: z.string().uuid(),
+  error: z.string().min(1).max(64000),
+  exitCode: z.number().int().min(0).max(0xffffffff).nullable().optional(),
+  output: z.string().max(64000).optional(),
+  truncated: z.boolean().optional(),
+  pid: z.number().int().positive().optional(),
+  sandbox: z.literal('windows-lpac').optional(),
+  profileDeleted: z.boolean().optional(),
+  aliasesDeleted: z.boolean().optional(),
+  pathMappings: z.array(pathMappingSchema).length(3).optional(),
+}).strict();
+
+export interface ParseWindowsExecutionOptions {
+  expectedNonce: string;
+  roots: { copy: string; runtime: string; scratch: string };
+  maxOutputChars: number;
+}
+
+export function parseWindowsExecutionResult(
+  observed: { code: number | null; stdout: string; stderr?: string },
+  options: ParseWindowsExecutionOptions,
+): WindowsExecution {
+  if (observed.code == null || !Number.isInteger(observed.code) || observed.code < 0 || observed.code > 0xffffffff) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native controller exit code was not verified');
+  }
+
+  if (typeof observed.stdout !== 'string' || observed.stdout.length > 500000) {
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller output missing or oversized');
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(observed.stdout);
+  } catch {
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller returned unparseable output');
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller output was not an object');
+  }
+
+  const record = raw as Record<string, unknown>;
+  if (typeof record.nonce !== 'string' || record.nonce !== options.expectedNonce) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller nonce was not verified');
+  }
+
+  const hasError = Object.hasOwn(record, 'error');
+
+  if (hasError) {
+    if (observed.code === 0) {
+      throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native controller reported error with unexpected zero exit code');
+    }
+    const failureParsed = failureEnvelopeSchema.safeParse(raw);
+    if (!failureParsed.success) {
+      throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller returned invalid failure envelope');
+    }
+
+    const isTimedOutOrCancelled = record.error === 'Command timed out' || record.error === 'Command cancelled';
+    const isCompletedExecution = isTimedOutOrCancelled &&
+      record.sandbox === 'windows-lpac' &&
+      typeof record.exitCode === 'number' &&
+      Number.isInteger(record.exitCode) &&
+      record.exitCode >= 0 &&
+      record.exitCode <= 0xffffffff &&
+      record.aliasesDeleted === true &&
+      record.profileDeleted === true &&
+      Array.isArray(record.pathMappings) &&
+      record.pathMappings.length === 3;
+
+    if (isCompletedExecution) {
+      let result: WindowsExecution;
+      try {
+        result = executionSchema.parse(raw);
+      } catch {
+        throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native execution result did not match expected schema');
+      }
+      verifyPathMappings(result, options.roots);
+      if (result.output.length > options.maxOutputChars) {
+        throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller output limit was exceeded');
+      }
+      result.error = redactExecutionDiagnostic(result.error);
+      return result;
+    }
+
+    const redacted = redactExecutionDiagnostic(record.error as string);
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', redacted);
+  }
+
+  if (observed.code !== 0) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'No verified AppContainer execution result');
+  }
+
+  let result: WindowsExecution;
+  try {
+    result = executionSchema.parse(raw);
+  } catch {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native execution result did not match expected schema');
+  }
+
+  verifyPathMappings(result, options.roots);
+  if (result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > options.maxOutputChars) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller nonce, DOS aliases, output limit, or profile cleanup was not verified');
+  }
+  if (result.sandbox !== 'windows-lpac' || result.exitCode === null) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'No verified AppContainer execution result');
+  }
+  return result;
+}
+
 export async function executeWindowsTest(command: TestCommand, copyDirectory: string, options: WindowsExecutionOptions): Promise<WindowsExecution> {
   if (process.platform !== 'win32') throw new BridgeError('WINDOWS_EXECUTOR_UNAVAILABLE', 'Native Windows execution is only available on Windows');
   validateWindowsCommand(command);
@@ -248,10 +368,11 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
     let observed: NativeInvocation;
     try { observed = await nativeProcess(controller.helper, [file], options, 'cancel ' + nonce); }
     finally { await runRecoveryWithController(stateDirectory, { ...options, signal: undefined }); }
-    const result = executionSchema.parse(JSON.parse(observed.stdout));
-    verifyPathMappings(result, { copy: cwd, runtime, scratch });
-    if (result.nonce !== nonce || result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > selection.maxOutputChars) throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller nonce, DOS aliases, output limit, or profile cleanup was not verified');
-    if (!result.error && (observed.code !== 0 || result.sandbox !== 'windows-lpac' || result.exitCode === null)) throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'No verified AppContainer execution result');
+    const result = parseWindowsExecutionResult(observed, {
+      expectedNonce: nonce,
+      roots: { copy: cwd, runtime, scratch },
+      maxOutputChars: selection.maxOutputChars,
+    });
     return { ...result, portableNode: staged.portableNode };
   } finally {
     await removeOwned([[scratch, 'agy-mcp-scratch-'], [runtime, 'agy-mcp-runtime-'], [controller.directory, 'agy-mcp-controller-']], temp);

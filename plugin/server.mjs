@@ -46410,6 +46410,7 @@ internal static class WindowsTestRunner
     {
         public Grant grant;
         public int maxFiles;
+        public bool revokeLeaf;
         readonly List<IntPtr> handles = new List<IntPtr>();
         public void Add(IntPtr value) { handles.Add(value); }
         public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }
@@ -46902,7 +46903,7 @@ internal static class WindowsTestRunner
     // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.
     static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }
 
-    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)
+    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles, bool isRevoke = false)
     {
         RequireLocalAbsolutePath(full, "Permission target");
         string canonical = Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar);
@@ -46918,17 +46919,27 @@ internal static class WindowsTestRunner
             try
             {
                 ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");
-                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0)
+                bool isReparse = (info.attributes & (uint)FileAttributes.ReparsePoint) != 0;
+                bool isCloud = false;
+                if (isReparse)
                 {
                     FileAttributeTagInfo tagInfo;
                     Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");
-                    if (!IsCloudTag(tagInfo.tag)) throw new Exception("Permission target contains an unsafe reparse point");
+                    if (IsCloudTag(tagInfo.tag))
+                    {
+                        isCloud = true;
+                    }
+                    else
+                    {
+                        if (!isRevoke || index < pieces.Length - 1) throw new Exception("Permission target contains an unsafe reparse point");
+                    }
                 }
                 bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;
                 if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");
                 if (index == pieces.Length - 1)
                 {
-                    if (!directory && info.links > 1) throw new Exception("Permission target file has multiple hard links");
+                    if (!directory && !isRevoke && info.links > 1) throw new Exception("Permission target file has multiple hard links");
+                    if (isRevoke && isReparse && !isCloud) target.revokeLeaf = true;
                     target.grant.path = canonical; target.grant.directory = directory; target.grant.volume = info.volume; target.grant.fileIndexHigh = info.indexHigh; target.grant.fileIndexLow = info.indexLow;
                 }
                 target.Add(handle); handle = IntPtr.Zero;
@@ -46986,6 +46997,14 @@ internal static class WindowsTestRunner
         catch { target.Dispose(); throw; }
     }
 
+    static PinnedTarget PinRevokeTarget(Grant supplied, int maxFiles)
+    {
+        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };
+        try { ValidatePathComponents(supplied.path, target, false, maxFiles, true); return target; }
+        catch { target.Dispose(); throw; }
+    }
+
     static bool SameIdentity(Grant expected, Grant actual)
     {
         return expected.directory == actual.directory && expected.volume == actual.volume && expected.fileIndexHigh == actual.fileIndexHigh && expected.fileIndexLow == actual.fileIndexLow;
@@ -47012,65 +47031,134 @@ internal static class WindowsTestRunner
         return true;
     }
 
+    const int RevokeFileBudget = 1000000;
+
+    static void AddCleanupFailure(List<string> failures, string message)
+    {
+        if (failures.Count > 25 || (failures.Count == 1 && failures[0] == OversizedDiagnosticMessage)) return;
+        if (failures.Count == 25) message = "Additional cleanup failures omitted";
+        long length = message.Length;
+        foreach (string failure in failures) length += failure.Length + 2;
+        if (length > MaxDiagnosticCharacters)
+        {
+            failures.Clear(); failures.Add(OversizedDiagnosticMessage);
+        }
+        else failures.Add(message);
+    }
+
     static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)
     {
-        AccessTree(target, identity, grant, true, target.maxFiles, new int[] { 0 });
+        if (!grant)
+        {
+            using (PinnedTarget fresh = PinRevokeTarget(target.grant, RevokeFileBudget))
+            {
+                if (!SameIdentity(target.grant, fresh.grant)) throw new Exception("Granted target identity changed");
+                AccessTree(fresh, identity, false, true, RevokeFileBudget, new int[] { 0 });
+            }
+            return;
+        }
+        AccessTree(target, identity, true, true, target.maxFiles, new int[] { 0 });
     }
 
     static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)
     {
-        // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.
-        RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);
-        if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;
-        RawAcl acl = descriptor.DiscretionaryAcl;
-        bool changed = false;
-        if (acl == null && grant) throw new Exception("Permission target has no DACL");
-        if (acl != null)
+        string rootFailure = null;
+        try
         {
-            int rights = (int)RightsFor(target.grant); CommonAce existing = null;
-            for (int index = acl.Count - 1; index >= 0; index--)
+            // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.
+            RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);
+            if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;
+            RawAcl acl = descriptor.DiscretionaryAcl;
+            bool changed = false;
+            if (acl == null && grant) throw new Exception("Permission target has no DACL");
+            if (acl != null)
             {
-                KnownAce ace = acl[index] as KnownAce;
-                if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;
-                if (!grant) { acl.RemoveAce(index); changed = true; }
-                else
+                int rights = (int)RightsFor(target.grant); CommonAce existing = null;
+                for (int index = acl.Count - 1; index >= 0; index--)
                 {
-                    CommonAce allow = ace as CommonAce;
-                    if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");
-                    existing = allow;
-                    if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }
+                    KnownAce ace = acl[index] as KnownAce;
+                    if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;
+                    if (!grant) { acl.RemoveAce(index); changed = true; }
+                    else
+                    {
+                        CommonAce allow = ace as CommonAce;
+                        if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");
+                        existing = allow;
+                        if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }
+                    }
+                }
+                if (grant && existing == null)
+                {
+                    AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;
+                    if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;
+                    int insert = acl.Count;
+                    if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }
+                    acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;
+                }
+                if (changed)
+                {
+                    ControlFlags storedFlags = descriptor.ControlFlags;
+                    // AR preserves AI in this non-propagating write; Windows consumes AR.
+                    if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);
+                    var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);
+                    Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");
+                    descriptor.SetFlags(storedFlags);
+                    if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");
                 }
             }
-            if (grant && existing == null)
-            {
-                AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;
-                if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;
-                int insert = acl.Count;
-                if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }
-                acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;
-            }
-            if (changed)
-            {
-                ControlFlags storedFlags = descriptor.ControlFlags;
-                // AR preserves AI in this non-propagating write; Windows consumes AR.
-                if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);
-                var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);
-                Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");
-                descriptor.SetFlags(storedFlags);
-                if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");
-            }
         }
-        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.
-        if (!target.grant.directory) return;
-        foreach (string child in Directory.GetFileSystemEntries(target.grant.path))
+        catch (Exception error)
         {
-            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
-            using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })
+            if (grant) throw;
+            rootFailure = Path.GetFileName(target.grant.path) + " DACL: " + error.Message;
+        }
+
+        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.
+        if (!target.grant.directory || (!grant && target.revokeLeaf))
+        {
+            if (rootFailure != null) throw new Exception(CombineDiagnostic(rootFailure, null));
+            return;
+        }
+
+        List<string> childFailures = null;
+        try
+        {
+            foreach (string child in Directory.EnumerateFileSystemEntries(target.grant.path))
             {
-                ValidatePathComponents(child, pin, false, maxFiles);
-                AccessTree(pin, identity, grant, false, maxFiles, count);
+                if (++count[0] > maxFiles)
+                {
+                    if (grant) throw new Exception("Permission directory exceeds the configured file limit");
+                    if (childFailures == null) childFailures = new List<string>();
+                    AddCleanupFailure(childFailures, "Permission directory exceeds cleanup file limit");
+                    break;
+                }
+                using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })
+                {
+                    try
+                    {
+                        ValidatePathComponents(child, pin, false, maxFiles, !grant);
+                        AccessTree(pin, identity, grant, false, maxFiles, count);
+                    }
+                    catch (Exception error)
+                    {
+                        if (grant) throw;
+                        if (childFailures == null) childFailures = new List<string>();
+                        AddCleanupFailure(childFailures, Path.GetFileName(child) + ": " + error.Message);
+                    }
+                }
             }
         }
+        catch (Exception enumError)
+        {
+            if (grant) throw;
+            if (childFailures == null) childFailures = new List<string>();
+            AddCleanupFailure(childFailures, "Enumerate: " + enumError.Message);
+        }
+
+        var allFailures = new List<string>();
+        if (rootFailure != null) AddCleanupFailure(allFailures, rootFailure);
+        if (childFailures != null) foreach (string failure in childFailures) AddCleanupFailure(allFailures, failure);
+        if (allFailures.Count != 0) throw new Exception(String.Join("; ", allFailures.ToArray()));
     }
 
     const string NullDeviceKernelPath = @"\\\\?\\GLOBALROOT\\Device\\Null";
@@ -47535,7 +47623,11 @@ internal static class WindowsTestRunner
 
     static SecurityIdentifier LeaseIdentity(Lease lease)
     {
-        if (lease.phase == "creating") return null;
+        if (String.IsNullOrEmpty(lease.sid))
+        {
+            if (lease.phase == "creating") return null;
+            throw new Exception("Lease has no profile identity");
+        }
         var identity = new SecurityIdentifier(lease.sid);
         IntPtr derived; int result = DeriveAppContainerSidFromAppContainerName(lease.profile, out derived);
         if (result >= 0 && derived != IntPtr.Zero)
@@ -47605,9 +47697,8 @@ internal static class WindowsTestRunner
                         for (int index = lease.grants.Length - 1; index >= 0; index--)
                         {
                             if (IsMissingOwnedTemporaryGrant(lease, lease.grants[index])) continue;
-                            PinnedTarget pin = null;
-                            try { pin = PinGrant(lease.grants[index], 1000000); if (!SameIdentity(lease.grants[index], pin.grant)) throw new Exception("Granted target identity changed"); Access(pin, identity, false); pins.Add(pin); pin = null; }
-                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); if (pin != null) pin.Dispose(); }
+                            try { Access(new PinnedTarget { grant = lease.grants[index] }, identity, false); }
+                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); }
                         }
                     }
                     try { DeleteProfile(lease.profile); } catch (Exception error) { cleanupFailures.Add("Profile: " + error.Message); }
@@ -47615,7 +47706,8 @@ internal static class WindowsTestRunner
                 finally { for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose(); }
                 if (cleanupFailures.Count != 0)
                 {
-                    lease.phase = "cleanup-failed"; try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }
+                    if (!String.IsNullOrEmpty(lease.sid)) lease.phase = "cleanup-failed";
+                    try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }
                     throw new Exception(String.Join("; ", cleanupFailures.ToArray()));
                 }
                 File.Delete(file); recovered++;
@@ -47659,6 +47751,19 @@ internal static class WindowsTestRunner
                 part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;
         }
         return false;
+    }
+
+    const int MaxDiagnosticCharacters = 64000;
+    internal const string OversizedDiagnosticMessage = "Execution diagnostic omitted: exceeded 64000 characters [truncated]";
+
+    internal static string CombineDiagnostic(string primary, string secondary)
+    {
+        long length = (primary == null ? 0 : primary.Length) + (long)(secondary == null ? 0 : secondary.Length);
+        if (!String.IsNullOrEmpty(primary) && !String.IsNullOrEmpty(secondary)) length += 2;
+        if (length > MaxDiagnosticCharacters) return OversizedDiagnosticMessage;
+        if (String.IsNullOrEmpty(primary)) return secondary ?? "";
+        if (String.IsNullOrEmpty(secondary)) return primary;
+        return primary + "; " + secondary;
     }
 
     static int Main(string[] arguments)
@@ -47713,6 +47818,7 @@ internal static class WindowsTestRunner
             WriteLease(leaseFile, lease, true, serializer);
             CheckHr(CreateAppContainerProfile(profile, profile, "Isolated test process", IntPtr.Zero, 0, out sid), "CreateAppContainerProfile");
             profileCreated = true; identity = new SecurityIdentifier(sid);
+            lease.sid = identity.Value; WriteLease(leaseFile, lease, false, serializer);
             Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Temp"));
             Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Local"));
             bool needNullGrant = request.environment.ContainsKey("GIT_EXEC_PATH") && NullDeviceRequiresGrant(identity);
@@ -47799,7 +47905,11 @@ internal static class WindowsTestRunner
                     finally { CloseHandle(job); job = IntPtr.Zero; }
                 }
             }
-            if (write != IntPtr.Zero) CloseHandle(write); if (reader != null && !reader.Join(5000)) result["error"] = "Output reader did not terminate";
+            if (write != IntPtr.Zero) CloseHandle(write);
+            if (reader != null && !reader.Join(5000))
+            {
+                result["error"] = CombineDiagnostic(result.ContainsKey("error") && result["error"] != null ? result["error"].ToString() : null, "Output reader did not terminate");
+            }
             if (child.thread != IntPtr.Zero) CloseHandle(child.thread); if (child.process != IntPtr.Zero) CloseHandle(child.process); if (read != IntPtr.Zero) CloseHandle(read); if (inputRead != IntPtr.Zero) CloseHandle(inputRead); if (inputWrite != IntPtr.Zero) CloseHandle(inputWrite);
             if (attributesInitialized) DeleteProcThreadAttributeList(attributes);
             foreach (IntPtr pointer in new IntPtr[] { attributes, capabilityData, capabilityList, lpacData, handleData, jobData, envData }) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer);
@@ -47817,9 +47927,12 @@ internal static class WindowsTestRunner
             if (leaseFile != null)
             {
                 if (failures.Count == 0 && profileCreated) { try { File.Delete(leaseFile); } catch (Exception error) { failures.Add("Lease: " + error.Message); } }
-                if (failures.Count != 0) try { if (lease != null) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }
+                if (failures.Count != 0) try { if (lease != null && !String.IsNullOrEmpty(lease.sid)) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }
             }
-            if (failures.Count != 0) result["error"] = "Cleanup failed: " + String.Join("; ", failures.ToArray());
+            if (failures.Count != 0)
+            {
+                result["error"] = CombineDiagnostic(result.ContainsKey("error") && result["error"] != null ? result["error"].ToString() : null, "Cleanup failed: " + String.Join("; ", failures.ToArray()));
+            }
         }
         result["output"] = output.ToString(); result["truncated"] = truncated; Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
     }
@@ -49411,6 +49524,95 @@ async function recoverWindowsExecutions(stateDirectory) {
   await mkdir7(effective, { recursive: true, mode: 448 });
   await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
 }
+function redactExecutionDiagnostic(value) {
+  if (!value)
+    return "";
+  const redacted = redactDiagnostic(String(value), {});
+  const limit = 4e3;
+  if (redacted.length > limit) {
+    const marker = "... [truncated]";
+    return redacted.slice(0, limit - marker.length) + marker;
+  }
+  return redacted;
+}
+var failureEnvelopeSchema = external_exports.object({
+  nonce: external_exports.string().uuid(),
+  error: external_exports.string().min(1).max(64e3),
+  exitCode: external_exports.number().int().min(0).max(4294967295).nullable().optional(),
+  output: external_exports.string().max(64e3).optional(),
+  truncated: external_exports.boolean().optional(),
+  pid: external_exports.number().int().positive().optional(),
+  sandbox: external_exports.literal("windows-lpac").optional(),
+  profileDeleted: external_exports.boolean().optional(),
+  aliasesDeleted: external_exports.boolean().optional(),
+  pathMappings: external_exports.array(pathMappingSchema).length(3).optional()
+}).strict();
+function parseWindowsExecutionResult(observed, options) {
+  if (observed.code == null || !Number.isInteger(observed.code) || observed.code < 0 || observed.code > 4294967295) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native controller exit code was not verified");
+  }
+  if (typeof observed.stdout !== "string" || observed.stdout.length > 5e5) {
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller output missing or oversized");
+  }
+  let raw;
+  try {
+    raw = JSON.parse(observed.stdout);
+  } catch {
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller returned unparseable output");
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller output was not an object");
+  }
+  const record2 = raw;
+  if (typeof record2.nonce !== "string" || record2.nonce !== options.expectedNonce) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce was not verified");
+  }
+  const hasError = Object.hasOwn(record2, "error");
+  if (hasError) {
+    if (observed.code === 0) {
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native controller reported error with unexpected zero exit code");
+    }
+    const failureParsed = failureEnvelopeSchema.safeParse(raw);
+    if (!failureParsed.success) {
+      throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller returned invalid failure envelope");
+    }
+    const isTimedOutOrCancelled = record2.error === "Command timed out" || record2.error === "Command cancelled";
+    const isCompletedExecution = isTimedOutOrCancelled && record2.sandbox === "windows-lpac" && typeof record2.exitCode === "number" && Number.isInteger(record2.exitCode) && record2.exitCode >= 0 && record2.exitCode <= 4294967295 && record2.aliasesDeleted === true && record2.profileDeleted === true && Array.isArray(record2.pathMappings) && record2.pathMappings.length === 3;
+    if (isCompletedExecution) {
+      let result2;
+      try {
+        result2 = executionSchema.parse(raw);
+      } catch {
+        throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native execution result did not match expected schema");
+      }
+      verifyPathMappings(result2, options.roots);
+      if (result2.output.length > options.maxOutputChars) {
+        throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller output limit was exceeded");
+      }
+      result2.error = redactExecutionDiagnostic(result2.error);
+      return result2;
+    }
+    const redacted = redactExecutionDiagnostic(record2.error);
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", redacted);
+  }
+  if (observed.code !== 0) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+  }
+  let result;
+  try {
+    result = executionSchema.parse(raw);
+  } catch {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native execution result did not match expected schema");
+  }
+  verifyPathMappings(result, options.roots);
+  if (result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > options.maxOutputChars) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce, DOS aliases, output limit, or profile cleanup was not verified");
+  }
+  if (result.sandbox !== "windows-lpac" || result.exitCode === null) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+  }
+  return result;
+}
 async function executeWindowsTest(command2, copyDirectory, options) {
   if (process.platform !== "win32")
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
@@ -49483,12 +49685,11 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     } finally {
       await runRecoveryWithController(stateDirectory, { ...options, signal: void 0 });
     }
-    const result = executionSchema.parse(JSON.parse(observed.stdout));
-    verifyPathMappings(result, { copy: cwd, runtime, scratch });
-    if (result.nonce !== nonce || result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > selection.maxOutputChars)
-      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce, DOS aliases, output limit, or profile cleanup was not verified");
-    if (!result.error && (observed.code !== 0 || result.sandbox !== "windows-lpac" || result.exitCode === null))
-      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+    const result = parseWindowsExecutionResult(observed, {
+      expectedNonce: nonce,
+      roots: { copy: cwd, runtime, scratch },
+      maxOutputChars: selection.maxOutputChars
+    });
     return { ...result, portableNode: staged.portableNode };
   } finally {
     await removeOwned([[scratch, "agy-mcp-scratch-"], [runtime, "agy-mcp-runtime-"], [controller.directory, "agy-mcp-controller-"]], temp);

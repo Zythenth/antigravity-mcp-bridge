@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -42,13 +43,14 @@ async function removeOwned(directory: string | undefined, prefix: string): Promi
   await rm(canonical, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 
-function storedAcls(targets: { path: string; mode?: 'explicit' | 'foreign' }[]): string[] {
+function storedAcls(targets: { path: string; mode?: string }[]): string[] {
   const source = `using System;using System.IO;using System.ComponentModel;using System.Runtime.InteropServices;using System.Security.AccessControl;
 public static class AclFixture {
 [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool GetFileSecurity(string p,uint i,byte[] b,uint n,out uint needed);
 [DllImport("advapi32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool SetFileSecurity(string p,uint i,byte[] b);
 public static string Apply(string p,string mode){uint n;GetFileSecurity(p,4,null,0,out n);byte[] b=new byte[n];if(!GetFileSecurity(p,4,b,n,out n))throw new Win32Exception();var sd=new RawSecurityDescriptor(b,0);
 if(!String.IsNullOrEmpty(mode)){if(mode=="foreign")sd.DiscretionaryAcl.InsertAce(0,new CommonAce(AceFlags.None,AceQualifier.AccessAllowed,0x120089,new System.Security.Principal.SecurityIdentifier("S-1-5-21-1-2-3-4567"),false,null));
+else if(mode.StartsWith("S-1-"))sd.DiscretionaryAcl.InsertAce(0,new CommonAce(AceFlags.None,AceQualifier.AccessAllowed,0x120089,new System.Security.Principal.SecurityIdentifier(mode),false,null));
 else {var flags=sd.ControlFlags&~(ControlFlags.DiscretionaryAclProtected|ControlFlags.DiscretionaryAclAutoInherited|ControlFlags.DiscretionaryAclAutoInheritRequired);sd.SetFlags(flags);foreach(GenericAce ace in sd.DiscretionaryAcl){ace.AceFlags&=~AceFlags.Inherited;}}
 b=new byte[sd.BinaryLength];sd.GetBinaryForm(b,0);if(!SetFileSecurity(p,4,b))throw new Win32Exception();GetFileSecurity(p,4,null,0,out n);b=new byte[n];if(!GetFileSecurity(p,4,b,n,out n))throw new Win32Exception();sd=new RawSecurityDescriptor(b,0);}
 return sd.GetSddlForm(AccessControlSections.Access);}}`;
@@ -76,6 +78,17 @@ async function profileExists(sid: string): Promise<boolean> {
   const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
   assert.ok(code === 0 || code === 1, error);
   return code === 0;
+}
+
+function ownedProfile(profile: string, action: 'create' | 'remove'): string {
+  assert.match(profile, /^agy\.test\.[0-9a-f]{32}$/);
+  const source = 'using System;using System.Runtime.InteropServices;using System.Security.Principal;public static class ProfileFixture {' +
+    '[DllImport("userenv.dll",CharSet=CharSet.Unicode)]static extern int CreateAppContainerProfile(string n,string d,string x,IntPtr c,uint z,out IntPtr s);' +
+    '[DllImport("userenv.dll",CharSet=CharSet.Unicode)]static extern int DeleteAppContainerProfile(string n);[DllImport("advapi32.dll")]static extern IntPtr FreeSid(IntPtr s);' +
+    'public static string Create(string n){IntPtr s;int r=CreateAppContainerProfile(n,n,"Owned test profile",IntPtr.Zero,0,out s);if(r<0)Marshal.ThrowExceptionForHR(r);try{return new SecurityIdentifier(s).Value;}finally{FreeSid(s);}}' +
+    'public static void Remove(string n){int r=DeleteAppContainerProfile(n);if(r<0&&r!=unchecked((int)0x80070002)&&r!=unchecked((int)0x80070003))Marshal.ThrowExceptionForHR(r);}}';
+  const script = "$ErrorActionPreference='Stop';Add-Type -TypeDefinition $env:BRIDGE_PROFILE_SOURCE;" + (action === 'create' ? '[ProfileFixture]::Create($env:BRIDGE_PROFILE_NAME)' : '[ProfileFixture]::Remove($env:BRIDGE_PROFILE_NAME)');
+  return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, encoding: 'utf8', env: { ...process.env, BRIDGE_PROFILE_SOURCE: source, BRIDGE_PROFILE_NAME: profile } }).trim();
 }
 
 async function readLease(state: string): Promise<{ file: string; value: Lease }> {
@@ -246,6 +259,228 @@ test('Windows recovery leaves an existing scratch replacement untouched but skip
     } finally {
       if (worker && worker.exitCode === null) worker.kill('SIGTERM');
       if (staleLease) await rm(staleLease, { force: true });
+      await removeOwned(controllerDirectory, 'agy-mcp-controller-');
+    }
+  });
+});
+
+test('Windows cleanup revokes the owned SID after a child creates a hardlink', { skip: process.platform !== 'win32' }, async () => {
+  await crashFixture(async ({ copy, state }) => {
+    const seedPath = path.join(copy, 'seed.txt');
+    await writeFile(seedPath, 'seed content');
+    storedAcls([{ path: seedPath, mode: 'foreign' }]);
+    const beforeSeedDacl = storedAcls([{ path: seedPath }])[0]!;
+    assert.ok(beforeSeedDacl.includes('(A;;FR;;;S-1-5-21-1-2-3-4567)'), 'foreign ACE must exist before run');
+
+    const lpacScript = "const fs=require('node:fs');fs.linkSync('seed.txt','alias.txt');process.stdout.write('hardlink-created');";
+    const result = await executeWindowsTest({ executable: process.execPath, args: ['-e', lpacScript] }, copy, { ...settings, stateDirectory: state });
+
+    assert.equal(result.exitCode, 0, result.output);
+    assert.equal(result.aliasesDeleted, true, 'DOS aliases must be cleaned');
+    assert.equal(result.profileDeleted, true, 'AppContainer profile must be deleted');
+    assert.equal(result.output, 'hardlink-created');
+
+    const aliasPath = path.join(copy, 'alias.txt');
+    const afterSeedDacl = storedAcls([{ path: seedPath }])[0]!;
+    const afterAliasDacl = storedAcls([{ path: aliasPath }])[0]!;
+
+    assert.equal(afterSeedDacl, beforeSeedDacl, 'seed DACL must match exactly before the run');
+    assert.equal(afterAliasDacl, beforeSeedDacl, 'alias DACL must match exactly before the run');
+
+    const leaseDir = path.join(state, 'windows-lpac-leases');
+    const leaseFiles = await readdir(leaseDir).catch(() => []);
+    assert.equal(leaseFiles.filter(f => f.endsWith('.json')).length, 0, 'lease file must be deleted after verified cleanup');
+
+    // Verify independent next run in a different owned copy sharing the same state directory
+    const temp = await realpath(os.tmpdir());
+    const secondCopy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+    try {
+      const nextResult = await executeWindowsTest({ executable: process.execPath, args: ['-e', "process.stdout.write('next run ok')"] }, secondCopy, { ...settings, stateDirectory: state });
+      assert.equal(nextResult.exitCode, 0, nextResult.output);
+      assert.equal(nextResult.output, 'next run ok');
+    } finally {
+      await removeOwned(secondCopy, 'agy-mcp-copy-');
+    }
+
+    // Verify preexisting hardlinks are still refused at admission
+    const thirdCopy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+    try {
+      const pre1 = path.join(thirdCopy, 'pre1.txt');
+      const pre2 = path.join(thirdCopy, 'pre2.txt');
+      await writeFile(pre1, 'preexisting');
+      await link(pre1, pre2);
+      await assert.rejects(
+        executeWindowsTest({ executable: process.execPath, args: ['-e', 'process.exit(0)'] }, thirdCopy, { ...settings, stateDirectory: state }),
+        /hard links|INVALID_SANDBOX_PATH/
+      );
+    } finally {
+      await removeOwned(thirdCopy, 'agy-mcp-copy-');
+    }
+  });
+});
+
+test('Windows recovery handles creating leases and missing SID cannot produce invalid cleanup-failed lease', { skip: process.platform !== 'win32' }, async () => {
+  await crashFixture(async ({ copy, state }) => {
+    const temp = await realpath(os.tmpdir());
+    const scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
+    const runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
+    try {
+      const nonce = randomUUID();
+      const profile = 'agy.test.' + nonce.replace(/-/g, '');
+      const leaseDirectory = path.join(state, 'windows-lpac-leases');
+      await mkdir(leaseDirectory, { recursive: true });
+      const leaseFile = path.join(leaseDirectory, nonce.replace(/-/g, '') + '.json');
+
+      // 1. Legacy creating lease without SID but with real nonce-owned profile created
+      const creatingLease = {
+        version: 3,
+        nonce,
+        profile,
+        sid: '',
+        phase: 'creating',
+        controllerPid: process.pid,
+        controllerStarted: 1, // dead controller start time
+        cwd: copy,
+        runtime,
+        scratch,
+        grants: [],
+        logon: '00000000.00000000',
+        aliases: [
+          { kind: 'copy', physicalRoot: copy, customName: 'AGY.TEST.' + nonce.toUpperCase() + '.COPY', drive: 'Z:', aliasRoot: 'Z:\\', customTarget: '\\??\\' + copy, driveTarget: '\\??\\AGY.TEST.' + nonce.toUpperCase() + '.COPY', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
+          { kind: 'runtime', physicalRoot: runtime, customName: 'AGY.TEST.' + nonce.toUpperCase() + '.RUNTIME', drive: 'Y:', aliasRoot: 'Y:\\', customTarget: '\\??\\' + runtime, driveTarget: '\\??\\AGY.TEST.' + nonce.toUpperCase() + '.RUNTIME', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
+          { kind: 'scratch', physicalRoot: scratch, customName: 'AGY.TEST.' + nonce.toUpperCase() + '.SCRATCH', drive: 'X:', aliasRoot: 'X:\\', customTarget: '\\??\\' + scratch, driveTarget: '\\??\\AGY.TEST.' + nonce.toUpperCase() + '.SCRATCH', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
+        ],
+        nullDeviceGrant: false,
+        jobCreated: false,
+      };
+
+      const sid1 = ownedProfile(profile, 'create');
+      try {
+        assert.equal(await profileExists(sid1), true);
+        await writeFile(leaseFile, JSON.stringify(creatingLease), 'utf8');
+        await recoverWindowsExecutions(state);
+        assert.equal(await profileExists(sid1), false, 'creating lease without SID removes existing nonce-owned profile');
+        await assert.rejects(readFile(leaseFile), { code: 'ENOENT' });
+      } finally {
+        ownedProfile(profile, 'remove');
+      }
+
+      // 2. Creating lease with persisted SID
+      const nonce2 = randomUUID(), profile2 = 'agy.test.' + nonce2.replaceAll('-', '');
+      const file2 = path.join(leaseDirectory, nonce2.replaceAll('-', '') + '.json');
+      const sid2 = ownedProfile(profile2, 'create');
+      try {
+        assert.equal(await profileExists(sid2), true);
+        const aliases = creatingLease.aliases.map(alias => {
+          const customName = 'AGY.TEST.' + nonce2.toUpperCase() + '.' + alias.kind.toUpperCase();
+          return { ...alias, customName, driveTarget: '\\??\\' + customName };
+        });
+        await writeFile(file2, JSON.stringify({ ...creatingLease, nonce: nonce2, profile: profile2, sid: sid2, aliases }), 'utf8');
+        await recoverWindowsExecutions(state);
+        assert.equal(await profileExists(sid2), false, 'creating recovery must remove only the owned profile');
+        await assert.rejects(readFile(file2), { code: 'ENOENT' });
+      } finally {
+        ownedProfile(profile2, 'remove');
+      }
+    } finally {
+      await removeOwned(scratch, 'agy-mcp-scratch-');
+      await removeOwned(runtime, 'agy-mcp-runtime-');
+    }
+  });
+});
+
+test('Windows cleanup budget allows growth above admission limit and preserves foreign ACL', { skip: process.platform !== 'win32' }, async () => {
+  const temp = await realpath(os.tmpdir());
+  const compileDir = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-harness-compile-')));
+  const runnerExe = path.join(compileDir, 'runner.exe');
+  const harnessExe = path.join(compileDir, 'harness.exe');
+  const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+  try {
+    execFileSync(compiler, ['/nologo', '/target:exe', '/platform:x64', '/r:System.Web.Extensions.dll', '/nowarn:0649', '/out:' + runnerExe, path.resolve('native/windows-test-runner.cs')], { windowsHide: true });
+    execFileSync(compiler, ['/nologo', '/target:exe', '/platform:x64', '/r:System.Web.Extensions.dll', '/nowarn:0649', '/out:' + harnessExe, path.resolve('tests/windows-alias-harness.cs')], { windowsHide: true });
+    const output = execFileSync(harnessExe, [runnerExe, 'cleanup-growth'], { windowsHide: true, encoding: 'utf8' });
+    assert.equal(output.trim(), '');
+  } finally {
+    await removeOwned(compileDir, 'agy-mcp-harness-compile-');
+  }
+});
+
+test('Windows cleanup revokes the owned SID from post-grant final reparse point without following destination', { skip: process.platform !== 'win32' }, async () => {
+  await crashFixture(async ({ copy, state, grant, ready, heartbeat }) => {
+    let worker: ChildProcessWithoutNullStreams | undefined;
+    let controllerDirectory: string | undefined;
+    const temp = await realpath(os.tmpdir());
+    const destination = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-destination-')));
+    try {
+      const destFile = path.join(destination, 'dest-file.txt');
+      await writeFile(destFile, 'destination content');
+      storedAcls([{ path: destination, mode: 'foreign' }, { path: destFile, mode: 'foreign' }]);
+
+      const launched = await launchCrashWorker(copy, state, grant, ready, heartbeat);
+      worker = launched.worker;
+      controllerDirectory = path.dirname(launched.announcement.requestPath);
+      await verifyControllerAnnouncement(launched.announcement, state);
+      await eventually('LPAC command did not become ready', async () => (await readFile(ready, 'utf8').catch(() => undefined)) === 'ready' ? true : undefined);
+
+      const active = await readLease(state);
+      const sibling = path.join(grant, 'sibling.txt');
+      await writeFile(sibling, 'sibling content');
+      storedAcls([{ path: sibling, mode: 'foreign' }]);
+
+      const junction = path.join(grant, 'junction-link');
+      await symlink(destination, junction, 'junction');
+
+      // Add ACE with the real active.value.sid to destination, destFile, and junction
+      storedAcls([
+        { path: destination, mode: active.value.sid },
+        { path: destFile, mode: active.value.sid },
+        { path: junction, mode: active.value.sid },
+      ]);
+      const beforeDestDirDacl = storedAcls([{ path: destination }])[0]!;
+      const beforeDestFileDacl = storedAcls([{ path: destFile }])[0]!;
+      const beforeJunctionDacl = storedAcls([{ path: junction }])[0]!;
+      assert.ok(beforeDestDirDacl.includes(active.value.sid), 'destination intentionally has real execution SID');
+      assert.ok(beforeDestFileDacl.includes(active.value.sid), 'destFile intentionally has real execution SID');
+      assert.ok(beforeJunctionDacl.includes(active.value.sid), 'junction link has real execution SID');
+
+      await stopController(worker, launched.announcement);
+      worker = undefined;
+
+      await freshRecovery(state);
+
+      const afterDestDirDacl = storedAcls([{ path: destination }])[0]!;
+      const afterDestFileDacl = storedAcls([{ path: destFile }])[0]!;
+      assert.equal(afterDestDirDacl, beforeDestDirDacl, 'destination directory DACL must be untouched and preserve exact SDDL');
+      assert.equal(afterDestFileDacl, beforeDestFileDacl, 'destination file DACL must be untouched and preserve exact SDDL');
+      assert.ok(afterDestDirDacl.includes(active.value.sid), 'destination intentionally preserved the execution SID');
+      assert.ok(afterDestFileDacl.includes(active.value.sid), 'destination file intentionally preserved the execution SID');
+
+      const afterJunctionDacl = storedAcls([{ path: junction }])[0]!;
+      assert.ok(!afterJunctionDacl.includes(active.value.sid), 'junction link must have owned execution SID removed');
+
+      const siblingDacl = storedAcls([{ path: sibling }])[0]!;
+      assert.ok(siblingDacl.includes('(A;;FR;;;S-1-5-21-1-2-3-4567)'), 'sibling foreign ACE preserved');
+      assert.ok(!siblingDacl.includes(active.value.sid), 'owned SID removed from sibling');
+
+      await assert.rejects(readFile(active.file));
+
+      const preJunctionCopy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+      try {
+        await symlink(destination, path.join(preJunctionCopy, 'pre-junction'), 'junction');
+        await assert.rejects(
+          executeWindowsTest(
+            { executable: process.execPath, args: ['-e', 'process.exit(0)'] },
+            preJunctionCopy,
+            { ...settings, stateDirectory: state }
+          ),
+          /reparse point|INVALID_SANDBOX_PATH/
+        );
+      } finally {
+        await removeOwned(preJunctionCopy, 'agy-mcp-copy-');
+      }
+    } finally {
+      if (worker && worker.exitCode === null) worker.kill('SIGTERM');
+      await removeOwned(destination, 'agy-mcp-destination-');
       await removeOwned(controllerDirectory, 'agy-mcp-controller-');
     }
   });
