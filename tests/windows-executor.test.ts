@@ -535,11 +535,11 @@ test('Windows executor reports early native failure as bounded redacted BridgeEr
   });
 });
 
-function scratchCleanupFault(replace: boolean) {
+async function scratchCleanupFault(replace: boolean) {
   let directory = '', applied = false;
   let replacement: BigIntStats | undefined;
   let failure: unknown;
-  const temporary = realpathSync(os.tmpdir());
+  const temporary = await realpath(os.tmpdir());
   const owned = (target: string) => {
     assert.equal(path.dirname(target), temporary);
     assert.ok(path.basename(target).startsWith('agy-mcp-scratch-'));
@@ -598,7 +598,7 @@ function scratchCleanupFault(replace: boolean) {
 
 test('Windows executor succeeds and cleans up remaining directories even if owned scratch is already absent on exit', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async copy => {
-    const fault = scratchCleanupFault(false);
+    const fault = await scratchCleanupFault(false);
     const result = await executeWindowsTest(command("process.stdout.write('scratch-absent-success')"), copy, { ...settings, onProcess: fault.onProcess });
     fault.assertApplied();
     assert.equal(result.exitCode, 0, JSON.stringify(result));
@@ -610,7 +610,7 @@ test('Windows executor succeeds and cleans up remaining directories even if owne
 
 test('Windows executor preserves distinct nonzero exitCode when owned scratch is already absent on exit', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async copy => {
-    const fault = scratchCleanupFault(false);
+    const fault = await scratchCleanupFault(false);
     const result = await executeWindowsTest(command("process.stdout.write('scratch-absent-nonzero');process.exit(42)"), copy, { ...settings, onProcess: fault.onProcess });
     fault.assertApplied();
     assert.equal(result.exitCode, 42, JSON.stringify(result));
@@ -622,7 +622,7 @@ test('Windows executor preserves distinct nonzero exitCode when owned scratch is
 
 test('Windows executor rejects replacement directory at owned temporary path during cleanup and preserves replacement', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async copy => {
-    const fault = scratchCleanupFault(true);
+    const fault = await scratchCleanupFault(true);
     try {
       await assert.rejects(executeWindowsTest(command("process.stdout.write('replacement-fixture')"), copy, { ...settings, onProcess: fault.onProcess }), { code: 'UNSAFE_RUNTIME_PATH' });
       fault.assertApplied();
