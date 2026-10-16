@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { git, type HostGitOptions } from './host-git.js';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, readdir, realpath, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
@@ -14,11 +14,8 @@ import {
   type BlockedPath,
   type PreflightRecord,
 } from './secret-preflight.js';
-import { terminateSubprocess, redactDiagnostic } from './subprocess.js';
 
 export type { BlockedPath } from './secret-preflight.js';
-
-const maxGitOutput = 10_000_000;
 
 export interface ExecutionPolicyRequest { policy: ResolvedAgentPolicy; catalog: McpCatalogEntry[]; stateDirectory: string; executionId: string }
 
@@ -44,7 +41,41 @@ export interface ChangePreview {
   copyDirectory: string;
 }
 
+export const FENCE_MARKER_NAME = 'CLEANUP_UNVERIFIED';
+
+export function getFenceMarkerPath(project: { gitDirectory: string }): string {
+  return path.join(project.gitDirectory, FENCE_MARKER_NAME);
+}
+
+export async function checkFenceMarker(project: { gitDirectory: string }): Promise<void> {
+  const markerPath = getFenceMarkerPath(project);
+  let exists = false;
+  try {
+    await lstat(markerPath);
+    exists = true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      exists = false;
+    } else {
+      throw new BridgeError('GIT_CLEANUP_UNVERIFIED', 'Failed to inspect cleanup fence marker: ' + ((err as Error).message || String(err)));
+    }
+  }
+  if (exists) {
+    throw new BridgeError('GIT_CLEANUP_UNVERIFIED', 'Project copy is fenced due to unverified Git cleanup');
+  }
+}
+
+export async function writeFenceMarker(project: { gitDirectory: string }): Promise<void> {
+  const markerPath = getFenceMarkerPath(project);
+  try {
+    await writeFile(markerPath, JSON.stringify({ code: 'GIT_CLEANUP_UNVERIFIED', version: 1 }) + '\n', { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  } catch (err) {
+    throw new BridgeError('GIT_CLEANUP_UNVERIFIED', 'Failed to persist cleanup fence marker: ' + ((err as Error).message || String(err)));
+  }
+}
+
 export async function verifyManagedCopy(project: ProjectCopy): Promise<void> {
+  await checkFenceMarker(project);
   await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
   if (project.executionPolicy) {
     if (!project.executionStateDirectory) throw new BridgeError('INVALID_AGENT_POLICY', 'Execution policy state binding is missing');
@@ -67,6 +98,7 @@ export async function stageProjectExecutionPolicy(project: ProjectCopy, request:
 }
 
 export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
+  await checkFenceMarker(project);
   const root = await realpath(os.tmpdir());
   const targets = [
     [project.copyDirectory, 'agy-mcp-copy-'],
@@ -90,99 +122,37 @@ export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
   }
 }
 
-export async function git(cwd: string, args: string[], input?: Buffer, allowedCodes = [0]): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    let childProc: ChildProcessWithoutNullStreams;
-    try {
-      childProc = spawn('git', args, { cwd, windowsHide: true, stdio: 'pipe' });
-    } catch (err) {
-      reject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic((err as Error).message)));
-      return;
+export { git } from './host-git.js';
+
+export async function managedGit(
+  project: ProjectCopy,
+  cwd: string,
+  args: string[],
+  input?: Buffer,
+  allowedCodes = [0],
+  options?: HostGitOptions
+): Promise<Buffer> {
+  await checkFenceMarker(project);
+  const excludedRoots = [
+    project.sourceDirectory,
+    project.copyDirectory,
+    ...(options?.excludedRoots ?? []),
+  ];
+  try {
+    return await git(cwd, args, input, allowedCodes, {
+      ...options,
+      excludedRoots,
+    });
+  } catch (error) {
+    if (error instanceof BridgeError && error.code === 'GIT_CLEANUP_UNVERIFIED') {
+      await writeFenceMarker(project);
     }
-    const child: ChildProcessWithoutNullStreams = childProc;
+    throw error;
+  }
+}
 
-    let settled = false;
-    const settleReject = (error: Error) => {
-      if (settled) return;
-      settled = true;
-      terminateSubprocess(child);
-      reject(error);
-    };
-
-    const settleResolve = (result: Buffer) => {
-      if (settled) return;
-      settled = true;
-      resolve(result);
-    };
-
-    let ioError: Error | null = null;
-    const recordIoError = (error: Error) => {
-      if (!ioError) ioError = error;
-      terminateSubprocess(child);
-    };
-
-    const chunks: Buffer[] = [];
-    let length = 0;
-    let stderr = '';
-    let overflow = false;
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      length += chunk.length;
-      if (length > maxGitOutput) {
-        overflow = true;
-        terminateSubprocess(child);
-      } else {
-        chunks.push(chunk);
-      }
-    });
-
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr = (stderr + chunk.toString('utf8')).slice(-4000);
-    });
-
-    child.stdin.on('error', error => {
-      recordIoError(error);
-    });
-
-    child.stdout.on('error', error => {
-      recordIoError(error);
-    });
-
-    child.stderr.on('error', error => {
-      recordIoError(error);
-    });
-
-    child.once('error', error => {
-      settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(error.message)));
-    });
-
-    child.once('close', code => {
-      if (overflow) {
-        settleReject(new BridgeError('ISOLATION_TOO_LARGE', 'Git output exceeds the isolation limit'));
-      } else if (ioError) {
-        settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(ioError.message || 'Git stream communication error')));
-      } else if (!allowedCodes.includes(code ?? -1)) {
-        const diag = stderr.trim() || 'git exited with code ' + code;
-        settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(diag)));
-      } else {
-        settleResolve(Buffer.concat(chunks));
-      }
-    });
-
-    if (input !== undefined) {
-      try {
-        child.stdin.end(input);
-      } catch (err) {
-        recordIoError(err as Error);
-      }
-    } else {
-      try {
-        child.stdin.end();
-      } catch (err) {
-        recordIoError(err as Error);
-      }
-    }
-  });
+function copyGit(project: ProjectCopy, args: string[], input?: Buffer, allowedCodes = [0], options?: HostGitOptions): Promise<Buffer> {
+  return managedGit(project, project.copyDirectory, args, input, allowedCodes, options);
 }
 
 function splitNull(bytes: Buffer): string[] {
@@ -441,17 +411,19 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
     if (staged.length) project.providedSkills = staged;
     await verifyProvidedSkills(copyDirectory, staged);
     if (execution) await stageProjectExecutionPolicy(project, execution, limits);
-    await git(copyDirectory, ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
+    await copyGit(project, ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
     const scope = ['--git-dir=' + gitDirectory, '--work-tree=' + copyDirectory];
-    await git(copyDirectory, [...scope, 'add', '-A', '-f', '--', '.', ...executionExclusions(project)]);
-    await git(copyDirectory, [...scope,
+    await copyGit(project, [...scope, 'add', '-A', '-f', '--', '.', ...executionExclusions(project)]);
+    await copyGit(project, [...scope,
       '-c', 'user.name=Bridge Snapshot',
       '-c', 'user.email=bridge@invalid.local',
-      '-c', 'core.hooksPath=' + path.join(gitDirectory, 'disabled-hooks'),
       'commit', '--quiet', '--allow-empty', '-m', 'baseline',
     ]);
     return project;
   } catch (error) {
+    if (error instanceof BridgeError && error.code === 'GIT_CLEANUP_UNVERIFIED') {
+      throw error;
+    }
     if (path.dirname(copyDirectory) === os.tmpdir() && path.basename(copyDirectory).startsWith('agy-mcp-copy-')) {
       await rm(copyDirectory, { recursive: true, force: true });
     }
@@ -462,11 +434,22 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   }
 }
 
+function ensurePatchUtf8RoundTrip(bytes: Buffer): string {
+  const patchText = bytes.toString('utf8');
+  if (!Buffer.from(patchText, 'utf8').equals(bytes)) {
+    throw new BridgeError(
+      'UNSUPPORTED_PATCH_ENCODING',
+      'Patch contains non-UTF-8 content that cannot safely round-trip. Declare non-UTF-8 files as binary in .gitattributes.'
+    );
+  }
+  return patchText;
+}
+
 export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
   await verifyManagedCopy(project);
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
-  await git(project.copyDirectory, [...scope, 'add', '-A', '--', '.', ...executionExclusions(project)]);
-  const names = splitNull(await git(project.copyDirectory,
+  await copyGit(project, [...scope, 'add', '-A', '--', '.', ...executionExclusions(project)]);
+  const names = splitNull(await copyGit(project,
     [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--name-status', '--no-renames', '-z', 'HEAD']));
   if (names.length / 2 > limits.maxChangedFiles) throw new BridgeError('CHANGE_LIMIT_EXCEEDED', `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files: ChangePreview['files'] = [];
@@ -477,7 +460,7 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
     if (status !== 'D') await checkedPath(project.copyDirectory, relative, true);
     files.push({ status, path: relative });
   }
-  const stats = new Map(splitNull(await git(project.copyDirectory,
+  const stats = new Map(splitNull(await copyGit(project,
     [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--numstat', '--no-renames', '-z', 'HEAD'])).map(line => {
       const [added, removed, ...relative] = line.split('\t');
       return [relative.join('\t'), { insertions: added === '-' ? null : Number(added), deletions: removed === '-' ? null : Number(removed), binary: added === '-' }];
@@ -491,9 +474,10 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
     modified: files.filter(file => file.status === 'M').length, deleted: files.filter(file => file.status === 'D').length,
     insertions: fileSummaries.reduce((total, file) => total + (file.insertions ?? 0), 0),
     deletions: fileSummaries.reduce((total, file) => total + (file.deletions ?? 0), 0), binaryFiles: fileSummaries.filter(file => file.binary).length };
-  const bytes = await git(project.copyDirectory, [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD']);
+  const bytes = await copyGit(project, [...scope, 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD']);
+  const patch = ensurePatchUtf8RoundTrip(bytes);
   return {
-    files, fileSummaries, summary, patch: bytes.toString('utf8'), sha256: createHash('sha256').update(bytes).digest('hex'),
+    files, fileSummaries, summary, patch, sha256: createHash('sha256').update(bytes).digest('hex'),
     sourceDirectory: project.sourceDirectory, copyDirectory: project.copyDirectory,
   };
 }
@@ -521,8 +505,9 @@ export async function verifyReadOnlyCopy(project: ProjectCopy, baseline = new Ma
 
 export async function readProjectPatch(project: ProjectCopy, relative: string): Promise<string> {
   const file = validRelative(relative);
-  return (await git(project.copyDirectory, ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory,
-    'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD', '--', file])).toString('utf8');
+  const bytes = await copyGit(project, ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory,
+    'diff', '--cached', '--no-ext-diff', '--no-textconv', '--binary', '--no-renames', 'HEAD', '--', file]);
+  return ensurePatchUtf8RoundTrip(bytes);
 }
 
 export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLimits): Promise<Map<string, string>> {
@@ -549,12 +534,17 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
   await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)));
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
+  const candidates = [...new Set(splitNull(await copyGit(project, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))];
   const ignored = new Set<string>();
   if (candidates.length) {
     const input = Buffer.from(candidates.join('\0') + '\0');
-    for (const file of splitNull(await git(project.copyDirectory, [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
-    for (const file of splitNull(await git(project.sourceDirectory, ['check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
+    for (const file of splitNull(await copyGit(project, [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
+    for (const file of splitNull(await managedGit(project, project.sourceDirectory, ['check-ignore', '--no-index', '--stdin', '-z'], input, [0, 1]))) ignored.add(file);
+  }
+  for (const file of ignored) {
+    if (project.baseline.has(file) && !managed.has(file)) {
+      throw new BridgeError('CONTEXT_CHANGED', 'Baseline file became ignored: ' + file);
+    }
   }
   const eligibleCandidates = candidates.filter(file => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some(managedPath => managedPath === file)) && (!ignored.has(file) || managed.has(file)));
   const preflight = await preflightProjectFiles(project.copyDirectory, eligibleCandidates, limits);
@@ -576,34 +566,151 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
     blockedFiles: preflight.blocked,
   };
   try {
-    const budget = { remainingBytes: limits.maxCopyBytes };
-    for (const relative of preflight.eligible) {
-      let source: string;
-      try { source = await checkedPath(project.copyDirectory, relative, true); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
+    const tempBaselineDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-worktree-'));
+    try {
+      const budget = { remainingBytes: limits.maxCopyBytes };
+      for (const relative of preflight.eligible) {
+        let source: string;
+        try { source = await checkedPath(project.copyDirectory, relative, true); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
 
-      if (fork.includedFiles.length >= limits.maxCopyFiles) {
-        throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Context copy exceeds configured limits');
+        if (fork.includedFiles.length >= limits.maxCopyFiles) {
+          throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Context copy exceeds configured limits');
+        }
+
+        const target = path.join(copyDirectory, ...validRelative(relative).split('/'));
+        const record = preflight.records.get(relative);
+        await copyVerifiedFile(source, target, relative, record, budget, 'CONTEXT_CHANGED');
+        fork.includedFiles.push(relative);
       }
 
-      const target = path.join(copyDirectory, ...validRelative(relative).split('/'));
-      const record = preflight.records.get(relative);
-      await copyVerifiedFile(source, target, relative, record, budget, 'CONTEXT_CHANGED');
-      fork.includedFiles.push(relative);
+      // 1. Pin source baseline commit, object format and tree via native rev-parse
+      const pinnedCommit = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'])).toString('utf8').trim();
+      const objectFormat = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--show-object-format'])).toString('utf8').trim();
+      const pinnedTree = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{tree}'])).toString('utf8').trim();
+
+      if (!['sha1', 'sha256'].includes(objectFormat)) {
+        throw new BridgeError('GIT_OPERATION_FAILED', 'Unsupported Git object format: ' + objectFormat);
+      }
+      const hashPattern = objectFormat === 'sha256' ? /^[0-9a-f]{64}$/ : /^[0-9a-f]{40}$/;
+      if (!hashPattern.test(pinnedCommit) || !hashPattern.test(pinnedTree)) {
+        throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid commit or tree object identifier');
+      }
+
+      // 2. Inspect ls-tree -r -l -z of that commit BEFORE materializing; enforce limits and safe regular blob paths
+      const lsTreeRaw = await copyGit(project, ['--git-dir=' + project.gitDirectory, 'ls-tree', '-r', '-l', '-z', pinnedCommit]);
+      let baselineFileCount = 0;
+      let baselineByteCount = 0;
+      let offset = 0;
+
+      while (offset < lsTreeRaw.length) {
+        const nextNull = lsTreeRaw.indexOf(0, offset);
+        if (nextNull === -1) throw new BridgeError('GIT_OPERATION_FAILED', 'Unterminated ls-tree record');
+        const entryBuf = lsTreeRaw.subarray(offset, nextNull);
+        offset = nextNull + 1;
+        if (entryBuf.length === 0) continue;
+
+        const tabIdx = entryBuf.indexOf(0x09);
+        if (tabIdx === -1) {
+          throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid ls-tree output format');
+        }
+
+        const meta = entryBuf.subarray(0, tabIdx).toString('utf8').trim();
+        const relPath = entryBuf.subarray(tabIdx + 1).toString('utf8');
+
+        const parts = meta.split(/\s+/);
+        if (parts.length < 4) {
+          throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid ls-tree metadata: ' + meta);
+        }
+        const mode = parts[0]!;
+        const type = parts[1]!;
+        const sizeStr = parts[3]!;
+
+        if (mode !== '100644' && mode !== '100755') {
+          throw new BridgeError('UNSAFE_PROJECT_PATH', 'Baseline contains non-regular file or link: ' + relPath);
+        }
+        if (type !== 'blob') {
+          throw new BridgeError('UNSAFE_PROJECT_PATH', 'Baseline entry is not a blob: ' + relPath);
+        }
+
+        validRelative(relPath);
+        const size = Number(sizeStr);
+        if (!/^\d+$/.test(sizeStr) || !Number.isSafeInteger(size) || size < 0) {
+          throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid blob size in baseline ls-tree');
+        }
+
+        baselineFileCount++;
+        baselineByteCount += size;
+
+        if (baselineFileCount > limits.maxCopyFiles || baselineByteCount > limits.maxCopyBytes) {
+          throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Baseline tree exceeds copy limits');
+        }
+      }
+
+      // 3. Restore pinned commit into owned private temporary baseline worktree
+      await copyGit(project, [
+        '--git-dir=' + project.gitDirectory,
+        '--work-tree=' + tempBaselineDir,
+        'restore',
+        '--source=' + pinnedCommit,
+        '--worktree',
+        '--',
+        '.'
+      ]);
+
+      // 4. Initialize fork private bare repo with same object format (inherits supported ref-format from env)
+      await copyGit(fork, [
+        '-c', 'init.templateDir=',
+        'init',
+        '--bare',
+        '--object-format=' + objectFormat,
+        '--quiet',
+        gitDirectory
+      ]);
+
+      // 5. Stage private baseline worktree and commit with fixed identity
+      const forkBaselineScope = ['--git-dir=' + gitDirectory, '--work-tree=' + tempBaselineDir];
+      await copyGit(fork, [...forkBaselineScope, 'add', '-A', '-f', '--', '.']);
+      await copyGit(fork, [
+        ...forkBaselineScope,
+        '-c', 'user.name=Bridge Snapshot',
+        '-c', 'user.email=bridge@invalid.local',
+        'commit', '--quiet', '--allow-empty', '-m', 'baseline'
+      ]);
+
+      // 6. Prove its tree equals pinned source tree
+      const forkTree = (await copyGit(fork, ['--git-dir=' + gitDirectory, 'rev-parse', '--verify', 'HEAD^{tree}'])).toString('utf8').trim();
+      if (forkTree !== pinnedTree) {
+        throw new BridgeError('GIT_OPERATION_FAILED', `Fork baseline tree (${forkTree}) does not match source pinned tree (${pinnedTree})`);
+      }
+
+      // 7. Read baseline tree into fork worktree index
+      await copyGit(fork, ['--git-dir=' + gitDirectory, '--work-tree=' + copyDirectory, 'read-tree', 'HEAD']);
+      await fingerprintProjectCopy(fork, limits);
+      const finalHead = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'])).toString('utf8').trim();
+      if (finalHead !== pinnedCommit) throw new BridgeError('CONTEXT_CHANGED', 'Source baseline HEAD changed during fork');
+      return fork;
+    } finally {
+      const root = await realpath(os.tmpdir());
+      const info = await lstat(tempBaselineDir);
+      const absolute = await realpath(tempBaselineDir);
+      if (info.isSymbolicLink() || !info.isDirectory() || path.relative(root, path.dirname(absolute)) !== '' || !path.basename(absolute).startsWith('agy-mcp-worktree-')) {
+        throw new BridgeError('UNSAFE_PROJECT_PATH', 'Private baseline worktree was replaced or escaped temporary storage');
+      }
+      await rm(absolute, { recursive: true, force: true });
     }
-    await git(copyDirectory, ['-c', 'init.templateDir=', 'clone', '--bare', '--no-hardlinks', '--quiet', project.gitDirectory, gitDirectory]);
-    await git(copyDirectory, ['--git-dir=' + gitDirectory, '--work-tree=' + copyDirectory, 'read-tree', 'HEAD']);
-    await fingerprintProjectCopy(fork, limits);
-    return fork;
-  } catch (error) { await discardProjectCopy(fork); throw error; }
+  } catch (error) {
+    await discardProjectCopy(fork);
+    throw error;
+  }
 }
 
 export async function fingerprintProjectCopy(project: ProjectCopy, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<string> {
   await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => file.path)));
   const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))].sort();
-  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory,
+  const candidates = [...new Set(splitNull(await copyGit(project, [...scope, 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])))].sort();
+  const ignored = new Set(candidates.length ? splitNull(await copyGit(project,
     [...scope, 'check-ignore', '--no-index', '--stdin', '-z'], Buffer.from(candidates.join('\0') + '\0'), [0, 1])) : []);
   const digest = createHash('sha256');
   let count = 0, bytes = 0;
@@ -639,7 +746,8 @@ export async function integrateProjectCopy(project: ProjectCopy, expectedSha256:
     }
   }
   const patch = Buffer.from(preview.patch, 'utf8');
-  await git(project.sourceDirectory, ['apply', '--check', '--binary', '-'], patch);
-  await git(project.sourceDirectory, ['apply', '--binary', '-'], patch);
+  const sourceScope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.sourceDirectory];
+  await managedGit(project, project.sourceDirectory, [...sourceScope, 'apply', '--check', '--binary', '--whitespace=nowarn', '-'], patch, [0]);
+  await managedGit(project, project.sourceDirectory, [...sourceScope, 'apply', '--binary', '--whitespace=nowarn', '-'], patch, [0]);
   return preview;
 }

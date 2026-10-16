@@ -1,11 +1,10 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readdir } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { z } from 'zod';
 import { BridgeError } from './types.js';
-import { checkedPath, type ProjectCopy } from './isolation.js';
+import { checkedPath, checkFenceMarker, managedGit, type ProjectCopy } from './isolation.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
 
 const WINDOWS_DEVICE_NAMES = new Set([
@@ -105,34 +104,6 @@ export interface ReadArtifactResult {
   offsetUnit: 'bytes';
 }
 
-async function git(cwd: string, args: string[], input?: Buffer, allowedCodes = [0]): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('git', args, { cwd, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    const chunks: Buffer[] = [];
-    let length = 0;
-    let stderr = '';
-    let overflow = false;
-    child.stdout.on('data', (chunk: Buffer) => {
-      length += chunk.length;
-      if (length > 10_000_000) {
-        overflow = true;
-        child.kill();
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr = (stderr + chunk.toString('utf8')).slice(-4000);
-    });
-    child.once('error', reject);
-    child.once('close', code => {
-      if (overflow) reject(new BridgeError('ISOLATION_TOO_LARGE', 'Git output exceeds the isolation limit'));
-      else if (!allowedCodes.includes(code ?? -1)) reject(new BridgeError('GIT_OPERATION_FAILED', stderr.trim() || 'git exited with code ' + code));
-      else resolve(Buffer.concat(chunks));
-    });
-    child.stdin.end(input);
-  });
-}
 
 function splitNull(bytes: Buffer): string[] {
   return bytes.toString('utf8').split('\0').filter(Boolean);
@@ -181,6 +152,7 @@ export async function collectArtifacts(
   paths: readonly string[],
   limits: ProjectLimits = DEFAULT_PROJECT_LIMITS
 ): Promise<ArtifactReference[]> {
+  await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
 
   const parsed = artifactPathsSchema.safeParse(paths);
@@ -203,7 +175,8 @@ export async function collectArtifacts(
 
   // Preserve git ignore rules: check all paths on the original repository root (including .gitignore and .git/info/exclude)
   const stdinBuf = Buffer.from(normalizedPaths.join('\0') + '\0');
-  const ignoreOutput = await git(
+  const ignoreOutput = await managedGit(
+    project,
     project.sourceDirectory,
     ['check-ignore', '--no-index', '--stdin', '-z'],
     stdinBuf,
@@ -296,6 +269,7 @@ export async function readArtifact(
     throw new BridgeError('CONTENT_CHANGED', 'expectedSha256 does not match reference sha256');
   }
 
+  await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
 
   const relative = validArtifactRelative(reference.path);

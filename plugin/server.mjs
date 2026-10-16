@@ -3267,8 +3267,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path20) {
-      let input2 = path20;
+    function removeDotSegments(path21) {
+      let input2 = path21;
       const output2 = [];
       let nextSlash = -1;
       let len = 0;
@@ -3677,8 +3677,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path20 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path20 && path20 !== "/" ? path20 : void 0;
+        const path21 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path21 && path21 !== "/" ? path21 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8023,10 +8023,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path20) {
-  if (!path20)
+function getElementAtPath(obj, path21) {
+  if (!path21)
     return obj;
-  return path20.reduce((acc, key) => acc?.[key], obj);
+  return path21.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys2 = Object.keys(promisesObj);
@@ -8366,11 +8366,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path20, issues) {
+function prefixIssues(path21, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path20);
+    iss.path.unshift(path21);
     return iss;
   });
 }
@@ -8820,16 +8820,16 @@ function flattenError(error62, mapper = (issue2) => issue2.message) {
 }
 function formatError(error62, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError2 = (error63, path20 = []) => {
+  const processError2 = (error63, path21 = []) => {
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError2({ issues }, [...path20, ...issue2.path]));
+        issue2.errors.map((issues) => processError2({ issues }, [...path21, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else {
-        const fullpath = [...path20, ...issue2.path];
+        const fullpath = [...path21, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -8868,17 +8868,17 @@ function formatError(error62, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error62, mapper = (issue2) => issue2.message) {
   const result = { errors: [] };
-  const processError2 = (error63, path20 = []) => {
+  const processError2 = (error63, path21 = []) => {
     var _a3;
     for (const issue2 of error63.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError2({ issues }, [...path20, ...issue2.path]));
+        issue2.errors.map((issues) => processError2({ issues }, [...path21, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError2({ issues: issue2.issues }, [...path20, ...issue2.path]);
+        processError2({ issues: issue2.issues }, [...path21, ...issue2.path]);
       } else {
-        const fullpath = [...path20, ...issue2.path];
+        const fullpath = [...path21, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -8917,8 +8917,8 @@ function treeifyError(error62, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path20 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path20) {
+  const path21 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path21) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -26020,13 +26020,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path20 = ref.slice(1).split("/").filter(Boolean);
-  if (path20.length === 0) {
+  const path21 = ref.slice(1).split("/").filter(Boolean);
+  if (path21.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path20[0] === defsKey) {
-    const key = path20[1] === void 0 ? void 0 : decodeJSONPointerSegment(path20[1]);
+  if (path21[0] === defsKey) {
+    const key = path21[1] === void 0 ? void 0 : decodeJSONPointerSegment(path21[1]);
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -28511,7 +28511,7 @@ var StdioServerTransport = class {
 };
 
 // dist/src/cli-adapter.js
-import { spawn as spawn4 } from "node:child_process";
+import { spawn as spawn3 } from "node:child_process";
 
 // dist/src/project-memory.js
 import { createHash, randomUUID } from "node:crypto";
@@ -28620,9 +28620,9 @@ function verifySafeDirectory(targetPath, code) {
   const parsed = path.parse(current);
   const root = parsed.root;
   while (current && current !== root) {
-    let stat3;
+    let stat4;
     try {
-      stat3 = lstatSync(current);
+      stat4 = lstatSync(current);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         current = path.dirname(current);
@@ -28630,7 +28630,7 @@ function verifySafeDirectory(targetPath, code) {
       }
       throw new BridgeError(code, `Failed to inspect path component: ${current}`);
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError(code, `Path component cannot be a link or junction: ${current}`);
     }
     current = path.dirname(current);
@@ -28702,15 +28702,15 @@ var ProjectMemoryStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "Memory storage must be an accessible directory");
     }
-    const stat3 = lstatSync(this.stateDirectory, { bigint: true });
-    if (stat3.isSymbolicLink()) {
+    const stat4 = lstatSync(this.stateDirectory, { bigint: true });
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "State directory cannot be a link");
     }
-    if (!stat3.isDirectory()) {
+    if (!stat4.isDirectory()) {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "State directory must be a directory");
     }
     verifySafeDirectory(this.stateDirectory, "INVALID_STATE_DIRECTORY");
-    this.stateIdentity = stat3.dev.toString() + ":" + stat3.ino.toString();
+    this.stateIdentity = stat4.dev.toString() + ":" + stat4.ino.toString();
     this.canonicalStateDir = realpathSync.native(this.stateDirectory);
     if (isVolumeRoot(this.canonicalStateDir)) {
       throw new BridgeError("INVALID_STATE_DIRECTORY", "Canonical state directory cannot be volume root");
@@ -28777,16 +28777,16 @@ var ProjectMemoryStore = class {
     if (isVolumeRoot(projectDirectory)) {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", "Project directory cannot be volume root");
     }
-    let stat3;
+    let stat4;
     try {
-      stat3 = lstatSync(projectDirectory);
+      stat4 = lstatSync(projectDirectory);
     } catch {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", `Project directory does not exist: ${projectDirectory}`);
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", "Project directory cannot be a link or junction");
     }
-    if (!stat3.isDirectory()) {
+    if (!stat4.isDirectory()) {
       throw new BridgeError("INVALID_PROJECT_DIRECTORY", "Project directory must be a directory");
     }
     verifySafeDirectory(projectDirectory, "INVALID_PROJECT_DIRECTORY");
@@ -28834,13 +28834,13 @@ var ProjectMemoryStore = class {
         if (error62.code !== "EEXIST") {
           throw new BridgeError("MEMORY_BUSY", "Failed to acquire memory lock: " + (error62 instanceof Error ? error62.message : String(error62)));
         }
-        let stat3;
+        let stat4;
         try {
-          stat3 = lstatSync(lockFile, { bigint: true });
+          stat4 = lstatSync(lockFile, { bigint: true });
         } catch (inspectError) {
           throw new BridgeError("MEMORY_BUSY", "Failed to inspect existing memory lock: " + (inspectError instanceof Error ? inspectError.message : String(inspectError)));
         }
-        if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.size > 1024n) {
+        if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.nlink !== 1n || stat4.size > 1024n) {
           throw new BridgeError("MEMORY_BUSY", "Memory lock is not a regular file");
         }
         let lockData;
@@ -28876,7 +28876,7 @@ var ProjectMemoryStore = class {
           this.verifyStorageAncestry();
           const current = lstatSync(lockFile, { bigint: true });
           const data = JSON.parse(readFileSync(lockFile, "utf8"));
-          if (current.isSymbolicLink() || !current.isFile() || current.nlink !== 1n || current.size > 1024n || current.dev !== stat3.dev || current.ino !== stat3.ino || data.pid !== lockPid || data.token !== lockToken || processAlive(lockPid))
+          if (current.isSymbolicLink() || !current.isFile() || current.nlink !== 1n || current.size > 1024n || current.dev !== stat4.dev || current.ino !== stat4.ino || data.pid !== lockPid || data.token !== lockToken || processAlive(lockPid))
             throw new BridgeError("MEMORY_BUSY", "Lock identity changed before recovery");
           rmSync(lockFile);
         } catch (error63) {
@@ -28896,15 +28896,15 @@ var ProjectMemoryStore = class {
       }
     }
     return () => {
-      let stat3;
+      let stat4;
       try {
-        stat3 = lstatSync(lockFile, { bigint: true });
+        stat4 = lstatSync(lockFile, { bigint: true });
       } catch (err) {
         if (err.code === "ENOENT")
           throw new BridgeError("MEMORY_BUSY", "Owned lock disappeared before release");
         throw new BridgeError("MEMORY_BUSY", `Failed to stat lock file during release: ${err instanceof Error ? err.message : String(err)}`);
       }
-      if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.dev !== ownedIdentity?.dev || stat3.ino !== ownedIdentity?.ino) {
+      if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.nlink !== 1n || stat4.dev !== ownedIdentity?.dev || stat4.ino !== ownedIdentity?.ino) {
         throw new BridgeError("MEMORY_BUSY", "Lock file is invalid during release");
       }
       let content;
@@ -28931,22 +28931,22 @@ var ProjectMemoryStore = class {
   }
   readRecord(filePath, expectedProjectId, expectedSpecialist) {
     verifySafeDirectory(filePath, "INVALID_MEMORY_STATE");
-    let stat3;
+    let stat4;
     try {
-      stat3 = lstatSync(filePath);
+      stat4 = lstatSync(filePath);
     } catch {
       throw new BridgeError("INVALID_MEMORY_STATE", `Cannot stat memory file: ${filePath}`);
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file cannot be a symbolic link: ${filePath}`);
     }
-    if (!stat3.isFile() || stat3.nlink !== 1) {
+    if (!stat4.isFile() || stat4.nlink !== 1) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file must be a regular file: ${filePath}`);
     }
-    if (stat3.size <= 0) {
+    if (stat4.size <= 0) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file is empty: ${filePath}`);
     }
-    if (stat3.size > this.limits.maxEntryBytes * 6 + 8192) {
+    if (stat4.size > this.limits.maxEntryBytes * 6 + 8192) {
       throw new BridgeError("INVALID_MEMORY_STATE", `Memory file size exceeds allowable entry limit: ${filePath}`);
     }
     let rawJson;
@@ -29640,32 +29640,716 @@ var peerContextSchema = external_exports.object({
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync2, realpathSync as realpathSync3, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { access as access2 } from "node:fs/promises";
-import path12 from "node:path";
+import path13 from "node:path";
 
 // dist/src/roles.js
 import { createHash as createHash10 } from "node:crypto";
-import { readFile as readFile2, stat } from "node:fs/promises";
+import { readFile as readFile2, stat as stat2 } from "node:fs/promises";
 
 // dist/src/isolation.js
 import { createHash as createHash6 } from "node:crypto";
+
+// dist/src/host-git.js
 import { spawn as spawn2 } from "node:child_process";
+import { stat, realpath } from "node:fs/promises";
+import os from "node:os";
+import { StringDecoder } from "node:string_decoder";
+import path3 from "node:path";
+
+// dist/src/subprocess.js
+import { spawn } from "node:child_process";
+import path2 from "node:path";
+var stopping = /* @__PURE__ */ new WeakSet();
+var ownedProcessGroups = /* @__PURE__ */ new WeakSet();
+function registerOwnedProcessGroup(child) {
+  ownedProcessGroups.add(child);
+}
+function processError(error62, operation) {
+  if (error62 instanceof BridgeError)
+    return error62;
+  const code = error62?.code;
+  if (code === "ENOENT")
+    return new BridgeError("AGY_NOT_FOUND", "agy executable not found");
+  if (code === "EACCES" || code === "EPERM")
+    return new BridgeError("AGY_PERMISSION_DENIED", "Permission denied executing agy");
+  if (operation === "stdin" || code === "EPIPE" || code === "EOF" || code === "ECONNRESET" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END")
+    return new BridgeError("CLI_INPUT_FAILED", "Failed writing input to agy");
+  const message = error62 instanceof Error ? error62.message : String(error62);
+  return new BridgeError("AGY_IO_FAILED", `agy ${operation} failed: ${message}`);
+}
+function terminateSubprocess(child, options) {
+  const isOwned = options?.ownedGroup ?? ownedProcessGroups.has(child);
+  if (stopping.has(child))
+    return;
+  if ((child.exitCode != null || child.signalCode != null) && !isOwned)
+    return;
+  stopping.add(child);
+  let closed = false;
+  let killer;
+  const force = () => {
+    if (!closed) {
+      if (process.platform === "win32") {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      } else if (child.pid) {
+        if (isOwned) {
+          try {
+            process.kill(-child.pid, "SIGKILL");
+          } catch {
+            try {
+              child.kill("SIGKILL");
+            } catch {
+            }
+          }
+        } else {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+          }
+        }
+      } else {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+      }
+    }
+  };
+  const timeoutMs = options?.escalationTimeoutMs ?? 3e3;
+  const timer = setTimeout(() => {
+    force();
+    if (killer && killer.exitCode === null && killer.signalCode === null) {
+      try {
+        killer.kill();
+      } catch {
+      }
+    }
+  }, timeoutMs);
+  timer.unref();
+  const cleanup = () => {
+    closed = true;
+    clearTimeout(timer);
+  };
+  child.once("close", cleanup);
+  if (process.platform === "win32") {
+    if (child.pid) {
+      try {
+        const executable = path2.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
+        killer = spawn(executable, ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, shell: false, stdio: "ignore" });
+        killer.once("error", force);
+        killer.once("close", (code) => {
+          if (code !== 0)
+            force();
+        });
+      } catch {
+        force();
+      }
+    } else {
+      force();
+    }
+  } else {
+    if (child.pid) {
+      if (isOwned) {
+        try {
+          process.kill(-child.pid, "SIGTERM");
+        } catch {
+          try {
+            child.kill("SIGTERM");
+          } catch {
+            force();
+          }
+        }
+      } else {
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          force();
+        }
+      }
+    } else {
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        force();
+      }
+    }
+  }
+}
+function redactDiagnostic(value, state) {
+  if (!value)
+    return "";
+  let text = String(value);
+  if (state) {
+    if (state.inPrivateKey) {
+      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
+        state.inPrivateKey = false;
+      }
+      return "[private key redacted]";
+    }
+    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(text)) {
+      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
+        state.inPrivateKey = false;
+      } else {
+        state.inPrivateKey = true;
+      }
+      return "[private key redacted]";
+    }
+  }
+  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[private key redacted]").replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, "[private key redacted]");
+  text = text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, "$1[redacted]@");
+  for (const [name, secret] of Object.entries(process.env)) {
+    if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name))
+      text = text.split(secret).join("[redacted]");
+  }
+  return text.replace(/\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/g, "[redacted]").replace(/(Bearer\s+)[^\s"']+/gi, "$1[redacted]");
+}
+
+// dist/src/host-git.js
+var MAX_GIT_OUTPUT = 1e7;
+var DEFAULT_GIT_TIMEOUT_MS = 12e4;
+var DEFAULT_SHUTDOWN_GRACE_MS = 3250;
+var GIT_NULL_FILE = process.platform === "win32" ? "NUL" : os.devNull;
+var MAX_STDERR_LENGTH = 4e3;
+var TRUNCATION_MARKER = "... [diagnostic truncated]";
+function isInsideOrEqual(parent, target, isWindows) {
+  const normParent = isWindows ? path3.resolve(parent).toLowerCase() : path3.resolve(parent);
+  const normTarget = isWindows ? path3.resolve(target).toLowerCase() : path3.resolve(target);
+  if (normParent === normTarget)
+    return true;
+  const rel = path3.relative(normParent, normTarget);
+  if (rel === "")
+    return true;
+  if (rel !== ".." && !rel.startsWith(".." + path3.sep) && !path3.isAbsolute(rel))
+    return true;
+  return false;
+}
+async function buildSafeGitPath(cwd, rawPath, excludedRoots = []) {
+  const isWindows = process.platform === "win32";
+  let canonicalCwd;
+  try {
+    canonicalCwd = await realpath(cwd);
+  } catch {
+    try {
+      canonicalCwd = path3.resolve(cwd);
+    } catch {
+      canonicalCwd = void 0;
+    }
+  }
+  const allExcluded = [path3.resolve(cwd)];
+  if (canonicalCwd)
+    allExcluded.push(canonicalCwd);
+  for (const root of excludedRoots) {
+    allExcluded.push(path3.resolve(root));
+    try {
+      allExcluded.push(await realpath(root));
+    } catch {
+    }
+  }
+  const pathStr = rawPath ?? process.env.PATH ?? "";
+  const entries = pathStr.split(path3.delimiter);
+  const safeEntries = [];
+  for (const rawEntry of entries) {
+    const entry = rawEntry.trim();
+    if (!entry)
+      continue;
+    if (!path3.isAbsolute(entry))
+      continue;
+    if (allExcluded.some((root) => isInsideOrEqual(root, entry, isWindows))) {
+      continue;
+    }
+    let canonicalEntry;
+    try {
+      canonicalEntry = await realpath(entry);
+    } catch {
+    }
+    if (canonicalEntry && allExcluded.some((root) => isInsideOrEqual(root, canonicalEntry, isWindows))) {
+      continue;
+    }
+    safeEntries.push(entry);
+  }
+  return safeEntries.join(path3.delimiter);
+}
+async function resolveGitExecutable(cwd, pathEnv, excludedRoots = []) {
+  const safePath = await buildSafeGitPath(cwd, pathEnv, excludedRoots);
+  const isWindows = process.platform === "win32";
+  const executableName = isWindows ? "git.exe" : "git";
+  let canonicalCwd;
+  try {
+    canonicalCwd = await realpath(cwd);
+  } catch {
+    try {
+      canonicalCwd = path3.resolve(cwd);
+    } catch {
+      canonicalCwd = void 0;
+    }
+  }
+  const allExcluded = [
+    path3.resolve(cwd),
+    ...canonicalCwd ? [canonicalCwd] : [],
+    ...await Promise.all(excludedRoots.flatMap((root) => [Promise.resolve(path3.resolve(root)), realpath(root).catch(() => path3.resolve(root))]))
+  ];
+  const entries = safePath.split(path3.delimiter);
+  for (const entry of entries) {
+    if (!entry)
+      continue;
+    const candidate = path3.join(entry, executableName);
+    let stats;
+    try {
+      stats = await stat(candidate);
+    } catch {
+      continue;
+    }
+    if (!stats.isFile())
+      continue;
+    if (!isWindows) {
+      if ((stats.mode & 73) === 0)
+        continue;
+    }
+    if (allExcluded.some((root) => isInsideOrEqual(root, candidate, isWindows))) {
+      continue;
+    }
+    let realCandidate;
+    try {
+      realCandidate = await realpath(candidate);
+    } catch {
+      continue;
+    }
+    if (allExcluded.some((root) => isInsideOrEqual(root, realCandidate, isWindows))) {
+      continue;
+    }
+    return candidate;
+  }
+  throw new BridgeError("GIT_OPERATION_FAILED", "Git executable not found in PATH");
+}
+function buildHostGitEnv(source = process.env, allowGlobalConfig = false, safePath) {
+  const isWindows = process.platform === "win32";
+  const env = {};
+  const allowedUpper = /* @__PURE__ */ new Set([
+    "PATH",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "COMSPEC",
+    "WINDIR",
+    "OS",
+    "PROCESSOR_ARCHITECTURE",
+    "PROCESSOR_ARCHITEW6432",
+    "NUMBER_OF_PROCESSORS",
+    "PROGRAMDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "COMMONPROGRAMFILES",
+    "COMMONPROGRAMFILES(X86)",
+    "PATHEXT",
+    "SHELL",
+    "TERM",
+    "COLORTERM",
+    "HOME",
+    "USERPROFILE",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "USER",
+    "LOGNAME",
+    "USERNAME",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "TZ",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "XDG_CONFIG_DIRS",
+    "XDG_DATA_DIRS"
+  ]);
+  for (const [key, value] of Object.entries(source)) {
+    if (key === "__proto__" || typeof value !== "string")
+      continue;
+    const upper = key.toUpperCase();
+    if (upper === "PATH")
+      continue;
+    if (upper.startsWith("NODE_") || upper.startsWith("LD_") || upper.startsWith("DYLD_"))
+      continue;
+    if (upper === "GIT_EXEC_PATH" || upper.startsWith("GIT_CONFIG_") || upper === "GIT_CONFIG_PARAMETERS")
+      continue;
+    if (upper === "GIT_DIR" || upper === "GIT_WORK_TREE" || upper === "GIT_INDEX_FILE")
+      continue;
+    if (upper === "GIT_OBJECT_DIRECTORY" || upper === "GIT_ALTERNATE_OBJECT_DIRECTORIES")
+      continue;
+    if (upper === "GIT_SSH" || upper === "GIT_SSH_COMMAND" || upper === "GIT_ASKPASS" || upper === "SSH_ASKPASS")
+      continue;
+    if (upper.startsWith("SSH_"))
+      continue;
+    if (upper.includes("TOKEN") || upper.includes("SECRET") || upper.includes("PASSWORD") || upper.includes("PASSWD") || upper.includes("API_KEY") || upper.includes("CREDENTIAL"))
+      continue;
+    if (upper.includes("PROXY"))
+      continue;
+    if (allowedUpper.has(upper)) {
+      env[key] = value;
+    }
+  }
+  if (safePath !== void 0) {
+    env.PATH = safePath;
+  } else {
+    const rawPath = source.PATH ?? (isWindows ? Object.entries(source).find(([k]) => k.toUpperCase() === "PATH")?.[1] : void 0);
+    if (typeof rawPath === "string") {
+      env.PATH = rawPath.split(path3.delimiter).map((e) => e.trim()).filter((e) => e && path3.isAbsolute(e)).join(path3.delimiter);
+    }
+  }
+  const refFormat = source.GIT_DEFAULT_REF_FORMAT;
+  if (refFormat === "reftable" || refFormat === "files") {
+    env.GIT_DEFAULT_REF_FORMAT = refFormat;
+  }
+  env.GIT_TERMINAL_PROMPT = "0";
+  if (!allowGlobalConfig) {
+    env.GIT_CONFIG_NOSYSTEM = "1";
+    env.GIT_CONFIG_GLOBAL = GIT_NULL_FILE;
+  }
+  if (isWindows && !env.PATHEXT) {
+    env.PATHEXT = ".COM;.EXE;.BAT;.CMD";
+  }
+  return env;
+}
+async function spawnGit(gitBinary, cwd, args, childEnv, input2, allowedCodes = [0], timeoutMs = DEFAULT_GIT_TIMEOUT_MS, spawnFn = spawn2, shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS) {
+  return new Promise((resolve2, reject) => {
+    let childProc;
+    try {
+      childProc = spawnFn(gitBinary, args, {
+        cwd,
+        windowsHide: true,
+        stdio: "pipe",
+        env: childEnv
+      });
+    } catch (err) {
+      reject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(err.message)));
+      return;
+    }
+    const child = childProc;
+    let settled = false;
+    let timedOut = false;
+    let graceTimer = null;
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (graceTimer) {
+        clearTimeout(graceTimer);
+        graceTimer = null;
+      }
+    };
+    const settleReject = (error62) => {
+      if (settled)
+        return;
+      settled = true;
+      cleanup();
+      terminateSubprocess(child);
+      reject(error62);
+    };
+    const settleResolve = (result) => {
+      if (settled)
+        return;
+      settled = true;
+      cleanup();
+      resolve2(result);
+    };
+    const requestTermination = () => {
+      terminateSubprocess(child);
+      if (!graceTimer && !settled) {
+        graceTimer = setTimeout(() => {
+          if (settled)
+            return;
+          settled = true;
+          cleanup();
+          try {
+            child.stdin.destroy();
+          } catch {
+          }
+          try {
+            child.stdout.destroy();
+          } catch {
+          }
+          try {
+            child.stderr.destroy();
+          } catch {
+          }
+          reject(new BridgeError("GIT_CLEANUP_UNVERIFIED", "Git process termination grace expired while streams remained open"));
+        }, shutdownGraceMs);
+        graceTimer.unref();
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      requestTermination();
+    }, timeoutMs);
+    timer.unref();
+    let ioError = null;
+    const recordIoError = (error62) => {
+      if (!ioError)
+        ioError = error62;
+      requestTermination();
+    };
+    const chunks = [];
+    let length = 0;
+    let stderr = "";
+    let stderrTruncated = false;
+    const stderrDecoder = new StringDecoder("utf8");
+    let overflow = false;
+    child.stdout.on("data", (chunk) => {
+      length += chunk.length;
+      if (length > MAX_GIT_OUTPUT) {
+        overflow = true;
+        requestTermination();
+      } else {
+        chunks.push(chunk);
+      }
+    });
+    const appendStderr = (text) => {
+      if (stderrTruncated)
+        return;
+      if (stderr.length + text.length > MAX_STDERR_LENGTH) {
+        stderrTruncated = true;
+        stderr = TRUNCATION_MARKER;
+      } else {
+        stderr += text;
+      }
+    };
+    child.stderr.on("data", (chunk) => appendStderr(stderrDecoder.write(chunk)));
+    child.stdin.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.stdout.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.stderr.on("error", (error62) => {
+      recordIoError(error62);
+    });
+    child.once("error", (error62) => {
+      settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(error62.message)));
+    });
+    child.once("close", (code, signal) => {
+      if (settled)
+        return;
+      cleanup();
+      appendStderr(stderrDecoder.end());
+      if (overflow) {
+        settleReject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
+      } else if (timedOut) {
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", `Git operation timed out after ${timeoutMs}ms`));
+      } else if (ioError) {
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(ioError.message || "Git stream communication error")));
+      } else if (!allowedCodes.includes(code ?? -1)) {
+        const diag = stderr.trim() || (signal ? "git terminated with signal " + signal : "git exited with code " + code);
+        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(diag, {})));
+      } else {
+        settleResolve(Buffer.concat(chunks));
+      }
+    });
+    if (input2 !== void 0) {
+      try {
+        child.stdin.end(input2);
+      } catch (err) {
+        recordIoError(err);
+      }
+    } else {
+      try {
+        child.stdin.end();
+      } catch (err) {
+        recordIoError(err);
+      }
+    }
+  });
+}
+var cachedAdmission = null;
+async function ensureGitVersionAdmission(gitBinary, spawnFn = spawn2, envSource = process.env, safePath) {
+  let stats;
+  try {
+    stats = await stat(gitBinary);
+  } catch {
+  }
+  if (spawnFn === spawn2 && cachedAdmission && stats && cachedAdmission.gitBinary === gitBinary && cachedAdmission.size === stats.size && cachedAdmission.mtimeMs === stats.mtimeMs && cachedAdmission.ino === stats.ino && cachedAdmission.dev === stats.dev) {
+    return;
+  }
+  const checkEnv = buildHostGitEnv(envSource, false, safePath);
+  let output2;
+  try {
+    output2 = await spawnGit(gitBinary, os.tmpdir(), ["--version"], checkEnv, void 0, [0], 1e4, spawnFn);
+  } catch (err) {
+    if (err instanceof BridgeError && err.code === "GIT_CLEANUP_UNVERIFIED") {
+      throw err;
+    }
+    throw new BridgeError("GIT_OPERATION_FAILED", "Failed to query Git version: " + redactDiagnostic(err.message));
+  }
+  const versionText = output2.toString("utf8").trim();
+  const match = /git\s+version\s+(\d+)\.(\d+)(?:\.(\d+))?/i.exec(versionText);
+  if (!match) {
+    throw new BridgeError("GIT_OPERATION_FAILED", `Unable to parse Git version from: ${redactDiagnostic(versionText)}`);
+  }
+  const major = parseInt(match[1], 10);
+  const minor = parseInt(match[2], 10);
+  if (major < 2 || major === 2 && minor < 32) {
+    throw new BridgeError("GIT_OPERATION_FAILED", `Git 2.32.0 or newer is required (found ${versionText}). Older Git versions do not support GIT_CONFIG_GLOBAL for global configuration isolation.`);
+  }
+  if (spawnFn === spawn2 && stats) {
+    cachedAdmission = {
+      gitBinary,
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ino: stats.ino,
+      dev: stats.dev
+    };
+  }
+}
+function isProtectedConfigKey(rawKey) {
+  const norm = rawKey.trim().toLowerCase();
+  return norm === "core.fsmonitor" || norm === "core.hookspath";
+}
+async function resolveEffectiveExcludesFile(cwd, gitBinary, envSource, timeoutMs, scope, spawnFn, safePath) {
+  try {
+    await realpath(cwd);
+  } catch {
+    return void 0;
+  }
+  const configEnv = buildHostGitEnv(envSource, true, safePath);
+  const lookupArgs = [
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=" + GIT_NULL_FILE,
+    ...scope,
+    "config",
+    "--null",
+    "--path",
+    "--get",
+    "core.excludesfile"
+  ];
+  let lookupOutput;
+  try {
+    lookupOutput = await spawnGit(gitBinary, cwd, lookupArgs, configEnv, void 0, [0, 1], Math.min(timeoutMs, 1e4), spawnFn);
+  } catch (err) {
+    if (err instanceof BridgeError && err.code === "GIT_CLEANUP_UNVERIFIED") {
+      throw err;
+    }
+    throw new BridgeError("GIT_OPERATION_FAILED", "Failed to resolve Git configuration: " + redactDiagnostic(err.message));
+  }
+  if (!lookupOutput?.length)
+    return void 0;
+  if (lookupOutput[lookupOutput.length - 1] !== 0) {
+    throw new BridgeError("GIT_OPERATION_FAILED", "Invalid core.excludesFile configuration response");
+  }
+  const value = lookupOutput.subarray(0, -1).toString("utf8");
+  return value ? path3.resolve(cwd, value) : GIT_NULL_FILE;
+}
+async function git(cwd, args, input2, allowedCodes = [0], options) {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new BridgeError("GIT_OPERATION_FAILED", "Invalid timeoutMs: must be a finite positive number");
+  }
+  const envSource = options?.env ?? process.env;
+  const safePath = await buildSafeGitPath(cwd, envSource.PATH, options?.excludedRoots);
+  const gitBinary = await resolveGitExecutable(cwd, safePath, options?.excludedRoots);
+  const spawnFn = options?.spawnImpl ?? spawn2;
+  let command2;
+  const scope = [];
+  const callerGlobalArgs = [];
+  let restArgs = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--") {
+      restArgs = args.slice(i);
+      break;
+    }
+    if (arg === "-c" || arg === "--config-env") {
+      const value = args[i + 1];
+      if (value === void 0) {
+        callerGlobalArgs.push(arg);
+        continue;
+      }
+      i++;
+      if (!isProtectedConfigKey(value.split("=")[0])) {
+        callerGlobalArgs.push(arg, value);
+      }
+      continue;
+    }
+    if (arg.startsWith("-c") && arg !== "-c") {
+      if (!isProtectedConfigKey(arg.slice(2).split("=")[0])) {
+        callerGlobalArgs.push(arg);
+      }
+      continue;
+    }
+    if (arg.startsWith("--config-env=")) {
+      if (!isProtectedConfigKey(arg.slice("--config-env=".length).split("=")[0])) {
+        callerGlobalArgs.push(arg);
+      }
+      continue;
+    }
+    if (["-C", "--git-dir", "--work-tree", "--namespace"].includes(arg)) {
+      const value = args[i + 1];
+      if (value !== void 0) {
+        i++;
+        callerGlobalArgs.push(arg, value);
+        if (arg === "--git-dir" || arg === "--work-tree") {
+          scope.push(arg, value);
+        }
+      } else {
+        callerGlobalArgs.push(arg);
+      }
+      continue;
+    }
+    if (arg.startsWith("--git-dir=") || arg.startsWith("--work-tree=")) {
+      callerGlobalArgs.push(arg);
+      scope.push(arg);
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      callerGlobalArgs.push(arg);
+      continue;
+    }
+    command2 = arg;
+    restArgs = args.slice(i);
+    break;
+  }
+  if (command2 !== "version" && args[0] !== "--version") {
+    await ensureGitVersionAdmission(gitBinary, spawnFn, envSource, safePath);
+  }
+  const skipLookup = ["config", "version", "init", "clone"].includes(command2 ?? "") || args[0] === "--version";
+  let effectiveExcludes;
+  if (!skipLookup) {
+    effectiveExcludes = await resolveEffectiveExcludesFile(cwd, gitBinary, envSource, timeoutMs, scope, spawnFn, safePath);
+  }
+  const safeArgs = [
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=" + GIT_NULL_FILE
+  ];
+  if (effectiveExcludes) {
+    safeArgs.push("-c", "core.excludesFile=" + effectiveExcludes);
+  }
+  safeArgs.push(...callerGlobalArgs, ...restArgs);
+  const childEnv = buildHostGitEnv(envSource, false, safePath);
+  return spawnGit(gitBinary, cwd, safeArgs, childEnv, input2, allowedCodes, timeoutMs, spawnFn, options?.shutdownGraceMs);
+}
+
+// dist/src/isolation.js
 import { createReadStream as createReadStream2 } from "node:fs";
-import { lstat as lstat4, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir2, realpath as realpath2, rm as rm2 } from "node:fs/promises";
-import os3 from "node:os";
-import path9 from "node:path";
+import { lstat as lstat4, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir2, realpath as realpath3, rm as rm2, writeFile as writeFile3 } from "node:fs/promises";
+import os4 from "node:os";
+import path10 from "node:path";
 
 // dist/src/skills.js
 import { createHash as createHash3 } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, writeFile } from "node:fs/promises";
-import path5 from "node:path";
+import path7 from "node:path";
 
 // dist/src/config.js
-import path4 from "node:path";
+import path6 from "node:path";
 
 // dist/src/agent-policy.js
 import * as crypto from "node:crypto";
-import * as path2 from "node:path";
+import * as path4 from "node:path";
 var serverIdRegex = /^[a-z][a-z0-9-]{0,31}$/;
 var toolNameRegex = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
 var envKeyRegex = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
@@ -29695,7 +30379,7 @@ function isAbsolutePath(val) {
   if (typeof val !== "string" || val.length === 0 || val.length > 4e3) {
     return false;
   }
-  return path2.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
+  return path4.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
 }
 function isValidServerUrl(urlString) {
   if (typeof urlString !== "string" || urlString.length > 4e3) {
@@ -29907,15 +30591,15 @@ function resolveAgentPolicy(selection, ceilingTools, catalog, mode, namespace) {
 
 // dist/src/integration-policy.js
 import { realpathSync as realpathSync2, statSync } from "node:fs";
-import path3 from "node:path";
+import path5 from "node:path";
 function preauthorizedIntegrationRoots(value) {
   const roots = JSON.parse(value ?? "[]");
-  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path3.isAbsolute(root))) {
+  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path5.isAbsolute(root))) {
     throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
   }
   return [...new Set(roots.map((root) => {
     const canonical = realpathSync2.native(root);
-    if (!statSync(canonical).isDirectory() || canonical === path3.parse(canonical).root)
+    if (!statSync(canonical).isDirectory() || canonical === path5.parse(canonical).root)
       throw new Error("Preauthorization requires a project directory, not a volume root");
     return process.platform === "win32" ? canonical.toLowerCase() : canonical;
   }))];
@@ -29926,7 +30610,7 @@ function integrationPreauthorized(workingDirectory, roots) {
 }
 
 // dist/src/config.js
-import os from "node:os";
+import os2 from "node:os";
 
 // dist/src/tool-profiles.js
 var toolProfileSchema = external_exports.enum(["full", "query", "review", "implementation"]);
@@ -29978,6 +30662,108 @@ function profileReadOnly(profile) {
   return profile === "query" || profile === "review";
 }
 
+// dist/src/hardening-policy.js
+function isForbiddenAllowedEnvVar(name) {
+  const norm = name.trim().toUpperCase();
+  if (norm === "NODE_OPTIONS" || norm === "NODE_PATH")
+    return true;
+  if (norm.startsWith("LD_") || norm.startsWith("DYLD_"))
+    return true;
+  return false;
+}
+function assertValidAllowedEnvVar(rawName, contextName = "allowedEnvVars") {
+  if (typeof rawName !== "string" || !rawName.trim() || rawName.includes("\0")) {
+    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
+  }
+  const trimmed = rawName.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
+  }
+  if (isForbiddenAllowedEnvVar(trimmed)) {
+    throw new BridgeError("FORBIDDEN_ENV_VAR", `${contextName} cannot include runtime injection variable: ${trimmed}`);
+  }
+  return trimmed;
+}
+function validateAllowedEnvVars(vars, contextName = "allowedEnvVars") {
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of vars) {
+    const valid = assertValidAllowedEnvVar(item, contextName);
+    if (!seen.has(valid)) {
+      seen.add(valid);
+      result.push(valid);
+    }
+  }
+  return result;
+}
+function validateRelativeGlobPattern(pattern, contextName = "Glob pattern") {
+  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
+  }
+  let norm = pattern.replaceAll("\\", "/").trim();
+  while (norm.startsWith("./")) {
+    norm = norm.slice(2);
+  }
+  if (!norm) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
+  }
+  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be project-relative`);
+  }
+  const parts = norm.split("/");
+  if (parts.some((p) => p === "..")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must not contain traversal (..)`);
+  }
+  return norm;
+}
+function normalizeSecretExceptionsPolicy(input2, contextName = "BRIDGE_SECRET_EXCEPTIONS") {
+  if (input2 === void 0) {
+    return { version: 2, namePatterns: [] };
+  }
+  if (Array.isArray(input2)) {
+    if (input2.length === 0) {
+      return { version: 2, namePatterns: [] };
+    }
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} uses legacy array format. Migrate to strict version 2 object format: {"version":2,"namePatterns":[...]}`);
+  }
+  if (typeof input2 !== "object" || input2 === null) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must be a strict JSON object: {"version":2,"namePatterns":[...]}`);
+  }
+  const obj = input2;
+  const keys2 = Object.keys(obj);
+  if (keys2.some((k) => k !== "version" && k !== "namePatterns")) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} contains unexpected fields. Only version and namePatterns are allowed`);
+  }
+  if (!Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns")) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain version and namePatterns fields`);
+  }
+  if (obj.version !== 2) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} specifies an unsupported version. Only version 2 is supported`);
+  }
+  if (!Array.isArray(obj.namePatterns)) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of strings`);
+  }
+  const validatedPatterns = [];
+  const seenPatterns = /* @__PURE__ */ new Set();
+  for (const item of obj.namePatterns) {
+    if (typeof item !== "string" || !item.trim() || item.includes("\0")) {
+      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of non-empty strings without NUL`);
+    }
+    if (item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === "..")) {
+      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain relative glob patterns without traversal`);
+    }
+    const validated = validateRelativeGlobPattern(item, `${contextName}.namePatterns`);
+    if (!seenPatterns.has(validated)) {
+      seenPatterns.add(validated);
+      validatedPatterns.push(validated);
+    }
+  }
+  return {
+    version: 2,
+    namePatterns: validatedPatterns
+  };
+}
+
 // dist/src/config.js
 function positiveInteger(value, fallback, max) {
   if (value === void 0)
@@ -29987,7 +30773,13 @@ function positiveInteger(value, fallback, max) {
     throw new Error(`Invalid numeric configuration: ${value}`);
   return n;
 }
-var DEFAULT_PROJECT_LIMITS = { maxCopyFiles: 1e4, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
+var DEFAULT_PROJECT_LIMITS = {
+  maxCopyFiles: 1e4,
+  maxCopyBytes: 256 * 1024 * 1024,
+  maxChangedFiles: 100,
+  secretExclusions: [],
+  secretExceptions: { version: 2, namePatterns: [] }
+};
 function approvalMode(value) {
   if (value === void 0)
     return "auto";
@@ -30010,20 +30802,31 @@ function windowsNodeRuntime(value) {
   throw new Error("BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable");
 }
 function windowsNodeCacheDirectory(value) {
-  const directory = value ?? path4.join(os.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
+  const directory = value ?? path6.join(os2.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
   if (value !== void 0) {
     if (process.platform === "win32") {
       if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
         throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path");
       }
-    } else if (!path4.isAbsolute(value)) {
+    } else if (!path6.isAbsolute(value)) {
       throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute");
     }
   }
-  const resolved = path4.resolve(directory);
-  if (resolved === path4.parse(resolved).root)
+  const resolved = path6.resolve(directory);
+  if (resolved === path6.parse(resolved).root)
     throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
   return resolved;
+}
+function parseSecretExceptionsConfig(value) {
+  if (value === void 0)
+    return { version: 2, namePatterns: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error('BRIDGE_SECRET_EXCEPTIONS must be a valid JSON object: {"version":2,"namePatterns":[...]}');
+  }
+  return normalizeSecretExceptionsPolicy(parsed, "BRIDGE_SECRET_EXCEPTIONS");
 }
 function parseStringArray(value, envName) {
   if (value === void 0)
@@ -30041,7 +30844,7 @@ function parseStringArray(value, envName) {
   if (envName === "BRIDGE_ALLOWED_ENV_VARS" && items.some((item) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
     throw new Error(envName + " must contain exact environment variable names");
   }
-  if ((envName === "BRIDGE_SECRET_EXCLUSIONS" || envName === "BRIDGE_SECRET_EXCEPTIONS") && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
+  if (envName === "BRIDGE_SECRET_EXCLUSIONS" && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
     throw new Error(envName + " must contain relative glob patterns without traversal");
   }
   return items;
@@ -30073,20 +30876,20 @@ function loadConfig(env = process.env) {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path4.join(os.homedir(), ".antigravity-mcp-bridge"),
+    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path6.join(os2.homedir(), ".antigravity-mcp-bridge"),
     memoryMaxEntries,
     memoryMaxBytes,
     memoryMaxEntryBytes,
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path4.delimiter).filter(Boolean).map((p) => path4.resolve(p)),
+    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path6.delimiter).filter(Boolean).map((p) => path6.resolve(p)),
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
     secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, "BRIDGE_SECRET_EXCLUSIONS"),
-    secretExceptions: parseStringArray(env.BRIDGE_SECRET_EXCEPTIONS, "BRIDGE_SECRET_EXCEPTIONS"),
-    allowedEnvVars: parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS")
+    secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
+    allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS"), "BRIDGE_ALLOWED_ENV_VARS")
   };
 }
 
@@ -30362,7 +31165,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `copyDirectory must be a non-link directory: ${copyDirectory}`);
   }
-  const agentsPath = path5.join(copyDirectory, ".agents");
+  const agentsPath = path7.join(copyDirectory, ".agents");
   const agentsStat = await lstat(agentsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -30373,7 +31176,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Existing .agents is not a directory or is a symbolic link");
     }
   }
-  const skillsPath = path5.join(copyDirectory, ".agents", "skills");
+  const skillsPath = path7.join(copyDirectory, ".agents", "skills");
   const skillsStat = await lstat(skillsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -30392,9 +31195,9 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     }
   }
   for (const bundle of bundles) {
-    const relSkillDir = path5.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
+    const relSkillDir = path7.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
     await checkedPath(copyDirectory, relSkillDir, false);
-    const targetSkillDir = path5.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
+    const targetSkillDir = path7.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
     const targetStat = await lstat(targetSkillDir).catch((err) => {
       if (err.code === "ENOENT")
         return void 0;
@@ -30407,10 +31210,10 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   await mkdir(skillsPath, { recursive: true });
   const stagedSkills = [];
   for (const bundle of bundles) {
-    const skillDir = path5.join(skillsPath, bundle.name.toLowerCase());
+    const skillDir = path7.join(skillsPath, bundle.name.toLowerCase());
     await mkdir(skillDir, { recursive: true });
     const files = [];
-    const skillMdTarget = path5.join(skillDir, "SKILL.md");
+    const skillMdTarget = path7.join(skillDir, "SKILL.md");
     await writeFile(skillMdTarget, bundle.content, { encoding: "utf8", flag: "wx" });
     files.push(Object.freeze({
       path: `.agents/skills/${bundle.name.toLowerCase()}/SKILL.md`,
@@ -30419,8 +31222,8 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     if (bundle.resources) {
       for (const res of bundle.resources) {
         const norm = res.path.replaceAll("\\", "/");
-        const targetFile = path5.join(skillDir, ...norm.split("/"));
-        await mkdir(path5.dirname(targetFile), { recursive: true });
+        const targetFile = path7.join(skillDir, ...norm.split("/"));
+        await mkdir(path7.dirname(targetFile), { recursive: true });
         await writeFile(targetFile, res.content, { encoding: "utf8", flag: "wx" });
         files.push(Object.freeze({
           path: `.agents/skills/${bundle.name.toLowerCase()}/${norm}`,
@@ -30529,7 +31332,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
     throw new BridgeError("SKILL_VERIFICATION_FAILED", "copyDirectory must be a directory and not a link");
   }
   for (const rel of [".agents", ".agents/skills"]) {
-    const full = path5.join(copyDirectory, ...rel.split("/"));
+    const full = path7.join(copyDirectory, ...rel.split("/"));
     const st = await lstat(full).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Missing required directory: ${rel}`);
     });
@@ -30540,7 +31343,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
   let totalVerifiedBytes = 0;
   for (const skill of manifest) {
     const skillRelative = `.agents/skills/${skill.name.toLowerCase()}`;
-    const skillDir = path5.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
+    const skillDir = path7.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
     const skillStat = await lstat(skillDir).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Skill directory not found: ${skillRelative}`);
     });
@@ -30584,7 +31387,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
       const entries = await readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         const entryRel = relPrefix + "/" + entry.name;
-        const fullPath = path5.join(dir, entry.name);
+        const fullPath = path7.join(dir, entry.name);
         const st = await lstat(fullPath);
         if (st.isSymbolicLink()) {
           throw new BridgeError("SKILL_VERIFICATION_FAILED", `Symbolic link found in skill: ${entryRel}`);
@@ -30623,9 +31426,9 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
 import * as crypto2 from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import * as path6 from "node:path";
+import * as path8 from "node:path";
 import * as fsp from "node:fs/promises";
-import * as os2 from "node:os";
+import * as os3 from "node:os";
 var EXECUTION_POLICY_PATHS = [
   ".agents/hooks.json",
   ".agents/bridge-execution-hook.mjs",
@@ -30645,7 +31448,7 @@ var stagedExecutionPolicySchema = external_exports.object({
   executionId: external_exports.string().regex(UUID_REGEX3),
   receiptIdentity: external_exports.object({ dev: external_exports.string().regex(/^[0-9]+$/), ino: external_exports.string().regex(/^[0-9]+$/) }).strict(),
   receiptPath: external_exports.string().min(1).max(4e3).refine((val) => {
-    return path6.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
+    return path8.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
   }, { message: "receiptPath must be an absolute path" }),
   files: external_exports.array(stagedExecutionPolicyFileSchema).length(4).refine((files) => {
     const paths2 = new Set(files.map((f) => f.path));
@@ -30688,15 +31491,15 @@ function isWindowsDeviceName3(segment) {
 }
 function pathsEqual(p1, p2) {
   if (process.platform === "win32") {
-    return path6.resolve(p1).toLowerCase() === path6.resolve(p2).toLowerCase();
+    return path8.resolve(p1).toLowerCase() === path8.resolve(p2).toLowerCase();
   }
-  return path6.resolve(p1) === path6.resolve(p2);
+  return path8.resolve(p1) === path8.resolve(p2);
 }
 function validatePathFormat(targetPath, label) {
   if (typeof targetPath !== "string" || !targetPath || targetPath.length > 4e3) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} must be a valid path string`);
   }
-  if (!path6.isAbsolute(targetPath)) {
+  if (!path8.isAbsolute(targetPath)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} must be absolute: ${targetPath}`);
   }
   if (process.platform === "win32") {
@@ -30715,8 +31518,8 @@ function validatePathFormat(targetPath, label) {
   }
   if (targetPath.split(/[\\/]+/).some((part) => part === "." || part === ".."))
     throw new BridgeError("UNSAFE_PROJECT_PATH", "Path traversal segments are not allowed");
-  const resolved = path6.resolve(targetPath);
-  const parsed = path6.parse(resolved);
+  const resolved = path8.resolve(targetPath);
+  const parsed = path8.parse(resolved);
   const relFromRoot = resolved.slice(parsed.root.length);
   const segments = relFromRoot.split(/[\\/]+/).filter(Boolean);
   for (const seg of segments) {
@@ -30733,30 +31536,30 @@ function validatePathFormat(targetPath, label) {
 }
 async function assertNoLinkAncestry(targetPath, label) {
   validatePathFormat(targetPath, label);
-  const resolved = path6.resolve(targetPath);
-  const parsed = path6.parse(resolved);
+  const resolved = path8.resolve(targetPath);
+  const parsed = path8.parse(resolved);
   const relFromRoot = resolved.slice(parsed.root.length);
   const segments = relFromRoot.split(/[\\/]+/).filter(Boolean);
   let current = parsed.root;
   for (const seg of segments) {
-    current = path6.join(current, seg);
-    let stat3;
+    current = path8.join(current, seg);
+    let stat4;
     try {
-      stat3 = await fsp.lstat(current);
+      stat4 = await fsp.lstat(current);
     } catch (err) {
       if (err.code === "ENOENT") {
         break;
       }
       throw err;
     }
-    if (stat3.isSymbolicLink()) {
+    if (stat4.isSymbolicLink()) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} cannot have symlink or junction in path: ${current}`);
     }
   }
 }
 async function hookMain() {
   const fsp2 = await import("node:fs/promises");
-  const path20 = await import("node:path");
+  const path21 = await import("node:path");
   const crypto3 = await import("node:crypto");
   const url2 = await import("node:url");
   const WINDOWS_DEVICE_NAMES5 = /* @__PURE__ */ new Set([
@@ -30790,20 +31593,20 @@ async function hookMain() {
     return WINDOWS_DEVICE_NAMES5.has(base);
   }
   function isInside(parent, child) {
-    const p = process.platform === "win32" ? path20.resolve(parent).toLowerCase() : path20.resolve(parent);
-    const c = process.platform === "win32" ? path20.resolve(child).toLowerCase() : path20.resolve(child);
-    const rel = path20.relative(p, c);
-    return rel === "" || !rel.startsWith("..") && !path20.isAbsolute(rel);
+    const p = process.platform === "win32" ? path21.resolve(parent).toLowerCase() : path21.resolve(parent);
+    const c = process.platform === "win32" ? path21.resolve(child).toLowerCase() : path21.resolve(child);
+    const rel = path21.relative(p, c);
+    return rel === "" || !rel.startsWith("..") && !path21.isAbsolute(rel);
   }
   function canonicalProtected(target) {
-    const parts = path20.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
+    const parts = path21.relative(manifest.canonicalCopyRoot, target).split(/[\\/]+/).filter(Boolean).map((part) => part.toLowerCase());
     return parts.includes(".git") || parts[0] === ".agents";
   }
   function emitDecision(decision2, reason2) {
     console.log(JSON.stringify({ decision: decision2, reason: reason2 }));
     process.exit(0);
   }
-  const manifestPath = path20.resolve(process.cwd(), "bridge-execution-policy.json");
+  const manifestPath = path21.resolve(process.cwd(), "bridge-execution-policy.json");
   let manifestStat;
   try {
     manifestStat = await fsp2.lstat(manifestPath);
@@ -30853,8 +31656,8 @@ async function hookMain() {
   }
   const isWindows = process.platform === "win32";
   try {
-    const expectedCanonical = path20.resolve(manifest.canonicalCopyRoot);
-    const actualCanonical = path20.resolve(await fsp2.realpath(path20.resolve(process.cwd(), "..")));
+    const expectedCanonical = path21.resolve(manifest.canonicalCopyRoot);
+    const actualCanonical = path21.resolve(await fsp2.realpath(path21.resolve(process.cwd(), "..")));
     const match = isWindows ? expectedCanonical.toLowerCase() === actualCanonical.toLowerCase() : expectedCanonical === actualCanonical;
     if (!match) {
       emitDecision("deny", "Denied by execution policy");
@@ -30892,12 +31695,12 @@ async function hookMain() {
     emitDecision("deny", "Denied by execution policy");
   }
   if (Array.isArray(input2.workspacePaths) && input2.workspacePaths.length > 0) {
-    const origRoot = path20.resolve(manifest.originalCopyRoot);
-    const canonRoot = path20.resolve(manifest.canonicalCopyRoot);
+    const origRoot = path21.resolve(manifest.originalCopyRoot);
+    const canonRoot = path21.resolve(manifest.canonicalCopyRoot);
     const matchAny = input2.workspacePaths.some((wp) => {
       if (typeof wp !== "string")
         return false;
-      const res = path20.resolve(wp);
+      const res = path21.resolve(wp);
       return isWindows ? res.toLowerCase() === origRoot.toLowerCase() || res.toLowerCase() === canonRoot.toLowerCase() : res === origRoot || res === canonRoot;
     });
     if (!matchAny) {
@@ -30958,7 +31761,7 @@ async function hookMain() {
       const rawTarget = toolName === "view_file" ? args?.AbsolutePath : args?.TargetFile;
       let pathValid = typeof rawTarget === "string" && rawTarget.length > 0 && rawTarget.length <= 4e3;
       if (pathValid) {
-        if (!path20.isAbsolute(rawTarget)) {
+        if (!path21.isAbsolute(rawTarget)) {
           pathValid = false;
         } else if (isWindows) {
           if (!/^[A-Za-z]:[\\/]/.test(rawTarget) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(rawTarget) || rawTarget.slice(2).includes(":")) {
@@ -30973,7 +31776,7 @@ async function hookMain() {
         decision = "deny";
         reason = "Invalid or non-absolute target file path";
       } else {
-        const resolvedTarget = path20.resolve(rawTarget);
+        const resolvedTarget = path21.resolve(rawTarget);
         const insideOriginal = isInside(manifest.originalCopyRoot, resolvedTarget);
         const insideCanonical = isInside(manifest.canonicalCopyRoot, resolvedTarget);
         if (!insideOriginal && !insideCanonical) {
@@ -30981,9 +31784,9 @@ async function hookMain() {
           reason = "Path is outside copy directory";
         } else {
           const rootUsed = insideOriginal ? manifest.originalCopyRoot : manifest.canonicalCopyRoot;
-          let relToRoot = path20.relative(rootUsed, resolvedTarget);
-          if (isWindows && (relToRoot.startsWith("..") || path20.isAbsolute(relToRoot))) {
-            relToRoot = path20.relative(path20.resolve(rootUsed).toLowerCase(), path20.resolve(resolvedTarget).toLowerCase());
+          let relToRoot = path21.relative(rootUsed, resolvedTarget);
+          if (isWindows && (relToRoot.startsWith("..") || path21.isAbsolute(relToRoot))) {
+            relToRoot = path21.relative(path21.resolve(rootUsed).toLowerCase(), path21.resolve(resolvedTarget).toLowerCase());
           }
           const segs = relToRoot.split(/[\\/]+/).filter(Boolean);
           let segsSafe = true;
@@ -31014,7 +31817,7 @@ async function hookMain() {
                 let ancSafe = true;
                 let current = rootUsed;
                 for (let i = 0; i < segs.length - 1; i++) {
-                  current = path20.join(current, segs[i]);
+                  current = path21.join(current, segs[i]);
                   try {
                     const st = await fsp2.lstat(current);
                     if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31059,7 +31862,7 @@ async function hookMain() {
             let ancSafe = true;
             let current = rootUsed;
             for (let i = 0; i < segs.length - 1; i++) {
-              current = path20.join(current, segs[i]);
+              current = path21.join(current, segs[i]);
               try {
                 const st = await fsp2.lstat(current);
                 if (st.isSymbolicLink() || !st.isDirectory()) {
@@ -31186,11 +31989,11 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
   const selectedDefinitions = setup.policy.mcpServers.map((server) => setup.catalog.find((entry) => entry.id === server.serverId));
   if (selectedDefinitions.some((entry) => !entry) || crypto2.createHash("sha256").update(JSON.stringify(selectedDefinitions)).digest("hex") !== setup.policy.catalogSha256)
     throw new BridgeError("AGENT_POLICY_CHANGED", "Trusted MCP catalog changed after task admission");
-  const canonicalTmp = await fsp.realpath(os2.tmpdir());
-  const absoluteCopy = path6.resolve(copyDirectory);
-  const copyParent = path6.dirname(absoluteCopy);
+  const canonicalTmp = await fsp.realpath(os3.tmpdir());
+  const absoluteCopy = path8.resolve(copyDirectory);
+  const copyParent = path8.dirname(absoluteCopy);
   const canonicalParent = await fsp.realpath(copyParent);
-  if (!pathsEqual(canonicalTmp, canonicalParent) || !path6.basename(absoluteCopy).startsWith("agy-mcp-copy-")) {
+  if (!pathsEqual(canonicalTmp, canonicalParent) || !path8.basename(absoluteCopy).startsWith("agy-mcp-copy-")) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory must be an owned temporary copy directly under os.tmpdir()");
   }
   const copyInfo = await fsp.lstat(absoluteCopy).catch(() => void 0);
@@ -31198,12 +32001,12 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory must be an existing non-link directory");
   }
   const canonicalCopy = await fsp.realpath(absoluteCopy);
-  if (!path6.basename(canonicalCopy).startsWith("agy-mcp-copy-")) {
+  if (!path8.basename(canonicalCopy).startsWith("agy-mcp-copy-")) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "canonical copyDirectory basename must start with agy-mcp-copy-");
   }
   await assertNoLinkAncestry(setup.stateDirectory, "stateDirectory");
-  const resolvedState = path6.resolve(setup.stateDirectory);
-  const stateParsed = path6.parse(resolvedState);
+  const resolvedState = path8.resolve(setup.stateDirectory);
+  const stateParsed = path8.parse(resolvedState);
   if (resolvedState === stateParsed.root) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "stateDirectory cannot be a volume root");
   }
@@ -31215,21 +32018,21 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
   if (pathsEqual(canonicalState, stateParsed.root)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "canonical stateDirectory cannot be a root directory");
   }
-  const relCopyState = path6.relative(canonicalCopy, canonicalState);
-  if (relCopyState === "" || !relCopyState.startsWith("..") && !path6.isAbsolute(relCopyState)) {
+  const relCopyState = path8.relative(canonicalCopy, canonicalState);
+  if (relCopyState === "" || !relCopyState.startsWith("..") && !path8.isAbsolute(relCopyState)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "stateDirectory cannot be inside copyDirectory");
   }
-  const relStateCopy = path6.relative(canonicalState, canonicalCopy);
-  if (relStateCopy === "" || !relStateCopy.startsWith("..") && !path6.isAbsolute(relStateCopy)) {
+  const relStateCopy = path8.relative(canonicalState, canonicalCopy);
+  if (relStateCopy === "" || !relStateCopy.startsWith("..") && !path8.isAbsolute(relStateCopy)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory cannot be inside stateDirectory");
   }
   if (typeof setup.executionId !== "string" || !UUID_REGEX3.test(setup.executionId)) {
     throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid executionId UUID: ${String(setup.executionId)}`);
   }
   validatePathFormat(copyDirectory, "copyDirectory");
-  for (const directory of [copyDirectory, path6.join(copyDirectory, ".agents")]) {
+  for (const directory of [copyDirectory, path8.join(copyDirectory, ".agents")]) {
     for (const name of ["node", "node.exe", "node.com", "node.cmd", "node.bat"]) {
-      if (await fsp.lstat(path6.join(directory, name)).then(() => true, (error62) => {
+      if (await fsp.lstat(path8.join(directory, name)).then(() => true, (error62) => {
         if (error62.code === "ENOENT")
           return false;
         throw error62;
@@ -31238,21 +32041,21 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     }
   }
   for (const managedPath of EXECUTION_POLICY_PATHS) {
-    const target = path6.join(copyDirectory, managedPath);
-    let stat3;
+    const target = path8.join(copyDirectory, managedPath);
+    let stat4;
     try {
-      stat3 = await fsp.lstat(target);
+      stat4 = await fsp.lstat(target);
     } catch (err) {
       if (err.code === "ENOENT") {
         continue;
       }
       throw err;
     }
-    if (stat3) {
+    if (stat4) {
       throw new BridgeError("CONFLICTING_EXECUTION_POLICY", `Conflicting managed path exists: ${managedPath}`);
     }
   }
-  const agentsDir = path6.join(copyDirectory, ".agents");
+  const agentsDir = path8.join(copyDirectory, ".agents");
   try {
     const agentsStat = await fsp.lstat(agentsDir);
     if (agentsStat.isSymbolicLink()) {
@@ -31285,9 +32088,9 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       allowedSkillFiles.push(normalized);
     }
   }
-  const receiptsDir = path6.join(canonicalState, "execution-receipts");
+  const receiptsDir = path8.join(canonicalState, "execution-receipts");
   await fsp.mkdir(receiptsDir, { recursive: true, mode: 448 });
-  const receiptPath = path6.join(receiptsDir, `${setup.executionId}.jsonl`);
+  const receiptPath = path8.join(receiptsDir, `${setup.executionId}.jsonl`);
   await assertNoLinkAncestry(receiptPath, "receiptPath");
   const createdFiles = [];
   let receiptIdentity;
@@ -31295,8 +32098,8 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     try {
       const handle = await fsp.open(receiptPath, "wx", 384);
       try {
-        const stat3 = await handle.stat({ bigint: true });
-        receiptIdentity = { dev: stat3.dev.toString(), ino: stat3.ino.toString() };
+        const stat4 = await handle.stat({ bigint: true });
+        receiptIdentity = { dev: stat4.dev.toString(), ino: stat4.ino.toString() };
       } finally {
         await handle.close();
       }
@@ -31378,20 +32181,20 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Staging requires ${totalBytes} bytes, but remaining limit is ${remaining.maxCopyBytes}`);
     }
     await fsp.mkdir(agentsDir, { recursive: true, mode: 448 });
-    const hooksPath = path6.join(copyDirectory, ".agents", "hooks.json");
+    const hooksPath = path8.join(copyDirectory, ".agents", "hooks.json");
     await fsp.writeFile(hooksPath, hooksJsonContent, { flag: "wx", mode: 384 });
     createdFiles.push(hooksPath);
-    const hookScriptPath = path6.join(copyDirectory, ".agents", "bridge-execution-hook.mjs");
+    const hookScriptPath = path8.join(copyDirectory, ".agents", "bridge-execution-hook.mjs");
     await fsp.writeFile(hookScriptPath, hookScriptContent, { flag: "wx", mode: 384 });
     createdFiles.push(hookScriptPath);
-    const manifestPath = path6.join(copyDirectory, ".agents", "bridge-execution-policy.json");
+    const manifestPath = path8.join(copyDirectory, ".agents", "bridge-execution-policy.json");
     await fsp.writeFile(manifestPath, manifestContent, { flag: "wx", mode: 384 });
     createdFiles.push(manifestPath);
-    const mcpConfigPath = path6.join(copyDirectory, ".agents", "mcp_config.json");
+    const mcpConfigPath = path8.join(copyDirectory, ".agents", "mcp_config.json");
     await fsp.writeFile(mcpConfigPath, mcpConfigContent, { flag: "wx", mode: 384 });
     createdFiles.push(mcpConfigPath);
     if (process.platform === "win32") {
-      await promisify(execFile)(path6.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "icacls.exe"), [mcpConfigPath, "/inheritance:d"], { windowsHide: true, timeout: 1e4, maxBuffer: 8192 });
+      await promisify(execFile)(path8.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "icacls.exe"), [mcpConfigPath, "/inheritance:d"], { windowsHide: true, timeout: 1e4, maxBuffer: 8192 });
     }
     const hooksSha256 = crypto2.createHash("sha256").update(hooksJsonContent, "utf8").digest("hex");
     const manifestSha256 = crypto2.createHash("sha256").update(manifestContent, "utf8").digest("hex");
@@ -31423,8 +32226,8 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     for (const created of createdFiles) {
       try {
         await assertNoLinkAncestry(created, "created helper");
-        const relative2 = path6.relative(canonicalCopy, created);
-        if (created !== receiptPath && (!relative2 || relative2.startsWith("..") || path6.isAbsolute(relative2)))
+        const relative2 = path8.relative(canonicalCopy, created);
+        if (created !== receiptPath && (!relative2 || relative2.startsWith("..") || path8.isAbsolute(relative2)))
           throw new Error("Unsafe helper cleanup");
         await fsp.rm(created, { force: true });
       } catch {
@@ -31452,7 +32255,7 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "stateDirectory must be a non-link directory");
   }
   const canonicalState = await fsp.realpath(stateDirectory);
-  const expectedReceiptPath = path6.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const expectedReceiptPath = path8.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "Receipt path boundary mismatch");
   }
@@ -31465,14 +32268,14 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "Receipt file is missing or not a regular file");
   }
   for (const file3 of staged.files) {
-    const fullPath = path6.join(copyDirectory, file3.path);
+    const fullPath = path8.join(copyDirectory, file3.path);
     await assertNoLinkAncestry(fullPath, "managed helper");
-    const stat3 = await fsp.lstat(fullPath).catch(() => void 0);
-    if (!stat3 || stat3.isSymbolicLink() || !stat3.isFile()) {
+    const stat4 = await fsp.lstat(fullPath).catch(() => void 0);
+    if (!stat4 || stat4.isSymbolicLink() || !stat4.isFile()) {
       throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `Managed helper is missing or not a regular file: ${file3.path}`);
     }
-    if (stat3.size !== file3.bytes) {
-      throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File size mismatch for ${file3.path}: expected ${file3.bytes}, got ${stat3.size}`);
+    if (stat4.size !== file3.bytes) {
+      throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File size mismatch for ${file3.path}: expected ${file3.bytes}, got ${stat4.size}`);
     }
     const content = await fsp.readFile(fullPath);
     const sha256 = crypto2.createHash("sha256").update(content).digest("hex");
@@ -31480,7 +32283,7 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
       throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File hash mismatch for ${file3.path}`);
     }
   }
-  const manifestPath = path6.join(copyDirectory, ".agents", "bridge-execution-policy.json");
+  const manifestPath = path8.join(copyDirectory, ".agents", "bridge-execution-policy.json");
   let manifest;
   try {
     const raw = await fsp.readFile(manifestPath, "utf8");
@@ -31502,7 +32305,7 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
     throw new BridgeError("INVALID_RECEIPT", "stateDirectory must be an existing non-link directory");
   }
   const canonicalState = await fsp.realpath(stateDirectory);
-  const expectedReceiptPath = path6.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const expectedReceiptPath = path8.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError("INVALID_RECEIPT", "Receipt path does not match stateDirectory and executionId");
   }
@@ -31535,10 +32338,10 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
   const handle = await fsp.open(staged.receiptPath, "r");
   let fullBuffer;
   try {
-    const stat3 = await handle.stat({ bigint: true });
-    if (stat3.dev !== identity.dev || stat3.ino !== identity.ino || stat3.size > 1048576n)
+    const stat4 = await handle.stat({ bigint: true });
+    if (stat4.dev !== identity.dev || stat4.ino !== identity.ino || stat4.size > 1048576n)
       throw new BridgeError("INVALID_RECEIPT", "Private receipt changed before reading");
-    const buffer = Buffer.alloc(Number(stat3.size) + 1);
+    const buffer = Buffer.alloc(Number(stat4.size) + 1);
     let length = 0;
     while (length < buffer.length) {
       const part = await handle.read(buffer, length, buffer.length - length, length);
@@ -31619,7 +32422,7 @@ async function discardExecutionPolicy(staged, stateDirectory) {
   stagedExecutionPolicySchema.parse(staged);
   await assertNoLinkAncestry(stateDirectory, "stateDirectory");
   const state = await fsp.realpath(stateDirectory);
-  const expected = path6.join(state, "execution-receipts", staged.executionId + ".jsonl");
+  const expected = path8.join(state, "execution-receipts", staged.executionId + ".jsonl");
   if (!pathsEqual(expected, staged.receiptPath))
     throw new BridgeError("INVALID_RECEIPT", "Private receipt cleanup boundary mismatch");
   await assertNoLinkAncestry(expected, "receiptPath");
@@ -31639,7 +32442,7 @@ async function discardExecutionPolicy(staged, stateDirectory) {
 // dist/src/secret-preflight.js
 import { createHash as createHash5 } from "node:crypto";
 import { lstat as lstat3, open as open3 } from "node:fs/promises";
-import path7 from "node:path";
+import path9 from "node:path";
 var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
   ".env",
   ".ini",
@@ -31651,28 +32454,8 @@ var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
   ".yaml",
   ".yml"
 ]);
-function validateGlobPattern(pattern) {
-  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be a non-empty string without NUL");
-  }
-  let norm = pattern.replaceAll("\\", "/").trim();
-  while (norm.startsWith("./")) {
-    norm = norm.slice(2);
-  }
-  if (!norm) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be a non-empty string without NUL");
-  }
-  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must be project-relative: " + pattern);
-  }
-  const parts = norm.split("/");
-  if (parts.some((p) => p === "..")) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", "Glob pattern must not contain traversal (..): " + pattern);
-  }
-  return norm;
-}
 function globToRegExp(pattern) {
-  let p = validateGlobPattern(pattern);
+  let p = validateRelativeGlobPattern(pattern);
   if (p === "**" || p === "*") {
     return /^.*$/i;
   }
@@ -31704,7 +32487,7 @@ function matchProjectRelativeGlob(pattern, relativePath) {
 }
 function isKnownCredentialFile(normalizedRelative) {
   const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
-  const base = path7.posix.basename(norm);
+  const base = path9.posix.basename(norm);
   if (base === ".env" || base === ".envrc")
     return true;
   if (base.startsWith(".env.")) {
@@ -31774,8 +32557,8 @@ var KNOWN_SOURCE_EXTENSIONS = /* @__PURE__ */ new Set([
 ]);
 function detectSecretContent(normalizedRelative, content, scanState = {}) {
   const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
-  const base = path7.posix.basename(norm);
-  const ext = path7.posix.extname(norm);
+  const base = path9.posix.basename(norm);
+  const ext = path9.posix.extname(norm);
   const text = content.toString("utf8");
   const trimmed = text.trimStart();
   const isSource = KNOWN_SOURCE_EXTENSIONS.has(ext);
@@ -31843,7 +32626,8 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
   const blocked = [];
   const records = /* @__PURE__ */ new Map();
   const exclusions = (limits.secretExclusions ?? []).filter(Boolean);
-  const exceptions = (limits.secretExceptions ?? []).filter(Boolean);
+  const exceptionsPolicy = normalizeSecretExceptionsPolicy(limits.secretExceptions, "secretExceptions");
+  const namePatterns = exceptionsPolicy.namePatterns;
   let aggregateBytesScanned = 0;
   for (const candidate of candidates) {
     let absolute;
@@ -31863,8 +32647,8 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
       blocked.push({ path: relative2, reason: "SECRET_EXCLUSION" });
       continue;
     }
-    const isExcepted = exceptions.some((pattern) => matchProjectRelativeGlob(pattern, relative2));
-    if (!isExcepted && isKnownCredentialFile(relative2)) {
+    const isNameExcepted = namePatterns.some((pattern) => matchProjectRelativeGlob(pattern, relative2));
+    if (!isNameExcepted && isKnownCredentialFile(relative2)) {
       blocked.push({ path: relative2, reason: "SECRET_FILE" });
       continue;
     }
@@ -31914,7 +32698,7 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
         }
         const slice = buf.subarray(0, bytesRead);
         hash3.update(slice);
-        if (!isExcepted && !hasSecret) {
+        if (!hasSecret) {
           const window = prevOverlap.length > 0 ? Buffer.concat([prevOverlap, slice]) : slice;
           if (detectSecretContent(relative2, window, scanState)) {
             hasSecret = true;
@@ -31944,159 +32728,38 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
   return { eligible, blocked, records };
 }
 
-// dist/src/subprocess.js
-import { spawn } from "node:child_process";
-import path8 from "node:path";
-var stopping = /* @__PURE__ */ new WeakSet();
-var ownedProcessGroups = /* @__PURE__ */ new WeakSet();
-function registerOwnedProcessGroup(child) {
-  ownedProcessGroups.add(child);
-}
-function processError(error62, operation) {
-  if (error62 instanceof BridgeError)
-    return error62;
-  const code = error62?.code;
-  if (code === "ENOENT")
-    return new BridgeError("AGY_NOT_FOUND", "agy executable not found");
-  if (code === "EACCES" || code === "EPERM")
-    return new BridgeError("AGY_PERMISSION_DENIED", "Permission denied executing agy");
-  if (operation === "stdin" || code === "EPIPE" || code === "EOF" || code === "ECONNRESET" || code === "ERR_STREAM_DESTROYED" || code === "ERR_STREAM_WRITE_AFTER_END")
-    return new BridgeError("CLI_INPUT_FAILED", "Failed writing input to agy");
-  const message = error62 instanceof Error ? error62.message : String(error62);
-  return new BridgeError("AGY_IO_FAILED", `agy ${operation} failed: ${message}`);
-}
-function terminateSubprocess(child, options) {
-  const isOwned = options?.ownedGroup ?? ownedProcessGroups.has(child);
-  if (stopping.has(child))
-    return;
-  if ((child.exitCode != null || child.signalCode != null) && !isOwned)
-    return;
-  stopping.add(child);
-  let closed = false;
-  let killer;
-  const force = () => {
-    if (!closed) {
-      if (process.platform === "win32") {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
-      } else if (child.pid) {
-        if (isOwned) {
-          try {
-            process.kill(-child.pid, "SIGKILL");
-          } catch {
-            try {
-              child.kill("SIGKILL");
-            } catch {
-            }
-          }
-        } else {
-          try {
-            child.kill("SIGKILL");
-          } catch {
-          }
-        }
-      } else {
-        try {
-          child.kill("SIGKILL");
-        } catch {
-        }
-      }
-    }
-  };
-  const timeoutMs = options?.escalationTimeoutMs ?? 3e3;
-  const timer = setTimeout(() => {
-    force();
-    if (killer && killer.exitCode === null && killer.signalCode === null) {
-      try {
-        killer.kill();
-      } catch {
-      }
-    }
-  }, timeoutMs);
-  timer.unref();
-  const cleanup = () => {
-    closed = true;
-    clearTimeout(timer);
-  };
-  child.once("close", cleanup);
-  if (process.platform === "win32") {
-    if (child.pid) {
-      try {
-        const executable = path8.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
-        killer = spawn(executable, ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, shell: false, stdio: "ignore" });
-        killer.once("error", force);
-        killer.once("close", (code) => {
-          if (code !== 0)
-            force();
-        });
-      } catch {
-        force();
-      }
-    } else {
-      force();
-    }
-  } else {
-    if (child.pid) {
-      if (isOwned) {
-        try {
-          process.kill(-child.pid, "SIGTERM");
-        } catch {
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            force();
-          }
-        }
-      } else {
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          force();
-        }
-      }
-    } else {
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        force();
-      }
-    }
-  }
-}
-function redactDiagnostic(value, state) {
-  if (!value)
-    return "";
-  let text = String(value);
-  if (state) {
-    if (state.inPrivateKey) {
-      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
-        state.inPrivateKey = false;
-      }
-      return "[private key redacted]";
-    }
-    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(text)) {
-      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
-        state.inPrivateKey = false;
-      } else {
-        state.inPrivateKey = true;
-      }
-      return "[private key redacted]";
-    }
-  }
-  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, "[private key redacted]").replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, "[private key redacted]");
-  text = text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, "$1[redacted]@");
-  for (const [name, secret] of Object.entries(process.env)) {
-    if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name))
-      text = text.split(secret).join("[redacted]");
-  }
-  return text.replace(/\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/g, "[redacted]").replace(/(Bearer\s+)[^\s"']+/gi, "$1[redacted]");
-}
-
 // dist/src/isolation.js
-var maxGitOutput = 1e7;
+var FENCE_MARKER_NAME = "CLEANUP_UNVERIFIED";
+function getFenceMarkerPath(project) {
+  return path10.join(project.gitDirectory, FENCE_MARKER_NAME);
+}
+async function checkFenceMarker(project) {
+  const markerPath = getFenceMarkerPath(project);
+  let exists = false;
+  try {
+    await lstat4(markerPath);
+    exists = true;
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      exists = false;
+    } else {
+      throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Failed to inspect cleanup fence marker: " + (err.message || String(err)));
+    }
+  }
+  if (exists) {
+    throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Project copy is fenced due to unverified Git cleanup");
+  }
+}
+async function writeFenceMarker(project) {
+  const markerPath = getFenceMarkerPath(project);
+  try {
+    await writeFile3(markerPath, JSON.stringify({ code: "GIT_CLEANUP_UNVERIFIED", version: 1 }) + "\n", { encoding: "utf8", flag: "wx", mode: 384 });
+  } catch (err) {
+    throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Failed to persist cleanup fence marker: " + (err.message || String(err)));
+  }
+}
 async function verifyManagedCopy(project) {
+  await checkFenceMarker(project);
   await verifyProvidedSkills(project.copyDirectory, project.providedSkills ?? []);
   if (project.executionPolicy) {
     if (!project.executionStateDirectory)
@@ -32118,14 +32781,15 @@ async function stageProjectExecutionPolicy(project, request, limits) {
   project.executionStateDirectory = request.stateDirectory;
 }
 async function discardProjectCopy(project) {
-  const root = await realpath2(os3.tmpdir());
+  await checkFenceMarker(project);
+  const root = await realpath3(os4.tmpdir());
   const targets = [
     [project.copyDirectory, "agy-mcp-copy-"],
     [project.gitDirectory, "agy-mcp-baseline-"]
   ];
   for (const [directory, prefix] of targets) {
-    const absolute = path9.resolve(directory);
-    if (path9.relative(root, await realpath2(path9.dirname(absolute))) !== "" || !path9.basename(absolute).startsWith(prefix)) {
+    const absolute = path10.resolve(directory);
+    if (path10.relative(root, await realpath3(path10.dirname(absolute))) !== "" || !path10.basename(absolute).startsWith(prefix)) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
     }
     const info = await lstat4(absolute).catch((error62) => {
@@ -32137,97 +32801,34 @@ async function discardProjectCopy(project) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
   }
   for (const [directory] of targets)
-    await rm2(path9.resolve(directory), { recursive: true, force: true });
+    await rm2(path10.resolve(directory), { recursive: true, force: true });
   if (project.executionPolicy) {
     if (!project.executionStateDirectory)
       throw new BridgeError("INVALID_AGENT_POLICY", "Private execution storage binding is missing");
     await discardExecutionPolicy(project.executionPolicy, project.executionStateDirectory);
   }
 }
-async function git(cwd, args, input2, allowedCodes = [0]) {
-  return new Promise((resolve2, reject) => {
-    let childProc;
-    try {
-      childProc = spawn2("git", args, { cwd, windowsHide: true, stdio: "pipe" });
-    } catch (err) {
-      reject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(err.message)));
-      return;
+async function managedGit(project, cwd, args, input2, allowedCodes = [0], options) {
+  await checkFenceMarker(project);
+  const excludedRoots = [
+    project.sourceDirectory,
+    project.copyDirectory,
+    ...options?.excludedRoots ?? []
+  ];
+  try {
+    return await git(cwd, args, input2, allowedCodes, {
+      ...options,
+      excludedRoots
+    });
+  } catch (error62) {
+    if (error62 instanceof BridgeError && error62.code === "GIT_CLEANUP_UNVERIFIED") {
+      await writeFenceMarker(project);
     }
-    const child = childProc;
-    let settled = false;
-    const settleReject = (error62) => {
-      if (settled)
-        return;
-      settled = true;
-      terminateSubprocess(child);
-      reject(error62);
-    };
-    const settleResolve = (result) => {
-      if (settled)
-        return;
-      settled = true;
-      resolve2(result);
-    };
-    let ioError = null;
-    const recordIoError = (error62) => {
-      if (!ioError)
-        ioError = error62;
-      terminateSubprocess(child);
-    };
-    const chunks = [];
-    let length = 0;
-    let stderr = "";
-    let overflow = false;
-    child.stdout.on("data", (chunk) => {
-      length += chunk.length;
-      if (length > maxGitOutput) {
-        overflow = true;
-        terminateSubprocess(child);
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
-    });
-    child.stdin.on("error", (error62) => {
-      recordIoError(error62);
-    });
-    child.stdout.on("error", (error62) => {
-      recordIoError(error62);
-    });
-    child.stderr.on("error", (error62) => {
-      recordIoError(error62);
-    });
-    child.once("error", (error62) => {
-      settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(error62.message)));
-    });
-    child.once("close", (code) => {
-      if (overflow) {
-        settleReject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      } else if (ioError) {
-        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(ioError.message || "Git stream communication error")));
-      } else if (!allowedCodes.includes(code ?? -1)) {
-        const diag = stderr.trim() || "git exited with code " + code;
-        settleReject(new BridgeError("GIT_OPERATION_FAILED", redactDiagnostic(diag)));
-      } else {
-        settleResolve(Buffer.concat(chunks));
-      }
-    });
-    if (input2 !== void 0) {
-      try {
-        child.stdin.end(input2);
-      } catch (err) {
-        recordIoError(err);
-      }
-    } else {
-      try {
-        child.stdin.end();
-      } catch (err) {
-        recordIoError(err);
-      }
-    }
-  });
+    throw error62;
+  }
+}
+function copyGit(project, args, input2, allowedCodes = [0], options) {
+  return managedGit(project, project.copyDirectory, args, input2, allowedCodes, options);
 }
 function splitNull(bytes) {
   return bytes.toString("utf8").split("\0").filter(Boolean);
@@ -32270,7 +32871,7 @@ async function checkedPath(root, relative2, mustExist) {
   const parts = validRelative(relative2).split("/");
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path9.join(current, parts[index]);
+    current = path10.join(current, parts[index]);
     let info;
     try {
       info = await lstat4(current);
@@ -32298,7 +32899,7 @@ async function validateProjectRoot(sourceDirectory) {
   } catch {
     throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
   }
-  if (path9.relative(await realpath2(top), await realpath2(sourceDirectory)) !== "") {
+  if (path10.relative(await realpath3(top), await realpath3(sourceDirectory)) !== "") {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
   }
 }
@@ -32360,7 +32961,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
     if (fstat.size !== record2.size || record2.ino !== 0 && fstat.ino !== record2.ino || record2.dev !== 0 && fstat.dev !== record2.dev) {
       throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
     }
-    await mkdir3(path9.dirname(target), { recursive: true });
+    await mkdir3(path10.dirname(target), { recursive: true });
     dstHandle = await open4(target, "w", fstat.mode);
     const CHUNK_SIZE = 64 * 1024;
     const buf = Buffer.allocUnsafe(CHUNK_SIZE);
@@ -32437,8 +33038,8 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     if (totalBytes > limits.maxCopyBytes)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
-  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   try {
     const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected, blockedFiles: preflight.blocked };
@@ -32446,7 +33047,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     const budget = { remainingBytes: limits.maxCopyBytes };
     for (const relative2 of selected) {
       const source = await checkedPath(sourceDirectory, relative2, true);
-      const target = path9.join(copyDirectory, ...relative2.split("/"));
+      const target = path10.join(copyDirectory, ...relative2.split("/"));
       const record2 = preflight.records.get(relative2);
       const hash3 = await copyVerifiedFile(source, target, relative2, record2, budget, "SOURCE_CHANGED");
       baseline.set(relative2, hash3);
@@ -32458,17 +33059,15 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     await verifyProvidedSkills(copyDirectory, staged);
     if (execution)
       await stageProjectExecutionPolicy(project, execution, limits);
-    await git(copyDirectory, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    await copyGit(project, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
     const scope = ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory];
-    await git(copyDirectory, [...scope, "add", "-A", "-f", "--", ".", ...executionExclusions(project)]);
-    await git(copyDirectory, [
+    await copyGit(project, [...scope, "add", "-A", "-f", "--", ".", ...executionExclusions(project)]);
+    await copyGit(project, [
       ...scope,
       "-c",
       "user.name=Bridge Snapshot",
       "-c",
       "user.email=bridge@invalid.local",
-      "-c",
-      "core.hooksPath=" + path9.join(gitDirectory, "disabled-hooks"),
       "commit",
       "--quiet",
       "--allow-empty",
@@ -32477,20 +33076,30 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     ]);
     return project;
   } catch (error62) {
-    if (path9.dirname(copyDirectory) === os3.tmpdir() && path9.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
+    if (error62 instanceof BridgeError && error62.code === "GIT_CLEANUP_UNVERIFIED") {
+      throw error62;
+    }
+    if (path10.dirname(copyDirectory) === os4.tmpdir() && path10.basename(copyDirectory).startsWith("agy-mcp-copy-")) {
       await rm2(copyDirectory, { recursive: true, force: true });
     }
-    if (path9.dirname(gitDirectory) === os3.tmpdir() && path9.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
+    if (path10.dirname(gitDirectory) === os4.tmpdir() && path10.basename(gitDirectory).startsWith("agy-mcp-baseline-")) {
       await rm2(gitDirectory, { recursive: true, force: true });
     }
     throw error62;
   }
 }
+function ensurePatchUtf8RoundTrip(bytes) {
+  const patchText = bytes.toString("utf8");
+  if (!Buffer.from(patchText, "utf8").equals(bytes)) {
+    throw new BridgeError("UNSUPPORTED_PATCH_ENCODING", "Patch contains non-UTF-8 content that cannot safely round-trip. Declare non-UTF-8 files as binary in .gitattributes.");
+  }
+  return patchText;
+}
 async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   await verifyManagedCopy(project);
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  await git(project.copyDirectory, [...scope, "add", "-A", "--", ".", ...executionExclusions(project)]);
-  const names = splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
+  await copyGit(project, [...scope, "add", "-A", "--", ".", ...executionExclusions(project)]);
+  const names = splitNull(await copyGit(project, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--name-status", "--no-renames", "-z", "HEAD"]));
   if (names.length / 2 > limits.maxChangedFiles)
     throw new BridgeError("CHANGE_LIMIT_EXCEEDED", `Changed ${names.length / 2} files; limit is ${limits.maxChangedFiles}`);
   const files = [];
@@ -32503,15 +33112,15 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
       await checkedPath(project.copyDirectory, relative2, true);
     files.push({ status: status2, path: relative2 });
   }
-  const stats = new Map(splitNull(await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
+  const stats = new Map(splitNull(await copyGit(project, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--numstat", "--no-renames", "-z", "HEAD"])).map((line) => {
     const [added, removed, ...relative2] = line.split("	");
     return [relative2.join("	"), { insertions: added === "-" ? null : Number(added), deletions: removed === "-" ? null : Number(removed), binary: added === "-" }];
   }));
   const fileSummaries = files.map((file3) => {
-    const stat3 = stats.get(file3.path);
-    if (!stat3)
+    const stat4 = stats.get(file3.path);
+    if (!stat4)
       throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file3.path);
-    return { ...file3, ...stat3 };
+    return { ...file3, ...stat4 };
   });
   const summary = {
     filesChanged: files.length,
@@ -32522,12 +33131,13 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
     deletions: fileSummaries.reduce((total, file3) => total + (file3.deletions ?? 0), 0),
     binaryFiles: fileSummaries.filter((file3) => file3.binary).length
   };
-  const bytes = await git(project.copyDirectory, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
+  const bytes = await copyGit(project, [...scope, "diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", "HEAD"]);
+  const patch = ensurePatchUtf8RoundTrip(bytes);
   return {
     files,
     fileSummaries,
     summary,
-    patch: bytes.toString("utf8"),
+    patch,
     sha256: createHash6("sha256").update(bytes).digest("hex"),
     sourceDirectory: project.sourceDirectory,
     copyDirectory: project.copyDirectory
@@ -32540,10 +33150,10 @@ async function verifyReadOnlyCopy(project, baseline = new Map([...project.baseli
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path9.join(directory, entry.name), relative2 + "/");
+        await visit2(path10.join(directory, entry.name), relative2 + "/");
       else {
         seen.add(relative2);
-        if (!entry.isFile() || baseline.get(relative2) !== await sha256File2(path9.join(directory, entry.name))) {
+        if (!entry.isFile() || baseline.get(relative2) !== await sha256File2(path10.join(directory, entry.name))) {
           throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative2);
         }
       }
@@ -32557,7 +33167,7 @@ async function verifyReadOnlyCopy(project, baseline = new Map([...project.baseli
 }
 async function readProjectPatch(project, relative2) {
   const file3 = validRelative(relative2);
-  return (await git(project.copyDirectory, [
+  const bytes = await copyGit(project, [
     "--git-dir=" + project.gitDirectory,
     "--work-tree=" + project.copyDirectory,
     "diff",
@@ -32569,7 +33179,8 @@ async function readProjectPatch(project, relative2) {
     "HEAD",
     "--",
     file3
-  ])).toString("utf8");
+  ]);
+  return ensurePatchUtf8RoundTrip(bytes);
 }
 async function snapshotCopyFiles(project, limits) {
   await verifyManagedCopy(project);
@@ -32579,7 +33190,7 @@ async function snapshotCopyFiles(project, limits) {
     for (const entry of await readdir2(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path9.join(directory, entry.name), relative2 + "/");
+        await visit2(path10.join(directory, entry.name), relative2 + "/");
       else {
         const file3 = await checkedPath(project.copyDirectory, relative2, true);
         bytes += (await lstat4(file3)).size;
@@ -32596,14 +33207,19 @@ async function forkProjectCopy(project, limits) {
   await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => file3.path)));
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
+  const candidates = [...new Set(splitNull(await copyGit(project, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))];
   const ignored = /* @__PURE__ */ new Set();
   if (candidates.length) {
     const input2 = Buffer.from(candidates.join("\0") + "\0");
-    for (const file3 of splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
+    for (const file3 of splitNull(await copyGit(project, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
       ignored.add(file3);
-    for (const file3 of splitNull(await git(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
+    for (const file3 of splitNull(await managedGit(project, project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], input2, [0, 1])))
       ignored.add(file3);
+  }
+  for (const file3 of ignored) {
+    if (project.baseline.has(file3) && !managed.has(file3)) {
+      throw new BridgeError("CONTEXT_CHANGED", "Baseline file became ignored: " + file3);
+    }
   }
   const eligibleCandidates = candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)));
   const preflight = await preflightProjectFiles(project.copyDirectory, eligibleCandidates, limits);
@@ -32612,8 +33228,8 @@ async function forkProjectCopy(project, limits) {
       throw new BridgeError("CONTEXT_CHANGED", "Baseline file became blocked or unsafe: " + blocked.path);
     }
   }
-  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-baseline-"));
   const fork = {
     ...project,
     executionPolicy: void 0,
@@ -32625,28 +33241,129 @@ async function forkProjectCopy(project, limits) {
     blockedFiles: preflight.blocked
   };
   try {
-    const budget = { remainingBytes: limits.maxCopyBytes };
-    for (const relative2 of preflight.eligible) {
-      let source;
-      try {
-        source = await checkedPath(project.copyDirectory, relative2, true);
-      } catch (error62) {
-        if (error62.code === "ENOENT")
+    const tempBaselineDir = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-worktree-"));
+    try {
+      const budget = { remainingBytes: limits.maxCopyBytes };
+      for (const relative2 of preflight.eligible) {
+        let source;
+        try {
+          source = await checkedPath(project.copyDirectory, relative2, true);
+        } catch (error62) {
+          if (error62.code === "ENOENT")
+            continue;
+          throw error62;
+        }
+        if (fork.includedFiles.length >= limits.maxCopyFiles) {
+          throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
+        }
+        const target = path10.join(copyDirectory, ...validRelative(relative2).split("/"));
+        const record2 = preflight.records.get(relative2);
+        await copyVerifiedFile(source, target, relative2, record2, budget, "CONTEXT_CHANGED");
+        fork.includedFiles.push(relative2);
+      }
+      const pinnedCommit = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--verify", "HEAD^{commit}"])).toString("utf8").trim();
+      const objectFormat = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--show-object-format"])).toString("utf8").trim();
+      const pinnedTree = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--verify", "HEAD^{tree}"])).toString("utf8").trim();
+      if (!["sha1", "sha256"].includes(objectFormat)) {
+        throw new BridgeError("GIT_OPERATION_FAILED", "Unsupported Git object format: " + objectFormat);
+      }
+      const hashPattern = objectFormat === "sha256" ? /^[0-9a-f]{64}$/ : /^[0-9a-f]{40}$/;
+      if (!hashPattern.test(pinnedCommit) || !hashPattern.test(pinnedTree)) {
+        throw new BridgeError("GIT_OPERATION_FAILED", "Invalid commit or tree object identifier");
+      }
+      const lsTreeRaw = await copyGit(project, ["--git-dir=" + project.gitDirectory, "ls-tree", "-r", "-l", "-z", pinnedCommit]);
+      let baselineFileCount = 0;
+      let baselineByteCount = 0;
+      let offset = 0;
+      while (offset < lsTreeRaw.length) {
+        const nextNull = lsTreeRaw.indexOf(0, offset);
+        if (nextNull === -1)
+          throw new BridgeError("GIT_OPERATION_FAILED", "Unterminated ls-tree record");
+        const entryBuf = lsTreeRaw.subarray(offset, nextNull);
+        offset = nextNull + 1;
+        if (entryBuf.length === 0)
           continue;
-        throw error62;
+        const tabIdx = entryBuf.indexOf(9);
+        if (tabIdx === -1) {
+          throw new BridgeError("GIT_OPERATION_FAILED", "Invalid ls-tree output format");
+        }
+        const meta3 = entryBuf.subarray(0, tabIdx).toString("utf8").trim();
+        const relPath = entryBuf.subarray(tabIdx + 1).toString("utf8");
+        const parts = meta3.split(/\s+/);
+        if (parts.length < 4) {
+          throw new BridgeError("GIT_OPERATION_FAILED", "Invalid ls-tree metadata: " + meta3);
+        }
+        const mode = parts[0];
+        const type = parts[1];
+        const sizeStr = parts[3];
+        if (mode !== "100644" && mode !== "100755") {
+          throw new BridgeError("UNSAFE_PROJECT_PATH", "Baseline contains non-regular file or link: " + relPath);
+        }
+        if (type !== "blob") {
+          throw new BridgeError("UNSAFE_PROJECT_PATH", "Baseline entry is not a blob: " + relPath);
+        }
+        validRelative(relPath);
+        const size = Number(sizeStr);
+        if (!/^\d+$/.test(sizeStr) || !Number.isSafeInteger(size) || size < 0) {
+          throw new BridgeError("GIT_OPERATION_FAILED", "Invalid blob size in baseline ls-tree");
+        }
+        baselineFileCount++;
+        baselineByteCount += size;
+        if (baselineFileCount > limits.maxCopyFiles || baselineByteCount > limits.maxCopyBytes) {
+          throw new BridgeError("COPY_LIMIT_EXCEEDED", "Baseline tree exceeds copy limits");
+        }
       }
-      if (fork.includedFiles.length >= limits.maxCopyFiles) {
-        throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
+      await copyGit(project, [
+        "--git-dir=" + project.gitDirectory,
+        "--work-tree=" + tempBaselineDir,
+        "restore",
+        "--source=" + pinnedCommit,
+        "--worktree",
+        "--",
+        "."
+      ]);
+      await copyGit(fork, [
+        "-c",
+        "init.templateDir=",
+        "init",
+        "--bare",
+        "--object-format=" + objectFormat,
+        "--quiet",
+        gitDirectory
+      ]);
+      const forkBaselineScope = ["--git-dir=" + gitDirectory, "--work-tree=" + tempBaselineDir];
+      await copyGit(fork, [...forkBaselineScope, "add", "-A", "-f", "--", "."]);
+      await copyGit(fork, [
+        ...forkBaselineScope,
+        "-c",
+        "user.name=Bridge Snapshot",
+        "-c",
+        "user.email=bridge@invalid.local",
+        "commit",
+        "--quiet",
+        "--allow-empty",
+        "-m",
+        "baseline"
+      ]);
+      const forkTree = (await copyGit(fork, ["--git-dir=" + gitDirectory, "rev-parse", "--verify", "HEAD^{tree}"])).toString("utf8").trim();
+      if (forkTree !== pinnedTree) {
+        throw new BridgeError("GIT_OPERATION_FAILED", `Fork baseline tree (${forkTree}) does not match source pinned tree (${pinnedTree})`);
       }
-      const target = path9.join(copyDirectory, ...validRelative(relative2).split("/"));
-      const record2 = preflight.records.get(relative2);
-      await copyVerifiedFile(source, target, relative2, record2, budget, "CONTEXT_CHANGED");
-      fork.includedFiles.push(relative2);
+      await copyGit(fork, ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory, "read-tree", "HEAD"]);
+      await fingerprintProjectCopy(fork, limits);
+      const finalHead = (await copyGit(project, ["--git-dir=" + project.gitDirectory, "rev-parse", "--verify", "HEAD^{commit}"])).toString("utf8").trim();
+      if (finalHead !== pinnedCommit)
+        throw new BridgeError("CONTEXT_CHANGED", "Source baseline HEAD changed during fork");
+      return fork;
+    } finally {
+      const root = await realpath3(os4.tmpdir());
+      const info = await lstat4(tempBaselineDir);
+      const absolute = await realpath3(tempBaselineDir);
+      if (info.isSymbolicLink() || !info.isDirectory() || path10.relative(root, path10.dirname(absolute)) !== "" || !path10.basename(absolute).startsWith("agy-mcp-worktree-")) {
+        throw new BridgeError("UNSAFE_PROJECT_PATH", "Private baseline worktree was replaced or escaped temporary storage");
+      }
+      await rm2(absolute, { recursive: true, force: true });
     }
-    await git(copyDirectory, ["-c", "init.templateDir=", "clone", "--bare", "--no-hardlinks", "--quiet", project.gitDirectory, gitDirectory]);
-    await git(copyDirectory, ["--git-dir=" + gitDirectory, "--work-tree=" + copyDirectory, "read-tree", "HEAD"]);
-    await fingerprintProjectCopy(fork, limits);
-    return fork;
   } catch (error62) {
     await discardProjectCopy(fork);
     throw error62;
@@ -32656,8 +33373,8 @@ async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) 
   await verifyManagedCopy(project);
   const managed = new Set((project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => file3.path)));
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
-  const candidates = [...new Set(splitNull(await git(project.copyDirectory, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
-  const ignored = new Set(candidates.length ? splitNull(await git(project.copyDirectory, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
+  const candidates = [...new Set(splitNull(await copyGit(project, [...scope, "ls-files", "--cached", "--others", "--exclude-standard", "-z"])))].sort();
+  const ignored = new Set(candidates.length ? splitNull(await copyGit(project, [...scope, "check-ignore", "--no-index", "--stdin", "-z"], Buffer.from(candidates.join("\0") + "\0"), [0, 1])) : []);
   const digest = createHash6("sha256");
   let count2 = 0, bytes = 0;
   for (const relative2 of candidates.filter((file3) => (!project.executionPolicy || !EXECUTION_POLICY_PATHS.some((managedPath) => managedPath === file3)) && (!ignored.has(file3) || managed.has(file3)))) {
@@ -32706,8 +33423,9 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
     }
   }
   const patch = Buffer.from(preview.patch, "utf8");
-  await git(project.sourceDirectory, ["apply", "--check", "--binary", "-"], patch);
-  await git(project.sourceDirectory, ["apply", "--binary", "-"], patch);
+  const sourceScope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.sourceDirectory];
+  await managedGit(project, project.sourceDirectory, [...sourceScope, "apply", "--check", "--binary", "--whitespace=nowarn", "-"], patch, [0]);
+  await managedGit(project, project.sourceDirectory, [...sourceScope, "apply", "--binary", "--whitespace=nowarn", "-"], patch, [0]);
   return preview;
 }
 
@@ -32826,8 +33544,7 @@ function compactTask(task2) {
 import { createHash as createHash8 } from "node:crypto";
 import { createReadStream as createReadStream3 } from "node:fs";
 import { lstat as lstat5, readdir as readdir3 } from "node:fs/promises";
-import { spawn as spawn3 } from "node:child_process";
-import path10 from "node:path";
+import path11 from "node:path";
 var WINDOWS_DEVICE_NAMES4 = /* @__PURE__ */ new Set([
   "CON",
   "PRN",
@@ -32916,37 +33633,6 @@ var artifactReferenceSchema = external_exports.object({
   sha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
   bytes: external_exports.number().int().nonnegative()
 }).strict();
-async function git2(cwd, args, input2, allowedCodes = [0]) {
-  return new Promise((resolve2, reject) => {
-    const child = spawn3("git", args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-    const chunks = [];
-    let length = 0;
-    let stderr = "";
-    let overflow = false;
-    child.stdout.on("data", (chunk) => {
-      length += chunk.length;
-      if (length > 1e7) {
-        overflow = true;
-        child.kill();
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(-4e3);
-    });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (overflow)
-        reject(new BridgeError("ISOLATION_TOO_LARGE", "Git output exceeds the isolation limit"));
-      else if (!allowedCodes.includes(code ?? -1))
-        reject(new BridgeError("GIT_OPERATION_FAILED", stderr.trim() || "git exited with code " + code));
-      else
-        resolve2(Buffer.concat(chunks));
-    });
-    child.stdin.end(input2);
-  });
-}
 function splitNull2(bytes) {
   return bytes.toString("utf8").split("\0").filter(Boolean);
 }
@@ -32982,11 +33668,12 @@ async function verifyExactDiskCase(rootDir, relativePath) {
       }
       throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath);
     }
-    current = path10.join(current, seg);
+    current = path11.join(current, seg);
   }
   return current;
 }
 async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS) {
+  await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
   const parsed = artifactPathsSchema.safeParse(paths2);
   if (!parsed.success) {
@@ -33005,7 +33692,7 @@ async function collectArtifacts(project, paths2, limits = DEFAULT_PROJECT_LIMITS
     }
   }
   const stdinBuf = Buffer.from(normalizedPaths.join("\0") + "\0");
-  const ignoreOutput = await git2(project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
+  const ignoreOutput = await managedGit(project, project.sourceDirectory, ["check-ignore", "--no-index", "--stdin", "-z"], stdinBuf, [0, 1]);
   const ignoredSet = new Set(splitNull2(ignoreOutput));
   for (const p of normalizedPaths) {
     if (ignoredSet.has(p)) {
@@ -33074,6 +33761,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
   if (expectedSha256 !== reference.sha256) {
     throw new BridgeError("CONTENT_CHANGED", "expectedSha256 does not match reference sha256");
   }
+  await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
   const relative2 = validArtifactRelative(reference.path);
   let filePath;
@@ -33758,7 +34446,7 @@ async function validateRoleReport(role, raw, copyDirectory) {
     if (!parsed.data.reviewedFiles.includes(finding.path))
       throw new BridgeError("ROLE_OUTPUT_INVALID", "Finding refers to a file outside reviewedFiles");
     const file3 = await checkedPath(copyDirectory, finding.path, true);
-    if ((await stat(file3)).size > 1e7)
+    if ((await stat2(file3)).size > 1e7)
       throw new BridgeError("VERIFICATION_TOO_LARGE", "Review citation exceeds the text file limit");
     const lines = (await readFile2(file3, "utf8")).split(/\r?\n/);
     const quote = finding.quote.split(/\r?\n/);
@@ -33771,22 +34459,22 @@ async function validateRoleReport(role, raw, copyDirectory) {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access, lstat as lstat6, realpath as realpath3, stat as stat2 } from "node:fs/promises";
-import path11 from "node:path";
+import { access, lstat as lstat6, realpath as realpath4, stat as stat3 } from "node:fs/promises";
+import path12 from "node:path";
 function within(root, candidate) {
-  const relative2 = path11.relative(root, candidate);
-  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path11.sep}`) && !path11.isAbsolute(relative2);
+  const relative2 = path12.relative(root, candidate);
+  return relative2 === "" || relative2 !== ".." && !relative2.startsWith(`..${path12.sep}`) && !path12.isAbsolute(relative2);
 }
 async function validateWorkingDirectory(input2, forbidden) {
-  if (!path11.isAbsolute(input2))
+  if (!path12.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
-    const directory = await realpath3(input2);
-    if (!(await stat2(directory)).isDirectory())
+    const directory = await realpath4(input2);
+    if (!(await stat3(directory)).isDirectory())
       throw new Error("not a directory");
     await access(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath3(excluded).catch(() => path11.resolve(excluded));
+      const resolved = await realpath4(excluded).catch(() => path12.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -33798,7 +34486,7 @@ async function validateWorkingDirectory(input2, forbidden) {
   }
 }
 async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
-  let existing = path11.resolve(cacheDirectory);
+  let existing = path12.resolve(cacheDirectory);
   const missing = [];
   try {
     for (; ; ) {
@@ -33806,14 +34494,14 @@ async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) 
         await lstat6(existing);
         break;
       } catch (error62) {
-        const parent = path11.dirname(existing);
+        const parent = path12.dirname(existing);
         if (error62.code !== "ENOENT" || parent === existing)
           throw error62;
-        missing.unshift(path11.basename(existing));
+        missing.unshift(path12.basename(existing));
         existing = parent;
       }
     }
-    const cache = path11.join(await realpath3(existing), ...missing);
+    const cache = path12.join(await realpath4(existing), ...missing);
     if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
       throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
     }
@@ -33829,7 +34517,7 @@ function validatePrompt(prompt, maxChars) {
   }
 }
 async function validateStateSeparation(workingDirectory, stateDirectory) {
-  const state = await realpath3(stateDirectory);
+  const state = await realpath4(stateDirectory);
   if (within(workingDirectory, state) || within(state, workingDirectory)) {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps private bridge state; keep that storage outside projects");
   }
@@ -33923,16 +34611,14 @@ var DEFAULT_ALLOWED_ENV_VARS = Object.freeze(Object.keys(DEFAULT_ALLOWED_ENV_VAR
 function cliEnvironment(allowedEnvVars, source = process.env, platform = process.platform) {
   const result = {};
   const isWindows = platform === "win32";
+  const validatedAllowedEnvVars = validateAllowedEnvVars(allowedEnvVars, "allowedEnvVars");
   if (isWindows) {
     const allowedUpper = /* @__PURE__ */ new Set();
     for (const name of DEFAULT_ALLOWED_ENV_VARS) {
       allowedUpper.add(name.toUpperCase());
     }
-    for (const name of allowedEnvVars) {
-      const trimmed = name.trim();
-      if (trimmed) {
-        allowedUpper.add(trimmed.toUpperCase());
-      }
+    for (const name of validatedAllowedEnvVars) {
+      allowedUpper.add(name.toUpperCase());
     }
     const seenUpper = /* @__PURE__ */ new Set();
     for (const [key, value] of Object.entries(source)) {
@@ -33954,11 +34640,8 @@ function cliEnvironment(allowedEnvVars, source = process.env, platform = process
     for (const name of DEFAULT_ALLOWED_ENV_VARS) {
       allowedExact.add(name);
     }
-    for (const name of allowedEnvVars) {
-      const trimmed = name.trim();
-      if (trimmed) {
-        allowedExact.add(trimmed);
-      }
+    for (const name of validatedAllowedEnvVars) {
+      allowedExact.add(name);
     }
     for (const [key, value] of Object.entries(source)) {
       if (key === "__proto__" || typeof value !== "string")
@@ -33989,14 +34672,14 @@ function taskPrompt(options, maxChars) {
   return content;
 }
 function stageSchemaFile(stateDirectory, content) {
-  if (!path12.isAbsolute(stateDirectory))
+  if (!path13.isAbsolute(stateDirectory))
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage must be absolute");
   mkdirSync2(stateDirectory, { recursive: true, mode: 448 });
   if (lstatSync2(stateDirectory).isSymbolicLink())
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage cannot be a link");
   const root = realpathSync3.native(stateDirectory);
   const identity = lstatSync2(root);
-  const file3 = path12.join(root, "cli-schema-" + randomUUID3() + ".json");
+  const file3 = path13.join(root, "cli-schema-" + randomUUID3() + ".json");
   writeFileSync2(file3, content, { flag: "wx", mode: 384 });
   let cleaned = false;
   return { file: file3, cleanup() {
@@ -34014,14 +34697,14 @@ function isAuthError(message) {
   return /authentication required|not logged in|not logged into|login required|please log in/i.test(message);
 }
 async function resolveExecutable(command2) {
-  if (path12.isAbsolute(command2))
-    return path12.resolve(command2);
+  if (path13.isAbsolute(command2))
+    return path13.resolve(command2);
   const extensions = process.platform === "win32" ? ["", ".exe"] : [""];
-  for (const directory of (process.env.PATH || "").split(path12.delimiter)) {
+  for (const directory of (process.env.PATH || "").split(path13.delimiter)) {
     if (!directory)
       continue;
     for (const extension of extensions) {
-      const candidate = path12.join(directory, command2 + extension);
+      const candidate = path13.join(directory, command2 + extension);
       try {
         await access2(candidate);
         return candidate;
@@ -34048,7 +34731,7 @@ var CliAdapter = class {
     return new Promise((resolve2, reject) => {
       let child;
       try {
-        child = spawn4(this.config.agyPath, [...this.prefixArgs, ...args], {
+        child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], {
           env: this.environment(),
           windowsHide: true,
           shell: false,
@@ -34248,7 +34931,7 @@ var CliAdapter = class {
       args[schemaIndex + 1] = staged.file;
     let child;
     try {
-      child = spawn4(this.config.agyPath, [...this.prefixArgs, ...args], {
+      child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], {
         env: this.environment(),
         cwd,
         windowsHide: true,
@@ -34756,8 +35439,8 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
   for (const criterion of criteria) {
     let checkPassed;
     if (criterion.check) {
-      const { kind, path: path20, text } = criterion.check;
-      const content = await file3(path20);
+      const { kind, path: path21, text } = criterion.check;
+      const content = await file3(path21);
       if (kind === "file-exists")
         checkPassed = content !== void 0;
       if (kind === "file-absent")
@@ -35429,8 +36112,8 @@ function getErrorMap2() {
 
 // node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path20, errorMaps, issueData } = params;
-  const fullPath = [...path20, ...issueData.path || []];
+  const { data, path: path21, errorMaps, issueData } = params;
+  const fullPath = [...path21, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -35545,11 +36228,11 @@ var errorUtil;
 
 // node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path20, key) {
+  constructor(parent, value, path21, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path20;
+    this._path = path21;
     this._key = key;
   }
   get path() {
@@ -39100,11 +39783,11 @@ function normalizeObjectSchema(schema) {
   }
   return void 0;
 }
-function getDotPath(path20) {
-  if (path20.length === 0) {
+function getDotPath(path21) {
+  if (path21.length === 0) {
     return "object root";
   }
-  return path20.reduce((acc, seg, index) => {
+  return path21.reduce((acc, seg, index) => {
     if (index === 0) {
       return String(seg);
     }
@@ -42961,8 +43644,8 @@ var EMPTY_COMPLETION_RESULT = {
 
 // dist/src/native-tests.js
 import { createHash as createHash14, randomUUID as randomUUID4 } from "node:crypto";
-import { appendFile, mkdir as mkdir4, readFile as readFile3, rm as rm3, writeFile as writeFile3 } from "node:fs/promises";
-import path13 from "node:path";
+import { appendFile, mkdir as mkdir4, readFile as readFile3, rm as rm3, writeFile as writeFile4 } from "node:fs/promises";
+import path14 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
   args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
@@ -43062,13 +43745,13 @@ async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID4();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
-  const absolute = path13.join(project.copyDirectory, file3);
+  const absolute = path14.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
   const hash3 = createHash14("sha256").update(script).digest("hex");
-  const exclude = path13.join(project.gitDirectory, "info", "exclude");
-  await mkdir4(path13.dirname(exclude), { recursive: true });
+  const exclude = path14.join(project.gitDirectory, "info", "exclude");
+  await mkdir4(path14.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
-  await writeFile3(absolute, script, { flag: "wx", mode: 384 });
+  await writeFile4(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
   let commandLine;
   if (process.platform === "win32") {
@@ -43087,7 +43770,7 @@ async function prepareNativeTest(project, request, settings) {
     async cleanup() {
       await rm3(absolute, { force: true });
       const content = await readFile3(exclude, "utf8");
-      await writeFile3(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
+      await writeFile4(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
     }
   };
 }
@@ -43191,10 +43874,10 @@ function compareFindings(tasks, models) {
     }
   }
   return [...groups.values()].map((opinions) => {
-    const { path: path20, line, quote } = opinions[0].finding;
+    const { path: path21, line, quote } = opinions[0].finding;
     const notReportedBy = models.filter((model) => !opinions.some((opinion) => opinion.model === model));
     return {
-      path: path20,
+      path: path21,
       line,
       quote,
       opinions,
@@ -43206,9 +43889,9 @@ function compareFindings(tasks, models) {
 
 // dist/src/sandbox-policy.js
 import { createHash as createHash15 } from "node:crypto";
-import { lstat as lstat7, readdir as readdir4, realpath as realpath4 } from "node:fs/promises";
-import os4 from "node:os";
-import path14 from "node:path";
+import { lstat as lstat7, readdir as readdir4, realpath as realpath5 } from "node:fs/promises";
+import os5 from "node:os";
+import path15 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
 var persistedPolicySchema = external_exports.object({
   readRoots: paths,
@@ -43256,8 +43939,8 @@ function comparePaths(left, right) {
   return 0;
 }
 function contains(root, target) {
-  const relative2 = path14.relative(pathKey(root), pathKey(target));
-  return relative2 === "" || !relative2.startsWith(".." + path14.sep) && relative2 !== ".." && !path14.isAbsolute(relative2);
+  const relative2 = path15.relative(pathKey(root), pathKey(target));
+  return relative2 === "" || !relative2.startsWith(".." + path15.sep) && relative2 !== ".." && !path15.isAbsolute(relative2);
 }
 function overlaps(left, right) {
   return contains(left, right) || contains(right, left);
@@ -43323,17 +44006,17 @@ function localAbsolutePath(value) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
       }
     }
-  } else if (!path14.isAbsolute(value) || value.startsWith("//")) {
+  } else if (!path15.isAbsolute(value) || value.startsWith("//")) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
   }
-  return path14.resolve(value);
+  return path15.resolve(value);
 }
 async function inspectExistingPath(absolute) {
-  const root = path14.parse(absolute).root;
-  const parts = path14.relative(root, absolute).split(path14.sep).filter(Boolean);
+  const root = path15.parse(absolute).root;
+  const parts = path15.relative(root, absolute).split(path15.sep).filter(Boolean);
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path14.join(current, parts[index]);
+    current = path15.join(current, parts[index]);
     let info;
     try {
       info = await lstat7(current);
@@ -43349,7 +44032,7 @@ async function inspectExistingPath(absolute) {
   }
   let canonical;
   try {
-    canonical = await realpath4(absolute);
+    canonical = await realpath5(absolute);
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a sandbox permission target");
   }
@@ -43369,7 +44052,7 @@ async function inspectDirectoryGrant(directory, limits) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
     for (const name of children) {
-      const child = path14.join(current, name);
+      const child = path15.join(current, name);
       let info;
       try {
         info = await lstat7(child);
@@ -43399,11 +44082,11 @@ async function inspectSandboxGrant(value) {
 }
 async function canonicalProtectedPath(value) {
   const absolute = localAbsolutePath(value);
-  const root = path14.parse(absolute).root;
-  const parts = path14.relative(root, absolute).split(path14.sep).filter(Boolean);
+  const root = path15.parse(absolute).root;
+  const parts = path15.relative(root, absolute).split(path15.sep).filter(Boolean);
   let current = root, firstMissing = parts.length;
   for (let index = 0; index < parts.length; index++) {
-    const next = path14.join(current, parts[index]);
+    const next = path15.join(current, parts[index]);
     let info;
     try {
       info = await lstat7(next);
@@ -43421,25 +44104,25 @@ async function canonicalProtectedPath(value) {
   }
   let canonical;
   try {
-    canonical = await realpath4(current);
+    canonical = await realpath5(current);
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
-  return path14.join(canonical, ...parts.slice(firstMissing));
+  return path15.join(canonical, ...parts.slice(firstMissing));
 }
 async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
   return Promise.all([
     stateDirectory,
     ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
-    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path14.join(os4.homedir(), name)),
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path15.join(os5.homedir(), name)),
     ...forbidden
   ].map(canonicalProtectedPath));
 }
 async function canonicalPaths(values, protectedRoots, limits) {
-  const temporary = await canonicalProtectedPath(os4.tmpdir());
+  const temporary = await canonicalProtectedPath(os5.tmpdir());
   const canonical = await Promise.all(values.map(async (value) => {
     const target = await inspectSandboxGrant(value);
-    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path14.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path15.sep).some((part) => ownedTemporaryDirectory.test(part))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
     }
     if (target.directory)
@@ -44201,7 +44884,7 @@ function createMcpServer(adapter, tasks) {
       description: "Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.",
       inputSchema: { taskId: external_exports.string().uuid(), expectedSha256: external_exports.string().regex(/^[a-f0-9]{64}$/), path: external_exports.string().min(1).max(1e3).optional(), ...chunkInput },
       annotations: readOnly
-    }, async ({ taskId, expectedSha256, path: path20, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path20, offset, limit))());
+    }, async ({ taskId, expectedSha256, path: path21, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path21, offset, limit))());
   if (toolEnabled(tasks.toolProfile, "antigravity_read_result"))
     server.registerTool("antigravity_read_result", {
       outputSchema: outputSchemas.antigravity_read_result,
@@ -44432,24 +45115,24 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
         limit: external_exports.number().int().min(1).max(65536).optional()
       },
       annotations: readOnly
-    }, async ({ taskId, path: path20, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path20, expectedSha256, offset, limit))());
+    }, async ({ taskId, path: path21, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path21, expectedSha256, offset, limit))());
   return server;
 }
 
 // dist/src/group-store.js
 import { lstatSync as lstatSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync as realpathSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { randomUUID as randomUUID6 } from "node:crypto";
-import path16 from "node:path";
+import path17 from "node:path";
 
 // dist/src/state-store.js
 import { randomUUID as randomUUID5 } from "node:crypto";
 import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import path15 from "node:path";
-import os5 from "node:os";
+import path16 from "node:path";
+import os6 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
-var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path15.isAbsolute(root) && path15.resolve(root) === root && root !== path15.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
+var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path16.isAbsolute(root) && path16.resolve(root) === root && root !== path16.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
 var blockedMetadataSchema = external_exports.object({
   path: external_exports.string(),
   reason: external_exports.enum(["SECRET_FILE", "SECRET_CONTENT", "SECRET_EXCLUSION", "UNSAFE_PATH"])
@@ -44563,7 +45246,7 @@ var StateStore = class {
   directory;
   constructor(directory) {
     this.directory = directory;
-    if (!path15.isAbsolute(directory))
+    if (!path16.isAbsolute(directory))
       throw new BridgeError("INVALID_STATE_DIRECTORY", "BRIDGE_STATE_DIRECTORY must be absolute");
     mkdirSync3(directory, { recursive: true, mode: 448 });
     if (lstatSync3(directory).isSymbolicLink())
@@ -44572,13 +45255,13 @@ var StateStore = class {
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path15.join(this.directory, taskId + ".json");
+    return path16.join(this.directory, taskId + ".json");
   }
   loadIntegrationRoots() {
-    const file3 = path15.join(this.directory, "integration-approvals.json");
+    const file3 = path16.join(this.directory, "integration-approvals.json");
     try {
-      const stat3 = lstatSync3(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.nlink !== 1 || stat3.size > 128 * 1024)
+      const stat4 = lstatSync3(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.nlink !== 1 || stat4.size > 128 * 1024)
         throw new Error("Unsafe integration approvals");
       return integrationApprovalsSchema.parse(JSON.parse(readFileSync2(file3, "utf8"))).roots;
     } catch (error62) {
@@ -44590,7 +45273,7 @@ var StateStore = class {
   rememberIntegrationRoot(directory) {
     const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0];
     const release = this.acquire("integration-approvals");
-    const target = path15.join(this.directory, "integration-approvals.json");
+    const target = path16.join(this.directory, "integration-approvals.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       const roots = this.loadIntegrationRoots();
@@ -44605,10 +45288,10 @@ var StateStore = class {
     }
   }
   loadModel() {
-    const file3 = path15.join(this.directory, "model-selection.json");
+    const file3 = path16.join(this.directory, "model-selection.json");
     try {
-      const stat3 = lstatSync3(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > 1024)
+      const stat4 = lstatSync3(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.size > 1024)
         throw new Error("Unsafe model selection");
       return modelSelectionSchema.parse(JSON.parse(readFileSync2(file3, "utf8")));
     } catch (error62) {
@@ -44618,10 +45301,10 @@ var StateStore = class {
     }
   }
   loadSandboxPolicy() {
-    const file3 = path15.join(this.directory, "sandbox-policy.json");
+    const file3 = path16.join(this.directory, "sandbox-policy.json");
     try {
-      const stat3 = lstatSync3(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.size > maxSandboxPolicyFileBytes)
+      const stat4 = lstatSync3(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.size > maxSandboxPolicyFileBytes)
         throw new Error("Unsafe sandbox policy");
       return parseSandboxPolicySnapshot(JSON.parse(readFileSync2(file3, "utf8")));
     } catch (error62) {
@@ -44639,7 +45322,7 @@ var StateStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
-    const target = path15.join(this.directory, "sandbox-policy.json");
+    const target = path16.join(this.directory, "sandbox-policy.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       this.loadSandboxPolicy();
@@ -44652,7 +45335,7 @@ var StateStore = class {
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path15.join(this.directory, "model-selection.json");
+    const target = path16.join(this.directory, "model-selection.json");
     const temporary = target + "." + randomUUID5() + ".tmp";
     try {
       this.loadModel();
@@ -44676,7 +45359,7 @@ var StateStore = class {
   }
   load() {
     return readdirSync2(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path15.join(this.directory, name);
+      const file3 = path16.join(this.directory, name);
       if (lstatSync3(file3).isSymbolicLink() || lstatSync3(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
       let data;
@@ -44685,7 +45368,7 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path15.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path16.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       const messages = data.record.messages ?? [];
@@ -44710,10 +45393,10 @@ var StateStore = class {
       if (data.record.agentPolicy?.sha256 !== data.options.agentPolicy?.sha256)
         throw new BridgeError("INVALID_STATE", "Persisted task tool policies disagree");
       if (data.project) {
-        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && path15.relative(realpathSync4.native(data.project.executionStateDirectory), realpathSync4.native(this.directory)) !== "" || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
+        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && path16.relative(realpathSync4.native(data.project.executionStateDirectory), realpathSync4.native(this.directory)) !== "" || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
           throw new BridgeError("INVALID_STATE", "Persisted execution policy differs from task or private storage");
         for (const [directory, prefix] of [[data.project.copyDirectory, "agy-mcp-copy-"], [data.project.gitDirectory, "agy-mcp-baseline-"]]) {
-          if (!path15.isAbsolute(directory) || path15.relative(os5.tmpdir(), path15.dirname(directory)) !== "" || !path15.basename(directory).startsWith(prefix)) {
+          if (!path16.isAbsolute(directory) || path16.relative(os6.tmpdir(), path16.dirname(directory)) !== "" || !path16.basename(directory).startsWith(prefix)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -44734,7 +45417,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path15.join(this.directory, name + ".lock"), token = randomUUID5();
+    const file3 = path16.join(this.directory, name + ".lock"), token = randomUUID5();
     const root = lstatSync3(this.directory, { bigint: true });
     const busy = () => new BridgeError("STATE_BUSY", "Another operation owns this task or copy, or its lock cannot be verified");
     const checkRoot = () => {
@@ -44745,13 +45428,13 @@ var StateStore = class {
     };
     const inspect = (target) => {
       try {
-        const stat3 = lstatSync3(target, { bigint: true });
-        if (stat3.isSymbolicLink() || !stat3.isFile() || stat3.nlink !== 1n || stat3.size < 1n || stat3.size > 1024n)
+        const stat4 = lstatSync3(target, { bigint: true });
+        if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.nlink !== 1n || stat4.size < 1n || stat4.size > 1024n)
           throw busy();
         const data = JSON.parse(readFileSync2(target, "utf8"));
         if (!data || typeof data !== "object" || Array.isArray(data) || typeof data.pid !== "number" || !Number.isSafeInteger(data.pid) || data.pid < 1 || data.token !== void 0 && (typeof data.token !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(data.token)))
           throw busy();
-        return { stat: stat3, pid: data.pid, token: data.token };
+        return { stat: stat4, pid: data.pid, token: data.token };
       } catch {
         throw busy();
       }
@@ -44824,29 +45507,29 @@ var GroupStore = class {
   directoryIdentity() {
     let current = this.root;
     for (; ; ) {
-      const stat4 = lstatSync4(current);
-      if (!stat4.isDirectory() || stat4.isSymbolicLink())
+      const stat5 = lstatSync4(current);
+      if (!stat5.isDirectory() || stat5.isSymbolicLink())
         throw new BridgeError("INVALID_STATE", "Unsafe group storage ancestry");
-      const parent = path16.dirname(current);
+      const parent = path17.dirname(current);
       if (parent === current)
         break;
       current = parent;
     }
-    const stat3 = lstatSync4(this.root, { bigint: true });
-    return stat3.dev.toString() + ":" + stat3.ino.toString();
+    const stat4 = lstatSync4(this.root, { bigint: true });
+    return stat4.dev.toString() + ":" + stat4.ino.toString();
   }
   file(groupId) {
     if (this.directoryIdentity() !== this.identity)
       throw new BridgeError("INVALID_STATE", "Group storage identity changed");
     if (!/^[a-f0-9-]{36}$/i.test(groupId))
       throw new BridgeError("INVALID_GROUP", "Invalid group ID");
-    return path16.join(this.root, "group-" + groupId.toLowerCase() + ".json");
+    return path17.join(this.root, "group-" + groupId.toLowerCase() + ".json");
   }
   read(groupId) {
     const file3 = this.file(groupId);
     try {
-      const stat3 = lstatSync4(file3);
-      if (!stat3.isFile() || stat3.isSymbolicLink() || stat3.nlink !== 1 || stat3.size > 5 * 1024 * 1024)
+      const stat4 = lstatSync4(file3);
+      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.nlink !== 1 || stat4.size > 5 * 1024 * 1024)
         throw Error("Unsafe group file");
       const record2 = groupRecordSchema.parse(JSON.parse(readFileSync3(file3, "utf8")));
       if (record2.groupId.toLowerCase() !== groupId.toLowerCase() || record2.definitionSha256 !== groupDefinitionSha256(record2.definition))
@@ -45624,11 +46307,11 @@ var EventStore = class {
 };
 
 // dist/src/stream-parser.js
-import { StringDecoder } from "node:string_decoder";
+import { StringDecoder as StringDecoder2 } from "node:string_decoder";
 var LineParser = class {
   onLine;
   maxLineChars;
-  decoder = new StringDecoder("utf8");
+  decoder = new StringDecoder2("utf8");
   remainder = "";
   constructor(onLine, maxLineChars = 2e6) {
     this.onLine = onLine;
@@ -45692,1200 +46375,1804 @@ function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
 import { setTimeout as delay3 } from "node:timers/promises";
 
 // dist/src/windows-executor.js
-import { spawn as spawn6 } from "node:child_process";
-import { lstat as lstat10, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath6, rm as rm5, writeFile as writeFile5 } from "node:fs/promises";
+import { spawn as spawn5 } from "node:child_process";
+import { lstat as lstat10, mkdir as mkdir7, mkdtemp as mkdtemp3, realpath as realpath7, rm as rm5, writeFile as writeFile6 } from "node:fs/promises";
 import { randomUUID as randomUUID9 } from "node:crypto";
-import path19 from "node:path";
-import os7 from "node:os";
+import path20 from "node:path";
+import os8 from "node:os";
 
 // dist/src/windows-helper-source.js
-var windowsHelperSource = `using System;\r
-using System.Collections.Generic;\r
-using System.ComponentModel;\r
-using System.Diagnostics;\r
-using System.Globalization;\r
-using System.IO;\r
-using System.Runtime.InteropServices;\r
-using System.Security.AccessControl;\r
-using System.Security.Principal;\r
-using System.Text;\r
-using System.Threading;\r
-using System.Web.Script.Serialization;\r
-using Microsoft.Win32.SafeHandles;\r
-\r
-internal static class WindowsTestRunner\r
-{\r
-    const uint FileShareRead = 1, FileShareWrite = 2, OpenExisting = 3, FileFlagBackupSemantics = 0x02000000, FileFlagOpenReparsePoint = 0x00200000, InvalidFileAttributes = 0xffffffff;\r
-    const uint WaitObject0 = 0, WaitTimeout = 0x102, ProcessQueryLimitedInformation = 0x1000, Synchronize = 0x100000;\r
-    const uint DosRawTargetPath = 1, DosRemoveDefinition = 2, DosExactMatchOnRemove = 4, DosNoBroadcast = 8;\r
-    const int ProcThreadAttributeSecurityCapabilities = 0x20009, ProcThreadAttributeHandleList = 0x20002, ProcThreadAttributeJobList = 0x2000D, ProcThreadAttributeAllApplicationPackagesPolicy = 0x2000F;\r
-    const uint AllApplicationPackagesPolicyLpac = 1, JobObjectExtendedLimitInformation = 9, JobObjectLimitKillOnJobClose = 0x2000, JobObjectLimitActiveProcess = 0x8, JobObjectLimitBreakawayOk = 0x800, JobObjectLimitSilentBreakawayOk = 0x1000;\r
-    public sealed class Request\r
-    {\r
-        public string action;\r
-        public string nonce;\r
-        public string profile;\r
-        public string cwd;\r
-        public string runtime;\r
-        public string scratch;\r
-        public string executable;\r
-        public string[] args;\r
-        public int timeoutSeconds;\r
-        public int maxFiles;\r
-        public int maxOutputChars;\r
-        public bool network;\r
-        public bool childProcesses;\r
-        public string stateDirectory;\r
-        public Grant[] grants;\r
-        public Dictionary<string, string> environment;\r
-    }\r
-\r
-    public sealed class Grant\r
-    {\r
-        public string path;\r
-        public string rights;\r
-        public bool directory;\r
-        public uint volume;\r
-        public uint fileIndexHigh;\r
-        public uint fileIndexLow;\r
-    }\r
-\r
-    public sealed class Lease\r
-    {\r
-        public int version;\r
-        public string nonce;\r
-        public string profile;\r
-        public string sid;\r
-        public string phase;\r
-        public int controllerPid;\r
-        public long controllerStarted;\r
-        public string cwd;\r
-        public string runtime;\r
-        public string scratch;\r
-        public Grant[] grants;\r
-        public string logon;\r
-        public AliasPlan[] aliases;\r
-    }\r
-\r
-    public sealed class AliasPlan\r
-    {\r
-        public string kind;\r
-        public string physicalRoot;\r
-        public string customName;\r
-        public string drive;\r
-        public string aliasRoot;\r
-        public string customTarget;\r
-        public string driveTarget;\r
-        public uint volume;\r
-        public uint fileIndexHigh;\r
-        public uint fileIndexLow;\r
-        internal Mutex gate;\r
-    }\r
-\r
-    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }\r
-    [StructLayout(LayoutKind.Sequential)] struct SecurityCapabilities { public IntPtr sid, capabilities; public uint count, reserved; }\r
-    [StructLayout(LayoutKind.Sequential)] struct SidAndAttributes { public IntPtr sid; public uint attributes; }\r
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct StartupInfo\r
-    {\r
-        public int cb; public string reserved, desktop, title;\r
-        public uint x, y, xSize, ySize, xChars, yChars, fill, flags;\r
-        public short showWindow, reservedSize; public IntPtr reservedBytes, input, output, error;\r
-    }\r
-    [StructLayout(LayoutKind.Sequential)] struct StartupInfoEx { public StartupInfo startup; public IntPtr attributes; }\r
-    [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process, thread; public uint pid, threadId; }\r
-    [StructLayout(LayoutKind.Sequential)] struct BasicLimits\r
-    {\r
-        public long processTime, jobTime; public uint flags; public UIntPtr minimumWorkingSet, maximumWorkingSet;\r
-        public uint activeProcesses; public UIntPtr affinity; public uint priority, scheduling;\r
-    }\r
-    [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong readOps, writeOps, otherOps, readBytes, writeBytes, otherBytes; }\r
-    [StructLayout(LayoutKind.Sequential)] struct ExtendedLimits { public BasicLimits basic; public IoCounters io; public UIntPtr processMemory, jobMemory, peakProcessMemory, peakJobMemory; }\r
-    [StructLayout(LayoutKind.Sequential)] struct FileTime { public uint low, high; }\r
-    [StructLayout(LayoutKind.Sequential)] struct Luid { public uint low; public int high; }\r
-    [StructLayout(LayoutKind.Sequential)] struct TokenStatistics\r
-    {\r
-        public Luid tokenId, authenticationId; public long expiration; public uint tokenType, impersonationLevel, dynamicCharged, dynamicAvailable, groupCount, privilegeCount; public Luid modifiedId;\r
-    }\r
-    [StructLayout(LayoutKind.Sequential)] struct ByHandleFileInformation\r
-    {\r
-        public uint attributes; public FileTime created, accessed, written; public uint volume, sizeHigh, sizeLow, links, indexHigh, indexLow;\r
-    }\r
-\r
-    sealed class PinnedTarget : IDisposable\r
-    {\r
-        public Grant grant;\r
-        public int maxFiles;\r
-        readonly List<IntPtr> handles = new List<IntPtr>();\r
-        public void Add(IntPtr value) { handles.Add(value); }\r
-        public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }\r
-    }\r
-\r
-    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string display, string description, IntPtr capabilities, uint count, out IntPtr sid);\r
-    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);\r
-    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeriveAppContainerSidFromAppContainerName(string name, out IntPtr sid);\r
-    [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);\r
-    [DllImport("kernelbase.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DeriveCapabilitySidsFromName(string name, out IntPtr groups, out uint groupCount, out IntPtr capabilities, out uint capabilityCount);\r
-    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, uint flags, ref UIntPtr size);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, UIntPtr size, IntPtr previous, IntPtr returned);\r
-    [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);\r
-    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcess(string app, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string cwd, ref StartupInfoEx startup, out ProcessInfo process);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes attributes, uint size);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateJobObject(IntPtr attributes, string name);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int info, IntPtr limits, uint size);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr job, uint code);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint code);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern uint ResumeThread(IntPtr thread);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);\r
-    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);\r
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string path, uint information, byte[] descriptor, uint length, out uint needed);\r
-    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string path, uint information, byte[] descriptor);\r
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);\r
-    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);\r
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);\r
-    [StructLayout(LayoutKind.Sequential)] struct FileAttributeTagInfo { public uint attributes, tag; }\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);\r
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);\r
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);\r
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);\r
-    [DllImport("secur32.dll")] static extern int LsaEnumerateLogonSessions(out uint count, out IntPtr sessions);\r
-    [DllImport("secur32.dll")] static extern int LsaFreeReturnBuffer(IntPtr buffer);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint desiredAccess, bool inherit, uint processId);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetProcessTimes(IntPtr process, out FileTime creation, out FileTime exit, out FileTime kernel, out FileTime user);\r
-    [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int info, IntPtr limits, uint size, IntPtr returned);\r
-\r
-    static readonly IntPtr InvalidHandle = new IntPtr(-1);\r
-\r
-    static void Check(bool success, string operation)\r
-    {\r
-        if (!success) { int code = Marshal.GetLastWin32Error(); throw new Win32Exception(code, operation + " (Win32 " + code + "): " + new Win32Exception(code).Message); }\r
-    }\r
-    static void CheckHr(int result, string operation) { if (result < 0) throw new Exception(operation + ": 0x" + result.ToString("x8")); }\r
-    static bool IsNotFoundHresult(int value) { return value == unchecked((int)0x80070002) || value == unchecked((int)0x80070003); }\r
-    static long FileTimeValue(FileTime value) { return ((long)value.high << 32) | value.low; }\r
-\r
-    sealed class ControllerIdentity\r
-    {\r
-        public SecurityIdentifier user;\r
-        public string logon;\r
-    }\r
-\r
-    static ControllerIdentity CurrentControllerIdentity()\r
-    {\r
-        IntPtr token;\r
-        Check(OpenProcessToken(Process.GetCurrentProcess().Handle, 8, out token), "Open controller token");\r
-        try\r
-        {\r
-            uint returned;\r
-            GetTokenInformation(token, 1, IntPtr.Zero, 0, out returned);\r
-            if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid controller user token size");\r
-            IntPtr userData = Marshal.AllocHGlobal(checked((int)returned));\r
-            try\r
-            {\r
-                Check(GetTokenInformation(token, 1, userData, returned, out returned), "Read controller user token");\r
-                var user = new SecurityIdentifier(Marshal.ReadIntPtr(userData));\r
-                if (user.IsWellKnown(WellKnownSidType.LocalSystemSid)) throw new Exception("LocalSystem cannot create local DOS aliases");\r
-                int size = Marshal.SizeOf(typeof(TokenStatistics)); IntPtr statisticsData = Marshal.AllocHGlobal(size);\r
-                try\r
-                {\r
-                    Check(GetTokenInformation(token, 10, statisticsData, (uint)size, out returned), "Read controller logon token");\r
-                    var statistics = (TokenStatistics)Marshal.PtrToStructure(statisticsData, typeof(TokenStatistics));\r
-                    return new ControllerIdentity { user = user, logon = ((uint)statistics.authenticationId.high).ToString("x8") + "." + statistics.authenticationId.low.ToString("x8") };\r
-                }\r
-                finally { Marshal.FreeHGlobal(statisticsData); }\r
-            }\r
-            finally { Marshal.FreeHGlobal(userData); }\r
-        }\r
-        finally { CloseHandle(token); }\r
-    }\r
-\r
-    static bool TryParseLogon(string value, out Luid logon)\r
-    {\r
-        logon = new Luid();\r
-        if (String.IsNullOrEmpty(value) || value.Length != 17 || value[8] != '.') return false;\r
-        for (int index = 0; index < value.Length; index++) if (index != 8 && !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f') || (value[index] >= 'A' && value[index] <= 'F'))) return false;\r
-        uint high, low;\r
-        if (!UInt32.TryParse(value.Substring(0, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out high) || !UInt32.TryParse(value.Substring(9, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out low)) return false;\r
-        logon.high = unchecked((int)high); logon.low = low; return true;\r
-    }\r
-\r
-    static string DriveGateName(string logon, char letter)\r
-    {\r
-        Luid parsed; if (!TryParseLogon(logon, out parsed)) throw new Exception("Invalid logon identifier for DOS alias mutex");\r
-        return "Global\\\\AGY.TEST.DOS." + logon + "." + letter;\r
-    }\r
-\r
-    static bool LogonSessionExists(string value)\r
-    {\r
-        Luid expected; if (!TryParseLogon(value, out expected)) throw new Exception("Invalid logon identifier for DOS alias recovery");\r
-        uint count; IntPtr sessions; int status = LsaEnumerateLogonSessions(out count, out sessions);\r
-        if (status != 0) throw new Exception("Enumerate logon sessions: 0x" + status.ToString("x8"));\r
-        try\r
-        {\r
-            if (count > 1048576) throw new Exception("Logon session enumeration exceeded its bounded count");\r
-            int size = Marshal.SizeOf(typeof(Luid));\r
-            for (uint index = 0; index < count; index++)\r
-            {\r
-                var candidate = (Luid)Marshal.PtrToStructure(IntPtr.Add(sessions, checked((int)(index * (uint)size))), typeof(Luid));\r
-                if (candidate.high == expected.high && candidate.low == expected.low) return true;\r
-            }\r
-            return false;\r
-        }\r
-        finally\r
-        {\r
-            if (sessions != IntPtr.Zero)\r
-            {\r
-                int released = LsaFreeReturnBuffer(sessions);\r
-                if (released != 0) throw new Exception("Free logon session enumeration: 0x" + released.ToString("x8"));\r
-            }\r
-        }\r
-    }\r
-\r
-    static string[] QueryDosTargets(string name)\r
-    {\r
-        for (uint capacity = 256; capacity <= 65536; capacity *= 2)\r
-        {\r
-            var buffer = new char[checked((int)capacity)];\r
-            uint length = QueryDosDevice(name, buffer, capacity);\r
-            if (length != 0) return new String(buffer, 0, checked((int)length)).Split(new char[] { '\\0' }, StringSplitOptions.RemoveEmptyEntries);\r
-            int error = Marshal.GetLastWin32Error();\r
-            if (error == 2) return null;\r
-            if (error == 122) continue;\r
-            throw new Win32Exception(error, "Query DOS device " + name);\r
-        }\r
-        throw new Exception("DOS device query exceeded its bounded buffer");\r
-    }\r
-\r
-    static void RequireDosAbsent(string name)\r
-    {\r
-        string[] targets = QueryDosTargets(name);\r
-        if (targets != null) throw new Exception("DOS device is already defined: " + name);\r
-    }\r
-\r
-    static void RequireDosExact(string name, string target)\r
-    {\r
-        string[] targets = QueryDosTargets(name);\r
-        if (targets == null || targets.Length != 1 || !String.Equals(targets[0], target, StringComparison.Ordinal)) throw new Exception("DOS device definition is missing, foreign, or stacked: " + name);\r
-    }\r
-\r
-    static Mutex AcquireDriveGate(char letter, ControllerIdentity controller)\r
-    {\r
-        var security = new MutexSecurity(); security.SetOwner(controller.user);\r
-        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));\r
-        bool created; Mutex gate = new Mutex(true, DriveGateName(controller.logon, letter), out created, security);\r
-        if (created) return gate;\r
-        gate.Close(); return null;\r
-    }\r
-\r
-    static Mutex AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)\r
-    {\r
-        var security = new MutexSecurity(); security.SetOwner(controller.user);\r
-        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));\r
-        bool created, owned = false; Mutex gate = null;\r
-        try\r
-        {\r
-            gate = new Mutex(false, DriveGateName(logon, letter), out created, security);\r
-            try { owned = gate.WaitOne(0); }\r
-            catch (AbandonedMutexException) { owned = true; }\r
-            if (!owned) throw new Exception("DOS drive mutex is held: " + letter);\r
-            return gate;\r
-        }\r
-        catch\r
-        {\r
-            if (gate != null) { if (owned) gate.ReleaseMutex(); gate.Close(); }\r
-            throw;\r
-        }\r
-    }\r
-\r
-    static string RawDosTarget(string value) { return "\\\\??\\\\" + value; }\r
-\r
-    static AliasPlan[] CreateAliasPlan(Guid nonce, ControllerIdentity controller, PinnedTarget[] roots)\r
-    {\r
-        if (roots == null || roots.Length != 3) throw new Exception("Exactly three owned roots are required for DOS aliases");\r
-        string[] kinds = new string[] { "copy", "runtime", "scratch" };\r
-        var aliases = new AliasPlan[3]; int selected = 0;\r
-        try\r
-        {\r
-            for (char letter = 'Z'; letter >= 'D' && selected < aliases.Length; letter--)\r
-            {\r
-                string drive = letter + ":"; if (QueryDosTargets(drive) != null) continue;\r
-                Mutex gate = AcquireDriveGate(letter, controller); if (gate == null) continue;\r
-                try\r
-                {\r
-                    if (QueryDosTargets(drive) != null) continue;\r
-                    Grant root = roots[selected].grant;\r
-                    if (!root.directory) throw new Exception("Owned DOS alias root is not a directory");\r
-                    string custom = "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();\r
-                    RequireDosAbsent(custom);\r
-                    aliases[selected] = new AliasPlan { kind = kinds[selected], physicalRoot = root.path, customName = custom, drive = drive, aliasRoot = drive + "\\\\", customTarget = RawDosTarget(root.path), driveTarget = RawDosTarget(custom), volume = root.volume, fileIndexHigh = root.fileIndexHigh, fileIndexLow = root.fileIndexLow, gate = gate };\r
-                    gate = null; selected++;\r
-                }\r
-                finally { if (gate != null) { gate.ReleaseMutex(); gate.Close(); } }\r
-            }\r
-            if (selected != aliases.Length) throw new Exception("Fewer than three unused DOS drive letters are available");\r
-            return aliases;\r
-        }\r
-        catch { ReleaseAliasGates(aliases); throw; }\r
-    }\r
-\r
-    static void ReleaseAliasGates(AliasPlan[] aliases)\r
-    {\r
-        if (aliases == null) return;\r
-        for (int index = aliases.Length - 1; index >= 0; index--) if (aliases[index] != null && aliases[index].gate != null)\r
-        {\r
-            aliases[index].gate.ReleaseMutex(); aliases[index].gate.Close(); aliases[index].gate = null;\r
-        }\r
-    }\r
-\r
-    static void AcquireRecoveryAliasGates(AliasPlan[] aliases, ControllerIdentity controller, string logon)\r
-    {\r
-        try\r
-        {\r
-            for (int index = 0; index < aliases.Length; index++) aliases[index].gate = AcquireRecoveryDriveGate(aliases[index].drive[0], controller, logon);\r
-        }\r
-        catch { ReleaseAliasGates(aliases); throw; }\r
-    }\r
-\r
-    static void VerifyAliasRoot(AliasPlan alias)\r
-    {\r
-        IntPtr handle = CreateFile(alias.aliasRoot, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);\r
-        if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open DOS alias root");\r
-        try\r
-        {\r
-            ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect DOS alias root");\r
-            if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0 || (info.attributes & (uint)FileAttributes.Directory) == 0 || info.volume != alias.volume || info.indexHigh != alias.fileIndexHigh || info.indexLow != alias.fileIndexLow) throw new Exception("DOS alias root identity changed");\r
-        }\r
-        finally { CloseHandle(handle); }\r
-    }\r
-\r
-    static void DefineAlias(AliasPlan alias, bool drive)\r
-    {\r
-        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;\r
-        RequireDosAbsent(name); Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast, name, target), "Define DOS device " + name); RequireDosExact(name, target);\r
-    }\r
-\r
-    static void ApplyAliases(AliasPlan[] aliases)\r
-    {\r
-        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], false);\r
-        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], true);\r
-        for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }\r
-    }\r
-\r
-    static void RemoveAlias(AliasPlan alias, bool drive)\r
-    {\r
-        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;\r
-        string[] current = QueryDosTargets(name); if (current == null) return;\r
-        if (current.Length != 1 || !String.Equals(current[0], target, StringComparison.Ordinal)) throw new Exception("DOS alias cleanup found a foreign or stacked definition: " + name);\r
-        Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast | DosRemoveDefinition | DosExactMatchOnRemove, name, target), "Remove DOS device " + name);\r
-        if (QueryDosTargets(name) != null) throw new Exception("DOS alias remained after exact cleanup: " + name);\r
-    }\r
-\r
-    static void RemoveAliases(AliasPlan[] aliases)\r
-    {\r
-        if (aliases == null) return;\r
-        var failures = new List<string>();\r
-        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], true); } catch (Exception error) { failures.Add(error.Message); }\r
-        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], false); } catch (Exception error) { failures.Add(error.Message); }\r
-        if (failures.Count != 0) throw new Exception(String.Join("; ", failures.ToArray()));\r
-    }\r
-\r
-    static bool IsPhysicalAbsolutePath(string value)\r
-    {\r
-        return !String.IsNullOrEmpty(value) && value.Length >= 3 && Char.IsLetter(value[0]) && value[1] == ':' && (value[2] == '\\\\' || value[2] == '/') && !value.StartsWith("\\\\\\\\", StringComparison.Ordinal) && value.IndexOf(':', 2) < 0;\r
-    }\r
-\r
-    static string ProjectOwnedPath(string value, AliasPlan[] aliases)\r
-    {\r
-        if (!IsPhysicalAbsolutePath(value)) return value;\r
-        for (int index = 0; index < aliases.Length; index++)\r
-        {\r
-            string root = aliases[index].physicalRoot;\r
-            if (value.Length < root.Length) continue;\r
-            bool match = true;\r
-            for (int character = 0; character < root.Length; character++)\r
-            {\r
-                char actual = value[character], expected = root[character];\r
-                if ((actual == '\\\\' || actual == '/') && (expected == '\\\\' || expected == '/')) continue;\r
-                if (Char.ToUpperInvariant(actual) != Char.ToUpperInvariant(expected)) { match = false; break; }\r
-            }\r
-            if (!match || (value.Length > root.Length && value[root.Length] != '\\\\' && value[root.Length] != '/')) continue;\r
-            string tail = value.Substring(root.Length).TrimStart('\\\\', '/');\r
-            foreach (string part in tail.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries)) if (part == "." || part == "..") return value;\r
-            return aliases[index].aliasRoot + tail.Replace('/', '\\\\');\r
-        }\r
-        return value;\r
-    }\r
-\r
-    static string[] ProjectArguments(string[] arguments, AliasPlan[] aliases)\r
-    {\r
-        var projected = new string[arguments.Length]; for (int index = 0; index < arguments.Length; index++) projected[index] = ProjectOwnedPath(arguments[index], aliases); return projected;\r
-    }\r
-\r
-    static Dictionary<string, string> ProjectEnvironment(Request request, AliasPlan[] aliases)\r
-    {\r
-        string systemRoot = Environment.GetEnvironmentVariable("SystemRoot"); RequireLocalAbsolutePath(systemRoot, "SystemRoot");\r
-        string system32 = Path.Combine(systemRoot, "System32");\r
-        string system32Canonical = Path.GetFullPath(system32);\r
-        var projected = new Dictionary<string, string>(request.environment, StringComparer.OrdinalIgnoreCase);\r
-        AliasPlan runtime = aliases[1], scratch = aliases[2];\r
-\r
-        string runtimePhysical = Path.GetFullPath(runtime.physicalRoot);\r
-        string runtimeSeparator = runtimePhysical.EndsWith("\\\\") ? runtimePhysical : runtimePhysical + "\\\\";\r
-\r
-        var pathEntries = new List<string>();\r
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);\r
-\r
-        pathEntries.Add(runtime.aliasRoot);\r
-        seen.Add(runtime.aliasRoot);\r
-\r
-        string rawPath;\r
-        if (projected.TryGetValue("PATH", out rawPath) && !String.IsNullOrEmpty(rawPath))\r
-        {\r
-            string[] items = rawPath.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);\r
-            foreach (string rawItem in items)\r
-            {\r
-                string item = rawItem.Trim().Trim('"');\r
-                if (String.IsNullOrEmpty(item)) continue;\r
-                if (!IsPhysicalAbsolutePath(item)) continue;\r
-                string full;\r
-                try { full = Path.GetFullPath(item); } catch { continue; }\r
-                if (!IsPhysicalAbsolutePath(full)) continue;\r
-\r
-                if (String.Equals(full, system32Canonical, StringComparison.OrdinalIgnoreCase)) continue;\r
-\r
-                bool isRuntimeOwned = String.Equals(full, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||\r
-                                      full.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);\r
-                if (!isRuntimeOwned) continue;\r
-\r
-                string mapped = ProjectOwnedPath(full, aliases);\r
-                if (!mapped.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) continue;\r
-\r
-                if (seen.Add(mapped))\r
-                {\r
-                    pathEntries.Add(mapped);\r
-                }\r
-            }\r
-        }\r
-\r
-        if (seen.Add(system32))\r
-        {\r
-            pathEntries.Add(system32);\r
-        }\r
-\r
-        projected["PATH"] = String.Join(";", pathEntries.ToArray());\r
-        foreach (string key in new string[] { "TEMP", "TMP", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA" }) projected[key] = scratch.aliasRoot;\r
-        string comspec; if (!projected.TryGetValue("COMSPEC", out comspec)) comspec = Path.Combine(systemRoot, "System32", "cmd.exe"); projected["COMSPEC"] = ProjectOwnedPath(comspec, aliases);\r
-\r
-        string gitExecPath;\r
-        if (projected.TryGetValue("GIT_EXEC_PATH", out gitExecPath) && !String.IsNullOrEmpty(gitExecPath))\r
-        {\r
-            RequireLocalAbsolutePath(gitExecPath, "GIT_EXEC_PATH");\r
-            string fullGitExec = Path.GetFullPath(gitExecPath);\r
-            RequireLocalAbsolutePath(fullGitExec, "GIT_EXEC_PATH");\r
-            bool isInsideRuntime = String.Equals(fullGitExec, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||\r
-                                  fullGitExec.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);\r
-            if (!isInsideRuntime) throw new Exception("GIT_EXEC_PATH must be located inside the runtime directory: " + gitExecPath);\r
-            string projectedGitExec = ProjectOwnedPath(fullGitExec, aliases);\r
-            if (!projectedGitExec.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_EXEC_PATH projection failed: " + gitExecPath);\r
-            projected["GIT_EXEC_PATH"] = projectedGitExec;\r
-        }\r
-\r
-        string gitConfigGlobal;\r
-        if (projected.TryGetValue("GIT_CONFIG_GLOBAL", out gitConfigGlobal) && !String.IsNullOrEmpty(gitConfigGlobal))\r
-        {\r
-            RequireLocalAbsolutePath(gitConfigGlobal, "GIT_CONFIG_GLOBAL");\r
-            string fullGitConfig = Path.GetFullPath(gitConfigGlobal);\r
-            RequireLocalAbsolutePath(fullGitConfig, "GIT_CONFIG_GLOBAL");\r
-            string scratchPhysical = Path.GetFullPath(scratch.physicalRoot);\r
-            string scratchSeparator = scratchPhysical.EndsWith("\\\\") ? scratchPhysical : scratchPhysical + "\\\\";\r
-            bool isInsideScratch = String.Equals(fullGitConfig, scratchPhysical, StringComparison.OrdinalIgnoreCase) ||\r
-                                  fullGitConfig.StartsWith(scratchSeparator, StringComparison.OrdinalIgnoreCase);\r
-            if (!isInsideScratch) throw new Exception("GIT_CONFIG_GLOBAL must be located inside the scratch directory: " + gitConfigGlobal);\r
-            string projectedGitConfig = ProjectOwnedPath(fullGitConfig, aliases);\r
-            if (!projectedGitConfig.StartsWith(scratch.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_CONFIG_GLOBAL projection failed: " + gitConfigGlobal);\r
-            projected["GIT_CONFIG_GLOBAL"] = projectedGitConfig;\r
-        }\r
-\r
-        return projected;\r
-    }\r
-\r
-    static List<Dictionary<string, string>> PathMappings(AliasPlan[] aliases)\r
-    {\r
-        var mappings = new List<Dictionary<string, string>>(); foreach (AliasPlan alias in aliases) mappings.Add(new Dictionary<string, string> { { "kind", alias.kind }, { "aliasRoot", alias.aliasRoot }, { "physicalRoot", alias.physicalRoot } }); return mappings;\r
-    }\r
-\r
-    static void RequireLocalAbsolutePath(string value, string description)\r
-    {\r
-        if (String.IsNullOrEmpty(value) || value.IndexOf('\\0') >= 0 || value.StartsWith("\\\\\\\\", StringComparison.Ordinal) || value.StartsWith("//", StringComparison.Ordinal) ||\r
-            value.StartsWith("\\\\\\\\?\\\\", StringComparison.Ordinal) || value.StartsWith("\\\\\\\\.\\\\", StringComparison.Ordinal) || value.Length < 3 ||\r
-            !Char.IsLetter(value[0]) || value[1] != ':' || (value[2] != '\\\\' && value[2] != '/')) throw new Exception(description + " must be a local absolute path");\r
-        if (value.IndexOf(':', 2) >= 0) throw new Exception(description + " cannot use an alternate data stream");\r
-    }\r
-\r
-    static string OwnedTemporaryPath(string directory, string prefix)\r
-    {\r
-        RequireLocalAbsolutePath(directory, "Directory");\r
-        string full = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);\r
-        string parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);\r
-        if (!String.Equals(Path.GetDirectoryName(full), parent, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith(prefix, StringComparison.Ordinal)) throw new Exception("Directory is not owned temporary storage");\r
-        return full;\r
-    }\r
-\r
-    static string OwnedDirectory(string directory, string prefix)\r
-    {\r
-        string full = OwnedTemporaryPath(directory, prefix);\r
-        if (!Directory.Exists(full) || (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0) throw new Exception("Directory was replaced or linked");\r
-        return full;\r
-    }\r
-\r
-    static string StateLeaseDirectory(string stateDirectory)\r
-    {\r
-        RequireLocalAbsolutePath(stateDirectory, "State directory");\r
-        string state = Path.GetFullPath(stateDirectory).TrimEnd(Path.DirectorySeparatorChar);\r
-        if (!Directory.Exists(state) || (File.GetAttributes(state) & FileAttributes.ReparsePoint) != 0) throw new Exception("State directory is unavailable or linked");\r
-        string lease = Path.Combine(state, "windows-lpac-leases");\r
-        if (!Directory.Exists(lease)) Directory.CreateDirectory(lease);\r
-        if ((File.GetAttributes(lease) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease directory is linked");\r
-        return lease;\r
-    }\r
-\r
-    // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.\r
-    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }\r
-\r
-    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles)\r
-    {\r
-        RequireLocalAbsolutePath(full, "Permission target");\r
-        string canonical = Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar);\r
-        if (String.Equals(canonical + Path.DirectorySeparatorChar, Path.GetPathRoot(canonical), StringComparison.OrdinalIgnoreCase)) throw new Exception("Permission target cannot be a volume root");\r
-        string root = Path.GetPathRoot(canonical), tail = canonical.Substring(root.Length), current = root;\r
-        if (tail.Length == 0) throw new Exception("Permission target cannot be a volume root");\r
-        string[] pieces = tail.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);\r
-        for (int index = 0; index < pieces.Length; index++)\r
-        {\r
-            current = Path.Combine(current, pieces[index]);\r
-            IntPtr handle = CreateFile(current, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);\r
-            if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open permission target");\r
-            try\r
-            {\r
-                ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");\r
-                if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0)\r
-                {\r
-                    FileAttributeTagInfo tagInfo;\r
-                    Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");\r
-                    if (!IsCloudTag(tagInfo.tag)) throw new Exception("Permission target contains an unsafe reparse point");\r
-                }\r
-                bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;\r
-                if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");\r
-                if (index == pieces.Length - 1)\r
-                {\r
-                    if (!directory && info.links > 1) throw new Exception("Permission target file has multiple hard links");\r
-                    target.grant.path = canonical; target.grant.directory = directory; target.grant.volume = info.volume; target.grant.fileIndexHigh = info.indexHigh; target.grant.fileIndexLow = info.indexLow;\r
-                }\r
-                target.Add(handle); handle = IntPtr.Zero;\r
-            }\r
-            finally { if (handle != IntPtr.Zero && handle != InvalidHandle) CloseHandle(handle); }\r
-        }\r
-        if (walkTree && target.grant.directory) ScanTree(canonical, maxFiles, new int[] { 0 });\r
-    }\r
-\r
-    static void ScanTree(string directory, int maxFiles, int[] count)\r
-    {\r
-        foreach (string child in Directory.GetFileSystemEntries(directory))\r
-        {\r
-            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");\r
-            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };\r
-            try { ValidatePathComponents(child, temporary, false, maxFiles); if (temporary.grant.directory) ScanTree(child, maxFiles, count); }\r
-            finally { temporary.Dispose(); }\r
-        }\r
-    }\r
-\r
-    static PinnedTarget PinGrant(Grant supplied, int maxFiles)\r
-    {\r
-        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");\r
-        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };\r
-        try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }\r
-        catch { target.Dispose(); throw; }\r
-    }\r
-\r
-    static bool SameIdentity(Grant expected, Grant actual)\r
-    {\r
-        return expected.directory == actual.directory && expected.volume == actual.volume && expected.fileIndexHigh == actual.fileIndexHigh && expected.fileIndexLow == actual.fileIndexLow;\r
-    }\r
-\r
-    static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }\r
-\r
-    static RawSecurityDescriptor ReadDacl(string path)\r
-    {\r
-        uint needed;\r
-        if (!GetFileSecurity(path, 4, null, 0, out needed) && Marshal.GetLastWin32Error() != 122) Check(false, "Measure target DACL");\r
-        if (needed == 0 || needed > 1024 * 1024) throw new Exception("Invalid target DACL size");\r
-        var data = new byte[needed];\r
-        Check(GetFileSecurity(path, 4, data, needed, out needed), "Read target DACL");\r
-        return new RawSecurityDescriptor(data, 0);\r
-    }\r
-\r
-    static bool SameDacl(RawSecurityDescriptor expected, RawSecurityDescriptor actual)\r
-    {\r
-        if (expected.ControlFlags != actual.ControlFlags || expected.DiscretionaryAcl == null || actual.DiscretionaryAcl == null || expected.DiscretionaryAcl.BinaryLength != actual.DiscretionaryAcl.BinaryLength) return false;\r
-        var left = new byte[expected.DiscretionaryAcl.BinaryLength]; var right = new byte[actual.DiscretionaryAcl.BinaryLength];\r
-        expected.DiscretionaryAcl.GetBinaryForm(left, 0); actual.DiscretionaryAcl.GetBinaryForm(right, 0);\r
-        for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;\r
-        return true;\r
-    }\r
-\r
-    static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)\r
-    {\r
-        AccessTree(target, identity, grant, true, target.maxFiles, new int[] { 0 });\r
-    }\r
-\r
-    static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)\r
-    {\r
-        // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.\r
-        RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);\r
-        if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;\r
-        RawAcl acl = descriptor.DiscretionaryAcl;\r
-        bool changed = false;\r
-        if (acl == null && grant) throw new Exception("Permission target has no DACL");\r
-        if (acl != null)\r
-        {\r
-            int rights = (int)RightsFor(target.grant); CommonAce existing = null;\r
-            for (int index = acl.Count - 1; index >= 0; index--)\r
-            {\r
-                KnownAce ace = acl[index] as KnownAce;\r
-                if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;\r
-                if (!grant) { acl.RemoveAce(index); changed = true; }\r
-                else\r
-                {\r
-                    CommonAce allow = ace as CommonAce;\r
-                    if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");\r
-                    existing = allow;\r
-                    if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }\r
-                }\r
-            }\r
-            if (grant && existing == null)\r
-            {\r
-                AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;\r
-                if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;\r
-                int insert = acl.Count;\r
-                if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }\r
-                acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;\r
-            }\r
-            if (changed)\r
-            {\r
-                ControlFlags storedFlags = descriptor.ControlFlags;\r
-                // AR preserves AI in this non-propagating write; Windows consumes AR.\r
-                if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);\r
-                var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);\r
-                Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");\r
-                descriptor.SetFlags(storedFlags);\r
-                if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");\r
-            }\r
-        }\r
-        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.\r
-        if (!target.grant.directory) return;\r
-        foreach (string child in Directory.GetFileSystemEntries(target.grant.path))\r
-        {\r
-            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");\r
-            using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })\r
-            {\r
-                ValidatePathComponents(child, pin, false, maxFiles);\r
-                AccessTree(pin, identity, grant, false, maxFiles, count);\r
-            }\r
-        }\r
-    }\r
-\r
-    static string Quote(string argument)\r
-    {\r
-        var result = new StringBuilder("\\""); int slashes = 0;\r
-        foreach (char character in argument)\r
-        {\r
-            if (character == '\\\\') { slashes++; continue; }\r
-            if (character == '"') result.Append('\\\\', slashes * 2 + 1);\r
-            else result.Append('\\\\', slashes);\r
-            result.Append(character); slashes = 0;\r
-        }\r
-        result.Append('\\\\', slashes * 2); return result.Append('"').ToString();\r
-    }\r
-\r
-    static long CurrentProcessStart()\r
-    {\r
-        FileTime created, exited, kernel, user;\r
-        Check(GetProcessTimes(Process.GetCurrentProcess().Handle, out created, out exited, out kernel, out user), "Read controller start time");\r
-        return FileTimeValue(created);\r
-    }\r
-\r
-    static void WriteLease(string path, Lease lease, bool initial, JavaScriptSerializer serializer)\r
-    {\r
-        byte[] data = new UTF8Encoding(false).GetBytes(serializer.Serialize(lease));\r
-        if (initial)\r
-        {\r
-            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }\r
-            return;\r
-        }\r
-        string temporary = path + ".update." + Process.GetCurrentProcess().Id.ToString() + ".tmp";\r
-        using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }\r
-        try { File.Replace(temporary, path, null); }\r
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }\r
-    }\r
-\r
-    static void ValidateLease(Lease lease, string expectedFile)\r
-    {\r
-        Guid nonce;\r
-        if (lease == null || (lease.version != 1 && lease.version != 2) || !Guid.TryParseExact(lease.nonce, "D", out nonce) || String.IsNullOrEmpty(lease.profile) ||\r
-            !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||\r
-            lease.controllerPid <= 0 || lease.controllerStarted <= 0 || lease.grants == null || (lease.phase != "creating" && lease.phase != "active" && lease.phase != "cleanup-failed")) throw new Exception("Invalid Windows LPAC lease");\r
-        if (lease.phase != "creating" && String.IsNullOrEmpty(lease.sid)) throw new Exception("Lease has no profile identity");\r
-        OwnedTemporaryPath(lease.cwd, "agy-mcp-copy-"); OwnedTemporaryPath(lease.runtime, "agy-mcp-runtime-"); OwnedTemporaryPath(lease.scratch, "agy-mcp-scratch-");\r
-        if (lease.version == 2) ValidateLeaseAliases(lease, nonce);\r
-    }\r
-\r
-    static void ValidateLeaseAliases(Lease lease, Guid nonce)\r
-    {\r
-        Luid logon; if (!TryParseLogon(lease.logon, out logon) || lease.aliases == null || lease.aliases.Length != 3) throw new Exception("Invalid Windows LPAC alias lease");\r
-        string[] kinds = new string[] { "copy", "runtime", "scratch" }, roots = new string[] { lease.cwd, lease.runtime, lease.scratch }; var drives = new HashSet<char>();\r
-        for (int index = 0; index < lease.aliases.Length; index++)\r
-        {\r
-            AliasPlan alias = lease.aliases[index];\r
-            if (alias == null || !String.Equals(alias.kind, kinds[index], StringComparison.Ordinal) || !String.Equals(alias.physicalRoot, roots[index], StringComparison.OrdinalIgnoreCase) ||\r
-                !String.Equals(alias.customName, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||\r
-                String.IsNullOrEmpty(alias.drive) || alias.drive.Length != 2 || alias.drive[0] < 'D' || alias.drive[0] > 'Z' || alias.drive[1] != ':' || !drives.Add(alias.drive[0]) || (index != 0 && alias.drive[0] >= lease.aliases[index - 1].drive[0]) || !String.Equals(alias.aliasRoot, alias.drive + "\\\\", StringComparison.Ordinal) ||\r
-                !String.Equals(alias.customTarget, RawDosTarget(roots[index]), StringComparison.Ordinal) || !String.Equals(alias.driveTarget, RawDosTarget(alias.customName), StringComparison.Ordinal)) throw new Exception("Invalid Windows LPAC alias plan");\r
-        }\r
-    }\r
-\r
-    static bool ControllerIsActive(Lease lease)\r
-    {\r
-        IntPtr process = OpenProcess(ProcessQueryLimitedInformation | Synchronize, false, (uint)lease.controllerPid);\r
-        if (process == IntPtr.Zero)\r
-        {\r
-            int error = Marshal.GetLastWin32Error();\r
-            if (error == 87 || error == 1168) return false;\r
-            throw new Win32Exception(error, "Cannot verify lease controller");\r
-        }\r
-        try\r
-        {\r
-            FileTime created, exited, kernel, user;\r
-            Check(GetProcessTimes(process, out created, out exited, out kernel, out user), "Verify lease controller start time");\r
-            uint state = WaitForSingleObject(process, 0);\r
-            if (state == WaitTimeout) return FileTimeValue(created) == lease.controllerStarted;\r
-            if (state == WaitObject0) return false;\r
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Verify lease controller state");\r
-        }\r
-        finally { CloseHandle(process); }\r
-    }\r
-\r
-    static SecurityIdentifier LeaseIdentity(Lease lease)\r
-    {\r
-        if (lease.phase == "creating") return null;\r
-        var identity = new SecurityIdentifier(lease.sid);\r
-        IntPtr derived; int result = DeriveAppContainerSidFromAppContainerName(lease.profile, out derived);\r
-        if (result >= 0 && derived != IntPtr.Zero)\r
-        {\r
-            try { if (!identity.Equals(new SecurityIdentifier(derived))) throw new Exception("Lease profile SID does not match its profile name"); }\r
-            finally { FreeSid(derived); }\r
-        }\r
-        else if (!IsNotFoundHresult(result)) CheckHr(result, "Verify lease profile SID");\r
-        return identity;\r
-    }\r
-\r
-    static bool IsMissingOwnedTemporaryGrant(Lease lease, Grant grant)\r
-    {\r
-        if (grant == null || !grant.directory) return false;\r
-        string directory = null, prefix = null;\r
-        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = "agy-mcp-copy-"; }\r
-        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = "agy-mcp-runtime-"; }\r
-        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = "agy-mcp-scratch-"; }\r
-        else return false;\r
-        directory = OwnedTemporaryPath(directory, prefix);\r
-        if (GetFileAttributes(directory) != InvalidFileAttributes) return false;\r
-        int error = Marshal.GetLastWin32Error();\r
-        return error == 2 || error == 3;\r
-    }\r
-\r
-    static void DeleteProfile(string profile)\r
-    {\r
-        int result = DeleteAppContainerProfile(profile);\r
-        if (result < 0 && !IsNotFoundHresult(result)) CheckHr(result, "Delete AppContainer profile");\r
-    }\r
-\r
-    static void Recover(string stateDirectory, Dictionary<string, object> result, JavaScriptSerializer serializer)\r
-    {\r
-        string directory = StateLeaseDirectory(stateDirectory); var failures = new List<string>(); int recovered = 0, active = 0;\r
-        foreach (string file in Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly))\r
-        {\r
-            try\r
-            {\r
-                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease file is linked");\r
-                Lease lease = serializer.Deserialize<Lease>(File.ReadAllText(file, Encoding.UTF8)); ValidateLease(lease, file);\r
-                if (ControllerIsActive(lease)) { active++; continue; }\r
-                SecurityIdentifier identity = LeaseIdentity(lease); var pins = new List<PinnedTarget>(); var cleanupFailures = new List<string>();\r
-                try\r
-                {\r
-                    if (lease.version == 2)\r
-                    {\r
-                        try\r
-                        {\r
-                            ControllerIdentity controller = CurrentControllerIdentity();\r
-                            if (String.Equals(controller.logon, lease.logon, StringComparison.Ordinal))\r
-                            {\r
-                                AcquireRecoveryAliasGates(lease.aliases, controller, lease.logon);\r
-                                try { RemoveAliases(lease.aliases); }\r
-                                finally { ReleaseAliasGates(lease.aliases); }\r
-                            }\r
-                            else if (LogonSessionExists(lease.logon)) throw new Exception("Lease logon session remains active");\r
-                        }\r
-                        catch (Exception error) { cleanupFailures.Add("DOS aliases: " + error.Message); }\r
-                    }\r
-                    if (identity != null)\r
-                    {\r
-                        for (int index = lease.grants.Length - 1; index >= 0; index--)\r
-                        {\r
-                            if (IsMissingOwnedTemporaryGrant(lease, lease.grants[index])) continue;\r
-                            PinnedTarget pin = null;\r
-                            try { pin = PinGrant(lease.grants[index], 1000000); if (!SameIdentity(lease.grants[index], pin.grant)) throw new Exception("Granted target identity changed"); Access(pin, identity, false); pins.Add(pin); pin = null; }\r
-                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); if (pin != null) pin.Dispose(); }\r
-                        }\r
-                    }\r
-                    try { DeleteProfile(lease.profile); } catch (Exception error) { cleanupFailures.Add("Profile: " + error.Message); }\r
-                }\r
-                finally { for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose(); }\r
-                if (cleanupFailures.Count != 0)\r
-                {\r
-                    lease.phase = "cleanup-failed"; try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }\r
-                    throw new Exception(String.Join("; ", cleanupFailures.ToArray()));\r
-                }\r
-                File.Delete(file); recovered++;\r
-            }\r
-            catch (Exception error) { failures.Add(Path.GetFileName(file) + ": " + error.Message); }\r
-        }\r
-        result["recovered"] = recovered; result["active"] = active;\r
-        if (failures.Count != 0) result["error"] = "Windows LPAC recovery failed: " + String.Join("; ", failures.ToArray());\r
-    }\r
-\r
-    static IntPtr DeriveCapability(string name, List<IntPtr> allocations)\r
-    {\r
-        IntPtr groups, caps; uint groupCount, capabilityCount;\r
-        Check(DeriveCapabilitySidsFromName(name, out groups, out groupCount, out caps, out capabilityCount), "Derive " + name + " capability");\r
-        try\r
-        {\r
-            if (capabilityCount != 1) throw new Exception("Unexpected " + name + " capability count");\r
-            IntPtr sid = Marshal.ReadIntPtr(caps); allocations.Add(sid); return sid;\r
-        }\r
-        finally\r
-        {\r
-            for (int index = 0; index < (int)groupCount; index++) LocalFree(Marshal.ReadIntPtr(groups, index * IntPtr.Size));\r
-            if (groups != IntPtr.Zero) LocalFree(groups);\r
-            if (caps != IntPtr.Zero) LocalFree(caps);\r
-        }\r
-    }\r
-\r
-    static void AddGrant(List<Grant> grants, string path, string rights)\r
-    {\r
-        if (String.IsNullOrEmpty(path)) throw new Exception("Missing owned permission target");\r
-        foreach (Grant existing in grants) if (String.Equals(existing.path, path, StringComparison.OrdinalIgnoreCase)) { if (rights == "modify") existing.rights = "modify"; return; }\r
-        grants.Add(new Grant { path = path, rights = rights });\r
-    }\r
-\r
-    static bool IsBridgeOwnedTemporaryPath(string value)\r
-    {\r
-        foreach (string part in value.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))\r
-        {\r
-            if (part.StartsWith("agy-mcp-copy-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-baseline-", StringComparison.OrdinalIgnoreCase) ||\r
-                part.StartsWith("agy-mcp-runtime-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-controller-", StringComparison.OrdinalIgnoreCase) ||\r
-                part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;\r
-        }\r
-        return false;\r
-    }\r
-\r
-    static int Main(string[] arguments)\r
-    {\r
-        Console.OutputEncoding = new UTF8Encoding(false);\r
-        var serializer = new JavaScriptSerializer { MaxJsonLength = 2 * 1024 * 1024 };\r
-        var result = new Dictionary<string, object>();\r
-        string profile = null, leaseFile = null, cwd = null, runtime = null, scratch = null;\r
-        SecurityIdentifier identity = null; Lease lease = null;\r
-        ControllerIdentity controller = null; AliasPlan[] aliases = null;\r
-        IntPtr sid = IntPtr.Zero, job = IntPtr.Zero, attributes = IntPtr.Zero, capabilityData = IntPtr.Zero, lpacData = IntPtr.Zero, handleData = IntPtr.Zero, jobData = IntPtr.Zero, envData = IntPtr.Zero, capabilityList = IntPtr.Zero;\r
-        IntPtr read = IntPtr.Zero, write = IntPtr.Zero, inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero;\r
-        ProcessInfo child = new ProcessInfo(); bool attributesInitialized = false, profileCreated = false;\r
-        var pins = new List<PinnedTarget>(); var applied = new List<PinnedTarget>();\r
-        var capabilitySids = new List<IntPtr>();\r
-        var output = new StringBuilder(); bool truncated = false; Thread reader = null; object jobGate = new object(); int cancellation = 0;\r
-        try\r
-        {\r
-            if (arguments.Length != 1) throw new Exception("One controller request file is required");\r
-            var request = serializer.Deserialize<Request>(File.ReadAllText(arguments[0], Encoding.UTF8));\r
-            if (request == null || String.IsNullOrEmpty(request.action)) throw new Exception("Invalid controller request");\r
-            if (request.action == "recover")\r
-            {\r
-                Recover(request.stateDirectory, result, serializer); result["output"] = ""; result["truncated"] = false;\r
-                Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;\r
-            }\r
-            if (request.action != "write" && request.action != "read-only") throw new Exception("Invalid controller action");\r
-            Guid nonce; if (!Guid.TryParseExact(request.nonce, "D", out nonce)) throw new Exception("Invalid nonce");\r
-            if (!String.Equals(request.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");\r
-            result["nonce"] = request.nonce;\r
-            if (request.timeoutSeconds < 1 || request.timeoutSeconds > 86400 || request.maxFiles < 1 || request.maxFiles > 1000000 || request.maxOutputChars < 256 || request.maxOutputChars > 64000 || request.args == null || request.environment == null || request.grants == null) throw new Exception("Invalid request");\r
-            if (request.args.Length > 50) throw new Exception("Too many command arguments");\r
-            foreach (string argument in request.args) if (argument == null || argument.Length > 4000 || argument.IndexOf('\\0') >= 0) throw new Exception("Invalid command argument");\r
-            cwd = OwnedDirectory(request.cwd, "agy-mcp-copy-"); runtime = OwnedDirectory(request.runtime, "agy-mcp-runtime-"); scratch = OwnedDirectory(request.scratch, "agy-mcp-scratch-");\r
-            string executable = Path.GetFullPath(request.executable);\r
-            if (!executable.StartsWith(runtime + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(executable) || (File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0) throw new Exception("Executable must be staged inside the runtime");\r
-            var requestedGrants = new List<Grant>();\r
-            AddGrant(requestedGrants, cwd, request.action == "read-only" ? "read" : "modify");\r
-            AddGrant(requestedGrants, runtime, "read"); AddGrant(requestedGrants, scratch, "modify");\r
-            foreach (Grant grant in request.grants)\r
-            {\r
-                if (grant == null || IsBridgeOwnedTemporaryPath(grant.path)) throw new Exception("External permission grant targets bridge-owned temporary storage");\r
-                AddGrant(requestedGrants, grant.path, grant.rights);\r
-            }\r
-            if (requestedGrants.Count > 23) throw new Exception("Too many permission grants");\r
-            foreach (Grant grant in requestedGrants) pins.Add(PinGrant(grant, request.maxFiles));\r
-            string state = StateLeaseDirectory(request.stateDirectory);\r
-            profile = request.profile; leaseFile = Path.Combine(state, nonce.ToString("N") + ".json");\r
-            controller = CurrentControllerIdentity(); aliases = CreateAliasPlan(nonce, controller, new PinnedTarget[] { pins[0], pins[1], pins[2] });\r
-            lease = new Lease { version = 2, nonce = request.nonce, profile = profile, phase = "creating", controllerPid = Process.GetCurrentProcess().Id, controllerStarted = CurrentProcessStart(), cwd = cwd, runtime = runtime, scratch = scratch, grants = new Grant[0], logon = controller.logon, aliases = aliases };\r
-            WriteLease(leaseFile, lease, true, serializer);\r
-            CheckHr(CreateAppContainerProfile(profile, profile, "Isolated test process", IntPtr.Zero, 0, out sid), "CreateAppContainerProfile");\r
-            profileCreated = true; identity = new SecurityIdentifier(sid);\r
-            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Temp"));\r
-            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Local"));\r
-            var recorded = new List<Grant>(); foreach (PinnedTarget pin in pins) recorded.Add(pin.grant);\r
-            lease.sid = identity.Value; lease.grants = recorded.ToArray(); lease.phase = "active"; WriteLease(leaseFile, lease, false, serializer);\r
-            foreach (PinnedTarget pin in pins) { applied.Add(pin); Access(pin, identity, true); }\r
-            ApplyAliases(aliases); result["pathMappings"] = PathMappings(aliases);\r
-\r
-            var inheritable = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), inherit = 1 };\r
-            Check(CreatePipe(out read, out write, ref inheritable, 0), "Create output pipe"); Check(SetHandleInformation(read, 1, 0), "Protect output reader");\r
-            Check(CreatePipe(out inputRead, out inputWrite, ref inheritable, 0), "Create input pipe"); CloseHandle(inputWrite); inputWrite = IntPtr.Zero;\r
-            job = CreateJobObject(IntPtr.Zero, null); Check(job != IntPtr.Zero, "Create job");\r
-            var limits = new ExtendedLimits(); limits.basic.flags = JobObjectLimitKillOnJobClose | (request.childProcesses ? 0u : JobObjectLimitActiveProcess); limits.basic.activeProcesses = request.childProcesses ? 0u : 1u; IntPtr limitData = Marshal.AllocHGlobal(Marshal.SizeOf(limits));\r
-            try { Marshal.StructureToPtr(limits, limitData, false); Check(SetInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits)), "Require job cleanup"); Marshal.DestroyStructure(limitData, typeof(ExtendedLimits)); Check(QueryInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits), IntPtr.Zero), "Verify job limits"); var observed = (ExtendedLimits)Marshal.PtrToStructure(limitData, typeof(ExtendedLimits)); if ((observed.basic.flags & JobObjectLimitKillOnJobClose) == 0 || (observed.basic.flags & (JobObjectLimitBreakawayOk | JobObjectLimitSilentBreakawayOk)) != 0 || (!request.childProcesses && ((observed.basic.flags & JobObjectLimitActiveProcess) == 0 || observed.basic.activeProcesses != 1))) throw new Exception("Job limits were not applied"); }\r
-            finally { Marshal.FreeHGlobal(limitData); }\r
-            DeriveCapability("registryRead", capabilitySids);\r
-            if (request.network) { DeriveCapability("internetClient", capabilitySids); DeriveCapability("privateNetworkClientServer", capabilitySids); }\r
-                int sidAndAttributesSize = Marshal.SizeOf(typeof(SidAndAttributes)); capabilityList = Marshal.AllocHGlobal(sidAndAttributesSize * capabilitySids.Count);\r
-                for (int index = 0; index < capabilitySids.Count; index++) Marshal.StructureToPtr(new SidAndAttributes { sid = capabilitySids[index], attributes = 4 }, IntPtr.Add(capabilityList, index * sidAndAttributesSize), false);\r
-                var caps = new SecurityCapabilities { sid = sid, capabilities = capabilityList, count = (uint)capabilitySids.Count };\r
-                capabilityData = Marshal.AllocHGlobal(Marshal.SizeOf(caps)); Marshal.StructureToPtr(caps, capabilityData, false);\r
-                int attributeCount = 4; UIntPtr size = UIntPtr.Zero; InitializeProcThreadAttributeList(IntPtr.Zero, attributeCount, 0, ref size);\r
-                attributes = Marshal.AllocHGlobal(checked((int)size.ToUInt64())); Check(InitializeProcThreadAttributeList(attributes, attributeCount, 0, ref size), "Initialize attributes"); attributesInitialized = true;\r
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeSecurityCapabilities), capabilityData, new UIntPtr((uint)Marshal.SizeOf(caps)), IntPtr.Zero, IntPtr.Zero), "Set AppContainer");\r
-                lpacData = Marshal.AllocHGlobal(4); Marshal.WriteInt32(lpacData, (int)AllApplicationPackagesPolicyLpac);\r
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeAllApplicationPackagesPolicy), lpacData, new UIntPtr(4), IntPtr.Zero, IntPtr.Zero), "Require LPAC");\r
-                handleData = Marshal.AllocHGlobal(IntPtr.Size * 2); Marshal.WriteIntPtr(handleData, write); Marshal.WriteIntPtr(handleData, IntPtr.Size, inputRead);\r
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeHandleList), handleData, new UIntPtr((uint)(IntPtr.Size * 2)), IntPtr.Zero, IntPtr.Zero), "Restrict inherited handles");\r
-                jobData = Marshal.AllocHGlobal(IntPtr.Size); Marshal.WriteIntPtr(jobData, job);\r
-                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeJobList), jobData, new UIntPtr((uint)IntPtr.Size), IntPtr.Zero, IntPtr.Zero), "Assign job at process creation");\r
-            var startup = new StartupInfoEx(); startup.startup.cb = Marshal.SizeOf(startup); startup.startup.flags = 0x100; startup.startup.input = inputRead; startup.startup.output = write; startup.startup.error = write; startup.attributes = attributes;\r
-            string aliasExecutable = ProjectOwnedPath(executable, aliases), aliasCwd = ProjectOwnedPath(cwd, aliases); if (String.Equals(aliasExecutable, executable, StringComparison.OrdinalIgnoreCase) || String.Equals(aliasCwd, cwd, StringComparison.OrdinalIgnoreCase)) throw new Exception("Owned paths were not projected to DOS aliases");\r
-            var command = new StringBuilder(Quote(aliasExecutable)); foreach (string argument in ProjectArguments(request.args, aliases)) command.Append(' ').Append(Quote(argument));\r
-            Dictionary<string, string> projectedEnvironment = ProjectEnvironment(request, aliases); var environment = new StringBuilder(); var keys = new List<string>(projectedEnvironment.Keys); keys.Sort(StringComparer.OrdinalIgnoreCase);\r
-            foreach (string key in keys) { string value = projectedEnvironment[key]; if (String.IsNullOrEmpty(key) || value == null || key.IndexOfAny(new char[] { '=', '\\0' }) >= 0 || value.IndexOf('\\0') >= 0) throw new Exception("Invalid environment"); environment.Append(key).Append('=').Append(value).Append('\\0'); }\r
-            environment.Append('\\0'); envData = Marshal.StringToHGlobalUni(environment.ToString());\r
-            Check(CreateProcess(aliasExecutable, command, IntPtr.Zero, IntPtr.Zero, true, 0x80000 | 0x400 | 0x4 | 0x8000000, envData, aliasCwd, ref startup, out child), "Create isolated process");\r
-            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);\r
-            capabilitySids.Clear();\r
-            bool inJob; Check(IsProcessInJob(child.process, job, out inJob) && inJob, "Verify isolated job");\r
-            IntPtr token; Check(OpenProcessToken(child.process, 8, out token), "Inspect child token");\r
-            try\r
-            {\r
-                IntPtr info = Marshal.AllocHGlobal(IntPtr.Size); uint returned;\r
-                try\r
-                {\r
-                    Check(GetTokenInformation(token, 29, info, (uint)IntPtr.Size, out returned), "Verify AppContainer token"); if (Marshal.ReadInt32(info) != 1) throw new Exception("AppContainer token missing");\r
-                    GetTokenInformation(token, 31, IntPtr.Zero, 0, out returned); if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid package identity size"); IntPtr packageInfo = Marshal.AllocHGlobal(checked((int)returned));\r
-                    try { Check(GetTokenInformation(token, 31, packageInfo, returned, out returned), "Verify package identity"); if (!identity.Equals(new SecurityIdentifier(Marshal.ReadIntPtr(packageInfo)))) throw new Exception("Package identity mismatch"); }\r
-                    finally { Marshal.FreeHGlobal(packageInfo); }\r
-                }\r
-                finally { Marshal.FreeHGlobal(info); }\r
-            }\r
-            finally { CloseHandle(token); }\r
-            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }\r
-            var cancelReader = new Thread(delegate() { string message = Console.ReadLine(); if (message == null || message == "cancel " + request.nonce) { Interlocked.Exchange(ref cancellation, 1); lock (jobGate) { if (job != IntPtr.Zero) TerminateJobObject(job, 125); } } }); cancelReader.IsBackground = true; cancelReader.Start();\r
-            CloseHandle(write); write = IntPtr.Zero; CloseHandle(inputRead); inputRead = IntPtr.Zero; IntPtr outputHandle = read; read = IntPtr.Zero;\r
-            reader = new Thread(delegate() { using (var stream = new FileStream(new SafeFileHandle(outputHandle, true), FileAccess.Read)) using (var text = new StreamReader(stream, Encoding.UTF8)) { char[] buffer = new char[2048]; int count; while ((count = text.Read(buffer, 0, buffer.Length)) != 0) { output.Append(buffer, 0, count); if (output.Length > request.maxOutputChars) { truncated = true; output.Remove(0, output.Length - request.maxOutputChars); } } } }); reader.Start();\r
-            if (ResumeThread(child.thread) == UInt32.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error(), "Resume isolated process");\r
-            result["pid"] = child.pid; result["sandbox"] = "windows-lpac";\r
-            uint wait = WaitForSingleObject(child.process, checked((uint)request.timeoutSeconds * 1000));\r
-            if (wait == WaitTimeout) { result["error"] = "Command timed out"; Check(TerminateJobObject(job, 124), "Terminate timed out job"); if (WaitForSingleObject(child.process, 5000) != WaitObject0) throw new Exception("Timed out process did not terminate"); }\r
-            else if (wait != WaitObject0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Wait for isolated process");\r
-            uint exit; Check(GetExitCodeProcess(child.process, out exit), "Read exit code"); result["exitCode"] = exit;\r
-            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }\r
-            if (Interlocked.CompareExchange(ref cancellation, 0, 0) != 0) result["error"] = "Command cancelled";\r
-        }\r
-        catch (Exception error) { result["error"] = error.Message; result["exitCode"] = null; }\r
-        finally\r
-        {\r
-            if (child.process != IntPtr.Zero) TerminateProcess(child.process, 125);\r
-            lock (jobGate) { if (job != IntPtr.Zero) { CloseHandle(job); job = IntPtr.Zero; } }\r
-            if (write != IntPtr.Zero) CloseHandle(write); if (reader != null && !reader.Join(5000)) result["error"] = "Output reader did not terminate";\r
-            if (child.thread != IntPtr.Zero) CloseHandle(child.thread); if (child.process != IntPtr.Zero) CloseHandle(child.process); if (read != IntPtr.Zero) CloseHandle(read); if (inputRead != IntPtr.Zero) CloseHandle(inputRead); if (inputWrite != IntPtr.Zero) CloseHandle(inputWrite);\r
-            if (attributesInitialized) DeleteProcThreadAttributeList(attributes);\r
-            foreach (IntPtr pointer in new IntPtr[] { attributes, capabilityData, capabilityList, lpacData, handleData, jobData, envData }) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer);\r
-            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);\r
-            var failures = new List<string>();\r
-            if (aliases != null) try { RemoveAliases(aliases); result["aliasesDeleted"] = true; } catch (Exception error) { failures.Add("DOS aliases: " + error.Message); } finally { ReleaseAliasGates(aliases); }\r
-            for (int index = applied.Count - 1; index >= 0; index--) try { Access(applied[index], identity, false); } catch (Exception error) { failures.Add("ACL " + index.ToString() + ": " + error.Message); }\r
-            if (profileCreated) try { DeleteProfile(profile); result["profileDeleted"] = true; } catch (Exception error) { failures.Add("Profile: " + error.Message); }\r
-            for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose();\r
-            if (sid != IntPtr.Zero) FreeSid(sid);\r
-            if (leaseFile != null)\r
-            {\r
-                if (failures.Count == 0 && profileCreated) { try { File.Delete(leaseFile); } catch (Exception error) { failures.Add("Lease: " + error.Message); } }\r
-                if (failures.Count != 0) try { if (lease != null) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }\r
-            }\r
-            if (failures.Count != 0) result["error"] = "Cleanup failed: " + String.Join("; ", failures.ToArray());\r
-        }\r
-        result["output"] = output.ToString(); result["truncated"] = truncated; Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;\r
-    }\r
-}\r
+var windowsHelperSource = `using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Text;
+using System.Threading;
+using System.Web.Script.Serialization;
+using Microsoft.Win32.SafeHandles;
+
+internal static class WindowsTestRunner
+{
+    const uint FileShareRead = 1, FileShareWrite = 2, OpenExisting = 3, FileFlagBackupSemantics = 0x02000000, FileFlagOpenReparsePoint = 0x00200000, InvalidFileAttributes = 0xffffffff;
+    const uint WaitObject0 = 0, WaitTimeout = 0x102, ProcessQueryLimitedInformation = 0x1000, Synchronize = 0x100000;
+    const uint DosRawTargetPath = 1, DosRemoveDefinition = 2, DosExactMatchOnRemove = 4, DosNoBroadcast = 8;
+    const int ProcThreadAttributeSecurityCapabilities = 0x20009, ProcThreadAttributeHandleList = 0x20002, ProcThreadAttributeJobList = 0x2000D, ProcThreadAttributeAllApplicationPackagesPolicy = 0x2000F;
+    const uint AllApplicationPackagesPolicyLpac = 1, JobObjectExtendedLimitInformation = 9, JobObjectLimitKillOnJobClose = 0x2000, JobObjectLimitActiveProcess = 0x8, JobObjectLimitBreakawayOk = 0x800, JobObjectLimitSilentBreakawayOk = 0x1000;
+    public sealed class Request
+    {
+        public string action;
+        public string nonce;
+        public string profile;
+        public string cwd;
+        public string runtime;
+        public string scratch;
+        public string executable;
+        public string[] args;
+        public int timeoutSeconds;
+        public int maxFiles;
+        public int maxOutputChars;
+        public bool network;
+        public bool childProcesses;
+        public string stateDirectory;
+        public Grant[] grants;
+        public Dictionary<string, string> environment;
+    }
+
+    public sealed class Grant
+    {
+        public string path;
+        public string rights;
+        public bool directory;
+        public uint volume;
+        public uint fileIndexHigh;
+        public uint fileIndexLow;
+    }
+
+    public sealed class Lease
+    {
+        public int version;
+        public string nonce;
+        public string profile;
+        public string sid;
+        public string phase;
+        public int controllerPid;
+        public long controllerStarted;
+        public string cwd;
+        public string runtime;
+        public string scratch;
+        public Grant[] grants;
+        public string logon;
+        public AliasPlan[] aliases;
+        public bool nullDeviceGrant;
+        public bool? jobCreated;
+    }
+
+    public sealed class AliasPlan
+    {
+        public string kind;
+        public string physicalRoot;
+        public string customName;
+        public string drive;
+        public string aliasRoot;
+        public string customTarget;
+        public string driveTarget;
+        public uint volume;
+        public uint fileIndexHigh;
+        public uint fileIndexLow;
+        internal Mutex gate;
+    }
+
+    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }
+    [StructLayout(LayoutKind.Sequential)] struct SecurityCapabilities { public IntPtr sid, capabilities; public uint count, reserved; }
+    [StructLayout(LayoutKind.Sequential)] struct SidAndAttributes { public IntPtr sid; public uint attributes; }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct StartupInfo
+    {
+        public int cb; public string reserved, desktop, title;
+        public uint x, y, xSize, ySize, xChars, yChars, fill, flags;
+        public short showWindow, reservedSize; public IntPtr reservedBytes, input, output, error;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct StartupInfoEx { public StartupInfo startup; public IntPtr attributes; }
+    [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process, thread; public uint pid, threadId; }
+    [StructLayout(LayoutKind.Sequential)] struct BasicLimits
+    {
+        public long processTime, jobTime; public uint flags; public UIntPtr minimumWorkingSet, maximumWorkingSet;
+        public uint activeProcesses; public UIntPtr affinity; public uint priority, scheduling;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong readOps, writeOps, otherOps, readBytes, writeBytes, otherBytes; }
+    [StructLayout(LayoutKind.Sequential)] struct ExtendedLimits { public BasicLimits basic; public IoCounters io; public UIntPtr processMemory, jobMemory, peakProcessMemory, peakJobMemory; }
+    [StructLayout(LayoutKind.Sequential)] struct JobAccounting
+    {
+        public long totalUser, totalKernel, periodUser, periodKernel;
+        public uint pageFaults, totalProcesses, activeProcesses, terminatedProcesses;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct FileTime { public uint low, high; }
+    [StructLayout(LayoutKind.Sequential)] struct Luid { public uint low; public int high; }
+    [StructLayout(LayoutKind.Sequential)] struct TokenStatistics
+    {
+        public Luid tokenId, authenticationId; public long expiration; public uint tokenType, impersonationLevel, dynamicCharged, dynamicAvailable, groupCount, privilegeCount; public Luid modifiedId;
+    }
+    [StructLayout(LayoutKind.Sequential)] struct ByHandleFileInformation
+    {
+        public uint attributes; public FileTime created, accessed, written; public uint volume, sizeHigh, sizeLow, links, indexHigh, indexLow;
+    }
+
+    sealed class PinnedTarget : IDisposable
+    {
+        public Grant grant;
+        public int maxFiles;
+        public bool revokeLeaf;
+        readonly List<IntPtr> handles = new List<IntPtr>();
+        public void Add(IntPtr value) { handles.Add(value); }
+        public void Dispose() { for (int index = handles.Count - 1; index >= 0; index--) if (handles[index] != IntPtr.Zero) CloseHandle(handles[index]); handles.Clear(); }
+    }
+
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string display, string description, IntPtr capabilities, uint count, out IntPtr sid);
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);
+    [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeriveAppContainerSidFromAppContainerName(string name, out IntPtr sid);
+    [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);
+    [DllImport("kernelbase.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DeriveCapabilitySidsFromName(string name, out IntPtr groups, out uint groupCount, out IntPtr capabilities, out uint capabilityCount);
+    [DllImport("kernel32.dll")] static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, uint flags, ref UIntPtr size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, UIntPtr size, IntPtr previous, IntPtr returned);
+    [DllImport("kernel32.dll")] static extern void DeleteProcThreadAttributeList(IntPtr list);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern bool CreateProcess(string app, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string cwd, ref StartupInfoEx startup, out ProcessInfo process);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool CreatePipe(out IntPtr read, out IntPtr write, ref SecurityAttributes attributes, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateJobObject(IntPtr attributes, string name);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr OpenJobObject(uint access, bool inherit, string name);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int info, IntPtr limits, uint size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr job, uint code);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateProcess(IntPtr process, uint code);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint ResumeThread(IntPtr thread);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr process, out uint code);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetKernelObjectSecurity(IntPtr handle, int securityInformation, byte[] pSecurityDescriptor, uint nLength, out uint lpnLengthNeeded);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetKernelObjectSecurity(IntPtr handle, int securityInformation, byte[] pSecurityDescriptor);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern IntPtr CreateMutex(IntPtr lpMutexAttributes, bool bInitialOwner, string lpName);
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)] static extern IntPtr OpenMutex(uint dwDesiredAccess, bool bInheritHandle, string lpName);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool ReleaseMutex(IntPtr hMutex);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string path, uint information, byte[] descriptor, uint length, out uint needed);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string path, uint information, byte[] descriptor);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr information, uint size, out uint returned);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFile(string name, uint desiredAccess, uint shareMode, IntPtr securityAttributes, uint creationDisposition, uint flagsAndAttributes, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandle(IntPtr handle, out ByHandleFileInformation info);
+    [StructLayout(LayoutKind.Sequential)] struct FileAttributeTagInfo { public uint attributes, tag; }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint GetFileAttributes(string name);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool DefineDosDevice(uint flags, string name, string target);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern uint QueryDosDevice(string name, char[] target, uint max);
+    [DllImport("secur32.dll")] static extern int LsaEnumerateLogonSessions(out uint count, out IntPtr sessions);
+    [DllImport("secur32.dll")] static extern int LsaFreeReturnBuffer(IntPtr buffer);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint desiredAccess, bool inherit, uint processId);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetProcessTimes(IntPtr process, out FileTime creation, out FileTime exit, out FileTime kernel, out FileTime user);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int info, IntPtr limits, uint size, IntPtr returned);
+
+    static readonly IntPtr InvalidHandle = new IntPtr(-1);
+
+    static void Check(bool success, string operation)
+    {
+        if (!success) { int code = Marshal.GetLastWin32Error(); throw new Win32Exception(code, operation + " (Win32 " + code + "): " + new Win32Exception(code).Message); }
+    }
+    static void CheckHr(int result, string operation) { if (result < 0) throw new Exception(operation + ": 0x" + result.ToString("x8")); }
+    static bool IsNotFoundHresult(int value) { return value == unchecked((int)0x80070002) || value == unchecked((int)0x80070003); }
+    static long FileTimeValue(FileTime value) { return ((long)value.high << 32) | value.low; }
+
+    sealed class ControllerIdentity
+    {
+        public SecurityIdentifier user;
+        public string logon;
+    }
+
+    static ControllerIdentity CurrentControllerIdentity()
+    {
+        IntPtr token;
+        Check(OpenProcessToken(Process.GetCurrentProcess().Handle, 8, out token), "Open controller token");
+        try
+        {
+            uint returned;
+            GetTokenInformation(token, 1, IntPtr.Zero, 0, out returned);
+            if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid controller user token size");
+            IntPtr userData = Marshal.AllocHGlobal(checked((int)returned));
+            try
+            {
+                Check(GetTokenInformation(token, 1, userData, returned, out returned), "Read controller user token");
+                var user = new SecurityIdentifier(Marshal.ReadIntPtr(userData));
+                if (user.IsWellKnown(WellKnownSidType.LocalSystemSid)) throw new Exception("LocalSystem cannot create local DOS aliases");
+                int size = Marshal.SizeOf(typeof(TokenStatistics)); IntPtr statisticsData = Marshal.AllocHGlobal(size);
+                try
+                {
+                    Check(GetTokenInformation(token, 10, statisticsData, (uint)size, out returned), "Read controller logon token");
+                    var statistics = (TokenStatistics)Marshal.PtrToStructure(statisticsData, typeof(TokenStatistics));
+                    return new ControllerIdentity { user = user, logon = ((uint)statistics.authenticationId.high).ToString("x8") + "." + statistics.authenticationId.low.ToString("x8") };
+                }
+                finally { Marshal.FreeHGlobal(statisticsData); }
+            }
+            finally { Marshal.FreeHGlobal(userData); }
+        }
+        finally { CloseHandle(token); }
+    }
+
+    static bool TryParseLogon(string value, out Luid logon)
+    {
+        logon = new Luid();
+        if (String.IsNullOrEmpty(value) || value.Length != 17 || value[8] != '.') return false;
+        for (int index = 0; index < value.Length; index++) if (index != 8 && !((value[index] >= '0' && value[index] <= '9') || (value[index] >= 'a' && value[index] <= 'f') || (value[index] >= 'A' && value[index] <= 'F'))) return false;
+        uint high, low;
+        if (!UInt32.TryParse(value.Substring(0, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out high) || !UInt32.TryParse(value.Substring(9, 8), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out low)) return false;
+        logon.high = unchecked((int)high); logon.low = low; return true;
+    }
+
+    static string DriveGateName(string logon, char letter)
+    {
+        Luid parsed; if (!TryParseLogon(logon, out parsed)) throw new Exception("Invalid logon identifier for DOS alias mutex");
+        return "Global\\\\AGY.TEST.DOS." + logon + "." + letter;
+    }
+
+    static bool LogonSessionExists(string value)
+    {
+        Luid expected; if (!TryParseLogon(value, out expected)) throw new Exception("Invalid logon identifier for DOS alias recovery");
+        uint count; IntPtr sessions; int status = LsaEnumerateLogonSessions(out count, out sessions);
+        if (status != 0) throw new Exception("Enumerate logon sessions: 0x" + status.ToString("x8"));
+        try
+        {
+            if (count > 1048576) throw new Exception("Logon session enumeration exceeded its bounded count");
+            int size = Marshal.SizeOf(typeof(Luid));
+            for (uint index = 0; index < count; index++)
+            {
+                var candidate = (Luid)Marshal.PtrToStructure(IntPtr.Add(sessions, checked((int)(index * (uint)size))), typeof(Luid));
+                if (candidate.high == expected.high && candidate.low == expected.low) return true;
+            }
+            return false;
+        }
+        finally
+        {
+            if (sessions != IntPtr.Zero)
+            {
+                int released = LsaFreeReturnBuffer(sessions);
+                if (released != 0) throw new Exception("Free logon session enumeration: 0x" + released.ToString("x8"));
+            }
+        }
+    }
+
+    static string[] QueryDosTargets(string name)
+    {
+        for (uint capacity = 256; capacity <= 65536; capacity *= 2)
+        {
+            var buffer = new char[checked((int)capacity)];
+            uint length = QueryDosDevice(name, buffer, capacity);
+            if (length != 0) return new String(buffer, 0, checked((int)length)).Split(new char[] { '\\0' }, StringSplitOptions.RemoveEmptyEntries);
+            int error = Marshal.GetLastWin32Error();
+            if (error == 2) return null;
+            if (error == 122) continue;
+            throw new Win32Exception(error, "Query DOS device " + name);
+        }
+        throw new Exception("DOS device query exceeded its bounded buffer");
+    }
+
+    static void RequireDosAbsent(string name)
+    {
+        string[] targets = QueryDosTargets(name);
+        if (targets != null) throw new Exception("DOS device is already defined: " + name);
+    }
+
+    static void RequireDosExact(string name, string target)
+    {
+        string[] targets = QueryDosTargets(name);
+        if (targets == null || targets.Length != 1 || !String.Equals(targets[0], target, StringComparison.Ordinal)) throw new Exception("DOS device definition is missing, foreign, or stacked: " + name);
+    }
+
+    static Mutex AcquireDriveGate(char letter, ControllerIdentity controller)
+    {
+        var security = new MutexSecurity(); security.SetOwner(controller.user);
+        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
+        bool created; Mutex gate = new Mutex(true, DriveGateName(controller.logon, letter), out created, security);
+        if (created) return gate;
+        gate.Close(); return null;
+    }
+
+    static Mutex AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)
+    {
+        var security = new MutexSecurity(); security.SetOwner(controller.user);
+        security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
+        bool created, owned = false; Mutex gate = null;
+        try
+        {
+            gate = new Mutex(false, DriveGateName(logon, letter), out created, security);
+            try { owned = gate.WaitOne(0); }
+            catch (AbandonedMutexException) { owned = true; }
+            if (!owned) throw new Exception("DOS drive mutex is held: " + letter);
+            return gate;
+        }
+        catch
+        {
+            if (gate != null) { if (owned) gate.ReleaseMutex(); gate.Close(); }
+            throw;
+        }
+    }
+
+    static string RawDosTarget(string value) { return "\\\\??\\\\" + value; }
+
+    static AliasPlan[] CreateAliasPlan(Guid nonce, ControllerIdentity controller, PinnedTarget[] roots)
+    {
+        if (roots == null || roots.Length != 3) throw new Exception("Exactly three owned roots are required for DOS aliases");
+        string[] kinds = new string[] { "copy", "runtime", "scratch" };
+        var aliases = new AliasPlan[3]; int selected = 0;
+        try
+        {
+            for (char letter = 'Z'; letter >= 'D' && selected < aliases.Length; letter--)
+            {
+                string drive = letter + ":"; if (QueryDosTargets(drive) != null) continue;
+                Mutex gate = AcquireDriveGate(letter, controller); if (gate == null) continue;
+                try
+                {
+                    if (QueryDosTargets(drive) != null) continue;
+                    Grant root = roots[selected].grant;
+                    if (!root.directory) throw new Exception("Owned DOS alias root is not a directory");
+                    string custom = "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();
+                    RequireDosAbsent(custom);
+                    aliases[selected] = new AliasPlan { kind = kinds[selected], physicalRoot = root.path, customName = custom, drive = drive, aliasRoot = drive + "\\\\", customTarget = RawDosTarget(root.path), driveTarget = RawDosTarget(custom), volume = root.volume, fileIndexHigh = root.fileIndexHigh, fileIndexLow = root.fileIndexLow, gate = gate };
+                    gate = null; selected++;
+                }
+                finally { if (gate != null) { gate.ReleaseMutex(); gate.Close(); } }
+            }
+            if (selected != aliases.Length) throw new Exception("Fewer than three unused DOS drive letters are available");
+            return aliases;
+        }
+        catch { ReleaseAliasGates(aliases); throw; }
+    }
+
+    static void ReleaseAliasGates(AliasPlan[] aliases)
+    {
+        if (aliases == null) return;
+        for (int index = aliases.Length - 1; index >= 0; index--) if (aliases[index] != null && aliases[index].gate != null)
+        {
+            aliases[index].gate.ReleaseMutex(); aliases[index].gate.Close(); aliases[index].gate = null;
+        }
+    }
+
+    static void AcquireRecoveryAliasGates(AliasPlan[] aliases, ControllerIdentity controller, string logon)
+    {
+        try
+        {
+            for (int index = 0; index < aliases.Length; index++) aliases[index].gate = AcquireRecoveryDriveGate(aliases[index].drive[0], controller, logon);
+        }
+        catch { ReleaseAliasGates(aliases); throw; }
+    }
+
+    static void VerifyAliasRoot(AliasPlan alias)
+    {
+        IntPtr handle = CreateFile(alias.aliasRoot, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+        if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open DOS alias root");
+        try
+        {
+            ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect DOS alias root");
+            if ((info.attributes & (uint)FileAttributes.ReparsePoint) != 0 || (info.attributes & (uint)FileAttributes.Directory) == 0 || info.volume != alias.volume || info.indexHigh != alias.fileIndexHigh || info.indexLow != alias.fileIndexLow) throw new Exception("DOS alias root identity changed");
+        }
+        finally { CloseHandle(handle); }
+    }
+
+    static void DefineAlias(AliasPlan alias, bool drive)
+    {
+        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;
+        RequireDosAbsent(name); Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast, name, target), "Define DOS device " + name); RequireDosExact(name, target);
+    }
+
+    static void ApplyAliases(AliasPlan[] aliases)
+    {
+        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], false);
+        for (int index = 0; index < aliases.Length; index++) DefineAlias(aliases[index], true);
+        for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
+    }
+
+    static void RemoveAlias(AliasPlan alias, bool drive)
+    {
+        string name = drive ? alias.drive : alias.customName, target = drive ? alias.driveTarget : alias.customTarget;
+        string[] current = QueryDosTargets(name); if (current == null) return;
+        if (current.Length != 1 || !String.Equals(current[0], target, StringComparison.Ordinal)) throw new Exception("DOS alias cleanup found a foreign or stacked definition: " + name);
+        Check(DefineDosDevice(DosRawTargetPath | DosNoBroadcast | DosRemoveDefinition | DosExactMatchOnRemove, name, target), "Remove DOS device " + name);
+        if (QueryDosTargets(name) != null) throw new Exception("DOS alias remained after exact cleanup: " + name);
+    }
+
+    static void RemoveAliases(AliasPlan[] aliases)
+    {
+        if (aliases == null) return;
+        var failures = new List<string>();
+        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], true); } catch (Exception error) { failures.Add(error.Message); }
+        for (int index = aliases.Length - 1; index >= 0; index--) try { RemoveAlias(aliases[index], false); } catch (Exception error) { failures.Add(error.Message); }
+        if (failures.Count != 0) throw new Exception(String.Join("; ", failures.ToArray()));
+    }
+
+    static bool IsPhysicalAbsolutePath(string value)
+    {
+        return !String.IsNullOrEmpty(value) && value.Length >= 3 && Char.IsLetter(value[0]) && value[1] == ':' && (value[2] == '\\\\' || value[2] == '/') && !value.StartsWith("\\\\\\\\", StringComparison.Ordinal) && value.IndexOf(':', 2) < 0;
+    }
+
+    static string ProjectOwnedPath(string value, AliasPlan[] aliases)
+    {
+        if (!IsPhysicalAbsolutePath(value)) return value;
+        for (int index = 0; index < aliases.Length; index++)
+        {
+            string root = aliases[index].physicalRoot;
+            if (value.Length < root.Length) continue;
+            bool match = true;
+            for (int character = 0; character < root.Length; character++)
+            {
+                char actual = value[character], expected = root[character];
+                if ((actual == '\\\\' || actual == '/') && (expected == '\\\\' || expected == '/')) continue;
+                if (Char.ToUpperInvariant(actual) != Char.ToUpperInvariant(expected)) { match = false; break; }
+            }
+            if (!match || (value.Length > root.Length && value[root.Length] != '\\\\' && value[root.Length] != '/')) continue;
+            string tail = value.Substring(root.Length).TrimStart('\\\\', '/');
+            foreach (string part in tail.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries)) if (part == "." || part == "..") return value;
+            return aliases[index].aliasRoot + tail.Replace('/', '\\\\');
+        }
+        return value;
+    }
+
+    static string[] ProjectArguments(string[] arguments, AliasPlan[] aliases)
+    {
+        var projected = new string[arguments.Length]; for (int index = 0; index < arguments.Length; index++) projected[index] = ProjectOwnedPath(arguments[index], aliases); return projected;
+    }
+
+    static Dictionary<string, string> ProjectEnvironment(Request request, AliasPlan[] aliases)
+    {
+        string systemRoot = Environment.GetEnvironmentVariable("SystemRoot"); RequireLocalAbsolutePath(systemRoot, "SystemRoot");
+        string system32 = Path.Combine(systemRoot, "System32");
+        string system32Canonical = Path.GetFullPath(system32);
+        var projected = new Dictionary<string, string>(request.environment, StringComparer.OrdinalIgnoreCase);
+        AliasPlan runtime = aliases[1], scratch = aliases[2];
+
+        string runtimePhysical = Path.GetFullPath(runtime.physicalRoot);
+        string runtimeSeparator = runtimePhysical.EndsWith("\\\\") ? runtimePhysical : runtimePhysical + "\\\\";
+
+        var pathEntries = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        pathEntries.Add(runtime.aliasRoot);
+        seen.Add(runtime.aliasRoot);
+
+        string rawPath;
+        if (projected.TryGetValue("PATH", out rawPath) && !String.IsNullOrEmpty(rawPath))
+        {
+            string[] items = rawPath.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string rawItem in items)
+            {
+                string item = rawItem.Trim().Trim('"');
+                if (String.IsNullOrEmpty(item)) continue;
+                if (!IsPhysicalAbsolutePath(item)) continue;
+                string full;
+                try { full = Path.GetFullPath(item); } catch { continue; }
+                if (!IsPhysicalAbsolutePath(full)) continue;
+
+                if (String.Equals(full, system32Canonical, StringComparison.OrdinalIgnoreCase)) continue;
+
+                bool isRuntimeOwned = String.Equals(full, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||
+                                      full.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);
+                if (!isRuntimeOwned) continue;
+
+                string mapped = ProjectOwnedPath(full, aliases);
+                if (!mapped.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (seen.Add(mapped))
+                {
+                    pathEntries.Add(mapped);
+                }
+            }
+        }
+
+        if (seen.Add(system32))
+        {
+            pathEntries.Add(system32);
+        }
+
+        projected["PATH"] = String.Join(";", pathEntries.ToArray());
+        foreach (string key in new string[] { "TEMP", "TMP", "USERPROFILE", "HOME", "APPDATA", "LOCALAPPDATA" }) projected[key] = scratch.aliasRoot;
+        string comspec; if (!projected.TryGetValue("COMSPEC", out comspec)) comspec = Path.Combine(systemRoot, "System32", "cmd.exe"); projected["COMSPEC"] = ProjectOwnedPath(comspec, aliases);
+
+        string gitExecPath;
+        if (projected.TryGetValue("GIT_EXEC_PATH", out gitExecPath) && !String.IsNullOrEmpty(gitExecPath))
+        {
+            RequireLocalAbsolutePath(gitExecPath, "GIT_EXEC_PATH");
+            string fullGitExec = Path.GetFullPath(gitExecPath);
+            RequireLocalAbsolutePath(fullGitExec, "GIT_EXEC_PATH");
+            bool isInsideRuntime = String.Equals(fullGitExec, runtimePhysical, StringComparison.OrdinalIgnoreCase) ||
+                                  fullGitExec.StartsWith(runtimeSeparator, StringComparison.OrdinalIgnoreCase);
+            if (!isInsideRuntime) throw new Exception("GIT_EXEC_PATH must be located inside the runtime directory: " + gitExecPath);
+            string projectedGitExec = ProjectOwnedPath(fullGitExec, aliases);
+            if (!projectedGitExec.StartsWith(runtime.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_EXEC_PATH projection failed: " + gitExecPath);
+            projected["GIT_EXEC_PATH"] = projectedGitExec;
+
+            var poisonKeys = new List<string>();
+            foreach (string envKey in projected.Keys)
+            {
+                if (String.Equals(envKey, "GIT_CONFIG_COUNT", StringComparison.OrdinalIgnoreCase) ||
+                    String.Equals(envKey, "GIT_CONFIG_PARAMETERS", StringComparison.OrdinalIgnoreCase) ||
+                    envKey.StartsWith("GIT_CONFIG_KEY_", StringComparison.OrdinalIgnoreCase) ||
+                    envKey.StartsWith("GIT_CONFIG_VALUE_", StringComparison.OrdinalIgnoreCase))
+                {
+                    poisonKeys.Add(envKey);
+                }
+            }
+            foreach (string poisonKey in poisonKeys)
+            {
+                projected.Remove(poisonKey);
+            }
+
+            AliasPlan copyAlias = aliases[0];
+            string copyAliasRoot = copyAlias.aliasRoot;
+            var safeDirectories = new List<string>();
+            safeDirectories.Add("");
+            safeDirectories.Add(copyAliasRoot);
+
+            int copyMaxFiles = request.maxFiles;
+            if (copyMaxFiles < 1) throw new Exception("Invalid repository discovery file limit");
+            string copyPhysicalRoot = Path.GetFullPath(copyAlias.physicalRoot);
+            var nestedRepos = new List<string>();
+            DiscoverNestedGitRepositories(copyPhysicalRoot, copyPhysicalRoot, copyMaxFiles, new int[] { 0 }, nestedRepos);
+            nestedRepos.Sort(StringComparer.OrdinalIgnoreCase);
+            foreach (string nestedRepo in nestedRepos)
+            {
+                string projectedNested = ProjectOwnedPath(nestedRepo, aliases);
+                if (projectedNested.StartsWith(copyAliasRoot, StringComparison.OrdinalIgnoreCase) && !safeDirectories.Contains(projectedNested))
+                {
+                    safeDirectories.Add(projectedNested);
+                }
+            }
+
+            projected["GIT_CONFIG_COUNT"] = safeDirectories.Count.ToString();
+            for (int index = 0; index < safeDirectories.Count; index++)
+            {
+                projected["GIT_CONFIG_KEY_" + index.ToString()] = "safe.directory";
+                projected["GIT_CONFIG_VALUE_" + index.ToString()] = safeDirectories[index];
+            }
+        }
+
+        string gitConfigGlobal;
+        if (projected.TryGetValue("GIT_CONFIG_GLOBAL", out gitConfigGlobal) && !String.IsNullOrEmpty(gitConfigGlobal))
+        {
+            RequireLocalAbsolutePath(gitConfigGlobal, "GIT_CONFIG_GLOBAL");
+            string fullGitConfig = Path.GetFullPath(gitConfigGlobal);
+            RequireLocalAbsolutePath(fullGitConfig, "GIT_CONFIG_GLOBAL");
+            string scratchPhysical = Path.GetFullPath(scratch.physicalRoot);
+            string scratchSeparator = scratchPhysical.EndsWith("\\\\") ? scratchPhysical : scratchPhysical + "\\\\";
+            bool isInsideScratch = String.Equals(fullGitConfig, scratchPhysical, StringComparison.OrdinalIgnoreCase) ||
+                                  fullGitConfig.StartsWith(scratchSeparator, StringComparison.OrdinalIgnoreCase);
+            if (!isInsideScratch) throw new Exception("GIT_CONFIG_GLOBAL must be located inside the scratch directory: " + gitConfigGlobal);
+            string projectedGitConfig = ProjectOwnedPath(fullGitConfig, aliases);
+            if (!projectedGitConfig.StartsWith(scratch.aliasRoot, StringComparison.OrdinalIgnoreCase)) throw new Exception("GIT_CONFIG_GLOBAL projection failed: " + gitConfigGlobal);
+            projected["GIT_CONFIG_GLOBAL"] = projectedGitConfig;
+        }
+
+        return projected;
+    }
+
+    static List<Dictionary<string, string>> PathMappings(AliasPlan[] aliases)
+    {
+        var mappings = new List<Dictionary<string, string>>(); foreach (AliasPlan alias in aliases) mappings.Add(new Dictionary<string, string> { { "kind", alias.kind }, { "aliasRoot", alias.aliasRoot }, { "physicalRoot", alias.physicalRoot } }); return mappings;
+    }
+
+    static void RequireLocalAbsolutePath(string value, string description)
+    {
+        if (String.IsNullOrEmpty(value) || value.IndexOf('\\0') >= 0 || value.StartsWith("\\\\\\\\", StringComparison.Ordinal) || value.StartsWith("//", StringComparison.Ordinal) ||
+            value.StartsWith("\\\\\\\\?\\\\", StringComparison.Ordinal) || value.StartsWith("\\\\\\\\.\\\\", StringComparison.Ordinal) || value.Length < 3 ||
+            !Char.IsLetter(value[0]) || value[1] != ':' || (value[2] != '\\\\' && value[2] != '/')) throw new Exception(description + " must be a local absolute path");
+        if (value.IndexOf(':', 2) >= 0) throw new Exception(description + " cannot use an alternate data stream");
+    }
+
+    static string OwnedTemporaryPath(string directory, string prefix)
+    {
+        RequireLocalAbsolutePath(directory, "Directory");
+        string full = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar);
+        string parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
+        if (!String.Equals(Path.GetDirectoryName(full), parent, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith(prefix, StringComparison.Ordinal)) throw new Exception("Directory is not owned temporary storage");
+        return full;
+    }
+
+    static string OwnedDirectory(string directory, string prefix)
+    {
+        string full = OwnedTemporaryPath(directory, prefix);
+        if (!Directory.Exists(full) || (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0) throw new Exception("Directory was replaced or linked");
+        return full;
+    }
+
+    static string StateLeaseDirectory(string stateDirectory)
+    {
+        RequireLocalAbsolutePath(stateDirectory, "State directory");
+        string state = Path.GetFullPath(stateDirectory).TrimEnd(Path.DirectorySeparatorChar);
+        if (!Directory.Exists(state) || (File.GetAttributes(state) & FileAttributes.ReparsePoint) != 0) throw new Exception("State directory is unavailable or linked");
+        string lease = Path.Combine(state, "windows-lpac-leases");
+        if (!Directory.Exists(lease)) Directory.CreateDirectory(lease);
+        if ((File.GetAttributes(lease) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease directory is linked");
+        return lease;
+    }
+
+    // Cloud Files placeholders keep their path identity; links and unknown tags remain forbidden.
+    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }
+
+    static void ValidatePathComponents(string full, PinnedTarget target, bool walkTree, int maxFiles, bool isRevoke = false)
+    {
+        RequireLocalAbsolutePath(full, "Permission target");
+        string canonical = Path.GetFullPath(full).TrimEnd(Path.DirectorySeparatorChar);
+        if (String.Equals(canonical + Path.DirectorySeparatorChar, Path.GetPathRoot(canonical), StringComparison.OrdinalIgnoreCase)) throw new Exception("Permission target cannot be a volume root");
+        string root = Path.GetPathRoot(canonical), tail = canonical.Substring(root.Length), current = root;
+        if (tail.Length == 0) throw new Exception("Permission target cannot be a volume root");
+        string[] pieces = tail.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        for (int index = 0; index < pieces.Length; index++)
+        {
+            current = Path.Combine(current, pieces[index]);
+            IntPtr handle = CreateFile(current, 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+            if (handle == InvalidHandle) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open permission target");
+            try
+            {
+                ByHandleFileInformation info; Check(GetFileInformationByHandle(handle, out info), "Inspect permission target");
+                bool isReparse = (info.attributes & (uint)FileAttributes.ReparsePoint) != 0;
+                bool isCloud = false;
+                if (isReparse)
+                {
+                    FileAttributeTagInfo tagInfo;
+                    Check(GetFileInformationByHandleEx(handle, 9, out tagInfo, 8), "Inspect permission target reparse tag");
+                    if (IsCloudTag(tagInfo.tag))
+                    {
+                        isCloud = true;
+                    }
+                    else
+                    {
+                        if (!isRevoke || index < pieces.Length - 1) throw new Exception("Permission target contains an unsafe reparse point");
+                    }
+                }
+                bool directory = (info.attributes & (uint)FileAttributes.Directory) != 0;
+                if (index < pieces.Length - 1 && !directory) throw new Exception("Permission target component is not a directory");
+                if (index == pieces.Length - 1)
+                {
+                    if (!directory && !isRevoke && info.links > 1) throw new Exception("Permission target file has multiple hard links");
+                    if (isRevoke && isReparse && !isCloud) target.revokeLeaf = true;
+                    target.grant.path = canonical; target.grant.directory = directory; target.grant.volume = info.volume; target.grant.fileIndexHigh = info.indexHigh; target.grant.fileIndexLow = info.indexLow;
+                }
+                target.Add(handle); handle = IntPtr.Zero;
+            }
+            finally { if (handle != IntPtr.Zero && handle != InvalidHandle) CloseHandle(handle); }
+        }
+        if (walkTree && target.grant.directory) ScanTree(canonical, maxFiles, new int[] { 0 });
+    }
+
+    static void ScanTree(string directory, int maxFiles, int[] count)
+    {
+        foreach (string child in Directory.GetFileSystemEntries(directory))
+        {
+            if (++count[0] > maxFiles) throw new Exception("Permission directory exceeds the configured file limit");
+            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };
+            try { ValidatePathComponents(child, temporary, false, maxFiles); if (temporary.grant.directory) ScanTree(child, maxFiles, count); }
+            finally { temporary.Dispose(); }
+        }
+    }
+
+    static void DiscoverNestedGitRepositories(string rootDirectory, string currentDirectory, int maxFiles, int[] count, List<string> discovered)
+    {
+        foreach (string child in Directory.GetFileSystemEntries(currentDirectory))
+        {
+            if (++count[0] > maxFiles) throw new Exception("Copy directory exceeds the configured file limit during repository discovery");
+            var temporary = new PinnedTarget { grant = new Grant { rights = "read" } };
+            try
+            {
+                ValidatePathComponents(child, temporary, false, maxFiles);
+                if (temporary.grant.directory)
+                {
+                    string name = Path.GetFileName(child);
+                    if (String.Equals(name, ".git", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!String.Equals(currentDirectory, rootDirectory, StringComparison.OrdinalIgnoreCase))
+                        {
+                            discovered.Add(currentDirectory);
+                        }
+                    }
+                    else
+                    {
+                        DiscoverNestedGitRepositories(rootDirectory, child, maxFiles, count, discovered);
+                    }
+                }
+            }
+            finally { temporary.Dispose(); }
+        }
+    }
+
+    static PinnedTarget PinGrant(Grant supplied, int maxFiles)
+    {
+        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };
+        try { ValidatePathComponents(supplied.path, target, Directory.Exists(supplied.path), maxFiles); return target; }
+        catch { target.Dispose(); throw; }
+    }
+
+    static PinnedTarget PinRevokeTarget(Grant supplied, int maxFiles)
+    {
+        if (supplied == null || (supplied.rights != "read" && supplied.rights != "modify")) throw new Exception("Invalid permission grant");
+        var target = new PinnedTarget { grant = new Grant { path = supplied.path, rights = supplied.rights }, maxFiles = maxFiles };
+        try { ValidatePathComponents(supplied.path, target, false, maxFiles, true); return target; }
+        catch { target.Dispose(); throw; }
+    }
+
+    static bool SameIdentity(Grant expected, Grant actual)
+    {
+        return expected.directory == actual.directory && expected.volume == actual.volume && expected.fileIndexHigh == actual.fileIndexHigh && expected.fileIndexLow == actual.fileIndexLow;
+    }
+
+    static FileSystemRights RightsFor(Grant grant) { return grant.rights == "modify" ? FileSystemRights.Modify | FileSystemRights.Synchronize : FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize; }
+
+    static RawSecurityDescriptor ReadDacl(string path)
+    {
+        uint needed;
+        if (!GetFileSecurity(path, 4, null, 0, out needed) && Marshal.GetLastWin32Error() != 122) Check(false, "Measure target DACL");
+        if (needed == 0 || needed > 1024 * 1024) throw new Exception("Invalid target DACL size");
+        var data = new byte[needed];
+        Check(GetFileSecurity(path, 4, data, needed, out needed), "Read target DACL");
+        return new RawSecurityDescriptor(data, 0);
+    }
+
+    static bool SameDacl(RawSecurityDescriptor expected, RawSecurityDescriptor actual)
+    {
+        if (expected.ControlFlags != actual.ControlFlags || expected.DiscretionaryAcl == null || actual.DiscretionaryAcl == null || expected.DiscretionaryAcl.BinaryLength != actual.DiscretionaryAcl.BinaryLength) return false;
+        var left = new byte[expected.DiscretionaryAcl.BinaryLength]; var right = new byte[actual.DiscretionaryAcl.BinaryLength];
+        expected.DiscretionaryAcl.GetBinaryForm(left, 0); actual.DiscretionaryAcl.GetBinaryForm(right, 0);
+        for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return false;
+        return true;
+    }
+
+    const int RevokeFileBudget = 1000000;
+
+    static void AddCleanupFailure(List<string> failures, string message)
+    {
+        if (failures.Count > 25 || (failures.Count == 1 && failures[0] == OversizedDiagnosticMessage)) return;
+        if (failures.Count == 25) message = "Additional cleanup failures omitted";
+        long length = message.Length;
+        foreach (string failure in failures) length += failure.Length + 2;
+        if (length > MaxDiagnosticCharacters)
+        {
+            failures.Clear(); failures.Add(OversizedDiagnosticMessage);
+        }
+        else failures.Add(message);
+    }
+
+    static void Access(PinnedTarget target, SecurityIdentifier identity, bool grant)
+    {
+        if (!grant)
+        {
+            using (PinnedTarget fresh = PinRevokeTarget(target.grant, RevokeFileBudget))
+            {
+                if (!SameIdentity(target.grant, fresh.grant)) throw new Exception("Granted target identity changed");
+                AccessTree(fresh, identity, false, true, RevokeFileBudget, new int[] { 0 });
+            }
+            return;
+        }
+        AccessTree(target, identity, true, true, target.maxFiles, new int[] { 0 });
+    }
+
+    static void AccessTree(PinnedTarget target, SecurityIdentifier identity, bool grant, bool root, int maxFiles, int[] count)
+    {
+        string rootFailure = null;
+        try
+        {
+            // Read the stored descriptor: GetAccessControl infers inherited flags on legacy DACLs.
+            RawSecurityDescriptor descriptor = ReadDacl(target.grant.path);
+            if (grant && !root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclProtected) != 0) return;
+            RawAcl acl = descriptor.DiscretionaryAcl;
+            bool changed = false;
+            if (acl == null && grant) throw new Exception("Permission target has no DACL");
+            if (acl != null)
+            {
+                int rights = (int)RightsFor(target.grant); CommonAce existing = null;
+                for (int index = acl.Count - 1; index >= 0; index--)
+                {
+                    KnownAce ace = acl[index] as KnownAce;
+                    if (ace == null || !identity.Equals(ace.SecurityIdentifier)) continue;
+                    if (!grant) { acl.RemoveAce(index); changed = true; }
+                    else
+                    {
+                        CommonAce allow = ace as CommonAce;
+                        if (allow == null || allow.AceQualifier != AceQualifier.AccessAllowed || allow.IsCallback) throw new Exception("Unexpected owned permission rule");
+                        existing = allow;
+                        if ((allow.AccessMask & rights) != rights) { allow.AccessMask |= rights; changed = true; }
+                    }
+                }
+                if (grant && existing == null)
+                {
+                    AceFlags flags = target.grant.directory ? AceFlags.ContainerInherit | AceFlags.ObjectInherit : AceFlags.None;
+                    if (!root && (descriptor.ControlFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) flags |= AceFlags.Inherited;
+                    int insert = acl.Count;
+                    if ((flags & AceFlags.Inherited) == 0) for (int index = 0; index < acl.Count; index++) if ((acl[index].AceFlags & AceFlags.Inherited) != 0) { insert = index; break; }
+                    acl.InsertAce(insert, new CommonAce(flags, AceQualifier.AccessAllowed, rights, identity, false, null)); changed = true;
+                }
+                if (changed)
+                {
+                    ControlFlags storedFlags = descriptor.ControlFlags;
+                    // AR preserves AI in this non-propagating write; Windows consumes AR.
+                    if ((storedFlags & ControlFlags.DiscretionaryAclAutoInherited) != 0) descriptor.SetFlags(storedFlags | ControlFlags.DiscretionaryAclAutoInheritRequired);
+                    var data = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(data, 0);
+                    Check(SetFileSecurity(target.grant.path, 4, data), "Write target DACL");
+                    descriptor.SetFlags(storedFlags);
+                    if (!SameDacl(descriptor, ReadDacl(target.grant.path))) throw new Exception("Target DACL update was not preserved exactly");
+                }
+            }
+        }
+        catch (Exception error)
+        {
+            if (grant) throw;
+            rootFailure = Path.GetFileName(target.grant.path) + " DACL: " + error.Message;
+        }
+
+        // SetFileSecurity preserves stored ACEs but does not propagate to existing children.
+        if (!target.grant.directory || (!grant && target.revokeLeaf))
+        {
+            if (rootFailure != null) throw new Exception(CombineDiagnostic(rootFailure, null));
+            return;
+        }
+
+        List<string> childFailures = null;
+        try
+        {
+            foreach (string child in Directory.EnumerateFileSystemEntries(target.grant.path))
+            {
+                if (++count[0] > maxFiles)
+                {
+                    if (grant) throw new Exception("Permission directory exceeds the configured file limit");
+                    if (childFailures == null) childFailures = new List<string>();
+                    AddCleanupFailure(childFailures, "Permission directory exceeds cleanup file limit");
+                    break;
+                }
+                using (var pin = new PinnedTarget { grant = new Grant { rights = target.grant.rights }, maxFiles = maxFiles })
+                {
+                    try
+                    {
+                        ValidatePathComponents(child, pin, false, maxFiles, !grant);
+                        AccessTree(pin, identity, grant, false, maxFiles, count);
+                    }
+                    catch (Exception error)
+                    {
+                        if (grant) throw;
+                        if (childFailures == null) childFailures = new List<string>();
+                        AddCleanupFailure(childFailures, Path.GetFileName(child) + ": " + error.Message);
+                    }
+                }
+            }
+        }
+        catch (Exception enumError)
+        {
+            if (grant) throw;
+            if (childFailures == null) childFailures = new List<string>();
+            AddCleanupFailure(childFailures, "Enumerate: " + enumError.Message);
+        }
+
+        var allFailures = new List<string>();
+        if (rootFailure != null) AddCleanupFailure(allFailures, rootFailure);
+        if (childFailures != null) foreach (string failure in childFailures) AddCleanupFailure(allFailures, failure);
+        if (allFailures.Count != 0) throw new Exception(String.Join("; ", allFailures.ToArray()));
+    }
+
+    const string NullDeviceKernelPath = @"\\\\?\\GLOBALROOT\\Device\\Null";
+    const uint StandardRightsRead = 0x00020000;
+    const uint StandardRightsWriteDac = 0x00040000;
+    const int NullDeviceAccessRights = 0x12019f; // FILE_GENERIC_READ | FILE_GENERIC_WRITE union
+    static readonly SecurityIdentifier AllRestrictedPackagesSid = new SecurityIdentifier("S-1-15-2-2");
+    static readonly SecurityIdentifier WorldSid = new SecurityIdentifier("S-1-1-0");
+
+    sealed class NullDeviceGate : IDisposable
+    {
+        const string MutexName = "Global\\\\AGY.TEST.NULL_DEVICE.MUTEX";
+        const uint MutexSynchronizeAndModify = 0x00100001; // SYNCHRONIZE | MUTEX_MODIFY_STATE
+        IntPtr handle = IntPtr.Zero;
+        bool owned = false;
+
+        public static NullDeviceGate Acquire(int timeoutMilliseconds = 30000)
+        {
+            var gate = new NullDeviceGate();
+            try
+            {
+                gate.OpenOrCreate();
+                uint wait = WaitForSingleObject(gate.handle, checked((uint)timeoutMilliseconds));
+                if (wait == WaitObject0 || wait == 0x80)
+                {
+                    gate.owned = true;
+                    return gate;
+                }
+                if (wait == WaitTimeout) throw new Exception("Null device mutex wait timed out");
+                int err = Marshal.GetLastWin32Error();
+                throw new Win32Exception(err, "Wait for Null device mutex (Win32 " + err + ")");
+            }
+            catch
+            {
+                gate.Dispose();
+                throw;
+            }
+        }
+
+        void OpenOrCreate()
+        {
+            handle = OpenMutex(MutexSynchronizeAndModify, false, MutexName);
+            if (handle != IntPtr.Zero) return;
+            int err = Marshal.GetLastWin32Error();
+            if (err != 2 && err != 1168) throw new Win32Exception(err, "Open Null device mutex (Win32 " + err + ")");
+
+            var security = new MutexSecurity();
+            security.AddAccessRule(new MutexAccessRule(WorldSid, MutexRights.Synchronize | MutexRights.Modify, AccessControlType.Allow));
+            byte[] sdBytes = security.GetSecurityDescriptorBinaryForm();
+            IntPtr pSd = Marshal.AllocHGlobal(sdBytes.Length);
+            try
+            {
+                Marshal.Copy(sdBytes, 0, pSd, sdBytes.Length);
+                var sa = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), descriptor = pSd, inherit = 0 };
+                IntPtr pSa = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(SecurityAttributes)));
+                try
+                {
+                    Marshal.StructureToPtr(sa, pSa, false);
+                    handle = CreateMutex(pSa, false, MutexName);
+                    if (handle == IntPtr.Zero)
+                    {
+                        int createErr = Marshal.GetLastWin32Error();
+                        handle = OpenMutex(MutexSynchronizeAndModify, false, MutexName);
+                        if (handle == IntPtr.Zero) throw new Win32Exception(createErr, "Create Null device mutex (Win32 " + createErr + ")");
+                    }
+                }
+                finally { Marshal.FreeHGlobal(pSa); }
+            }
+            finally { Marshal.FreeHGlobal(pSd); }
+        }
+
+        public void Dispose()
+        {
+            if (handle != IntPtr.Zero)
+            {
+                if (owned)
+                {
+                    ReleaseMutex(handle);
+                    owned = false;
+                }
+                CloseHandle(handle);
+                handle = IntPtr.Zero;
+            }
+        }
+    }
+
+    internal static RawSecurityDescriptor ReadKernelDacl(IntPtr handle)
+    {
+        uint needed;
+        GetKernelObjectSecurity(handle, 4, null, 0, out needed);
+        int err = Marshal.GetLastWin32Error();
+        if (err != 0 && err != 122) Check(false, "Measure kernel object DACL");
+        if (needed < 20 || needed > 65536) throw new Exception("Invalid kernel object DACL size: " + needed);
+        byte[] buffer = new byte[needed];
+        Check(GetKernelObjectSecurity(handle, 4, buffer, needed, out needed), "Read kernel object DACL");
+        return new RawSecurityDescriptor(buffer, 0);
+    }
+
+    internal static void WriteKernelDacl(IntPtr handle, RawSecurityDescriptor descriptor)
+    {
+        byte[] buffer = new byte[descriptor.BinaryLength];
+        descriptor.GetBinaryForm(buffer, 0);
+        Check(SetKernelObjectSecurity(handle, 4, buffer), "Write kernel object DACL");
+    }
+
+    internal static bool IsStockNullAccessSufficient(RawSecurityDescriptor descriptor, SecurityIdentifier childSid)
+    {
+        if (descriptor == null || descriptor.DiscretionaryAcl == null) return false;
+        RawAcl acl = descriptor.DiscretionaryAcl;
+        for (int i = 0; i < acl.Count; i++)
+        {
+            CommonAce ace = acl[i] as CommonAce;
+            if (ace != null && ace.AceQualifier == AceQualifier.AccessDenied)
+            {
+                if ((ace.SecurityIdentifier.Equals(AllRestrictedPackagesSid) ||
+                     ace.SecurityIdentifier.Equals(WorldSid) ||
+                     (childSid != null && ace.SecurityIdentifier.Equals(childSid))) &&
+                    (ace.AccessMask & NullDeviceAccessRights) != 0)
+                {
+                    return false;
+                }
+            }
+        }
+        for (int i = 0; i < acl.Count; i++)
+        {
+            CommonAce ace = acl[i] as CommonAce;
+            if (ace != null && ace.AceQualifier == AceQualifier.AccessAllowed &&
+                !ace.IsCallback && (ace.AceFlags & AceFlags.InheritOnly) == 0 &&
+                ace.SecurityIdentifier.Equals(AllRestrictedPackagesSid))
+            {
+                if ((ace.AccessMask & NullDeviceAccessRights) == NullDeviceAccessRights)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    internal static RawSecurityDescriptor ApplyNullDeviceAceToDescriptor(RawSecurityDescriptor descriptor, SecurityIdentifier identity)
+    {
+        if (descriptor == null || descriptor.DiscretionaryAcl == null) throw new ArgumentNullException("descriptor");
+        if (identity == null) throw new ArgumentNullException("identity");
+        const ControlFlags supported = ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected | ControlFlags.SelfRelative;
+        if ((descriptor.ControlFlags & ~supported) != 0) throw new Exception("Unsupported Null device DACL control flags: 0x" + ((int)descriptor.ControlFlags).ToString("x4"));
+        RawAcl acl = descriptor.DiscretionaryAcl;
+        for (int i = 0; i < acl.Count; i++)
+        {
+            CommonAce ace = acl[i] as CommonAce;
+            if (ace == null || ace.IsCallback) throw new Exception("Unexpected ACE in Null device DACL");
+            if (ace.AceQualifier == AceQualifier.AccessDenied &&
+                (ace.SecurityIdentifier.Equals(identity) || ace.SecurityIdentifier.Equals(AllRestrictedPackagesSid) || ace.SecurityIdentifier.Equals(WorldSid)) &&
+                (ace.AccessMask & NullDeviceAccessRights) != 0)
+            {
+                throw new Exception("Explicit deny on Null device DACL prevents execution access");
+            }
+            if (ace.SecurityIdentifier.Equals(identity))
+            {
+                throw new Exception("Duplicate or unexpected existing owned ACE for execution SID in Null device DACL");
+            }
+        }
+        var newAce = new CommonAce(AceFlags.None, AceQualifier.AccessAllowed, NullDeviceAccessRights, identity, false, null);
+        int insertIndex = 0;
+        while (insertIndex < acl.Count && ((CommonAce)acl[insertIndex]).AceQualifier == AceQualifier.AccessDenied)
+        {
+            insertIndex++;
+        }
+        acl.InsertAce(insertIndex, newAce);
+        return descriptor;
+    }
+
+    internal static bool RemoveNullDeviceAceFromDescriptor(RawSecurityDescriptor descriptor, SecurityIdentifier identity, bool requirePresent)
+    {
+        if (descriptor == null || descriptor.DiscretionaryAcl == null) throw new ArgumentNullException("descriptor");
+        if (identity == null) throw new ArgumentNullException("identity");
+        RawAcl acl = descriptor.DiscretionaryAcl;
+        int foundIndex = -1;
+        int matchCount = 0;
+        for (int i = 0; i < acl.Count; i++)
+        {
+            CommonAce ace = acl[i] as CommonAce;
+            if (ace != null && ace.SecurityIdentifier.Equals(identity))
+            {
+                matchCount++;
+                foundIndex = i;
+                if (ace.AceQualifier != AceQualifier.AccessAllowed || ace.AceFlags != AceFlags.None ||
+                    ace.AccessMask != NullDeviceAccessRights || ace.IsCallback)
+                {
+                    throw new Exception("Unexpected owned permission rule on Null device DACL");
+                }
+            }
+        }
+        if (matchCount > 1) throw new Exception("Duplicate owned ACEs on Null device DACL for execution SID");
+        if (matchCount == 0)
+        {
+            if (requirePresent) throw new Exception("Expected owned ACE on Null device DACL was missing");
+            return false;
+        }
+        acl.RemoveAce(foundIndex);
+        return true;
+    }
+
+    internal static void VerifyDaclPreservation(RawSecurityDescriptor original, RawSecurityDescriptor updated, SecurityIdentifier addedSid, SecurityIdentifier removedSid)
+    {
+        if (original.ControlFlags != updated.ControlFlags) throw new Exception("Control flags were not preserved");
+        RawAcl originalAcl = original.DiscretionaryAcl, updatedAcl = updated.DiscretionaryAcl;
+        if (addedSid != null)
+        {
+            if (updatedAcl.Count != originalAcl.Count + 1) throw new Exception("Updated DACL count mismatch after addition");
+            int origIdx = 0;
+            for (int i = 0; i < updatedAcl.Count; i++)
+            {
+                CommonAce ace = updatedAcl[i] as CommonAce;
+                if (ace != null && ace.SecurityIdentifier.Equals(addedSid))
+                {
+                    if (ace.AceQualifier != AceQualifier.AccessAllowed || ace.AceFlags != AceFlags.None || ace.AccessMask != NullDeviceAccessRights)
+                        throw new Exception("Added ACE properties do not match expected grant");
+                    continue;
+                }
+                if (origIdx >= originalAcl.Count) throw new Exception("Foreign ACE count mismatch");
+                CommonAce origAce = originalAcl[origIdx++] as CommonAce;
+                if (origAce == null || ace == null || origAce.AceQualifier != ace.AceQualifier || origAce.AceFlags != ace.AceFlags ||
+                    origAce.AccessMask != ace.AccessMask || !origAce.SecurityIdentifier.Equals(ace.SecurityIdentifier))
+                    throw new Exception("Foreign ACE was not preserved exactly");
+            }
+        }
+        else if (removedSid != null)
+        {
+            if (updatedAcl.Count != originalAcl.Count - 1) throw new Exception("Updated DACL count mismatch after removal");
+            int updIdx = 0;
+            for (int i = 0; i < originalAcl.Count; i++)
+            {
+                CommonAce ace = originalAcl[i] as CommonAce;
+                if (ace != null && ace.SecurityIdentifier.Equals(removedSid)) continue;
+                if (updIdx >= updatedAcl.Count) throw new Exception("Foreign ACE count mismatch");
+                CommonAce updAce = updatedAcl[updIdx++] as CommonAce;
+                if (updAce == null || ace == null || updAce.AceQualifier != ace.AceQualifier || updAce.AceFlags != ace.AceFlags ||
+                    updAce.AccessMask != ace.AccessMask || !updAce.SecurityIdentifier.Equals(ace.SecurityIdentifier))
+                    throw new Exception("Foreign ACE was not preserved exactly");
+            }
+        }
+    }
+
+    internal static void ApplyKernelObjectGrant(IntPtr handle, SecurityIdentifier identity)
+    {
+        RawSecurityDescriptor before = ReadKernelDacl(handle);
+        if (IsStockNullAccessSufficient(before, identity)) return;
+        byte[] cloneBytes = new byte[before.BinaryLength];
+        before.GetBinaryForm(cloneBytes, 0);
+        RawSecurityDescriptor toModify = new RawSecurityDescriptor(cloneBytes, 0);
+        ApplyNullDeviceAceToDescriptor(toModify, identity);
+        WriteKernelDacl(handle, toModify);
+        RawSecurityDescriptor verified = ReadKernelDacl(handle);
+        if (!SameDacl(toModify, verified)) throw new Exception("Kernel object DACL update was not preserved exactly");
+        VerifyDaclPreservation(before, verified, identity, null);
+    }
+
+    internal static bool RemoveKernelObjectGrant(IntPtr handle, SecurityIdentifier identity, bool requirePresent)
+    {
+        RawSecurityDescriptor before = ReadKernelDacl(handle);
+        byte[] cloneBytes = new byte[before.BinaryLength];
+        before.GetBinaryForm(cloneBytes, 0);
+        RawSecurityDescriptor toModify = new RawSecurityDescriptor(cloneBytes, 0);
+        bool removed = RemoveNullDeviceAceFromDescriptor(toModify, identity, requirePresent);
+        if (!removed) return false;
+        WriteKernelDacl(handle, toModify);
+        RawSecurityDescriptor verified = ReadKernelDacl(handle);
+        if (!SameDacl(toModify, verified)) throw new Exception("Kernel object DACL cleanup was not preserved exactly");
+        VerifyDaclPreservation(before, verified, null, identity);
+        return true;
+    }
+
+    static bool NullDeviceRequiresGrant(SecurityIdentifier identity)
+    {
+            IntPtr handle = CreateFile(NullDeviceKernelPath, StandardRightsRead, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle == InvalidHandle) Check(false, "Open Null device for inspection");
+            try
+            {
+                RawSecurityDescriptor descriptor = ReadKernelDacl(handle);
+                return !IsStockNullAccessSufficient(descriptor, identity);
+            }
+            finally { CloseHandle(handle); }
+    }
+
+    static void ApplyNullDeviceGrant(SecurityIdentifier identity)
+    {
+        using (NullDeviceGate.Acquire())
+        {
+            IntPtr handle = CreateFile(NullDeviceKernelPath, StandardRightsRead | StandardRightsWriteDac, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle == InvalidHandle)
+            {
+                int error = Marshal.GetLastWin32Error();
+                throw new Win32Exception(error, "Open Null device for DACL modification (Win32 " + error + "): " + new Win32Exception(error).Message);
+            }
+            try
+            {
+                ApplyKernelObjectGrant(handle, identity);
+            }
+            finally { CloseHandle(handle); }
+        }
+    }
+
+    static void ReconcileRecoveryNullDeviceGrant(SecurityIdentifier identity)
+    {
+        using (NullDeviceGate.Acquire())
+        {
+            IntPtr inspect = CreateFile(NullDeviceKernelPath, StandardRightsRead, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (inspect == InvalidHandle) Check(false, "Inspect pending Null device grant");
+            try
+            {
+                RawSecurityDescriptor current = ReadKernelDacl(inspect);
+                if (!RemoveNullDeviceAceFromDescriptor(current, identity, false)) return;
+            }
+            finally { CloseHandle(inspect); }
+            IntPtr handle = CreateFile(NullDeviceKernelPath, StandardRightsRead | StandardRightsWriteDac, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle == InvalidHandle)
+            {
+                int error = Marshal.GetLastWin32Error();
+                throw new Win32Exception(error, "Open Null device for recovery DACL cleanup (Win32 " + error + "): " + new Win32Exception(error).Message);
+            }
+            try
+            {
+                RemoveKernelObjectGrant(handle, identity, false);
+            }
+            finally { CloseHandle(handle); }
+        }
+    }
+
+    static string ExecutionJobName(Lease lease) { return "Global\\\\AGY.TEST.JOB." + Guid.ParseExact(lease.nonce, "D").ToString("N"); }
+
+    static IntPtr CreateExecutionJob(Lease lease, SecurityIdentifier user)
+    {
+        var acl = new RawAcl(RawAcl.AclRevision, 2);
+        acl.InsertAce(0, new CommonAce(AceFlags.None, AceQualifier.AccessAllowed, 0x1f003f, user, false, null));
+        acl.InsertAce(1, new CommonAce(AceFlags.None, AceQualifier.AccessAllowed, 0x1f003f, new SecurityIdentifier("S-1-5-18"), false, null));
+        var descriptor = new RawSecurityDescriptor(ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected, user, null, null, acl);
+        var bytes = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(bytes, 0);
+        IntPtr sd = Marshal.AllocHGlobal(bytes.Length), sa = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(SecurityAttributes)));
+        try
+        {
+            Marshal.Copy(bytes, 0, sd, bytes.Length);
+            Marshal.StructureToPtr(new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), descriptor = sd, inherit = 0 }, sa, false);
+            IntPtr created = CreateJobObject(sa, ExecutionJobName(lease)); Check(created != IntPtr.Zero, "Create owned execution job");
+            if (Marshal.GetLastWin32Error() == 183) { CloseHandle(created); throw new Exception("Execution job already exists"); }
+            return created;
+        }
+        finally { Marshal.FreeHGlobal(sa); Marshal.FreeHGlobal(sd); }
+    }
+
+    internal static void WaitForEmptyJob(IntPtr job, int timeoutMilliseconds)
+    {
+        var timer = Stopwatch.StartNew(); IntPtr data = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(JobAccounting)));
+        try
+        {
+            for (;;)
+            {
+                Check(QueryInformationJobObject(job, 1, data, (uint)Marshal.SizeOf(typeof(JobAccounting)), IntPtr.Zero), "Verify owned job process count");
+                if (((JobAccounting)Marshal.PtrToStructure(data, typeof(JobAccounting))).activeProcesses == 0) return;
+                if (timer.ElapsedMilliseconds >= timeoutMilliseconds) throw new Exception("Owned job processes have not terminated");
+                Thread.Sleep(10);
+            }
+        }
+        finally { Marshal.FreeHGlobal(data); }
+    }
+
+    static void VerifyRecoveryJobEnded(Lease lease)
+    {
+        if (lease.version < 3 || lease.jobCreated != true) return;
+        IntPtr job = OpenJobObject(4, false, ExecutionJobName(lease));
+        if (job == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            if (error == 2 || error == 1168) return;
+            throw new Win32Exception(error, "Inspect interrupted execution job (Win32 " + error + ")");
+        }
+        try { WaitForEmptyJob(job, 5000); }
+        finally { CloseHandle(job); }
+    }
+
+    static string Quote(string argument)
+    {
+        var result = new StringBuilder("\\""); int slashes = 0;
+        foreach (char character in argument)
+        {
+            if (character == '\\\\') { slashes++; continue; }
+            if (character == '"') result.Append('\\\\', slashes * 2 + 1);
+            else result.Append('\\\\', slashes);
+            result.Append(character); slashes = 0;
+        }
+        result.Append('\\\\', slashes * 2); return result.Append('"').ToString();
+    }
+
+    static long CurrentProcessStart()
+    {
+        FileTime created, exited, kernel, user;
+        Check(GetProcessTimes(Process.GetCurrentProcess().Handle, out created, out exited, out kernel, out user), "Read controller start time");
+        return FileTimeValue(created);
+    }
+
+    static void WriteLease(string path, Lease lease, bool initial, JavaScriptSerializer serializer)
+    {
+        byte[] data = new UTF8Encoding(false).GetBytes(serializer.Serialize(lease));
+        if (initial)
+        {
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }
+            return;
+        }
+        string temporary = path + ".update." + Process.GetCurrentProcess().Id.ToString() + ".tmp";
+        using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)) { stream.Write(data, 0, data.Length); stream.Flush(true); }
+        try { File.Replace(temporary, path, null); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    static void ValidateLease(Lease lease, string expectedFile)
+    {
+        Guid nonce;
+        if (lease == null || (lease.version != 1 && lease.version != 2 && lease.version != 3) || !Guid.TryParseExact(lease.nonce, "D", out nonce) || String.IsNullOrEmpty(lease.profile) ||
+            !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||
+            lease.controllerPid <= 0 || lease.controllerStarted <= 0 || lease.grants == null || (lease.phase != "creating" && lease.phase != "active" && lease.phase != "cleanup-failed")) throw new Exception("Invalid Windows LPAC lease");
+        if (lease.phase != "creating" && String.IsNullOrEmpty(lease.sid)) throw new Exception("Lease has no profile identity");
+        OwnedTemporaryPath(lease.cwd, "agy-mcp-copy-"); OwnedTemporaryPath(lease.runtime, "agy-mcp-runtime-"); OwnedTemporaryPath(lease.scratch, "agy-mcp-scratch-");
+        if (lease.version == 2 || lease.version == 3) ValidateLeaseAliases(lease, nonce);
+        if (lease.version < 3 && (lease.nullDeviceGrant || lease.jobCreated == true)) throw new Exception("Legacy lease cannot declare Null device grant or named job");
+        if (lease.version == 3 && !lease.jobCreated.HasValue) throw new Exception("Lease has no job creation state");
+        if ((lease.nullDeviceGrant || lease.jobCreated == true) && (lease.phase == "creating" || String.IsNullOrEmpty(lease.sid))) throw new Exception("Lease has no verified execution identity");
+    }
+
+    static void ValidateLeaseAliases(Lease lease, Guid nonce)
+    {
+        Luid logon; if (!TryParseLogon(lease.logon, out logon) || lease.aliases == null || lease.aliases.Length != 3) throw new Exception("Invalid Windows LPAC alias lease");
+        string[] kinds = new string[] { "copy", "runtime", "scratch" }, roots = new string[] { lease.cwd, lease.runtime, lease.scratch }; var drives = new HashSet<char>();
+        for (int index = 0; index < lease.aliases.Length; index++)
+        {
+            AliasPlan alias = lease.aliases[index];
+            if (alias == null || !String.Equals(alias.kind, kinds[index], StringComparison.Ordinal) || !String.Equals(alias.physicalRoot, roots[index], StringComparison.OrdinalIgnoreCase) ||
+                !String.Equals(alias.customName, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||
+                String.IsNullOrEmpty(alias.drive) || alias.drive.Length != 2 || alias.drive[0] < 'D' || alias.drive[0] > 'Z' || alias.drive[1] != ':' || !drives.Add(alias.drive[0]) || (index != 0 && alias.drive[0] >= lease.aliases[index - 1].drive[0]) || !String.Equals(alias.aliasRoot, alias.drive + "\\\\", StringComparison.Ordinal) ||
+                !String.Equals(alias.customTarget, RawDosTarget(roots[index]), StringComparison.Ordinal) || !String.Equals(alias.driveTarget, RawDosTarget(alias.customName), StringComparison.Ordinal)) throw new Exception("Invalid Windows LPAC alias plan");
+        }
+    }
+
+    static bool ControllerIsActive(Lease lease)
+    {
+        IntPtr process = OpenProcess(ProcessQueryLimitedInformation | Synchronize, false, (uint)lease.controllerPid);
+        if (process == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            if (error == 87 || error == 1168) return false;
+            throw new Win32Exception(error, "Cannot verify lease controller");
+        }
+        try
+        {
+            FileTime created, exited, kernel, user;
+            Check(GetProcessTimes(process, out created, out exited, out kernel, out user), "Verify lease controller start time");
+            uint state = WaitForSingleObject(process, 0);
+            if (state == WaitTimeout) return FileTimeValue(created) == lease.controllerStarted;
+            if (state == WaitObject0) return false;
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Verify lease controller state");
+        }
+        finally { CloseHandle(process); }
+    }
+
+    static SecurityIdentifier LeaseIdentity(Lease lease)
+    {
+        if (String.IsNullOrEmpty(lease.sid))
+        {
+            if (lease.phase == "creating") return null;
+            throw new Exception("Lease has no profile identity");
+        }
+        var identity = new SecurityIdentifier(lease.sid);
+        IntPtr derived; int result = DeriveAppContainerSidFromAppContainerName(lease.profile, out derived);
+        if (result >= 0 && derived != IntPtr.Zero)
+        {
+            try { if (!identity.Equals(new SecurityIdentifier(derived))) throw new Exception("Lease profile SID does not match its profile name"); }
+            finally { FreeSid(derived); }
+        }
+        else if (!IsNotFoundHresult(result)) CheckHr(result, "Verify lease profile SID");
+        return identity;
+    }
+
+    static bool IsMissingOwnedTemporaryGrant(Lease lease, Grant grant)
+    {
+        if (grant == null || !grant.directory) return false;
+        string directory = null, prefix = null;
+        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = "agy-mcp-copy-"; }
+        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = "agy-mcp-runtime-"; }
+        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = "agy-mcp-scratch-"; }
+        else return false;
+        directory = OwnedTemporaryPath(directory, prefix);
+        if (GetFileAttributes(directory) != InvalidFileAttributes) return false;
+        int error = Marshal.GetLastWin32Error();
+        return error == 2 || error == 3;
+    }
+
+    static void DeleteProfile(string profile)
+    {
+        int result = DeleteAppContainerProfile(profile);
+        if (result < 0 && !IsNotFoundHresult(result)) CheckHr(result, "Delete AppContainer profile");
+    }
+
+    static void Recover(string stateDirectory, Dictionary<string, object> result, JavaScriptSerializer serializer)
+    {
+        string directory = StateLeaseDirectory(stateDirectory); var failures = new List<string>(); int recovered = 0, active = 0;
+        foreach (string file in Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly))
+        {
+            try
+            {
+                if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) throw new Exception("Lease file is linked");
+                Lease lease = serializer.Deserialize<Lease>(File.ReadAllText(file, Encoding.UTF8)); ValidateLease(lease, file);
+                if (ControllerIsActive(lease)) { active++; continue; }
+                SecurityIdentifier identity = LeaseIdentity(lease); VerifyRecoveryJobEnded(lease); var pins = new List<PinnedTarget>(); var cleanupFailures = new List<string>();
+                try
+                {
+                    if (lease.version == 2 || lease.version == 3)
+                    {
+                        try
+                        {
+                            ControllerIdentity controller = CurrentControllerIdentity();
+                            if (String.Equals(controller.logon, lease.logon, StringComparison.Ordinal))
+                            {
+                                AcquireRecoveryAliasGates(lease.aliases, controller, lease.logon);
+                                try { RemoveAliases(lease.aliases); }
+                                finally { ReleaseAliasGates(lease.aliases); }
+                            }
+                            else if (LogonSessionExists(lease.logon)) throw new Exception("Lease logon session remains active");
+                        }
+                        catch (Exception error) { cleanupFailures.Add("DOS aliases: " + error.Message); }
+                    }
+                    if (lease.version == 3 && lease.nullDeviceGrant && identity != null)
+                    {
+                        try { ReconcileRecoveryNullDeviceGrant(identity); }
+                        catch (Exception error) { cleanupFailures.Add("Null device: " + error.Message); }
+                    }
+                    if (identity != null)
+                    {
+                        for (int index = lease.grants.Length - 1; index >= 0; index--)
+                        {
+                            if (IsMissingOwnedTemporaryGrant(lease, lease.grants[index])) continue;
+                            try { Access(new PinnedTarget { grant = lease.grants[index] }, identity, false); }
+                            catch (Exception error) { cleanupFailures.Add("ACL " + index.ToString() + ": " + error.Message); }
+                        }
+                    }
+                    try { DeleteProfile(lease.profile); } catch (Exception error) { cleanupFailures.Add("Profile: " + error.Message); }
+                }
+                finally { for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose(); }
+                if (cleanupFailures.Count != 0)
+                {
+                    if (!String.IsNullOrEmpty(lease.sid)) lease.phase = "cleanup-failed";
+                    try { WriteLease(file, lease, false, serializer); } catch (Exception update) { cleanupFailures.Add("Lease: " + update.Message); }
+                    throw new Exception(String.Join("; ", cleanupFailures.ToArray()));
+                }
+                File.Delete(file); recovered++;
+            }
+            catch (Exception error) { failures.Add(Path.GetFileName(file) + ": " + error.Message); }
+        }
+        result["recovered"] = recovered; result["active"] = active;
+        if (failures.Count != 0) result["error"] = "Windows LPAC recovery failed: " + String.Join("; ", failures.ToArray());
+    }
+
+    static IntPtr DeriveCapability(string name, List<IntPtr> allocations)
+    {
+        IntPtr groups, caps; uint groupCount, capabilityCount;
+        Check(DeriveCapabilitySidsFromName(name, out groups, out groupCount, out caps, out capabilityCount), "Derive " + name + " capability");
+        try
+        {
+            if (capabilityCount != 1) throw new Exception("Unexpected " + name + " capability count");
+            IntPtr sid = Marshal.ReadIntPtr(caps); allocations.Add(sid); return sid;
+        }
+        finally
+        {
+            for (int index = 0; index < (int)groupCount; index++) LocalFree(Marshal.ReadIntPtr(groups, index * IntPtr.Size));
+            if (groups != IntPtr.Zero) LocalFree(groups);
+            if (caps != IntPtr.Zero) LocalFree(caps);
+        }
+    }
+
+    static void AddGrant(List<Grant> grants, string path, string rights)
+    {
+        if (String.IsNullOrEmpty(path)) throw new Exception("Missing owned permission target");
+        foreach (Grant existing in grants) if (String.Equals(existing.path, path, StringComparison.OrdinalIgnoreCase)) { if (rights == "modify") existing.rights = "modify"; return; }
+        grants.Add(new Grant { path = path, rights = rights });
+    }
+
+    static bool IsBridgeOwnedTemporaryPath(string value)
+    {
+        foreach (string part in value.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("agy-mcp-copy-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-baseline-", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith("agy-mcp-runtime-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-controller-", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
+    const int MaxDiagnosticCharacters = 64000;
+    internal const string OversizedDiagnosticMessage = "Execution diagnostic omitted: exceeded 64000 characters [truncated]";
+
+    internal static string CombineDiagnostic(string primary, string secondary)
+    {
+        long length = (primary == null ? 0 : primary.Length) + (long)(secondary == null ? 0 : secondary.Length);
+        if (!String.IsNullOrEmpty(primary) && !String.IsNullOrEmpty(secondary)) length += 2;
+        if (length > MaxDiagnosticCharacters) return OversizedDiagnosticMessage;
+        if (String.IsNullOrEmpty(primary)) return secondary ?? "";
+        if (String.IsNullOrEmpty(secondary)) return primary;
+        return primary + "; " + secondary;
+    }
+
+    static int Main(string[] arguments)
+    {
+        Console.OutputEncoding = new UTF8Encoding(false);
+        var serializer = new JavaScriptSerializer { MaxJsonLength = 2 * 1024 * 1024 };
+        var result = new Dictionary<string, object>();
+        string profile = null, leaseFile = null, cwd = null, runtime = null, scratch = null;
+        SecurityIdentifier identity = null; Lease lease = null;
+        ControllerIdentity controller = null; AliasPlan[] aliases = null;
+        IntPtr sid = IntPtr.Zero, job = IntPtr.Zero, attributes = IntPtr.Zero, capabilityData = IntPtr.Zero, lpacData = IntPtr.Zero, handleData = IntPtr.Zero, jobData = IntPtr.Zero, envData = IntPtr.Zero, capabilityList = IntPtr.Zero;
+        IntPtr read = IntPtr.Zero, write = IntPtr.Zero, inputRead = IntPtr.Zero, inputWrite = IntPtr.Zero;
+        ProcessInfo child = new ProcessInfo(); bool attributesInitialized = false, profileCreated = false, nullDeviceGranted = false;
+        var pins = new List<PinnedTarget>(); var applied = new List<PinnedTarget>();
+        var capabilitySids = new List<IntPtr>();
+        var output = new StringBuilder(); bool truncated = false; Thread reader = null; object jobGate = new object(); int cancellation = 0;
+        try
+        {
+            if (arguments.Length != 1) throw new Exception("One controller request file is required");
+            var request = serializer.Deserialize<Request>(File.ReadAllText(arguments[0], Encoding.UTF8));
+            if (request == null || String.IsNullOrEmpty(request.action)) throw new Exception("Invalid controller request");
+            if (request.action == "recover")
+            {
+                Recover(request.stateDirectory, result, serializer); result["output"] = ""; result["truncated"] = false;
+                Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
+            }
+            if (request.action != "write" && request.action != "read-only") throw new Exception("Invalid controller action");
+            Guid nonce; if (!Guid.TryParseExact(request.nonce, "D", out nonce)) throw new Exception("Invalid nonce");
+            if (!String.Equals(request.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");
+            result["nonce"] = request.nonce;
+            if (request.timeoutSeconds < 1 || request.timeoutSeconds > 86400 || request.maxFiles < 1 || request.maxFiles > 1000000 || request.maxOutputChars < 256 || request.maxOutputChars > 64000 || request.args == null || request.environment == null || request.grants == null) throw new Exception("Invalid request");
+            if (request.args.Length > 50) throw new Exception("Too many command arguments");
+            foreach (string argument in request.args) if (argument == null || argument.Length > 4000 || argument.IndexOf('\\0') >= 0) throw new Exception("Invalid command argument");
+            cwd = OwnedDirectory(request.cwd, "agy-mcp-copy-"); runtime = OwnedDirectory(request.runtime, "agy-mcp-runtime-"); scratch = OwnedDirectory(request.scratch, "agy-mcp-scratch-");
+            string executable = Path.GetFullPath(request.executable);
+            if (!executable.StartsWith(runtime + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(executable) || (File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0) throw new Exception("Executable must be staged inside the runtime");
+            var requestedGrants = new List<Grant>();
+            AddGrant(requestedGrants, cwd, request.action == "read-only" ? "read" : "modify");
+            AddGrant(requestedGrants, runtime, "read"); AddGrant(requestedGrants, scratch, "modify");
+            foreach (Grant grant in request.grants)
+            {
+                if (grant == null || IsBridgeOwnedTemporaryPath(grant.path)) throw new Exception("External permission grant targets bridge-owned temporary storage");
+                AddGrant(requestedGrants, grant.path, grant.rights);
+            }
+            if (requestedGrants.Count > 23) throw new Exception("Too many permission grants");
+            foreach (Grant grant in requestedGrants) pins.Add(PinGrant(grant, request.maxFiles));
+            string state = StateLeaseDirectory(request.stateDirectory);
+            profile = request.profile; leaseFile = Path.Combine(state, nonce.ToString("N") + ".json");
+            controller = CurrentControllerIdentity(); aliases = CreateAliasPlan(nonce, controller, new PinnedTarget[] { pins[0], pins[1], pins[2] });
+            result["pathMappings"] = PathMappings(aliases);
+            lease = new Lease { version = 3, nonce = request.nonce, profile = profile, phase = "creating", controllerPid = Process.GetCurrentProcess().Id, controllerStarted = CurrentProcessStart(), cwd = cwd, runtime = runtime, scratch = scratch, grants = new Grant[0], logon = controller.logon, aliases = aliases, nullDeviceGrant = false, jobCreated = false };
+            WriteLease(leaseFile, lease, true, serializer);
+            CheckHr(CreateAppContainerProfile(profile, profile, "Isolated test process", IntPtr.Zero, 0, out sid), "CreateAppContainerProfile");
+            profileCreated = true; identity = new SecurityIdentifier(sid);
+            lease.sid = identity.Value; WriteLease(leaseFile, lease, false, serializer);
+            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Temp"));
+            Directory.CreateDirectory(Path.Combine(scratch, "Packages", profile, "AC", "Local"));
+            bool needNullGrant = request.environment.ContainsKey("GIT_EXEC_PATH") && NullDeviceRequiresGrant(identity);
+            var recorded = new List<Grant>(); foreach (PinnedTarget pin in pins) recorded.Add(pin.grant);
+            lease.sid = identity.Value; lease.grants = recorded.ToArray(); lease.nullDeviceGrant = needNullGrant; lease.phase = "active"; WriteLease(leaseFile, lease, false, serializer);
+            if (needNullGrant)
+            {
+                nullDeviceGranted = true;
+                ApplyNullDeviceGrant(identity);
+            }
+            foreach (PinnedTarget pin in pins) { applied.Add(pin); Access(pin, identity, true); }
+            ApplyAliases(aliases); result["pathMappings"] = PathMappings(aliases);
+
+            var inheritable = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), inherit = 1 };
+            Check(CreatePipe(out read, out write, ref inheritable, 0), "Create output pipe"); Check(SetHandleInformation(read, 1, 0), "Protect output reader");
+            Check(CreatePipe(out inputRead, out inputWrite, ref inheritable, 0), "Create input pipe"); CloseHandle(inputWrite); inputWrite = IntPtr.Zero;
+            job = CreateExecutionJob(lease, controller.user);
+            lease.jobCreated = true; WriteLease(leaseFile, lease, false, serializer);
+            var limits = new ExtendedLimits(); limits.basic.flags = JobObjectLimitKillOnJobClose | (request.childProcesses ? 0u : JobObjectLimitActiveProcess); limits.basic.activeProcesses = request.childProcesses ? 0u : 1u; IntPtr limitData = Marshal.AllocHGlobal(Marshal.SizeOf(limits));
+            try { Marshal.StructureToPtr(limits, limitData, false); Check(SetInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits)), "Require job cleanup"); Marshal.DestroyStructure(limitData, typeof(ExtendedLimits)); Check(QueryInformationJobObject(job, (int)JobObjectExtendedLimitInformation, limitData, (uint)Marshal.SizeOf(limits), IntPtr.Zero), "Verify job limits"); var observed = (ExtendedLimits)Marshal.PtrToStructure(limitData, typeof(ExtendedLimits)); if ((observed.basic.flags & JobObjectLimitKillOnJobClose) == 0 || (observed.basic.flags & (JobObjectLimitBreakawayOk | JobObjectLimitSilentBreakawayOk)) != 0 || (!request.childProcesses && ((observed.basic.flags & JobObjectLimitActiveProcess) == 0 || observed.basic.activeProcesses != 1))) throw new Exception("Job limits were not applied"); }
+            finally { Marshal.FreeHGlobal(limitData); }
+            DeriveCapability("registryRead", capabilitySids);
+            if (request.network) { DeriveCapability("internetClient", capabilitySids); DeriveCapability("privateNetworkClientServer", capabilitySids); }
+                int sidAndAttributesSize = Marshal.SizeOf(typeof(SidAndAttributes)); capabilityList = Marshal.AllocHGlobal(sidAndAttributesSize * capabilitySids.Count);
+                for (int index = 0; index < capabilitySids.Count; index++) Marshal.StructureToPtr(new SidAndAttributes { sid = capabilitySids[index], attributes = 4 }, IntPtr.Add(capabilityList, index * sidAndAttributesSize), false);
+                var caps = new SecurityCapabilities { sid = sid, capabilities = capabilityList, count = (uint)capabilitySids.Count };
+                capabilityData = Marshal.AllocHGlobal(Marshal.SizeOf(caps)); Marshal.StructureToPtr(caps, capabilityData, false);
+                int attributeCount = 4; UIntPtr size = UIntPtr.Zero; InitializeProcThreadAttributeList(IntPtr.Zero, attributeCount, 0, ref size);
+                attributes = Marshal.AllocHGlobal(checked((int)size.ToUInt64())); Check(InitializeProcThreadAttributeList(attributes, attributeCount, 0, ref size), "Initialize attributes"); attributesInitialized = true;
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeSecurityCapabilities), capabilityData, new UIntPtr((uint)Marshal.SizeOf(caps)), IntPtr.Zero, IntPtr.Zero), "Set AppContainer");
+                lpacData = Marshal.AllocHGlobal(4); Marshal.WriteInt32(lpacData, (int)AllApplicationPackagesPolicyLpac);
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeAllApplicationPackagesPolicy), lpacData, new UIntPtr(4), IntPtr.Zero, IntPtr.Zero), "Require LPAC");
+                handleData = Marshal.AllocHGlobal(IntPtr.Size * 2); Marshal.WriteIntPtr(handleData, write); Marshal.WriteIntPtr(handleData, IntPtr.Size, inputRead);
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeHandleList), handleData, new UIntPtr((uint)(IntPtr.Size * 2)), IntPtr.Zero, IntPtr.Zero), "Restrict inherited handles");
+                jobData = Marshal.AllocHGlobal(IntPtr.Size); Marshal.WriteIntPtr(jobData, job);
+                Check(UpdateProcThreadAttribute(attributes, 0, new IntPtr(ProcThreadAttributeJobList), jobData, new UIntPtr((uint)IntPtr.Size), IntPtr.Zero, IntPtr.Zero), "Assign job at process creation");
+            var startup = new StartupInfoEx(); startup.startup.cb = Marshal.SizeOf(startup); startup.startup.flags = 0x100; startup.startup.input = inputRead; startup.startup.output = write; startup.startup.error = write; startup.attributes = attributes;
+            string aliasExecutable = ProjectOwnedPath(executable, aliases), aliasCwd = ProjectOwnedPath(cwd, aliases); if (String.Equals(aliasExecutable, executable, StringComparison.OrdinalIgnoreCase) || String.Equals(aliasCwd, cwd, StringComparison.OrdinalIgnoreCase)) throw new Exception("Owned paths were not projected to DOS aliases");
+            var command = new StringBuilder(Quote(aliasExecutable)); foreach (string argument in ProjectArguments(request.args, aliases)) command.Append(' ').Append(Quote(argument));
+            Dictionary<string, string> projectedEnvironment = ProjectEnvironment(request, aliases); var environment = new StringBuilder(); var keys = new List<string>(projectedEnvironment.Keys); keys.Sort(StringComparer.OrdinalIgnoreCase);
+            foreach (string key in keys) { string value = projectedEnvironment[key]; if (String.IsNullOrEmpty(key) || value == null || key.IndexOfAny(new char[] { '=', '\\0' }) >= 0 || value.IndexOf('\\0') >= 0) throw new Exception("Invalid environment"); environment.Append(key).Append('=').Append(value).Append('\\0'); }
+            environment.Append('\\0'); envData = Marshal.StringToHGlobalUni(environment.ToString());
+            Check(CreateProcess(aliasExecutable, command, IntPtr.Zero, IntPtr.Zero, true, 0x80000 | 0x400 | 0x4 | 0x8000000, envData, aliasCwd, ref startup, out child), "Create isolated process");
+            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);
+            capabilitySids.Clear();
+            bool inJob; Check(IsProcessInJob(child.process, job, out inJob) && inJob, "Verify isolated job");
+            IntPtr token; Check(OpenProcessToken(child.process, 8, out token), "Inspect child token");
+            try
+            {
+                IntPtr info = Marshal.AllocHGlobal(IntPtr.Size); uint returned;
+                try
+                {
+                    Check(GetTokenInformation(token, 29, info, (uint)IntPtr.Size, out returned), "Verify AppContainer token"); if (Marshal.ReadInt32(info) != 1) throw new Exception("AppContainer token missing");
+                    GetTokenInformation(token, 31, IntPtr.Zero, 0, out returned); if (returned < IntPtr.Size || returned > 65536) throw new Exception("Invalid package identity size"); IntPtr packageInfo = Marshal.AllocHGlobal(checked((int)returned));
+                    try { Check(GetTokenInformation(token, 31, packageInfo, returned, out returned), "Verify package identity"); if (!identity.Equals(new SecurityIdentifier(Marshal.ReadIntPtr(packageInfo)))) throw new Exception("Package identity mismatch"); }
+                    finally { Marshal.FreeHGlobal(packageInfo); }
+                }
+                finally { Marshal.FreeHGlobal(info); }
+            }
+            finally { CloseHandle(token); }
+            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
+            var cancelReader = new Thread(delegate() { string message = Console.ReadLine(); if (message == null || message == "cancel " + request.nonce) { Interlocked.Exchange(ref cancellation, 1); lock (jobGate) { if (job != IntPtr.Zero) TerminateJobObject(job, 125); } } }); cancelReader.IsBackground = true; cancelReader.Start();
+            CloseHandle(write); write = IntPtr.Zero; CloseHandle(inputRead); inputRead = IntPtr.Zero; IntPtr outputHandle = read; read = IntPtr.Zero;
+            reader = new Thread(delegate() { using (var stream = new FileStream(new SafeFileHandle(outputHandle, true), FileAccess.Read)) using (var text = new StreamReader(stream, Encoding.UTF8)) { char[] buffer = new char[2048]; int count; while ((count = text.Read(buffer, 0, buffer.Length)) != 0) { output.Append(buffer, 0, count); if (output.Length > request.maxOutputChars) { truncated = true; output.Remove(0, output.Length - request.maxOutputChars); } } } }); reader.Start();
+            if (ResumeThread(child.thread) == UInt32.MaxValue) throw new Win32Exception(Marshal.GetLastWin32Error(), "Resume isolated process");
+            result["pid"] = child.pid; result["sandbox"] = "windows-lpac";
+            uint wait = WaitForSingleObject(child.process, checked((uint)request.timeoutSeconds * 1000));
+            if (wait == WaitTimeout) { result["error"] = "Command timed out"; Check(TerminateJobObject(job, 124), "Terminate timed out job"); if (WaitForSingleObject(child.process, 5000) != WaitObject0) throw new Exception("Timed out process did not terminate"); }
+            else if (wait != WaitObject0) throw new Win32Exception(Marshal.GetLastWin32Error(), "Wait for isolated process");
+            uint exit; Check(GetExitCodeProcess(child.process, out exit), "Read exit code"); result["exitCode"] = exit;
+            for (int index = 0; index < aliases.Length; index++) { RequireDosExact(aliases[index].customName, aliases[index].customTarget); RequireDosExact(aliases[index].drive, aliases[index].driveTarget); VerifyAliasRoot(aliases[index]); }
+            if (Interlocked.CompareExchange(ref cancellation, 0, 0) != 0) result["error"] = "Command cancelled";
+        }
+        catch (Exception error) { result["error"] = error.Message; result["exitCode"] = null; }
+        finally
+        {
+            var failures = new List<string>(); bool jobEnded = true;
+            lock (jobGate)
+            {
+                if (job != IntPtr.Zero)
+                {
+                    try { Check(TerminateJobObject(job, 125), "Terminate owned job"); WaitForEmptyJob(job, 5000); }
+                    catch (Exception error) { jobEnded = false; failures.Add("Job: " + error.Message); }
+                    finally { CloseHandle(job); job = IntPtr.Zero; }
+                }
+            }
+            if (write != IntPtr.Zero) CloseHandle(write);
+            if (reader != null && !reader.Join(5000))
+            {
+                result["error"] = CombineDiagnostic(result.ContainsKey("error") && result["error"] != null ? result["error"].ToString() : null, "Output reader did not terminate");
+            }
+            if (child.thread != IntPtr.Zero) CloseHandle(child.thread); if (child.process != IntPtr.Zero) CloseHandle(child.process); if (read != IntPtr.Zero) CloseHandle(read); if (inputRead != IntPtr.Zero) CloseHandle(inputRead); if (inputWrite != IntPtr.Zero) CloseHandle(inputWrite);
+            if (attributesInitialized) DeleteProcThreadAttributeList(attributes);
+            foreach (IntPtr pointer in new IntPtr[] { attributes, capabilityData, capabilityList, lpacData, handleData, jobData, envData }) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer);
+            foreach (IntPtr capability in capabilitySids) if (capability != IntPtr.Zero) LocalFree(capability);
+            if (jobEnded)
+            {
+                if (aliases != null) try { RemoveAliases(aliases); result["aliasesDeleted"] = true; } catch (Exception error) { failures.Add("DOS aliases: " + error.Message); } finally { ReleaseAliasGates(aliases); }
+                if (nullDeviceGranted) try { ReconcileRecoveryNullDeviceGrant(identity); } catch (Exception error) { failures.Add("Null device: " + error.Message); }
+                for (int index = applied.Count - 1; index >= 0; index--) try { Access(applied[index], identity, false); } catch (Exception error) { failures.Add("ACL " + index.ToString() + ": " + error.Message); }
+                if (profileCreated) try { DeleteProfile(profile); result["profileDeleted"] = true; } catch (Exception error) { failures.Add("Profile: " + error.Message); }
+            }
+            else if (aliases != null) ReleaseAliasGates(aliases);
+            for (int index = pins.Count - 1; index >= 0; index--) pins[index].Dispose();
+            if (sid != IntPtr.Zero) FreeSid(sid);
+            if (leaseFile != null)
+            {
+                if (failures.Count == 0 && profileCreated) { try { File.Delete(leaseFile); } catch (Exception error) { failures.Add("Lease: " + error.Message); } }
+                if (failures.Count != 0) try { if (lease != null && !String.IsNullOrEmpty(lease.sid)) { lease.phase = "cleanup-failed"; WriteLease(leaseFile, lease, false, serializer); } } catch (Exception error) { failures.Add("Lease: " + error.Message); }
+            }
+            if (failures.Count != 0)
+            {
+                result["error"] = CombineDiagnostic(result.ContainsKey("error") && result["error"] != null ? result["error"].ToString() : null, "Cleanup failed: " + String.Join("; ", failures.ToArray()));
+            }
+        }
+        result["output"] = output.ToString(); result["truncated"] = truncated; Console.WriteLine(serializer.Serialize(result)); return result.ContainsKey("error") ? 1 : 0;
+    }
+}
 `;
-var reparseInspectorSource = `using System;\r
-using System.ComponentModel;\r
-using System.IO;\r
-using System.Runtime.InteropServices;\r
-using System.Text;\r
-using System.Text.RegularExpressions;\r
-\r
-// Native Windows reparse point inspector for portable Node cache paths.\r
-// Inspects file attributes and reparse tags directly without shell invocations.\r
-internal static class ReparseInspector\r
-{\r
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]\r
-    static extern uint GetFileAttributes(string name);\r
-\r
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]\r
-    static extern IntPtr CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);\r
-    [DllImport("kernel32.dll", SetLastError = true)]\r
-    static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);\r
-    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);\r
-\r
-    [StructLayout(LayoutKind.Sequential)]\r
-    struct FileAttributeTagInfo { public uint attributes, tag; }\r
-\r
-    const uint InvalidFileAttributes = 0xFFFFFFFF;\r
-    const uint FileAttributeReparsePoint = 0x400;\r
-\r
-    // IO_REPARSE_TAG_CLOUD through IO_REPARSE_TAG_CLOUD_F are placeholders, not name surrogates.\r
-    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }\r
-\r
-    static void InspectReparsePoint(string current, uint attrs)\r
-    {\r
-        if ((attrs & FileAttributeReparsePoint) == 0) return;\r
-        IntPtr handle = CreateFile(current, 0, 3, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);\r
-        if (handle == new IntPtr(-1)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open reparse point");\r
-        try\r
-        {\r
-            FileAttributeTagInfo info;\r
-            if (!GetFileInformationByHandleEx(handle, 9, out info, 8))\r
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Inspect reparse tag");\r
-            if ((info.attributes & FileAttributeReparsePoint) != 0 && !IsCloudTag(info.tag))\r
-                throw new InvalidOperationException("Unsafe reparse point detected: " + current);\r
-        }\r
-        finally { CloseHandle(handle); }\r
-    }\r
-\r
-    public static int Main(string[] args)\r
-    {\r
-        try\r
-        {\r
-            var decoder = new UnicodeEncoding(false, false, true);\r
-            var base64Regex = new Regex("^[A-Za-z0-9+/]+={0,2}$");\r
-            int count = 0;\r
-            string line;\r
-\r
-            while ((line = Console.In.ReadLine()) != null)\r
-            {\r
-                if (line.Length == 0 || line.Length % 4 != 0 || !base64Regex.IsMatch(line))\r
-                {\r
-                    throw new ArgumentException("Invalid path record");\r
-                }\r
-\r
-                byte[] bytes = Convert.FromBase64String(line);\r
-                string target = decoder.GetString(bytes);\r
-                if (target.Length == 0)\r
-                {\r
-                    throw new ArgumentException("Empty path");\r
-                }\r
-                if (target.IndexOf('\\0') >= 0)\r
-                {\r
-                    throw new ArgumentException("NUL character in path");\r
-                }\r
-                count++;\r
-\r
-                string root = Path.GetPathRoot(target);\r
-                if (string.IsNullOrEmpty(root) || !Path.IsPathRooted(target))\r
-                {\r
-                    throw new ArgumentException("Path must be absolute");\r
-                }\r
-\r
-                string relative = target.Substring(root.Length);\r
-                string current = root;\r
-\r
-                uint rootAttrs = GetFileAttributes(current);\r
-                if (rootAttrs == InvalidFileAttributes)\r
-                {\r
-                    int err = Marshal.GetLastWin32Error();\r
-                    throw new Win32Exception(err, "Could not inspect root: " + current);\r
-                }\r
-                InspectReparsePoint(current, rootAttrs);\r
-\r
-                string[] parts = relative.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries);\r
-                foreach (string part in parts)\r
-                {\r
-                    current = Path.Combine(current, part);\r
-                    uint attrs = GetFileAttributes(current);\r
-                    if (attrs == InvalidFileAttributes)\r
-                    {\r
-                        int err = Marshal.GetLastWin32Error();\r
-                        // Allow non-existent suffix only after all ancestors are verified\r
-                        if (err == 2 || err == 3) // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND\r
-                        {\r
-                            break;\r
-                        }\r
-                        // Conservative failure on Access Denied (5) or any unexpected error\r
-                        throw new Win32Exception(err, "Failed to inspect path component: " + current);\r
-                    }\r
-                    InspectReparsePoint(current, attrs);\r
-                }\r
-            }\r
-\r
-            if (count == 0)\r
-            {\r
-                throw new ArgumentException("Missing paths");\r
-            }\r
-\r
-            Console.Out.Write("{\\"safe\\":true}");\r
-            return 0;\r
-        }\r
-        catch (Exception ex)\r
-        {\r
-            Console.Error.WriteLine(ex.Message);\r
-            return 1;\r
-        }\r
-    }\r
-}\r
+var reparseInspectorSource = `using System;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
+
+// Native Windows reparse point inspector for portable Node cache paths.
+// Inspects file attributes and reparse tags directly without shell invocations.
+internal static class ReparseInspector
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern uint GetFileAttributes(string name);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateFile(string name, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandleEx(IntPtr handle, int kind, out FileAttributeTagInfo info, uint size);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct FileAttributeTagInfo { public uint attributes, tag; }
+
+    const uint InvalidFileAttributes = 0xFFFFFFFF;
+    const uint FileAttributeReparsePoint = 0x400;
+
+    // IO_REPARSE_TAG_CLOUD through IO_REPARSE_TAG_CLOUD_F are placeholders, not name surrogates.
+    static bool IsCloudTag(uint tag) { return (tag & 0xFFFF0FFF) == 0x9000001A; }
+
+    static void InspectReparsePoint(string current, uint attrs)
+    {
+        if ((attrs & FileAttributeReparsePoint) == 0) return;
+        IntPtr handle = CreateFile(current, 0, 3, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);
+        if (handle == new IntPtr(-1)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Open reparse point");
+        try
+        {
+            FileAttributeTagInfo info;
+            if (!GetFileInformationByHandleEx(handle, 9, out info, 8))
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Inspect reparse tag");
+            if ((info.attributes & FileAttributeReparsePoint) != 0 && !IsCloudTag(info.tag))
+                throw new InvalidOperationException("Unsafe reparse point detected: " + current);
+        }
+        finally { CloseHandle(handle); }
+    }
+
+    public static int Main(string[] args)
+    {
+        try
+        {
+            var decoder = new UnicodeEncoding(false, false, true);
+            var base64Regex = new Regex("^[A-Za-z0-9+/]+={0,2}$");
+            int count = 0;
+            string line;
+
+            while ((line = Console.In.ReadLine()) != null)
+            {
+                if (line.Length == 0 || line.Length % 4 != 0 || !base64Regex.IsMatch(line))
+                {
+                    throw new ArgumentException("Invalid path record");
+                }
+
+                byte[] bytes = Convert.FromBase64String(line);
+                string target = decoder.GetString(bytes);
+                if (target.Length == 0)
+                {
+                    throw new ArgumentException("Empty path");
+                }
+                if (target.IndexOf('\\0') >= 0)
+                {
+                    throw new ArgumentException("NUL character in path");
+                }
+                count++;
+
+                string root = Path.GetPathRoot(target);
+                if (string.IsNullOrEmpty(root) || !Path.IsPathRooted(target))
+                {
+                    throw new ArgumentException("Path must be absolute");
+                }
+
+                string relative = target.Substring(root.Length);
+                string current = root;
+
+                uint rootAttrs = GetFileAttributes(current);
+                if (rootAttrs == InvalidFileAttributes)
+                {
+                    int err = Marshal.GetLastWin32Error();
+                    throw new Win32Exception(err, "Could not inspect root: " + current);
+                }
+                InspectReparsePoint(current, rootAttrs);
+
+                string[] parts = relative.Split(new char[] { '\\\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (string part in parts)
+                {
+                    current = Path.Combine(current, part);
+                    uint attrs = GetFileAttributes(current);
+                    if (attrs == InvalidFileAttributes)
+                    {
+                        int err = Marshal.GetLastWin32Error();
+                        // Allow non-existent suffix only after all ancestors are verified
+                        if (err == 2 || err == 3) // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND
+                        {
+                            break;
+                        }
+                        // Conservative failure on Access Denied (5) or any unexpected error
+                        throw new Win32Exception(err, "Failed to inspect path component: " + current);
+                    }
+                    InspectReparsePoint(current, attrs);
+                }
+            }
+
+            if (count == 0)
+            {
+                throw new ArgumentException("Missing paths");
+            }
+
+            Console.Out.Write("{\\"safe\\":true}");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+}
 `;
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
 import { createHash as createHash19 } from "node:crypto";
 import { chmod, lstat as lstat9, mkdir as mkdir6, open as open6, readdir as readdir6, unlink as unlink3 } from "node:fs/promises";
-import path18 from "node:path";
+import path19 from "node:path";
 
 // dist/src/portable-node.js
 import { createHash as createHash18, randomUUID as randomUUID8 } from "node:crypto";
-import { spawn as spawn5 } from "node:child_process";
+import { spawn as spawn4 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readdir as readdir5, realpath as realpath5, rename, rm as rm4, unlink as unlink2, writeFile as writeFile4 } from "node:fs/promises";
-import os6 from "node:os";
-import path17 from "node:path";
+import { lstat as lstat8, mkdir as mkdir5, mkdtemp as mkdtemp2, open as open5, readdir as readdir5, realpath as realpath6, rename, rm as rm4, unlink as unlink2, writeFile as writeFile5 } from "node:fs/promises";
+import os7 from "node:os";
+import path18 from "node:path";
 import { setTimeout as delay2 } from "node:timers/promises";
 
 // dist/src/portable-node-descriptor.js
@@ -46949,7 +48236,7 @@ function sameAssetFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino && left.size === right.size;
 }
 function assetPath(root, descriptor, asset) {
-  return path17.join(root, cacheLeafName(descriptor), asset.fileName);
+  return path18.join(root, cacheLeafName(descriptor), asset.fileName);
 }
 function cacheLeafName(descriptor) {
   return descriptor.buildId + "-" + descriptor.assets.node.sha256;
@@ -46989,23 +48276,23 @@ function absoluteCacheDirectory(value) {
     if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
       fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be an absolute local non-device path");
     }
-  } else if (!path17.isAbsolute(value)) {
+  } else if (!path18.isAbsolute(value)) {
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory must be absolute");
   }
-  const absolute = path17.resolve(value);
-  if (absolute === path17.parse(absolute).root)
+  const absolute = path18.resolve(value);
+  if (absolute === path18.parse(absolute).root)
     fail("INVALID_PORTABLE_NODE_CACHE", "Portable Node cache directory cannot be a volume root");
   return absolute;
 }
 async function verifyOwnedTemporaryDirectory(directory, tempRoot, prefix) {
-  const canonical = await realpath5(directory);
-  if (path17.dirname(canonical) !== tempRoot || !path17.basename(canonical).startsWith(prefix) || (await lstat8(directory)).isSymbolicLink()) {
+  const canonical = await realpath6(directory);
+  if (path18.dirname(canonical) !== tempRoot || !path18.basename(canonical).startsWith(prefix) || (await lstat8(directory)).isSymbolicLink()) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary directory was replaced or linked");
   }
   return canonical;
 }
 async function removeOwnedDirectory(directory, tempRoot, prefix, expected) {
-  const canonical = await realpath5(directory).catch((error62) => {
+  const canonical = await realpath6(directory).catch((error62) => {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
@@ -47013,7 +48300,7 @@ async function removeOwnedDirectory(directory, tempRoot, prefix, expected) {
   if (!canonical)
     return;
   const current = await lstat8(directory);
-  if (path17.dirname(canonical) !== tempRoot || !path17.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
+  if (path18.dirname(canonical) !== tempRoot || !path18.basename(canonical).startsWith(prefix) || !current.isDirectory() || current.isSymbolicLink() || current.dev !== expected.dev || current.ino !== expected.ino) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Temporary cleanup path escaped its intended location");
   }
   await rm4(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
@@ -47028,28 +48315,28 @@ async function inspectReparsePoints(paths2) {
   const totalTimeoutMs = 15e3;
   const deadline = started + totalTimeoutMs;
   const timeRemainingMs = () => Math.max(0, Math.round(deadline - performance.now()));
-  const compiler = path17.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  const compiler = path18.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat8(compiler).catch(() => void 0))?.isFile()) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "The Windows .NET Framework compiler is unavailable");
   }
-  const tempRoot = await realpath5(os6.tmpdir());
-  const directory = await realpath5(await mkdtemp2(path17.join(tempRoot, "agy-mcp-inspector-")));
+  const tempRoot = await realpath6(os7.tmpdir());
+  const directory = await realpath6(await mkdtemp2(path18.join(tempRoot, "agy-mcp-inspector-")));
   const directoryInfo = await lstat8(directory);
-  const sourceFile = path17.join(directory, "inspector.cs");
-  const exeFile = path17.join(directory, "inspector.exe");
+  const sourceFile = path18.join(directory, "inspector.cs");
+  const exeFile = path18.join(directory, "inspector.exe");
   let stdout = "", stdoutChars = 0, stderrChars = 0;
   let stopReason;
   let executionError;
   try {
     await verifyOwnedTemporaryDirectory(directory, tempRoot, "agy-mcp-inspector-");
-    await writeFile4(sourceFile, reparseInspectorSource, { flag: "wx", mode: 384 });
+    await writeFile5(sourceFile, reparseInspectorSource, { flag: "wx", mode: 384 });
     const compileTimeout = timeRemainingMs();
     if (compileTimeout <= 0) {
       stopReason = "timeout";
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Compilation timed out");
     }
     const compileResult = await new Promise((resolve2) => {
-      const compileChild2 = spawn5(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
+      const compileChild2 = spawn4(compiler, ["/nologo", "/target:exe", "/platform:x64", "/nowarn:0649", "/out:" + exeFile, sourceFile], {
         windowsHide: true,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"]
@@ -47101,7 +48388,7 @@ async function inspectReparsePoints(paths2) {
       throw new BridgeError("UNSAFE_PORTABLE_NODE_CACHE", "Portable runtime cache contains a Windows reparse point or could not be safely inspected (" + diagnostics + ")");
     }
     const result = await new Promise((resolve2) => {
-      const child = spawn5(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn4(exeFile, [], { windowsHide: true, shell: false, stdio: ["pipe", "pipe", "pipe"] });
       let spawnError = false;
       const stop = (reason) => {
         if (!stopReason) {
@@ -47221,7 +48508,7 @@ async function verifyAsset(root, descriptor, asset) {
   }
 }
 async function verifyCacheLayout(root, descriptor) {
-  const leaf = path17.join(root, cacheLeafName(descriptor));
+  const leaf = path18.join(root, cacheLeafName(descriptor));
   const expected = /* @__PURE__ */ new Set([descriptor.assets.node.fileName, descriptor.assets.license.fileName, descriptor.assets.buildMetadata.fileName]);
   const entries = await readdir5(leaf, { withFileTypes: true });
   if (entries.some((entry) => !expected.has(entry.name) || !entry.isFile() || entry.isSymbolicLink())) {
@@ -47234,7 +48521,7 @@ async function resolvePortableNodeRuntime(cacheDirectory, descriptor = portableN
   const pinned = requireDescriptor(descriptor);
   const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root);
-  const leaf = path17.join(root, cacheLeafName(pinned));
+  const leaf = path18.join(root, cacheLeafName(pinned));
   const leafInfo = await lstat8(leaf).catch((error62) => {
     if (error62.code === "ENOENT")
       fail("PORTABLE_NODE_NOT_PREPARED", "Portable Node runtime is not prepared; run --prepare-windows-runtime");
@@ -47315,7 +48602,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
   }
 }
 async function removeOwnedTemporary(root, temporary) {
-  if (path17.dirname(temporary) !== root || !path17.basename(temporary).startsWith(".portable-node-")) {
+  if (path18.dirname(temporary) !== root || !path18.basename(temporary).startsWith(".portable-node-")) {
     fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node temporary cleanup path escaped its cache directory");
   }
   await inspectReparsePoints([temporary]);
@@ -47440,7 +48727,7 @@ async function recoverDeadPreparationLock(file3) {
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
-  const file3 = path17.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
+  const file3 = path18.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
       const nonce = randomUUID8();
@@ -47519,7 +48806,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path17.join(root, ".portable-node-" + randomUUID8());
+  const temporary = path18.join(root, ".portable-node-" + randomUUID8());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -47531,9 +48818,9 @@ async function preparePortableNodeRuntime(options) {
     await inspectReparsePoints([temporary]);
     const fetchImpl = options.fetch ?? globalThis.fetch;
     for (const asset of [descriptor.assets.node, descriptor.assets.license, descriptor.assets.buildMetadata]) {
-      await downloadAsset(asset, path17.join(temporary, asset.fileName), fetchImpl);
+      await downloadAsset(asset, path18.join(temporary, asset.fileName), fetchImpl);
     }
-    const final = path17.join(root, cacheLeafName(descriptor));
+    const final = path18.join(root, cacheLeafName(descriptor));
     try {
       await rename(temporary, final);
     } catch (error62) {
@@ -47590,11 +48877,11 @@ function fail2(code, message) {
   throw new BridgeError(code, message);
 }
 function canonicalKey2(file3) {
-  return path18.resolve(file3).toLocaleLowerCase("en-US");
+  return path19.resolve(file3).toLocaleLowerCase("en-US");
 }
 function isUnsafeWindowsPath(value) {
   const normalized = value.replaceAll("/", "\\");
-  const basename2 = path18.win32.basename(normalized).replace(/[ .]+$/u, "");
+  const basename2 = path19.win32.basename(normalized).replace(/[ .]+$/u, "");
   const withoutDrive = normalized.replace(/^[A-Za-z]:\\/, "");
   return normalized.includes("\0") || /^(?:\\\\|\/\/)/u.test(normalized) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(basename2) || withoutDrive.includes(":");
 }
@@ -47606,7 +48893,7 @@ function validateWindowsCommand(command2) {
   if (normalized.split("\\").some((part) => part === "." || part === "..")) {
     fail2("INVALID_TEST_COMMAND", "Windows command paths cannot contain traversal segments");
   }
-  if (!path18.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
+  if (!path19.isAbsolute(command2.executable) && /[\\/]/u.test(command2.executable)) {
     fail2("INVALID_TEST_COMMAND", "Windows commands must resolve by absolute path or PATH");
   }
 }
@@ -47616,12 +48903,12 @@ function validateLimits(limits) {
   }
 }
 async function assertSafePath(file3) {
-  const absolute = path18.resolve(file3);
-  const parsed = path18.parse(absolute);
-  const parts = path18.relative(parsed.root, absolute).split(path18.sep).filter(Boolean);
+  const absolute = path19.resolve(file3);
+  const parsed = path19.parse(absolute);
+  const parts = path19.relative(parsed.root, absolute).split(path19.sep).filter(Boolean);
   let current = parsed.root;
   for (const part of parts) {
-    current = path18.join(current, part);
+    current = path19.join(current, part);
     const info = await lstat9(current);
     if (info.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + file3);
@@ -47668,11 +48955,11 @@ async function readBoundedFile(file3, limit) {
   }
 }
 function commandNames(executable) {
-  const basename2 = path18.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename2 = path19.win32.basename(executable).toLocaleLowerCase("en-US");
   if (basename2 === "npm" || basename2 === "npm.cmd") {
     return { kind: "npm", names: [basename2 === "npm" ? executable + ".cmd" : executable] };
   }
-  const extension = path18.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path19.extname(executable).toLocaleLowerCase("en-US");
   if (extension === ".cmd" || extension === ".bat") {
     fail2("WINDOWS_COMMAND_UNSUPPORTED", "Only npm.cmd is supported; arbitrary Windows command scripts are not supported");
   }
@@ -47683,10 +48970,10 @@ function commandNames(executable) {
 }
 async function resolveCommand(executable) {
   const requested = commandNames(executable);
-  const directories = path18.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path18.delimiter).filter((directory) => directory && path18.isAbsolute(directory));
+  const directories = path19.isAbsolute(executable) ? [""] : (process.env.PATH || "").split(path19.delimiter).filter((directory) => directory && path19.isAbsolute(directory));
   for (const directory of directories) {
     for (const name of requested.names) {
-      const candidate = path18.isAbsolute(name) ? path18.resolve(name) : path18.resolve(directory, name);
+      const candidate = path19.isAbsolute(name) ? path19.resolve(name) : path19.resolve(directory, name);
       try {
         const info = await lstat9(candidate);
         if (info.isSymbolicLink())
@@ -47705,17 +48992,17 @@ async function resolveCommand(executable) {
   fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + executable);
 }
 function stagedPath(runtime, relative2) {
-  const target = path18.resolve(runtime, ...relative2);
-  const prefix = runtime.endsWith(path18.sep) ? runtime : runtime + path18.sep;
+  const target = path19.resolve(runtime, ...relative2);
+  const prefix = runtime.endsWith(path19.sep) ? runtime : runtime + path19.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   return target;
 }
 async function stageDirectory(directory, state) {
-  const target = path18.resolve(directory);
+  const target = path19.resolve(directory);
   if (target === state.runtime)
     return;
-  const prefix = state.runtime.endsWith(path18.sep) ? state.runtime : state.runtime + path18.sep;
+  const prefix = state.runtime.endsWith(path19.sep) ? state.runtime : state.runtime + path19.sep;
   if (!target.startsWith(prefix))
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   const targetKey = canonicalKey2(target);
@@ -47723,7 +49010,7 @@ async function stageDirectory(directory, state) {
     return;
   if (state.targets.has(targetKey))
     fail2("UNSAFE_RUNTIME_PATH", "A runtime file conflicts with a staging directory");
-  const parent = path18.dirname(target);
+  const parent = path19.dirname(target);
   if (parent === target)
     fail2("UNSAFE_RUNTIME_PATH", "Runtime staging path escaped its owned directory");
   await stageDirectory(parent, state);
@@ -47734,8 +49021,8 @@ async function stageDirectory(directory, state) {
   state.directories.add(targetKey);
 }
 async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path18.resolve(sourcePath);
-  const target = path18.resolve(targetPath);
+  const source = path19.resolve(sourcePath);
+  const target = path19.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
   const previousTarget = state.sources.get(sourceKey);
@@ -47752,7 +49039,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
   if (state.entries + 1 > state.maxFiles || state.bytes + expected.size > state.maxBytes) {
     fail2("ISOLATION_TOO_LARGE", "Runtime exceeds the configured copy file or byte limit");
   }
-  await stageDirectory(path18.dirname(target), state);
+  await stageDirectory(path19.dirname(target), state);
   const sourceHandle = await open6(source, "r");
   let targetHandle;
   let created = false;
@@ -47847,30 +49134,30 @@ async function stageNativeExecutable(source, destination, state, expectedSha256,
   }
   if (expectedSha256)
     return executable;
-  const directory = path18.dirname(source);
+  const directory = path19.dirname(source);
   const siblings = await readdir6(directory, { withFileTypes: true });
   for (const entry of siblings.sort((left, right) => left.name.localeCompare(right.name, "en-US"))) {
     if (!/\.dll$/iu.test(entry.name))
       continue;
     if (!entry.isFile() || entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "Runtime DLLs must be regular files");
-    await stageFile(path18.join(directory, entry.name), path18.join(path18.dirname(destination), entry.name), state, true, allowLinks);
+    await stageFile(path19.join(directory, entry.name), path19.join(path19.dirname(destination), entry.name), state, true, allowLinks);
   }
   return executable;
 }
 var gitHelperBinaries = ["git-upload-pack.exe", "git-receive-pack.exe", "git-upload-archive.exe"];
 function isGitCommandName(executable) {
-  const extension = path18.extname(executable).toLocaleLowerCase("en-US");
+  const extension = path19.extname(executable).toLocaleLowerCase("en-US");
   if (extension && extension !== ".exe")
     return false;
-  const basename2 = path18.win32.basename(executable).toLocaleLowerCase("en-US");
+  const basename2 = path19.win32.basename(executable).toLocaleLowerCase("en-US");
   return basename2 === "git" || basename2 === "git.exe";
 }
-async function resolveGitExecutable(requested) {
-  const targetFile = requested && path18.isAbsolute(requested) ? path18.extname(requested) ? requested : requested + ".exe" : void 0;
-  const directories = targetFile ? [""] : (process.env.PATH || "").split(path18.delimiter).map((directory) => directory.trim().replace(/^"(.*)"$/, "$1")).filter((directory) => directory && path18.isAbsolute(directory) && !isUnsafeWindowsPath(directory));
+async function resolveGitExecutable2(requested) {
+  const targetFile = requested && path19.isAbsolute(requested) ? path19.extname(requested) ? requested : requested + ".exe" : void 0;
+  const directories = targetFile ? [""] : (process.env.PATH || "").split(path19.delimiter).map((directory) => directory.trim().replace(/^"(.*)"$/, "$1")).filter((directory) => directory && path19.isAbsolute(directory) && !isUnsafeWindowsPath(directory));
   for (const directory of directories) {
-    const candidate = targetFile ? path18.resolve(targetFile) : path18.resolve(directory, "git.exe");
+    const candidate = targetFile ? path19.resolve(targetFile) : path19.resolve(directory, "git.exe");
     if (isUnsafeWindowsPath(candidate))
       continue;
     try {
@@ -47887,37 +49174,59 @@ async function resolveGitExecutable(requested) {
       }
       throw error62;
     }
-    const candidateDir = path18.dirname(candidate);
-    if (path18.basename(candidateDir).toLocaleLowerCase("en-US") === "cmd") {
-      const realCandidates = [
-        path18.resolve(candidateDir, "..", "ucrt64", "bin", "git.exe"),
-        path18.resolve(candidateDir, "..", "mingw64", "bin", "git.exe")
-      ];
-      let realGit;
-      for (const realCandidate of realCandidates) {
-        if (isUnsafeWindowsPath(realCandidate))
-          continue;
+    const candidateDir = path19.dirname(candidate);
+    const candidateDirName = path19.basename(candidateDir).toLocaleLowerCase("en-US");
+    const parentDir = path19.dirname(candidateDir);
+    const parentDirName = path19.basename(parentDir).toLocaleLowerCase("en-US");
+    if (candidateDirName === "bin" && (parentDirName === "mingw64" || parentDirName === "ucrt64")) {
+      return candidate;
+    }
+    const isCmdWrapper = candidateDirName === "cmd";
+    const isBinDir = candidateDirName === "bin";
+    if (isCmdWrapper || isBinDir) {
+      let hasNativeLayout = false;
+      for (const layout of ["ucrt64", "mingw64"]) {
         try {
-          const realInfo = await lstat9(realCandidate);
-          if (realInfo.isSymbolicLink()) {
-            fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + realCandidate);
-          }
-          if (!realInfo.isFile())
-            continue;
-          await regularFile(realCandidate, true);
-          realGit = realCandidate;
-          break;
+          const info = await lstat9(path19.join(parentDir, layout));
+          if (info.isSymbolicLink())
+            fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + path19.join(parentDir, layout));
+          if (info.isDirectory())
+            hasNativeLayout = true;
         } catch (error62) {
-          if (error62.code === "ENOENT" || error62.code === "ENOTDIR") {
-            continue;
-          }
-          throw error62;
+          if (error62.code !== "ENOENT" && error62.code !== "ENOTDIR")
+            throw error62;
         }
       }
-      if (!realGit) {
-        fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "Git wrapper does not contain a real bin layout: " + candidate);
+      const isKnownDistribution = isCmdWrapper || hasNativeLayout;
+      if (isKnownDistribution) {
+        const nativeLayouts = ["ucrt64", "mingw64"];
+        let realGit;
+        for (const layout of nativeLayouts) {
+          const nativeCandidate = path19.resolve(parentDir, layout, "bin", "git.exe");
+          if (isUnsafeWindowsPath(nativeCandidate))
+            continue;
+          try {
+            const realInfo = await lstat9(nativeCandidate);
+            if (realInfo.isSymbolicLink()) {
+              fail2("UNSAFE_RUNTIME_PATH", "Runtime files and directories cannot use links: " + nativeCandidate);
+            }
+            if (!realInfo.isFile())
+              continue;
+            await regularFile(nativeCandidate, true);
+            realGit = nativeCandidate;
+            break;
+          } catch (error62) {
+            if (error62.code === "ENOENT" || error62.code === "ENOTDIR") {
+              continue;
+            }
+            throw error62;
+          }
+        }
+        if (!realGit) {
+          fail2("WINDOWS_EXECUTABLE_UNSUPPORTED", "Git wrapper does not contain a real bin layout: " + candidate);
+        }
+        return realGit;
       }
-      return realGit;
     }
     return candidate;
   }
@@ -47925,9 +49234,9 @@ async function resolveGitExecutable(requested) {
 }
 async function stageGitInstallation(realGit, runtime, state) {
   const stagedGit = await stageNativeExecutable(realGit, stagedPath(runtime, ["git", "bin", "git.exe"]), state, void 0, true);
-  const realBinDir = path18.dirname(realGit);
+  const realBinDir = path19.dirname(realGit);
   for (const helper of gitHelperBinaries) {
-    const helperSource = path18.join(realBinDir, helper);
+    const helperSource = path19.join(realBinDir, helper);
     try {
       const info = await lstat9(helperSource);
       if (info.isSymbolicLink()) {
@@ -47946,11 +49255,11 @@ async function stageGitInstallation(realGit, runtime, state) {
   return stagedGit;
 }
 async function stageGit(runtime, state) {
-  const realGit = await resolveGitExecutable();
+  const realGit = await resolveGitExecutable2();
   if (!realGit)
     return void 0;
   const stagedGit = await stageGitInstallation(realGit, runtime, state);
-  return path18.dirname(stagedGit);
+  return path19.dirname(stagedGit);
 }
 function npmPathIsOmitted(parts) {
   const lower = parts.map((part) => part.toLocaleLowerCase("en-US"));
@@ -47973,8 +49282,8 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
     const childRelative = [...relative2, entry.name];
     if (npmPathIsOmitted(childRelative))
       continue;
-    const childSource = path18.join(source, entry.name);
-    const childDestination = path18.join(destination, entry.name);
+    const childSource = path19.join(source, entry.name);
+    const childDestination = path19.join(destination, entry.name);
     if (entry.isSymbolicLink())
       fail2("UNSAFE_RUNTIME_PATH", "npm runtime files and directories cannot use links");
     if (entry.isDirectory()) {
@@ -47992,7 +49301,7 @@ async function stageNpmDirectory(source, destination, state, relative2 = []) {
   }
 }
 async function stageSystemCmd(systemRoot, runtime, state) {
-  const source = path18.join(systemRoot, "System32", "cmd.exe");
+  const source = path19.join(systemRoot, "System32", "cmd.exe");
   return stageFile(source, stagedPath(runtime, ["system32", "cmd.exe"]), state, true, true);
 }
 async function stageNpm(launcher, runtime, state, args, portableNode, includeGit = false) {
@@ -48000,11 +49309,11 @@ async function stageNpm(launcher, runtime, state, args, portableNode, includeGit
   if (!launcherText.includes("node_modules\\npm\\bin\\npm-cli.js")) {
     fail2("WINDOWS_NPM_LAYOUT_UNSUPPORTED", "The npm launcher does not reference the expected npm-cli.js layout");
   }
-  const nodeDirectory = path18.dirname(launcher);
-  const nodeSource = path18.join(nodeDirectory, "node.exe");
-  const npmSource = path18.join(nodeDirectory, "node_modules", "npm");
-  const manifestPath = path18.join(npmSource, "package.json");
-  const cliSource = path18.join(npmSource, "bin", "npm-cli.js");
+  const nodeDirectory = path19.dirname(launcher);
+  const nodeSource = path19.join(nodeDirectory, "node.exe");
+  const npmSource = path19.join(nodeDirectory, "node_modules", "npm");
+  const manifestPath = path19.join(npmSource, "package.json");
+  const cliSource = path19.join(npmSource, "bin", "npm-cli.js");
   let manifest;
   try {
     manifest = JSON.parse((await readBoundedFile(manifestPath, maxInspectionBytes)).toString("utf8"));
@@ -48024,7 +49333,7 @@ async function stageNpm(launcher, runtime, state, args, portableNode, includeGit
   await stageNpmDirectory(npmSource, stagedPath(runtime, ["node_modules", "npm"]), state);
   const cli = stagedPath(runtime, ["node_modules", "npm", "bin", "npm-cli.js"]);
   const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  if (!path18.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
+  if (!path19.isAbsolute(systemRoot) || isUnsafeWindowsPath(systemRoot)) {
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "SystemRoot does not identify a safe Windows system directory");
   }
   const comspec = await stageSystemCmd(systemRoot, runtime, state);
@@ -48032,7 +49341,7 @@ async function stageNpm(launcher, runtime, state, args, portableNode, includeGit
   if (includeGit) {
     gitExecPath = await stageGit(runtime, state);
   }
-  const pathEntries = [path18.dirname(node2)];
+  const pathEntries = [path19.dirname(node2)];
   if (gitExecPath && !pathEntries.includes(gitExecPath)) {
     pathEntries.push(gitExecPath);
   }
@@ -48061,7 +49370,7 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
     fail2("WINDOWS_EXECUTOR_UNAVAILABLE", "Native Windows execution is only available on Windows");
   validateWindowsCommand(command2);
   validateLimits(limits);
-  const runtime = path18.resolve(runtimeDirectory);
+  const runtime = path19.resolve(runtimeDirectory);
   await assertSafePath(runtime);
   const runtimeInfo = await lstat9(runtime);
   if (!runtimeInfo.isDirectory() || runtimeInfo.isSymbolicLink() || (await readdir6(runtime)).length !== 0) {
@@ -48069,12 +49378,12 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
   }
   const state = { ...limits, runtime, bytes: 0, entries: 0, sources: /* @__PURE__ */ new Map(), targets: /* @__PURE__ */ new Map(), directories: /* @__PURE__ */ new Set() };
   if (isGitCommandName(command2.executable)) {
-    const gitSource = await resolveGitExecutable(command2.executable);
+    const gitSource = await resolveGitExecutable2(command2.executable);
     if (!gitSource) {
       fail2("WINDOWS_EXECUTABLE_NOT_FOUND", "Test executable was not found: " + command2.executable);
     }
     const stagedGit = await stageGitInstallation(gitSource, runtime, state);
-    const gitExecPath2 = path18.dirname(stagedGit);
+    const gitExecPath2 = path19.dirname(stagedGit);
     return {
       executable: stagedGit,
       args: [...command2.args],
@@ -48084,16 +49393,16 @@ async function stageWindowsCommand(command2, runtimeDirectory, limits, selection
   }
   const resolved = await resolveCommand(command2.executable);
   if (resolved.kind === "npm") {
-    const adjacentNode = path18.join(path18.dirname(resolved.file), "node.exe");
+    const adjacentNode = path19.join(path19.dirname(resolved.file), "node.exe");
     return stageNpm(resolved.file, runtime, state, command2.args, await portableNodeForHostRuntime(adjacentNode, selection), selection.includeGit ?? false);
   }
   const portableNode = await portableNodeForHostRuntime(resolved.file, selection);
-  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path18.basename(resolved.file)]), state, portableNode?.identity.sha256);
+  const executable = await stageNativeExecutable(portableNode?.nodePath ?? resolved.file, stagedPath(runtime, [path19.basename(resolved.file)]), state, portableNode?.identity.sha256);
   let gitExecPath;
   if (selection.includeGit) {
     gitExecPath = await stageGit(runtime, state);
   }
-  const pathEntries = [path18.dirname(executable)];
+  const pathEntries = [path19.dirname(executable)];
   if (gitExecPath && !pathEntries.includes(gitExecPath)) {
     pathEntries.push(gitExecPath);
   }
@@ -48130,10 +49439,10 @@ var libraryRuntime = (() => {
   return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
 })();
 function verifyPathMappings(result, roots) {
-  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path19.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
+  const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path20.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
   const aliases = /* @__PURE__ */ new Set();
   for (const mapping of result.pathMappings) {
-    if (expected.get(mapping.kind) !== path19.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
+    if (expected.get(mapping.kind) !== path20.resolve(mapping.physicalRoot).toLocaleLowerCase("en-US"))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mapping did not match an owned execution root");
     if (aliases.has(mapping.aliasRoot))
       throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings reused a drive letter");
@@ -48144,22 +49453,26 @@ function verifyPathMappings(result, roots) {
     throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native DOS path mappings were incomplete");
 }
 function contains2(root, target) {
-  const relative2 = path19.relative(root, target);
-  return relative2 === "" || !relative2.startsWith(".." + path19.sep) && relative2 !== ".." && !path19.isAbsolute(relative2);
+  const relative2 = path20.relative(root, target);
+  return relative2 === "" || !relative2.startsWith(".." + path20.sep) && relative2 !== ".." && !path20.isAbsolute(relative2);
 }
 function overlaps2(left, right) {
   return contains2(left, right) || contains2(right, left);
 }
 async function ownedDirectory(directory, temp, prefix) {
-  const canonical = await realpath6(directory);
-  if (path19.dirname(canonical) !== temp || !path19.basename(canonical).startsWith(prefix) || (await lstat10(directory)).isSymbolicLink()) {
+  const stat4 = await lstat10(directory);
+  if (stat4.isSymbolicLink() || !stat4.isDirectory()) {
+    throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+  }
+  const canonical = await realpath7(directory);
+  if (path20.dirname(canonical) !== temp || !path20.basename(canonical).startsWith(prefix)) {
     throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
   }
   return canonical;
 }
 async function nativeProcess(executable, args, options, input2) {
   options.signal?.throwIfAborted();
-  const child = spawn6(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn5(executable, args, { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   options.onProcess?.(child);
   let stdout = "", stderr = "", oversized = false, stopping2 = false;
   const controllerOutputLimit = Math.max(1e5, Math.min(4e5, (options.sandbox?.maxOutputChars ?? 4e3) * 6 + 12e3));
@@ -48208,34 +49521,81 @@ async function nativeProcess(executable, args, options, input2) {
   }
 }
 async function compileController(temp, options) {
-  const compiler = path19.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
+  const compiler = path20.join(process.env.SystemRoot || "C:\\Windows", "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe");
   if (!(await lstat10(compiler).catch(() => void 0))?.isFile())
     throw new BridgeError("WINDOWS_EXECUTOR_UNAVAILABLE", "The existing Windows .NET Framework compiler is unavailable");
-  const directory = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-controller-")));
-  const source = path19.join(directory, "runner.cs"), helper = path19.join(directory, "runner.exe");
+  const directory = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-controller-")));
+  const stat4 = await lstat10(directory, { bigint: true });
+  const source = path20.join(directory, "runner.cs"), helper = path20.join(directory, "runner.exe");
   try {
-    await writeFile5(source, windowsHelperSource, { flag: "wx" });
+    await writeFile6(source, windowsHelperSource, { flag: "wx" });
     const built = await nativeProcess(compiler, ["/nologo", "/target:exe", "/platform:x64", "/r:System.Web.Extensions.dll", "/nowarn:0649", "/out:" + helper, source], options);
     if (built.code !== 0)
       throw new BridgeError("WINDOWS_EXECUTOR_BUILD_FAILED", (built.stdout + built.stderr).slice(-4e3));
-    return { directory, helper };
+    return { directory, helper, stat: stat4 };
   } catch (error62) {
-    await rm5(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {
-    });
+    try {
+      await removeOwned([[directory, "agy-mcp-controller-", stat4]], temp);
+    } catch (cleanupError) {
+      const original = error62 instanceof Error ? error62.message : String(error62);
+      const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      throw new BridgeError("UNSAFE_RUNTIME_PATH", redactExecutionDiagnostic("Controller build: " + original + "; cleanup: " + cleanup));
+    }
     throw error62;
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path19.join(directory, "request-" + randomUUID9() + ".json");
-  await writeFile5(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
+  const file3 = path20.join(directory, "request-" + randomUUID9() + ".json");
+  await writeFile6(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
 async function removeOwned(directories, temp) {
   const failures = [];
-  for (const [directory, prefix] of directories) {
+  for (const [directory, prefix, expectedStat] of directories) {
     try {
-      await ownedDirectory(directory, temp, prefix);
-      await rm5(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      if (typeof directory !== "string" || !path20.isAbsolute(directory)) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage must be an absolute path");
+      }
+      if (!expectedStat?.isDirectory() || expectedStat.isSymbolicLink()) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage ownership was not captured");
+      }
+      const baseName = path20.basename(directory);
+      if (!baseName.startsWith(prefix) || baseName === "." || baseName === ".." || baseName.includes("/") || baseName.includes("\\")) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage prefix mismatch");
+      }
+      const parent = path20.dirname(directory);
+      const parentStat = await lstat10(parent, { bigint: true });
+      if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage parent is invalid or linked");
+      }
+      const canonicalParent = await realpath7(parent);
+      if (canonicalParent !== temp) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage parent is not the trusted temporary directory");
+      }
+      let stat4;
+      try {
+        stat4 = await lstat10(directory, { bigint: true });
+      } catch (error62) {
+        const err = error62;
+        if (err && err.code === "ENOENT" && err.syscall === "lstat" && typeof err.path === "string" && path20.resolve(err.path).toLocaleLowerCase("en-US") === path20.resolve(directory).toLocaleLowerCase("en-US")) {
+          continue;
+        }
+        throw error62;
+      }
+      if (stat4.isSymbolicLink() || !stat4.isDirectory()) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+      }
+      const canonical = await realpath7(directory);
+      if (path20.dirname(canonical) !== temp || !path20.basename(canonical).startsWith(prefix)) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+      }
+      if (path20.resolve(canonical).toLocaleLowerCase("en-US") !== path20.resolve(directory).toLocaleLowerCase("en-US")) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage was replaced or linked");
+      }
+      if (stat4.dev !== expectedStat.dev || stat4.ino !== expectedStat.ino || stat4.birthtimeNs !== expectedStat.birthtimeNs) {
+        throw new BridgeError("UNSAFE_RUNTIME_PATH", "Windows executor temporary storage identity changed");
+      }
+      await rm5(canonical, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     } catch (error62) {
       failures.push(error62 instanceof Error ? error62.message : String(error62));
     }
@@ -48246,38 +49606,38 @@ async function removeOwned(directories, temp) {
 async function grantPaths(selection, protectedPaths2, maxFiles) {
   const protectedCanonical = await Promise.all(protectedPaths2.map(async (value) => {
     try {
-      return await realpath6(value);
+      return await realpath7(value);
     } catch {
-      return path19.resolve(value);
+      return path20.resolve(value);
     }
   }));
   const paths2 = /* @__PURE__ */ new Map();
   const inspect = async (value, rights) => {
-    if (!path19.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
+    if (!path20.isAbsolute(value) || /^(?:\\\\|\/\/)/.test(value) || value.replace(/^[A-Za-z]:[\\/]/, "").includes(":") || value.includes("\0")) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets must be local absolute paths");
     }
-    const canonical = await realpath6(value), root = path19.parse(canonical).root;
+    const canonical = await realpath7(value), root = path20.parse(canonical).root;
     if (canonical === root || protectedCanonical.some((blocked) => overlaps2(blocked, canonical))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Windows permission target overlaps a protected path or volume root");
     }
-    const relative2 = path19.relative(root, canonical).split(path19.sep).filter(Boolean);
+    const relative2 = path20.relative(root, canonical).split(path20.sep).filter(Boolean);
     let current = root, entries = 0;
     const walk = async (candidate) => {
-      const stat3 = await lstat10(candidate);
-      if (stat3.isSymbolicLink() || !stat3.isDirectory() && !stat3.isFile() || stat3.isFile() && stat3.nlink > 1) {
+      const stat4 = await lstat10(candidate);
+      if (stat4.isSymbolicLink() || !stat4.isDirectory() && !stat4.isFile() || stat4.isFile() && stat4.nlink > 1) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission targets cannot contain links, hard links, or non-regular files");
       }
-      if (stat3.isDirectory())
+      if (stat4.isDirectory())
         for (const name of await (await import("node:fs/promises")).readdir(candidate)) {
           if (++entries > maxFiles)
             throw new BridgeError("SANDBOX_PATH_TOO_LARGE", "Windows permission directory exceeds its configured file limit");
-          await walk(path19.join(candidate, name));
+          await walk(path20.join(candidate, name));
         }
     };
     for (const part of relative2) {
-      current = path19.join(current, part);
-      const stat3 = await lstat10(current);
-      if (stat3.isSymbolicLink() || !stat3.isDirectory() && current !== canonical)
+      current = path20.join(current, part);
+      const stat4 = await lstat10(current);
+      if (stat4.isSymbolicLink() || !stat4.isDirectory() && current !== canonical)
         throw new BridgeError("INVALID_SANDBOX_PATH", "Windows permission target contains a link or non-directory component");
     }
     await walk(canonical);
@@ -48291,24 +49651,115 @@ async function grantPaths(selection, protectedPaths2, maxFiles) {
     await inspect(value, "modify");
   return [...paths2.values()];
 }
-async function runRecoveryWithController(stateDirectory, options) {
+async function runRecoveryWithController(stateDirectory, options, requireIdle = false) {
   if (process.platform !== "win32")
     return;
-  const temp = await realpath6(os7.tmpdir()), controller = await compileController(temp, options);
+  const temp = await realpath7(os8.tmpdir()), controller = await compileController(temp, options);
   try {
     const request = await writeRequest(controller.directory, { action: "recover", stateDirectory });
     const observed = await nativeProcess(controller.helper, [request], options);
     const result = recoverySchema.parse(JSON.parse(observed.stdout));
     if (observed.code !== 0 || result.error)
       throw new BridgeError("WINDOWS_EXECUTION_RECOVERY_FAILED", result.error || "Windows LPAC recovery did not complete");
+    if (requireIdle && result.active !== 0)
+      throw new BridgeError("WINDOWS_EXECUTION_RECOVERY_FAILED", "Active Windows executions prevent a recovery retry");
   } finally {
-    await removeOwned([[controller.directory, "agy-mcp-controller-"]], temp);
+    await removeOwned([[controller.directory, "agy-mcp-controller-", controller.stat]], temp);
   }
 }
-async function recoverWindowsExecutions(stateDirectory) {
-  const effective = path19.resolve(stateDirectory);
+async function recoverWindowsExecutions(stateDirectory, options = {}) {
+  const effective = path20.resolve(stateDirectory);
   await mkdir7(effective, { recursive: true, mode: 448 });
-  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
+  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 }, options.requireIdle);
+}
+function redactExecutionDiagnostic(value) {
+  if (!value)
+    return "";
+  const redacted = redactDiagnostic(String(value), {});
+  const limit = 4e3;
+  if (redacted.length > limit) {
+    const marker = "... [truncated]";
+    return redacted.slice(0, limit - marker.length) + marker;
+  }
+  return redacted;
+}
+var failureEnvelopeSchema = external_exports.object({
+  nonce: external_exports.string().uuid(),
+  error: external_exports.string().min(1).max(64e3),
+  exitCode: external_exports.number().int().min(0).max(4294967295).nullable().optional(),
+  output: external_exports.string().max(64e3).optional(),
+  truncated: external_exports.boolean().optional(),
+  pid: external_exports.number().int().positive().optional(),
+  sandbox: external_exports.literal("windows-lpac").optional(),
+  profileDeleted: external_exports.boolean().optional(),
+  aliasesDeleted: external_exports.boolean().optional(),
+  pathMappings: external_exports.array(pathMappingSchema).length(3).optional()
+}).strict();
+function parseWindowsExecutionResult(observed, options) {
+  if (observed.code == null || !Number.isInteger(observed.code) || observed.code < 0 || observed.code > 4294967295) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native controller exit code was not verified");
+  }
+  if (typeof observed.stdout !== "string" || observed.stdout.length > 5e5) {
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller output missing or oversized");
+  }
+  let raw;
+  try {
+    raw = JSON.parse(observed.stdout);
+  } catch {
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller returned unparseable output");
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller output was not an object");
+  }
+  const record2 = raw;
+  if (typeof record2.nonce !== "string" || record2.nonce !== options.expectedNonce) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce was not verified");
+  }
+  const hasError = Object.hasOwn(record2, "error");
+  if (hasError) {
+    if (observed.code === 0) {
+      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native controller reported error with unexpected zero exit code");
+    }
+    const failureParsed = failureEnvelopeSchema.safeParse(raw);
+    if (!failureParsed.success) {
+      throw new BridgeError("WINDOWS_EXECUTOR_FAILED", "Native controller returned invalid failure envelope");
+    }
+    const isTimedOutOrCancelled = record2.error === "Command timed out" || record2.error === "Command cancelled";
+    const isCompletedExecution = isTimedOutOrCancelled && record2.sandbox === "windows-lpac" && typeof record2.exitCode === "number" && Number.isInteger(record2.exitCode) && record2.exitCode >= 0 && record2.exitCode <= 4294967295 && record2.aliasesDeleted === true && record2.profileDeleted === true && Array.isArray(record2.pathMappings) && record2.pathMappings.length === 3;
+    if (isCompletedExecution) {
+      let result2;
+      try {
+        result2 = executionSchema.parse(raw);
+      } catch {
+        throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native execution result did not match expected schema");
+      }
+      verifyPathMappings(result2, options.roots);
+      if (result2.output.length > options.maxOutputChars) {
+        throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller output limit was exceeded");
+      }
+      result2.error = redactExecutionDiagnostic(result2.error);
+      return result2;
+    }
+    const redacted = redactExecutionDiagnostic(record2.error);
+    throw new BridgeError("WINDOWS_EXECUTOR_FAILED", redacted);
+  }
+  if (observed.code !== 0) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+  }
+  let result;
+  try {
+    result = executionSchema.parse(raw);
+  } catch {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Native execution result did not match expected schema");
+  }
+  verifyPathMappings(result, options.roots);
+  if (result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > options.maxOutputChars) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce, DOS aliases, output limit, or profile cleanup was not verified");
+  }
+  if (result.sandbox !== "windows-lpac" || result.exitCode === null) {
+    throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+  }
+  return result;
 }
 async function executeWindowsTest(command2, copyDirectory, options) {
   if (process.platform !== "win32")
@@ -48316,7 +49767,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
   validateWindowsCommand(command2);
   const selection = options.sandbox ?? { readPaths: [], writePaths: [], network: false, childProcesses: true, maxOutputChars: 4e3 };
   const mode = options.mode ?? "write", maxFiles = options.maxFiles ?? 1e4;
-  const exeBasename = path19.win32.basename(command2.executable).toLocaleLowerCase("en-US");
+  const exeBasename = path20.win32.basename(command2.executable).toLocaleLowerCase("en-US");
   const isNodeOrNpm = exeBasename === "node" || exeBasename === "node.exe" || exeBasename === "npm" || exeBasename === "npm.cmd";
   const isDirectGit = exeBasename === "git" || exeBasename === "git.exe";
   const autoIncludeGit = isNodeOrNpm || isDirectGit;
@@ -48326,21 +49777,25 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory,
     includeGit
   };
-  const stateDirectory = path19.resolve(options.stateDirectory ?? path19.join(os7.homedir(), ".antigravity-mcp-bridge"));
+  const stateDirectory = path20.resolve(options.stateDirectory ?? path20.join(os8.homedir(), ".antigravity-mcp-bridge"));
   await mkdir7(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
-  const temp = await realpath6(os7.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
+  const temp = await realpath7(os8.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, "agy-mcp-copy-");
   const controller = await compileController(temp, options);
-  const runtime = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-runtime-")));
-  const scratch = await realpath6(await mkdtemp3(path19.join(temp, "agy-mcp-scratch-")));
+  let runtime = "", scratch = "";
+  let runtimeStat, scratchStat;
   try {
+    runtime = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-runtime-")));
+    runtimeStat = await lstat10(runtime, { bigint: true });
+    scratch = await realpath7(await mkdtemp3(path20.join(temp, "agy-mcp-scratch-")));
+    scratchStat = await lstat10(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
     const nonce = randomUUID9(), systemRoot = process.env.SystemRoot || "C:\\Windows";
     const environment = {
       SystemRoot: systemRoot,
       WINDIR: systemRoot,
-      PATH: [...staged.pathEntries, path19.join(systemRoot, "System32")].join(path19.delimiter),
+      PATH: [...staged.pathEntries, path20.join(systemRoot, "System32")].join(path20.delimiter),
       PATHEXT: ".COM;.EXE;.BAT;.CMD",
       TEMP: scratch,
       TMP: scratch,
@@ -48348,12 +49803,12 @@ async function executeWindowsTest(command2, copyDirectory, options) {
       HOME: scratch,
       APPDATA: scratch,
       LOCALAPPDATA: scratch,
-      COMSPEC: staged.comspec ?? path19.join(systemRoot, "System32", "cmd.exe")
+      COMSPEC: staged.comspec ?? path20.join(systemRoot, "System32", "cmd.exe")
     };
     if (staged.gitExecPath) {
       environment.GIT_EXEC_PATH = staged.gitExecPath;
       environment.GIT_CONFIG_NOSYSTEM = "1";
-      environment.GIT_CONFIG_GLOBAL = path19.join(scratch, ".gitconfig");
+      environment.GIT_CONFIG_GLOBAL = path20.join(scratch, ".gitconfig");
       environment.GIT_TERMINAL_PROMPT = "0";
       environment.GIT_DEFAULT_REF_FORMAT = "reftable";
     }
@@ -48382,15 +49837,20 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     } finally {
       await runRecoveryWithController(stateDirectory, { ...options, signal: void 0 });
     }
-    const result = executionSchema.parse(JSON.parse(observed.stdout));
-    verifyPathMappings(result, { copy: cwd, runtime, scratch });
-    if (result.nonce !== nonce || result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > selection.maxOutputChars)
-      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "Controller nonce, DOS aliases, output limit, or profile cleanup was not verified");
-    if (!result.error && (observed.code !== 0 || result.sandbox !== "windows-lpac" || result.exitCode === null))
-      throw new BridgeError("WINDOWS_EXECUTION_UNVERIFIED", "No verified AppContainer execution result");
+    const result = parseWindowsExecutionResult(observed, {
+      expectedNonce: nonce,
+      roots: { copy: cwd, runtime, scratch },
+      maxOutputChars: selection.maxOutputChars
+    });
     return { ...result, portableNode: staged.portableNode };
   } finally {
-    await removeOwned([[scratch, "agy-mcp-scratch-"], [runtime, "agy-mcp-runtime-"], [controller.directory, "agy-mcp-controller-"]], temp);
+    const toClean = [];
+    if (scratch)
+      toClean.push([scratch, "agy-mcp-scratch-", scratchStat]);
+    if (runtime)
+      toClean.push([runtime, "agy-mcp-runtime-", runtimeStat]);
+    toClean.push([controller.directory, "agy-mcp-controller-", controller.stat]);
+    await removeOwned(toClean, temp);
   }
 }
 
@@ -49283,7 +50743,10 @@ var TaskManager = class {
     try {
       this.refresh();
       const current = this.tasks.get(sourceTaskId);
-      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal3.has(current.record.status) || current.record.status !== "completed" && current.record.error?.code !== "TEST_FAILED" || current.record.integratedAt) {
+      const isCompleted = current?.record.status === "completed";
+      const isTestFailed = current?.record.status === "failed" && current?.record.error?.code === "TEST_FAILED";
+      const isLocalExecutorFailure = current?.record.status === "failed" && current?.record.error?.code !== "TEST_FAILED" && current?.record.usageProvenance === "local-executor";
+      if (!current?.project || !current.record.sessionId || current.record.mode === "read-only" || !terminal3.has(current.record.status) || !isCompleted && !isTestFailed && !isLocalExecutorFailure || current.record.integratedAt) {
         throw new BridgeError("TASK_NOT_READY", "Tests require a completed write task with an isolated copy and CLI conversation");
       }
       if ([...this.tasks.values()].filter((candidate) => candidate.project === current.project).at(-1) !== current) {
@@ -49297,6 +50760,11 @@ var TaskManager = class {
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks)
         throw new BridgeError("QUEUE_FULL", "Task queue is full");
       releaseProject = this.state.acquire(this.projectLock(current.project));
+      if (isLocalExecutorFailure) {
+        await this.nativeRecovery;
+        await recoverWindowsExecutions(this.config.stateDirectory, { requireIdle: true });
+        this.nativeRecoveryError = void 0;
+      }
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find((candidate) => terminal3.has(candidate.record.status) && candidate !== current && !this.hasPendingInbox(candidate.record)) ?? (this.hasPendingInbox(current.record) ? void 0 : current);
         if (!oldestFinished)

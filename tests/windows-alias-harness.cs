@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading;
 using System.Web.Script.Serialization;
@@ -21,6 +22,8 @@ public static class AliasHarness
     [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int CreateAppContainerProfile(string name, string display, string description, IntPtr capabilities, uint count, out IntPtr sid);
     [DllImport("userenv.dll", CharSet = CharSet.Unicode)] static extern int DeleteAppContainerProfile(string name);
     [DllImport("advapi32.dll")] static extern IntPtr FreeSid(IntPtr sid);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetFileSecurity(string p, uint i, byte[] b, uint n, out uint needed);
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool SetFileSecurity(string p, uint i, byte[] b);
 
     [StructLayout(LayoutKind.Sequential)] struct Luid { public uint low; public int high; }
 
@@ -308,7 +311,7 @@ public static class AliasHarness
         var result = new Dictionary<string, object>(); Invoke("Recover", state, result, new JavaScriptSerializer()); return result;
     }
 
-    static void CleanStateDirectory(string path)
+    static void CleanStateDirectory(string path, string prefix = "agy-mcp-alias-state-")
     {
         if (String.IsNullOrEmpty(path)) throw new ArgumentException("Path cannot be empty", "path");
         string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -316,7 +319,6 @@ public static class AliasHarness
         string parent = Path.GetDirectoryName(fullPath);
         if (String.IsNullOrEmpty(parent) || !String.Equals(parent, tempPath, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Path escape or invalid parent: " + path);
         string name = Path.GetFileName(fullPath);
-        const string prefix = "agy-mcp-alias-state-";
         if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Invalid state directory prefix: " + path);
         string suffix = name.Substring(prefix.Length);
         Guid parsed;
@@ -350,8 +352,172 @@ public static class AliasHarness
         }
     }
 
+    static void TestCombineDiagnostic()
+    {
+        string combined = (string)Invoke("CombineDiagnostic", "Primary error", "Secondary cleanup failure");
+        if (combined != "Primary error; Secondary cleanup failure") throw new Exception("CombineDiagnostic failed to combine");
+        string onlySec = (string)Invoke("CombineDiagnostic", null, "Secondary cleanup failure");
+        if (onlySec != "Secondary cleanup failure") throw new Exception("CombineDiagnostic failed null primary");
+        string onlyPrim = (string)Invoke("CombineDiagnostic", "Primary error", null);
+        if (onlyPrim != "Primary error") throw new Exception("CombineDiagnostic failed null secondary");
+        string longPrimary = new string('A', 3000);
+        string longSecondary = new string('B', 2000);
+        string fiveThousand = (string)Invoke("CombineDiagnostic", longPrimary, longSecondary);
+        if (fiveThousand.Length != 5002 || !fiveThousand.StartsWith(longPrimary)) throw new Exception("CombineDiagnostic failed 5000 chars preservation");
+        string giantPrimary = new string('A', 40000);
+        string giantSecondary = new string('B', 30000);
+        string oversized = (string)Invoke("CombineDiagnostic", giantPrimary, giantSecondary);
+        if (oversized != "Execution diagnostic omitted: exceeded 64000 characters [truncated]") throw new Exception("CombineDiagnostic failed oversized static replacement");
+        if (((string)Invoke("CombineDiagnostic", new string('C', 64000), null)).Length != 64000) throw new Exception("Exact diagnostic limit was not preserved");
+        var failures = new List<string>();
+        Invoke("AddCleanupFailure", failures, new string('C', 64000));
+        Invoke("AddCleanupFailure", failures, "one more failure");
+        if (failures.Count != 1 || failures[0] != oversized) throw new Exception("Cleanup aggregation retained oversized raw diagnostics");
+    }
+
+    static string GetSddl(string path)
+    {
+        uint needed;
+        GetFileSecurity(path, 4, null, 0, out needed);
+        byte[] b = new byte[needed];
+        Check(GetFileSecurity(path, 4, b, needed, out needed), "GetFileSecurity");
+        return new RawSecurityDescriptor(b, 0).GetSddlForm(AccessControlSections.Access);
+    }
+
+    static void AddForeignAce(string path, SecurityIdentifier sid)
+    {
+        uint needed;
+        GetFileSecurity(path, 4, null, 0, out needed);
+        byte[] b = new byte[needed];
+        Check(GetFileSecurity(path, 4, b, needed, out needed), "GetFileSecurity");
+        var sd = new RawSecurityDescriptor(b, 0);
+        sd.DiscretionaryAcl.InsertAce(0, new CommonAce(AceFlags.None, AceQualifier.AccessAllowed, 0x120089, sid, false, null));
+        b = new byte[sd.BinaryLength];
+        sd.GetBinaryForm(b, 0);
+        Check(SetFileSecurity(path, 4, b), "SetFileSecurity");
+    }
+
+    static bool HasAce(string path, SecurityIdentifier sid)
+    {
+        uint needed;
+        GetFileSecurity(path, 4, null, 0, out needed);
+        byte[] b = new byte[needed];
+        Check(GetFileSecurity(path, 4, b, needed, out needed), "GetFileSecurity");
+        var sd = new RawSecurityDescriptor(b, 0);
+        if (sd.DiscretionaryAcl == null) return false;
+        foreach (GenericAce ace in sd.DiscretionaryAcl)
+        {
+            CommonAce common = ace as CommonAce;
+            if (common != null && common.SecurityIdentifier.Equals(sid)) return true;
+        }
+        return false;
+    }
+
+    static void CreateJunction(string link, string target)
+    {
+        using (var p = Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetEnvironmentVariable("SystemRoot"), "System32", "cmd.exe"), "/d /c mklink /J \"" + link + "\" \"" + target + "\"") { CreateNoWindow = true, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true }))
+        {
+            string output = p.StandardOutput.ReadToEnd(), error = p.StandardError.ReadToEnd();
+            p.WaitForExit();
+            if (p.ExitCode != 0) throw new Exception("mklink /J failed with exit code " + p.ExitCode + ": " + error + output);
+        }
+    }
+
+    public static void CleanupGrowth()
+    {
+        Type grantType = runner.GetType("WindowsTestRunner+Grant", true);
+        Type targetType = runner.GetType("WindowsTestRunner+PinnedTarget", true);
+        SecurityIdentifier syntheticSid = new SecurityIdentifier("S-1-5-21-999-888-777-6666");
+        SecurityIdentifier foreignSid = new SecurityIdentifier("S-1-5-21-1-2-3-4567");
+
+        string tree = Path.Combine(Path.GetTempPath(), "agy-mcp-growth-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tree);
+        try
+        {
+            object grant = New(grantType);
+            Set(grant, "path", tree);
+            Set(grant, "rights", "modify");
+            object pin = Invoke("PinGrant", grant, 2);
+            grant = Get(pin, "grant");
+            try
+            {
+                Invoke("Access", pin, syntheticSid, true);
+            }
+            finally
+            {
+                ((IDisposable)pin).Dispose();
+            }
+
+            string f1 = Path.Combine(tree, "f1.txt"); File.WriteAllText(f1, "1");
+            string f2 = Path.Combine(tree, "f2.txt"); File.WriteAllText(f2, "2");
+            string f3 = Path.Combine(tree, "f3.txt"); File.WriteAllText(f3, "3");
+            AddForeignAce(f1, foreignSid);
+
+            object revokeTarget = New(targetType);
+            Set(revokeTarget, "grant", grant);
+            Set(revokeTarget, "maxFiles", 2);
+            Invoke("Access", revokeTarget, syntheticSid, false);
+
+            if (HasAce(tree, syntheticSid)) throw new Exception("Synthetic SID was not revoked from tree root");
+            if (HasAce(f1, syntheticSid)) throw new Exception("Synthetic SID was not revoked from f1");
+            if (HasAce(f2, syntheticSid)) throw new Exception("Synthetic SID was not revoked from f2");
+            if (HasAce(f3, syntheticSid)) throw new Exception("Synthetic SID was not revoked from f3");
+
+            if (!HasAce(f1, foreignSid)) throw new Exception("Foreign SID was not preserved on f1");
+
+            bool admissionRejected = false;
+            try { Invoke("PinGrant", grant, 2); }
+            catch (Exception ex) { admissionRejected = ex.Message.IndexOf("exceeds the configured file limit", StringComparison.Ordinal) >= 0; }
+            if (!admissionRejected) throw new Exception("Admission limit was not strictly enforced for tree exceeding maxFiles");
+
+            string dest = Path.Combine(Path.GetTempPath(), "agy-mcp-dest-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dest);
+            string rep = Path.Combine(Path.GetTempPath(), "agy-mcp-rep-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(rep);
+            try
+            {
+                string destFile = Path.Combine(dest, "dest.txt");
+                File.WriteAllText(destFile, "destination content");
+                AddForeignAce(destFile, foreignSid);
+                AddForeignAce(destFile, syntheticSid);
+                string beforeDestDacl = GetSddl(destFile);
+
+                object repGrant = New(grantType);
+                Set(repGrant, "path", rep);
+                Set(repGrant, "rights", "modify");
+                object repPin = Invoke("PinGrant", repGrant, 100);
+                repGrant = Get(repPin, "grant");
+                ((IDisposable)repPin).Dispose();
+
+                Directory.Delete(rep);
+                CreateJunction(rep, dest);
+
+                object staleTarget = New(targetType);
+                Set(staleTarget, "grant", repGrant);
+                Set(staleTarget, "maxFiles", 1000000);
+                bool identityRejected = false;
+                try { Invoke("Access", staleTarget, syntheticSid, false); }
+                catch (Exception ex) { identityRejected = ex.Message.IndexOf("identity changed", StringComparison.OrdinalIgnoreCase) >= 0; }
+                if (!identityRejected) throw new Exception("Changed identity was not rejected before AccessTree");
+
+                string afterDestDacl = GetSddl(destFile);
+                if (afterDestDacl != beforeDestDacl) throw new Exception("Destination was touched despite changed identity");
+            }
+            finally
+            {
+                if (Directory.Exists(rep)) Directory.Delete(rep);
+                if (Directory.Exists(dest)) CleanStateDirectory(dest, "agy-mcp-dest-");
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(tree)) CleanStateDirectory(tree, "agy-mcp-growth-");
+        }
+    }
+
     static void RecoveryLuid()
     {
+        TestCombineDiagnostic();
         object controller = Invoke("CurrentControllerIdentity");
         string current = (string)Get(controller, "logon"), existing = null;
         foreach (string candidate in ExistingLogons()) if (!String.Equals(candidate, current, StringComparison.OrdinalIgnoreCase)) { existing = candidate; break; }
@@ -363,7 +529,13 @@ public static class AliasHarness
         {
             retained.Write(2, "creating", existing, Process.GetCurrentProcess().Id, 1);
             Dictionary<string, object> result = RecoverState(retainedState);
-            if (!result.ContainsKey("error") || !File.Exists(retained.file) || File.ReadAllText(retained.file).IndexOf("cleanup-failed", StringComparison.Ordinal) < 0) throw new Exception("Existing logon session did not retain its alias lease");
+            if (!result.ContainsKey("error") || !File.Exists(retained.file)) throw new Exception("Existing logon session did not retain its alias lease");
+            string text = File.ReadAllText(retained.file);
+            if (text.IndexOf("\"phase\":\"creating\"", StringComparison.Ordinal) < 0) throw new Exception("Creating lease without SID must remain in creating phase");
+            Dictionary<string, object> second = RecoverState(retainedState);
+            if (!second.ContainsKey("error") || !File.Exists(retained.file)) throw new Exception("Second recovery did not retain creating lease");
+            string secondError = second["error"].ToString();
+            if (secondError.IndexOf("no profile identity", StringComparison.OrdinalIgnoreCase) >= 0) throw new Exception("Second recovery failed lease identity validation: " + secondError);
         }
         finally { retained.Dispose(); CleanStateDirectory(retainedState); }
 
@@ -440,6 +612,8 @@ public static class AliasHarness
         if (arguments[1] == "insufficient") { InsufficientLetters(); return 0; }
         if (arguments[1] == "abandoned") { AbandonedMutex(); return 0; }
         if (arguments[1] == "recovery-luid") { RecoveryLuid(); return 0; }
+        if (arguments[1] == "combine-diagnostic") { TestCombineDiagnostic(); return 0; }
+        if (arguments[1] == "cleanup-growth") { CleanupGrowth(); return 0; }
         throw new ArgumentException("Unknown alias harness action");
     }
 }

@@ -105,6 +105,38 @@ if (scenario === 'signal-task') {
   process.kill(process.pid, 'SIGTERM');
 }
 
+if (scenario === 'final-stderr-no-newline') {
+  for await (const _ of process.stdin) {}
+  process.stderr.write('synthetic fatal crash without newline');
+  process.exit(42);
+}
+
+if (scenario === 'malformed-stream-json') {
+  for await (const _ of process.stdin) {}
+  console.log(JSON.stringify({ event: 'init', conversation_id: 'malformed-conv', init: {} }));
+  console.log('{corrupted-json-line');
+  process.exit(0);
+}
+
+if (scenario === 'incomplete-result-exit-zero') {
+  for await (const _ of process.stdin) {}
+  console.log(JSON.stringify({ event: 'init', conversation_id: 'incomplete-conv', init: {} }));
+  process.exit(0);
+}
+
+if (scenario === 'result-non-success-status') {
+  for await (const _ of process.stdin) {}
+  console.log(JSON.stringify({ event: 'init', conversation_id: 'nonsuccess-conv', init: {} }));
+  console.log(JSON.stringify({
+    event: 'result',
+    result: {
+      status: 'FAILED',
+      error: 'Upstream generation rejected',
+    },
+  }));
+  process.exit(0);
+}
+
 // Default normal execution: consume stdin, echo user message and report SUCCESS
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
