@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import type { BigIntStats } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,6 +9,7 @@ import { windowsHelperSource } from './windows-helper-source.js';
 import { loadConfig } from './config.js';
 import { stageWindowsCommand, validateWindowsCommand } from './windows-runtime.js';
 import { BridgeError } from './types.js';
+import { redactDiagnostic } from './subprocess.js';
 import type { TestCommand } from './native-tests.js';
 import type { SandboxSelection } from './sandbox-policy.js';
 import type { PortableNodeIdentity, WindowsNodeRuntime } from './portable-node.js';
@@ -65,8 +67,12 @@ function contains(root: string, target: string): boolean {
 function overlaps(left: string, right: string): boolean { return contains(left, right) || contains(right, left); }
 
 async function ownedDirectory(directory: string, temp: string, prefix: string): Promise<string> {
+  const stat = await lstat(directory);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage was replaced or linked');
+  }
   const canonical = await realpath(directory);
-  if (path.dirname(canonical) !== temp || !path.basename(canonical).startsWith(prefix) || (await lstat(directory)).isSymbolicLink()) {
+  if (path.dirname(canonical) !== temp || !path.basename(canonical).startsWith(prefix)) {
     throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage was replaced or linked');
   }
   return canonical;
@@ -105,18 +111,24 @@ async function nativeProcess(executable: string, args: string[], options: Window
   }
 }
 
-async function compileController(temp: string, options: WindowsExecutionOptions): Promise<{ directory: string; helper: string }> {
+async function compileController(temp: string, options: WindowsExecutionOptions): Promise<{ directory: string; helper: string; stat: BigIntStats }> {
   const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
   if (!(await lstat(compiler).catch(() => undefined))?.isFile()) throw new BridgeError('WINDOWS_EXECUTOR_UNAVAILABLE', 'The existing Windows .NET Framework compiler is unavailable');
   const directory = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-controller-')));
+  const stat = await lstat(directory, { bigint: true });
   const source = path.join(directory, 'runner.cs'), helper = path.join(directory, 'runner.exe');
   try {
     await writeFile(source, windowsHelperSource, { flag: 'wx' });
     const built = await nativeProcess(compiler, ['/nologo', '/target:exe', '/platform:x64', '/r:System.Web.Extensions.dll', '/nowarn:0649', '/out:' + helper, source], options);
     if (built.code !== 0) throw new BridgeError('WINDOWS_EXECUTOR_BUILD_FAILED', (built.stdout + built.stderr).slice(-4000));
-    return { directory, helper };
+    return { directory, helper, stat };
   } catch (error) {
-    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(() => {});
+    try { await removeOwned([[directory, 'agy-mcp-controller-', stat]], temp); }
+    catch (cleanupError) {
+      const original = error instanceof Error ? error.message : String(error);
+      const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+      throw new BridgeError('UNSAFE_RUNTIME_PATH', redactExecutionDiagnostic('Controller build: ' + original + '; cleanup: ' + cleanup));
+    }
     throw error;
   }
 }
@@ -127,13 +139,67 @@ async function writeRequest(directory: string, request: unknown): Promise<string
   return file;
 }
 
-async function removeOwned(directories: Array<readonly [string, string]>, temp: string): Promise<void> {
+async function removeOwned(directories: Array<readonly [string, string, (BigIntStats | undefined)?]>, temp: string): Promise<void> {
   const failures: string[] = [];
-  for (const [directory, prefix] of directories) {
+  for (const [directory, prefix, expectedStat] of directories) {
     try {
-      await ownedDirectory(directory, temp, prefix);
-      await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    } catch (error) { failures.push(error instanceof Error ? error.message : String(error)); }
+      if (typeof directory !== 'string' || !path.isAbsolute(directory)) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage must be an absolute path');
+      }
+      if (!expectedStat?.isDirectory() || expectedStat.isSymbolicLink()) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage ownership was not captured');
+      }
+      const baseName = path.basename(directory);
+      if (!baseName.startsWith(prefix) || baseName === '.' || baseName === '..' || baseName.includes('/') || baseName.includes('\\')) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage prefix mismatch');
+      }
+      const parent = path.dirname(directory);
+      const parentStat = await lstat(parent, { bigint: true });
+      if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage parent is invalid or linked');
+      }
+      const canonicalParent = await realpath(parent);
+      if (canonicalParent !== temp) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage parent is not the trusted temporary directory');
+      }
+
+      let stat: BigIntStats;
+      try {
+        stat = await lstat(directory, { bigint: true });
+      } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (
+          err &&
+          err.code === 'ENOENT' &&
+          err.syscall === 'lstat' &&
+          typeof err.path === 'string' &&
+          path.resolve(err.path).toLocaleLowerCase('en-US') === path.resolve(directory).toLocaleLowerCase('en-US')
+        ) {
+          continue;
+        }
+        throw error;
+      }
+
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage was replaced or linked');
+      }
+
+      const canonical = await realpath(directory);
+      if (path.dirname(canonical) !== temp || !path.basename(canonical).startsWith(prefix)) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage was replaced or linked');
+      }
+      if (path.resolve(canonical).toLocaleLowerCase('en-US') !== path.resolve(directory).toLocaleLowerCase('en-US')) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage was replaced or linked');
+      }
+
+      if (stat.dev !== expectedStat.dev || stat.ino !== expectedStat.ino || stat.birthtimeNs !== expectedStat.birthtimeNs) {
+        throw new BridgeError('UNSAFE_RUNTIME_PATH', 'Windows executor temporary storage identity changed');
+      }
+
+      await rm(canonical, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
   }
   if (failures.length) throw new BridgeError('UNSAFE_RUNTIME_PATH', failures.join('; '));
 }
@@ -174,7 +240,7 @@ async function grantPaths(selection: SandboxSelection, protectedPaths: string[],
   return [...paths.values()];
 }
 
-async function runRecoveryWithController(stateDirectory: string, options: WindowsExecutionOptions): Promise<void> {
+async function runRecoveryWithController(stateDirectory: string, options: WindowsExecutionOptions, requireIdle = false): Promise<void> {
   if (process.platform !== 'win32') return;
   const temp = await realpath(os.tmpdir()), controller = await compileController(temp, options);
   try {
@@ -182,13 +248,133 @@ async function runRecoveryWithController(stateDirectory: string, options: Window
     const observed = await nativeProcess(controller.helper, [request], options);
     const result = recoverySchema.parse(JSON.parse(observed.stdout));
     if (observed.code !== 0 || result.error) throw new BridgeError('WINDOWS_EXECUTION_RECOVERY_FAILED', result.error || 'Windows LPAC recovery did not complete');
-  } finally { await removeOwned([[controller.directory, 'agy-mcp-controller-']], temp); }
+    if (requireIdle && result.active !== 0) throw new BridgeError('WINDOWS_EXECUTION_RECOVERY_FAILED', 'Active Windows executions prevent a recovery retry');
+  } finally { await removeOwned([[controller.directory, 'agy-mcp-controller-', controller.stat]], temp); }
 }
 
-export async function recoverWindowsExecutions(stateDirectory: string): Promise<void> {
+export async function recoverWindowsExecutions(stateDirectory: string, options: { requireIdle?: boolean } = {}): Promise<void> {
   const effective = path.resolve(stateDirectory);
   await mkdir(effective, { recursive: true, mode: 0o700 });
-  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 });
+  await runRecoveryWithController(effective, { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024 }, options.requireIdle);
+}
+
+export function redactExecutionDiagnostic(value: string | undefined | null): string {
+  if (!value) return '';
+  const redacted = redactDiagnostic(String(value), {});
+  const limit = 4000;
+  if (redacted.length > limit) {
+    const marker = '... [truncated]';
+    return redacted.slice(0, limit - marker.length) + marker;
+  }
+  return redacted;
+}
+
+const failureEnvelopeSchema = z.object({
+  nonce: z.string().uuid(),
+  error: z.string().min(1).max(64000),
+  exitCode: z.number().int().min(0).max(0xffffffff).nullable().optional(),
+  output: z.string().max(64000).optional(),
+  truncated: z.boolean().optional(),
+  pid: z.number().int().positive().optional(),
+  sandbox: z.literal('windows-lpac').optional(),
+  profileDeleted: z.boolean().optional(),
+  aliasesDeleted: z.boolean().optional(),
+  pathMappings: z.array(pathMappingSchema).length(3).optional(),
+}).strict();
+
+export interface ParseWindowsExecutionOptions {
+  expectedNonce: string;
+  roots: { copy: string; runtime: string; scratch: string };
+  maxOutputChars: number;
+}
+
+export function parseWindowsExecutionResult(
+  observed: { code: number | null; stdout: string; stderr?: string },
+  options: ParseWindowsExecutionOptions,
+): WindowsExecution {
+  if (observed.code == null || !Number.isInteger(observed.code) || observed.code < 0 || observed.code > 0xffffffff) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native controller exit code was not verified');
+  }
+
+  if (typeof observed.stdout !== 'string' || observed.stdout.length > 500000) {
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller output missing or oversized');
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(observed.stdout);
+  } catch {
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller returned unparseable output');
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller output was not an object');
+  }
+
+  const record = raw as Record<string, unknown>;
+  if (typeof record.nonce !== 'string' || record.nonce !== options.expectedNonce) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller nonce was not verified');
+  }
+
+  const hasError = Object.hasOwn(record, 'error');
+
+  if (hasError) {
+    if (observed.code === 0) {
+      throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native controller reported error with unexpected zero exit code');
+    }
+    const failureParsed = failureEnvelopeSchema.safeParse(raw);
+    if (!failureParsed.success) {
+      throw new BridgeError('WINDOWS_EXECUTOR_FAILED', 'Native controller returned invalid failure envelope');
+    }
+
+    const isTimedOutOrCancelled = record.error === 'Command timed out' || record.error === 'Command cancelled';
+    const isCompletedExecution = isTimedOutOrCancelled &&
+      record.sandbox === 'windows-lpac' &&
+      typeof record.exitCode === 'number' &&
+      Number.isInteger(record.exitCode) &&
+      record.exitCode >= 0 &&
+      record.exitCode <= 0xffffffff &&
+      record.aliasesDeleted === true &&
+      record.profileDeleted === true &&
+      Array.isArray(record.pathMappings) &&
+      record.pathMappings.length === 3;
+
+    if (isCompletedExecution) {
+      let result: WindowsExecution;
+      try {
+        result = executionSchema.parse(raw);
+      } catch {
+        throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native execution result did not match expected schema');
+      }
+      verifyPathMappings(result, options.roots);
+      if (result.output.length > options.maxOutputChars) {
+        throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller output limit was exceeded');
+      }
+      result.error = redactExecutionDiagnostic(result.error);
+      return result;
+    }
+
+    const redacted = redactExecutionDiagnostic(record.error as string);
+    throw new BridgeError('WINDOWS_EXECUTOR_FAILED', redacted);
+  }
+
+  if (observed.code !== 0) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'No verified AppContainer execution result');
+  }
+
+  let result: WindowsExecution;
+  try {
+    result = executionSchema.parse(raw);
+  } catch {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Native execution result did not match expected schema');
+  }
+
+  verifyPathMappings(result, options.roots);
+  if (result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > options.maxOutputChars) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller nonce, DOS aliases, output limit, or profile cleanup was not verified');
+  }
+  if (result.sandbox !== 'windows-lpac' || result.exitCode === null) {
+    throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'No verified AppContainer execution result');
+  }
+  return result;
 }
 
 export async function executeWindowsTest(command: TestCommand, copyDirectory: string, options: WindowsExecutionOptions): Promise<WindowsExecution> {
@@ -211,9 +397,13 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
   await runRecoveryWithController(stateDirectory, options);
   const temp = await realpath(os.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, 'agy-mcp-copy-');
   const controller = await compileController(temp, options);
-  const runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
-  const scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
+  let runtime = '', scratch = '';
+  let runtimeStat: BigIntStats | undefined, scratchStat: BigIntStats | undefined;
   try {
+    runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
+    runtimeStat = await lstat(runtime, { bigint: true });
+    scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
+    scratchStat = await lstat(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles },
       runtimeSelection);
     const grants = await grantPaths(selection, [...(options.protectedPaths ?? []), stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
@@ -248,12 +438,17 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
     let observed: NativeInvocation;
     try { observed = await nativeProcess(controller.helper, [file], options, 'cancel ' + nonce); }
     finally { await runRecoveryWithController(stateDirectory, { ...options, signal: undefined }); }
-    const result = executionSchema.parse(JSON.parse(observed.stdout));
-    verifyPathMappings(result, { copy: cwd, runtime, scratch });
-    if (result.nonce !== nonce || result.profileDeleted !== true || result.aliasesDeleted !== true || result.output.length > selection.maxOutputChars) throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'Controller nonce, DOS aliases, output limit, or profile cleanup was not verified');
-    if (!result.error && (observed.code !== 0 || result.sandbox !== 'windows-lpac' || result.exitCode === null)) throw new BridgeError('WINDOWS_EXECUTION_UNVERIFIED', 'No verified AppContainer execution result');
+    const result = parseWindowsExecutionResult(observed, {
+      expectedNonce: nonce,
+      roots: { copy: cwd, runtime, scratch },
+      maxOutputChars: selection.maxOutputChars,
+    });
     return { ...result, portableNode: staged.portableNode };
   } finally {
-    await removeOwned([[scratch, 'agy-mcp-scratch-'], [runtime, 'agy-mcp-runtime-'], [controller.directory, 'agy-mcp-controller-']], temp);
+    const toClean: Array<readonly [string, string, (BigIntStats | undefined)?]> = [];
+    if (scratch) toClean.push([scratch, 'agy-mcp-scratch-', scratchStat]);
+    if (runtime) toClean.push([runtime, 'agy-mcp-runtime-', runtimeStat]);
+    toClean.push([controller.directory, 'agy-mcp-controller-', controller.stat]);
+    await removeOwned(toClean, temp);
   }
 }

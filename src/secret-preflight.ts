@@ -4,8 +4,10 @@ import path from 'node:path';
 import { BridgeError } from './types.js';
 import type { ProjectLimits } from './config.js';
 import { checkedPath, validRelative } from './isolation.js';
+import { normalizeSecretExceptionsPolicy, validateRelativeGlobPattern as validateGlobPattern, type SecretExceptionsPolicy } from './hardening-policy.js';
 
-export { validRelative, validRelative as validateSafeRelativePath };
+export { validRelative, validRelative as validateSafeRelativePath, validateGlobPattern };
+export type { SecretExceptionsPolicy };
 
 export interface BlockedPath {
   path: string;
@@ -31,31 +33,6 @@ const CONFIG_EXTENSIONS = new Set([
   '.env', '.ini', '.conf', '.cfg', '.cnf', '.properties',
   '.toml', '.yaml', '.yml'
 ]);
-
-/**
- * Validates glob pattern string explicitly.
- * Fails fast on traversal, NUL bytes, absolute paths, or empty strings.
- */
-export function validateGlobPattern(pattern: string): string {
-  if (typeof pattern !== 'string' || !pattern.trim() || pattern.includes('\0')) {
-    throw new BridgeError('INVALID_GLOB_PATTERN', 'Glob pattern must be a non-empty string without NUL');
-  }
-  let norm = pattern.replaceAll('\\', '/').trim();
-  while (norm.startsWith('./')) {
-    norm = norm.slice(2);
-  }
-  if (!norm) {
-    throw new BridgeError('INVALID_GLOB_PATTERN', 'Glob pattern must be a non-empty string without NUL');
-  }
-  if (norm.startsWith('/') || /^[A-Za-z]:/.test(norm)) {
-    throw new BridgeError('INVALID_GLOB_PATTERN', 'Glob pattern must be project-relative: ' + pattern);
-  }
-  const parts = norm.split('/');
-  if (parts.some(p => p === '..')) {
-    throw new BridgeError('INVALID_GLOB_PATTERN', 'Glob pattern must not contain traversal (..): ' + pattern);
-  }
-  return norm;
-}
 
 /**
  * Translates a project-relative glob pattern into a regular expression.
@@ -323,7 +300,8 @@ export async function preflightProjectFiles(
   const records = new Map<string, PreflightRecord>();
 
   const exclusions = (limits.secretExclusions ?? []).filter(Boolean);
-  const exceptions = (limits.secretExceptions ?? []).filter(Boolean);
+  const exceptionsPolicy = normalizeSecretExceptionsPolicy(limits.secretExceptions, 'secretExceptions');
+  const namePatterns = exceptionsPolicy.namePatterns;
   let aggregateBytesScanned = 0;
 
   for (const candidate of candidates) {
@@ -351,11 +329,11 @@ export async function preflightProjectFiles(
       continue;
     }
 
-    // 3. Check if an explicit exception applies (skips default secret checks)
-    const isExcepted = exceptions.some(pattern => matchProjectRelativeGlob(pattern, relative));
+    // 3. Check if an explicit name exception applies (skips known credential file name check ONLY)
+    const isNameExcepted = namePatterns.some(pattern => matchProjectRelativeGlob(pattern, relative));
 
     // 4. Known credential file check
-    if (!isExcepted && isKnownCredentialFile(relative)) {
+    if (!isNameExcepted && isKnownCredentialFile(relative)) {
       blocked.push({ path: relative, reason: 'SECRET_FILE' });
       continue;
     }
@@ -414,7 +392,7 @@ export async function preflightProjectFiles(
         const slice = buf.subarray(0, bytesRead);
         hash.update(slice);
 
-        if (!isExcepted && !hasSecret) {
+        if (!hasSecret) {
           const window = prevOverlap.length > 0 ? Buffer.concat([prevOverlap, slice]) : slice;
           if (detectSecretContent(relative, window, scanState)) {
             hasSecret = true;

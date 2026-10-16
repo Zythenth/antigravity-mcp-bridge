@@ -36,6 +36,16 @@ internal static class GitEnvironmentHarness
                 requestType.GetField("environment").SetValue(req, typedEnv);
             }
 
+            if (input.ContainsKey("maxFiles"))
+            {
+                requestType.GetField("maxFiles").SetValue(req, Convert.ToInt32(input["maxFiles"]));
+            }
+
+            if (input.ContainsKey("cwd"))
+            {
+                requestType.GetField("cwd").SetValue(req, input["cwd"] != null ? input["cwd"].ToString() : null);
+            }
+
             var aliasType = typeof(WindowsTestRunner).GetNestedType("AliasPlan", BindingFlags.Public | BindingFlags.NonPublic);
             var aliasesList = input["aliases"] as System.Collections.IList;
             var aliasesArray = Array.CreateInstance(aliasType, aliasesList.Count);

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
+import { normalizeSecretExceptionsPolicy } from '../src/hardening-policy.js';
 import {
   checkedPath,
   copyVerifiedFile,
@@ -14,9 +15,13 @@ import {
   discardProjectCopy,
   forkProjectCopy,
   git,
+  integrateProjectCopy,
   listProjectFiles,
+  previewProjectCopy,
+  readProjectPatch,
   validRelative,
   writeAll,
+  getFenceMarkerPath,
 } from '../src/isolation.js';
 import { BridgeError } from '../src/types.js';
 import {
@@ -297,7 +302,7 @@ test('policy: secretExclusions, secretExceptions, and precedence hierarchy', asy
     // 3. Explicit exception permits .env.local that is normally blocked by default
     const copy2 = await createProjectCopy(dir, undefined, undefined, {
       ...DEFAULT_PROJECT_LIMITS,
-      secretExceptions: ['.env.local'],
+      secretExceptions: { version: 2, namePatterns: ['.env.local'] },
     });
     try {
       assert.ok(copy2.includedFiles.includes('.env.local'));
@@ -310,7 +315,7 @@ test('policy: secretExclusions, secretExceptions, and precedence hierarchy', asy
     const copy3 = await createProjectCopy(dir, undefined, undefined, {
       ...DEFAULT_PROJECT_LIMITS,
       secretExclusions: ['.env.local'],
-      secretExceptions: ['.env.local'],
+      secretExceptions: { version: 2, namePatterns: ['.env.local'] },
     });
     try {
       assert.ok(!copy3.includedFiles.includes('.env.local'));
@@ -322,7 +327,7 @@ test('policy: secretExclusions, secretExceptions, and precedence hierarchy', asy
     // 5. Explicit exceptions CANNOT override Git ignores
     const copy4 = await createProjectCopy(dir, undefined, undefined, {
       ...DEFAULT_PROJECT_LIMITS,
-      secretExceptions: ['git-ignored.txt'],
+      secretExceptions: { version: 2, namePatterns: ['git-ignored.txt'] },
     });
     try {
       assert.ok(!copy4.includedFiles.includes('git-ignored.txt'));
@@ -370,7 +375,7 @@ test('paths: rejects traversal, NUL bytes, Windows ADS, device paths, and .git a
     // Explicit exception cannot override unsafe paths
     await assert.rejects(createProjectCopy(dir, ['../outside.txt'], undefined, {
       ...DEFAULT_PROJECT_LIMITS,
-      secretExceptions: ['../outside.txt'],
+      secretExceptions: { version: 2, namePatterns: ['../outside.txt'] },
     }), { code: 'INVALID_INCLUDE_PATH' });
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -531,10 +536,10 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
   // Valid JSON array of relative glob patterns
   const valid = loadConfig({
     BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['*.env', 'secrets/**']),
-    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(['.env.template']),
+    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.template'] }),
   });
   assert.deepEqual(valid.secretExclusions, ['*.env', 'secrets/**']);
-  assert.deepEqual(valid.secretExceptions, ['.env.template']);
+  assert.deepEqual(valid.secretExceptions, { version: 2, namePatterns: ['.env.template'] });
 
   // Invalid JSON format
   assert.throws(() => loadConfig({ BRIDGE_SECRET_EXCLUSIONS: 'not-json' }), /must be a JSON array of strings/);
@@ -547,7 +552,7 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
 
   // Invalid absolute path pattern
   assert.throws(
-    () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(['/root/secret']) }),
+    () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/root/secret'] }) }),
     /must contain relative glob patterns without traversal/
   );
 });
@@ -972,4 +977,414 @@ test('performance & limits: preflight checks candidate count before scan and fai
     }
   );
   assert.equal(ioCalled, false, 'Expected preflight to fail before performing any I/O');
+});
+
+test('fork: forkProjectCopy preserves baseline tree and reproduces worktree changes after preview', async () => {
+  const dir = await createRepo();
+  try {
+    await writeFile(path.join(dir, 'file-to-mod.txt'), 'original content\n');
+    await writeFile(path.join(dir, 'file-to-del.txt'), 'content to delete\n');
+    await writeFile(path.join(dir, 'file-unchanged.txt'), 'stays unchanged\n');
+
+    const copy = await createProjectCopy(dir);
+    try {
+      // Modify, add, delete, and add secret
+      await writeFile(path.join(copy.copyDirectory, 'file-to-mod.txt'), 'modified content in copy\n');
+      await rm(path.join(copy.copyDirectory, 'file-to-del.txt'));
+      await writeFile(path.join(copy.copyDirectory, 'file-new.txt'), 'brand new file\n');
+
+      // Stage and preview source copy
+      const copyPreview = await previewProjectCopy(copy);
+      assert.ok(copyPreview.files.some(f => f.path === 'file-to-mod.txt' && f.status === 'M'));
+      assert.ok(copyPreview.files.some(f => f.path === 'file-to-del.txt' && f.status === 'D'));
+      assert.ok(copyPreview.files.some(f => f.path === 'file-new.txt' && f.status === 'A'));
+      assert.ok(!copyPreview.files.some(f => f.path === '.env'));
+
+      // Record source copy commit, tree and index before fork
+      const sourceHeadBefore = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD'])).toString('utf8').trim();
+      const sourceTreeBefore = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD^{tree}'])).toString('utf8').trim();
+      const sourceIndexBefore = await readFile(path.join(copy.gitDirectory, 'index'));
+      await writeFile(path.join(copy.copyDirectory, '.env'), 'SYNTHETIC_TEST_VALUE=fixture\n');
+
+      // Fork the project copy
+      const fork = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+      try {
+        // Verify source copy HEAD, tree and index are unchanged
+        const sourceHeadAfter = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD'])).toString('utf8').trim();
+        const sourceTreeAfter = (await git(copy.copyDirectory, ['--git-dir=' + copy.gitDirectory, 'rev-parse', 'HEAD^{tree}'])).toString('utf8').trim();
+        const sourceIndexAfter = await readFile(path.join(copy.gitDirectory, 'index'));
+        assert.equal(sourceHeadAfter, sourceHeadBefore, 'Source HEAD must be unchanged');
+        assert.equal(sourceTreeAfter, sourceTreeBefore, 'Source tree must be unchanged');
+        assert.deepEqual(sourceIndexAfter, sourceIndexBefore, 'Source index must be unchanged');
+
+        // Verify fork content
+        assert.equal(await readFile(path.join(fork.copyDirectory, 'file-to-mod.txt'), 'utf8'), 'modified content in copy\n');
+        assert.equal(await readFile(path.join(fork.copyDirectory, 'file-new.txt'), 'utf8'), 'brand new file\n');
+        assert.equal(existsSync(path.join(fork.copyDirectory, 'file-to-del.txt')), false);
+        assert.equal(existsSync(path.join(fork.copyDirectory, '.env')), false);
+        assert.ok(fork.blockedFiles?.some(b => b.path === '.env' && b.reason === 'SECRET_FILE'));
+
+        // Verify fork preview reproduces changes
+        const forkPreview = await previewProjectCopy(fork);
+        assert.deepEqual(forkPreview.files, copyPreview.files);
+        assert.equal(forkPreview.summary.filesChanged, 3);
+        assert.equal(forkPreview.summary.added, 1);
+        assert.equal(forkPreview.summary.modified, 1);
+        assert.equal(forkPreview.summary.deleted, 1);
+      } finally {
+        await discardProjectCopy(fork);
+      }
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('patch integrity: non-UTF8 Latin1 text change fails closed with UNSUPPORTED_PATCH_ENCODING; binary attribute integrates exact bytes', async () => {
+  const dir = await createRepo();
+  try {
+    // Latin1 text with \xe9
+    const originalLatin1 = Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x74, 0x65, 0x73, 0x74, 0x0a]);
+    await writeFile(path.join(dir, 'latin1.dat'), originalLatin1);
+    execFileSync('git', ['add', 'latin1.dat'], { cwd: dir });
+    await git(dir, ['-c', 'user.name=Bridge Test', '-c', 'user.email=test@invalid.local', 'commit', '-m', 'adiciona arquivo Latin1']);
+
+    const copy = await createProjectCopy(dir);
+    try {
+      // Modify latin1 file: replace \xe9 with \xe8
+      const modifiedLatin1 = Buffer.from([0x63, 0x61, 0x66, 0xe8, 0x20, 0x74, 0x65, 0x73, 0x74, 0x0a]);
+      await writeFile(path.join(copy.copyDirectory, 'latin1.dat'), modifiedLatin1);
+
+      // 1. Without binary attribute, git diff produces raw Latin1 text diff, which cannot round-trip UTF-8.
+      // previewProjectCopy and readProjectPatch must fail closed with UNSUPPORTED_PATCH_ENCODING.
+      await assert.rejects(
+        previewProjectCopy(copy),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'UNSUPPORTED_PATCH_ENCODING');
+          assert.ok(err.message.includes('.gitattributes') && /binary/i.test(err.message));
+          return true;
+        }
+      );
+      await assert.rejects(
+        readProjectPatch(copy, 'latin1.dat'),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'UNSUPPORTED_PATCH_ENCODING');
+          return true;
+        }
+      );
+
+      // Verify source file in dir is completely untouched
+      const sourceContent = await readFile(path.join(dir, 'latin1.dat'));
+      assert.deepEqual(sourceContent, originalLatin1);
+    } finally {
+      await discardProjectCopy(copy);
+    }
+
+    // 2. Now declare *.dat as binary in .gitattributes
+    await writeFile(path.join(dir, '.gitattributes'), '*.dat binary\n');
+    execFileSync('git', ['add', '.gitattributes'], { cwd: dir });
+    await git(dir, ['-c', 'user.name=Bridge Test', '-c', 'user.email=test@invalid.local', 'commit', '-m', 'declara dat como binário']);
+
+    const copy2 = await createProjectCopy(dir);
+    try {
+      const modifiedLatin1 = Buffer.from([0x63, 0x61, 0x66, 0xe8, 0x20, 0x74, 0x65, 0x73, 0x74, 0x0a]);
+      await writeFile(path.join(copy2.copyDirectory, 'latin1.dat'), modifiedLatin1);
+
+      // With binary attribute, git produces a standard ASCII binary patch which round-trips UTF-8
+      const preview = await previewProjectCopy(copy2);
+      assert.ok(preview.patch.length > 0);
+      assert.ok(preview.summary.binaryFiles >= 1 || preview.fileSummaries.some(f => f.path === 'latin1.dat' && f.binary));
+
+      const singlePatch = await readProjectPatch(copy2, 'latin1.dat');
+      assert.ok(singlePatch.includes('GIT binary patch'));
+
+      // Integrate the patch
+      const integrated = await integrateProjectCopy(copy2, preview.sha256);
+      assert.ok(integrated);
+
+      // Verify the integrated file in source repo matches modified bytes exactly
+      const integratedContent = await readFile(path.join(dir, 'latin1.dat'));
+      assert.deepEqual(integratedContent, modifiedLatin1);
+    } finally {
+      await discardProjectCopy(copy2);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+
+test('integration: source Git filters and whitespace policy cannot execute code or change approved bytes', async () => {
+  const dir = await createRepo();
+  const auxiliary = await mkdtemp(path.join(os.tmpdir(), 'agy-apply-policy-'));
+  let copy;
+  try {
+    const marker = path.join(auxiliary, 'synthetic-filter-ran');
+    const script = path.join(auxiliary, 'filter.cjs');
+    await writeFile(script, "const fs=require('node:fs');fs.writeFileSync(" + JSON.stringify(marker) + ", 'synthetic filter');process.stdin.pipe(process.stdout);");
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    const command = quote(process.execPath.replaceAll('\\', '/')) + ' ' + quote(script.replaceAll('\\', '/'));
+    await writeFile(path.join(dir, '.gitattributes'), '*.txt filter=synthetic_probe\n');
+    await git(dir, ['config', 'filter.synthetic_probe.clean', command]);
+    await git(dir, ['config', 'filter.synthetic_probe.smudge', command]);
+    await git(dir, ['config', 'apply.whitespace', 'fix']);
+    const configBefore = await readFile(path.join(dir, '.git', 'config'));
+    copy = await createProjectCopy(dir);
+    const approved = Buffer.from('legitimate application source code\nsynthetic addition \n');
+    await writeFile(path.join(copy.copyDirectory, 'source.txt'), approved);
+    const preview = await previewProjectCopy(copy);
+    await integrateProjectCopy(copy, preview.sha256);
+    assert.deepEqual(await readFile(path.join(dir, 'source.txt')), approved);
+    assert.equal(existsSync(marker), false, 'Project Git filters must not execute during integration');
+    assert.deepEqual(await readFile(path.join(dir, '.git', 'config')), configBefore);
+  } finally {
+    if (copy) await discardProjectCopy(copy);
+    await rm(dir, { recursive: true, force: true });
+    await rm(auxiliary, { recursive: true, force: true });
+  }
+});
+
+test('fork: newly ignored baseline paths fail closed before exposing deletion content', async () => {
+  for (const policy of ['copy', 'source']) {
+    const dir = await createRepo();
+    let copy;
+    try {
+      await writeFile(path.join(dir, 'protected.txt'), 'synthetic restricted content');
+      copy = await createProjectCopy(dir);
+      if (policy === 'copy') await writeFile(path.join(copy.copyDirectory, '.gitignore'), 'protected.txt\n');
+      else {
+        await mkdir(path.join(dir, '.git', 'info'), { recursive: true });
+        await writeFile(path.join(dir, '.git', 'info', 'exclude'), 'protected.txt\n');
+      }
+      await assert.rejects(forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+      assert.equal(await readFile(path.join(dir, 'protected.txt'), 'utf8'), 'synthetic restricted content');
+    } finally {
+      if (copy) await discardProjectCopy(copy);
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('isolation: managed copy check-ignore and operations exclude both roots and refuse fenced copies', async () => {
+  const dir = await createRepo();
+  let copy;
+  try {
+    await writeFile(path.join(dir, 'app.txt'), 'app content\n');
+    copy = await createProjectCopy(dir);
+
+    // Verify forkProjectCopy succeeds and exercises managed check-ignore on both copy and source
+    const isWindows = process.platform === 'win32';
+    const fakeExeName = isWindows ? 'git.exe' : 'git';
+    await writeFile(path.join(copy.copyDirectory, fakeExeName), 'malicious binary');
+
+    const forked = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+    try {
+      assert.ok(forked.includedFiles.includes('app.txt'));
+    } finally {
+      await discardProjectCopy(forked);
+    }
+
+    // Now verify cleanup unverified fencing on copy
+    const markerPath = getFenceMarkerPath(copy);
+    await writeFile(markerPath, JSON.stringify({ code: 'GIT_CLEANUP_UNVERIFIED', version: 1 }) + '\n', 'utf8');
+
+    // All managed copy operations must fail closed with GIT_CLEANUP_UNVERIFIED
+    await assert.rejects(forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS), { code: 'GIT_CLEANUP_UNVERIFIED' });
+    await assert.rejects(previewProjectCopy(copy), { code: 'GIT_CLEANUP_UNVERIFIED' });
+    await assert.rejects(discardProjectCopy(copy), { code: 'GIT_CLEANUP_UNVERIFIED' });
+
+    // Fixture cleans up its own marker before deletion
+    await rm(markerPath, { force: true });
+    await discardProjectCopy(copy);
+    copy = undefined;
+  } finally {
+    if (copy) {
+      await rm(getFenceMarkerPath(copy), { force: true });
+      await discardProjectCopy(copy).catch(() => {});
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 secret exceptions: name exception permits harmless credential filename but never bypasses credential content detection', async () => {
+  const dir = await createRepo();
+  try {
+    // 1. Harmless content in .env.local: allowed under v2 exception
+    await writeFile(path.join(dir, '.env.local'), 'PORT=8080\nFEATURE_FLAG=true\nAPP_NAME=synthetic-app\n');
+
+    // 2. Secret content in another excepted file fixtures/.env.local:
+    // contains an AWS secret access key format
+    await mkdir(path.join(dir, 'fixtures'), { recursive: true });
+    await writeFile(path.join(dir, 'fixtures', '.env.local'), 'AWS_SECRET_ACCESS_KEY=BRIDGESYNTHETICNOTAREALKEY1234567890\n');
+
+    // 3. Secret content in third excepted file server.key:
+    // contains an unquoted private key
+    const privKey = '-----BEGIN PRIVATE KEY-----\nBRIDGE_SYNTHETIC_NOT_A_USABLE_KEY\n-----END PRIVATE KEY-----\n';
+    await writeFile(path.join(dir, 'server.key'), privKey);
+
+    const limits = {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: {
+        version: 2 as const,
+        namePatterns: ['.env.local', 'fixtures/.env.local', 'server.key'],
+      },
+    };
+
+    const copy = await createProjectCopy(dir, undefined, undefined, limits);
+    try {
+      // Harmless .env.local is included
+      assert.ok(copy.includedFiles.includes('.env.local'));
+      assert.equal(await readFile(path.join(copy.copyDirectory, '.env.local'), 'utf8'), 'PORT=8080\nFEATURE_FLAG=true\nAPP_NAME=synthetic-app\n');
+
+      // fixtures/.env.local had credential content -> blocked as SECRET_CONTENT despite name exception
+      assert.ok(!copy.includedFiles.includes('fixtures/.env.local'));
+      assert.ok(copy.blockedFiles?.some(b => b.path === 'fixtures/.env.local' && b.reason === 'SECRET_CONTENT'));
+
+      // server.key had private key content -> blocked as SECRET_CONTENT despite name exception
+      assert.ok(!copy.includedFiles.includes('server.key'));
+      assert.ok(copy.blockedFiles?.some(b => b.path === 'server.key' && b.reason === 'SECRET_CONTENT'));
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 secret exceptions: legacy non-empty arrays fail with migration guidance without echoing secret values', async () => {
+  const dir = await createRepo();
+  try {
+    const sensitivePatternName = 'sensitive-token-file-xyz.local';
+
+    // 1. In environment config: non-empty legacy array fails with migration message without echoing pattern
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify([sensitivePatternName]) }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.match(err.message, /uses legacy array format\. Migrate to strict version 2 object format/);
+        assert.ok(!err.message.includes(sensitivePatternName), 'Diagnostic must never echo values from legacy array');
+        return true;
+      }
+    );
+
+    // 2. Direct runtime API: non-empty legacy array in limits fails with migration message without echoing pattern
+    await assert.rejects(
+      preflightProjectFiles(dir, ['source.txt'], {
+        ...DEFAULT_PROJECT_LIMITS,
+        secretExceptions: [sensitivePatternName],
+      }),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_SECRET_EXCEPTIONS');
+        assert.match(err.message, /uses legacy array format\. Migrate to strict version 2 object format/);
+        assert.ok(!err.message.includes(sensitivePatternName), 'Diagnostic must never echo values from legacy array');
+        return true;
+      }
+    );
+
+    // 3. Direct runtime API: empty array and omitted normalize to empty policy
+    const emptyArrayPreflight = await preflightProjectFiles(dir, ['source.txt'], {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: [],
+    });
+    assert.deepEqual(emptyArrayPreflight.eligible, ['source.txt']);
+
+    const omittedPreflight = await preflightProjectFiles(dir, ['source.txt'], {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: undefined,
+    });
+    assert.deepEqual(omittedPreflight.eligible, ['source.txt']);
+
+    // 4. Env config: empty array and omitted normalize to empty policy
+    const emptyConfig = loadConfig({ BRIDGE_SECRET_EXCEPTIONS: '[]' });
+    assert.deepEqual(emptyConfig.secretExceptions, { version: 2, namePatterns: [] });
+
+    const omittedConfig = loadConfig({});
+    assert.deepEqual(omittedConfig.secretExceptions, { version: 2, namePatterns: [] });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 secret exceptions: strict validation rejects unsupported versions, extra fields, null, and traversal', async () => {
+  const dir = await createRepo();
+  try {
+    // Unsupported versions (v1, v3)
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 1, namePatterns: ['.env.local'] }) }),
+      /unsupported version.*Only version 2 is supported/
+    );
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 3, namePatterns: ['.env.local'] }) }),
+      /unsupported version.*Only version 2 is supported/
+    );
+
+    // Extra fields
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.local'], extraField: true }) }),
+      /contains unexpected fields\. Only version and namePatterns are allowed/
+    );
+
+    // Missing fields
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2 }) }),
+      /must contain version and namePatterns fields/
+    );
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ namePatterns: ['.env.local'] }) }),
+      /must contain version and namePatterns fields/
+    );
+
+    // Malformed / null
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: 'null' }),
+      /must be a strict JSON object/
+    );
+    assert.throws(
+      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: '123' }),
+      /must be a strict JSON object/
+    );
+
+    // A variable retains extra fields for runtime validation without a type escape.
+    const extraPolicy = { version: 2 as const, namePatterns: ['.env.local'], unexpectedKey: 'bad' };
+    await assert.rejects(
+      preflightProjectFiles(dir, ['source.txt'], {
+        ...DEFAULT_PROJECT_LIMITS,
+        secretExceptions: extraPolicy,
+      }),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_SECRET_EXCEPTIONS'
+    );
+
+    await assert.rejects(
+      preflightProjectFiles(dir, ['source.txt'], {
+        ...DEFAULT_PROJECT_LIMITS,
+        secretExceptions: { version: 2, namePatterns: ['sub/../../outside'] },
+      }),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_SECRET_EXCEPTIONS'
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('v2 policy rejects blank configuration and hides invalid version values', () => {
+  for (const input of ['', ' \t\n', '{']) {
+    assert.throws(() => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: input }), /valid JSON object/);
+  }
+  const hidden = 'BRIDGE_SYNTHETIC_VERSION_SHOULD_NOT_ECHO';
+  assert.throws(() => normalizeSecretExceptionsPolicy({ version: hidden, namePatterns: [] }), (error: unknown) => {
+    assert.ok(error instanceof BridgeError);
+    assert.equal(error.code, 'INVALID_SECRET_EXCEPTIONS');
+    assert.equal(error.message.includes(hidden), false);
+    return true;
+  });
+  const inherited = Object.setPrototypeOf({ namePatterns: [] }, { version: 2 });
+  assert.throws(() => normalizeSecretExceptionsPolicy(inherited), /must contain version and namePatterns/);
+  assert.deepEqual(normalizeSecretExceptionsPolicy({
+    version: 2, namePatterns: [' ./fixtures\\.env.local ', 'fixtures/.env.local'],
+  }), { version: 2, namePatterns: ['fixtures/.env.local'] });
 });

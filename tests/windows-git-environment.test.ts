@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -20,7 +20,7 @@ async function harnessFixture<T>(run: (context: {
   scratch: string;
   outside: string;
   systemRoot: string;
-  invoke: (environment: Record<string, string>) => HarnessResponse;
+  invoke: (environment: Record<string, string>, maxFiles?: number) => HarnessResponse;
 }) => Promise<T>): Promise<T> {
   const temp = await realpath(os.tmpdir());
   const workDir = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-git-env-test-')));
@@ -60,9 +60,9 @@ async function harnessFixture<T>(run: (context: {
       { kind: 'scratch', physicalRoot: scratch, aliasRoot: 'Z:\\' },
     ];
 
-    const invoke = (environment: Record<string, string>): HarnessResponse => {
+    const invoke = (environment: Record<string, string>, maxFiles = 10000): HarnessResponse => {
       const reqFile = path.join(workDir, 'req-' + randomUUID() + '.json');
-      const reqData = JSON.stringify({ environment, aliases });
+      const reqData = JSON.stringify({ environment, aliases, maxFiles, cwd: copy });
       writeFileSync(reqFile, reqData, { flag: 'wx', encoding: 'utf8' });
       const stdout = execFileSync(harnessExe, [reqFile], { encoding: 'utf8', windowsHide: true });
       return JSON.parse(stdout.trim()) as HarnessResponse;
@@ -175,5 +175,90 @@ test('C# ProjectEnvironment validates and projects GIT_CONFIG_GLOBAL inside scra
     const validConfig = invoke({ GIT_CONFIG_GLOBAL: path.join(scratch, '.gitconfig') });
     assert.equal(validConfig.success, true);
     assert.equal(validConfig.environment?.GIT_CONFIG_GLOBAL, 'Z:\\.gitconfig');
+  });
+});
+
+test('C# ProjectEnvironment injects protected safe.directory entries only when verified GIT_EXEC_PATH is present and strips poisoned configuration', { skip: process.platform !== 'win32' }, async () => {
+  await harnessFixture(async ({ copy, runtime, invoke }) => {
+    // 1. Without GIT_EXEC_PATH: no safe.directory injected, poison variables not purged or injected
+    const withoutGit = invoke({});
+    assert.equal(withoutGit.success, true);
+    assert.equal(withoutGit.environment?.GIT_CONFIG_COUNT, undefined);
+    assert.equal(withoutGit.environment?.GIT_CONFIG_KEY_0, undefined);
+    assert.equal(withoutGit.environment?.GIT_CONFIG_VALUE_0, undefined);
+
+    // 2. With GIT_EXEC_PATH (no nested repos): exactly 2 entries (reset empty and exact copy alias)
+    const validGitPath = path.join(runtime, 'git', 'bin');
+    const withGit = invoke({
+      GIT_EXEC_PATH: validGitPath,
+      git_config_count: '99',
+      GIT_CONFIG_PARAMETERS: "'safe.directory=*'",
+      git_config_key_0: 'safe.directory',
+      GIT_CONFIG_VALUE_0: '*',
+      git_config_key_99: 'core.autocrlf',
+      GIT_CONFIG_VALUE_99: 'false',
+    });
+
+    assert.equal(withGit.success, true);
+    const env = withGit.environment || {};
+
+    // Poisoned keys removed
+    assert.equal(env.git_config_count, undefined);
+    assert.equal(env.GIT_CONFIG_PARAMETERS, undefined);
+    assert.equal(env.git_config_key_0, undefined);
+    assert.equal(env.GIT_CONFIG_VALUE_0, '');
+    assert.equal(env.git_config_key_99, undefined);
+    assert.equal(env.GIT_CONFIG_VALUE_99, undefined);
+
+    // Exact 2 entries projected (no wildcards)
+    assert.equal(env.GIT_CONFIG_COUNT, '2');
+    assert.equal(env.GIT_CONFIG_KEY_0, 'safe.directory');
+    assert.equal(env.GIT_CONFIG_VALUE_0, '');
+    assert.equal(env.GIT_CONFIG_KEY_1, 'safe.directory');
+    assert.equal(env.GIT_CONFIG_VALUE_1, 'X:\\');
+    assert.equal(env.GIT_CONFIG_KEY_2, undefined);
+
+    // 3. With nested git repository present in copy: exact 3 entries projected
+    const nestedDir = path.join(copy, 'submodules', 'nested-repo');
+    const nestedGit = path.join(nestedDir, '.git');
+    await mkdir(nestedGit, { recursive: true });
+
+    const withNested = invoke({
+      GIT_EXEC_PATH: validGitPath,
+    });
+    assert.equal(withNested.success, true);
+    const nestedEnv = withNested.environment || {};
+
+    assert.equal(nestedEnv.GIT_CONFIG_COUNT, '3');
+    assert.equal(nestedEnv.GIT_CONFIG_KEY_0, 'safe.directory');
+    assert.equal(nestedEnv.GIT_CONFIG_VALUE_0, '');
+    assert.equal(nestedEnv.GIT_CONFIG_KEY_1, 'safe.directory');
+    assert.equal(nestedEnv.GIT_CONFIG_VALUE_1, 'X:\\');
+    assert.equal(nestedEnv.GIT_CONFIG_KEY_2, 'safe.directory');
+    assert.equal(nestedEnv.GIT_CONFIG_VALUE_2, 'X:\\submodules\\nested-repo');
+    assert.equal(nestedEnv.GIT_CONFIG_KEY_3, undefined);
+
+    assert.equal(invoke({ GIT_EXEC_PATH: validGitPath }, 0).success, false);
+    assert.equal(invoke({ GIT_EXEC_PATH: validGitPath }, 2).success, false);
+    assert.equal(invoke({ GIT_EXEC_PATH: validGitPath }, 3).success, true);
+
+    // Ensure no wildcards anywhere in the projected environment
+    for (const key of Object.keys(nestedEnv)) {
+      if (key.startsWith('GIT_CONFIG_VALUE_')) {
+        assert.ok(!nestedEnv[key]?.includes('*'), `Safe directory value must not contain wildcards: ${nestedEnv[key]}`);
+      }
+    }
+  });
+});
+
+
+
+test('C# Git trust discovery rejects a junction to another repository', { skip: process.platform !== 'win32' }, async () => {
+  await harnessFixture(async ({ copy, runtime, outside, invoke }) => {
+    await mkdir(path.join(outside, '.git'));
+    await symlink(outside, path.join(copy, 'foreign-repo'), 'junction');
+    const response = invoke({ GIT_EXEC_PATH: path.join(runtime, 'git', 'bin') });
+    assert.equal(response.success, false);
+    assert.match(response.error || '', /reparse|link/i);
   });
 });

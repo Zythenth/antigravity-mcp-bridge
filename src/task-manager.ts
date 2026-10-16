@@ -735,8 +735,11 @@ export class TaskManager {
     try {
       this.refresh();
       const current = this.tasks.get(sourceTaskId);
+      const isCompleted = current?.record.status === 'completed';
+      const isTestFailed = current?.record.status === 'failed' && current?.record.error?.code === 'TEST_FAILED';
+      const isLocalExecutorFailure = current?.record.status === 'failed' && current?.record.error?.code !== 'TEST_FAILED' && current?.record.usageProvenance === 'local-executor';
       if (!current?.project || !current.record.sessionId || current.record.mode === 'read-only' ||
-        !terminal.has(current.record.status) || (current.record.status !== 'completed' && current.record.error?.code !== 'TEST_FAILED') ||
+        !terminal.has(current.record.status) || (!isCompleted && !isTestFailed && !isLocalExecutorFailure) ||
         current.record.integratedAt) {
         throw new BridgeError('TASK_NOT_READY', 'Tests require a completed write task with an isolated copy and CLI conversation');
       }
@@ -748,6 +751,11 @@ export class TaskManager {
       if (currentPreview.sha256 !== nativeTest.expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Copy changed while tests were queued');
       if (this.queue.length >= this.config.maxQueuedTasks && this.active >= this.config.maxConcurrentTasks) throw new BridgeError('QUEUE_FULL', 'Task queue is full');
       releaseProject = this.state.acquire(this.projectLock(current.project));
+      if (isLocalExecutorFailure) {
+        await this.nativeRecovery;
+        await recoverWindowsExecutions(this.config.stateDirectory, { requireIdle: true });
+        this.nativeRecoveryError = undefined;
+      }
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find(candidate => terminal.has(candidate.record.status) && candidate !== current && !this.hasPendingInbox(candidate.record)) ?? (this.hasPendingInbox(current.record) ? undefined : current);
         if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');

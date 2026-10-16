@@ -6,6 +6,13 @@ import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
 import { customRolesSchema, type RoleDefinition } from './roles.js';
 import type { WindowsNodeRuntime } from './portable-node.js';
 
+import {
+  type SecretExceptionsPolicy,
+  normalizeSecretExceptionsPolicy,
+  validateAllowedEnvVars,
+} from './hardening-policy.js';
+
+export type { SecretExceptionsPolicy } from './hardening-policy.js';
 export type TestExecutor = 'agy' | 'windows-lpac';
 export type ApprovalMode = 'auto' | 'ask';
 
@@ -16,8 +23,20 @@ function positiveInteger(value: string | undefined, fallback: number, max: numbe
   return n;
 }
 
-export interface ProjectLimits { maxCopyFiles: number; maxCopyBytes: number; maxChangedFiles: number; secretExclusions?: readonly string[]; secretExceptions?: readonly string[] }
-export const DEFAULT_PROJECT_LIMITS: ProjectLimits = { maxCopyFiles: 10000, maxCopyBytes: 256 * 1024 * 1024, maxChangedFiles: 100, secretExclusions: [], secretExceptions: [] };
+export interface ProjectLimits {
+  maxCopyFiles: number;
+  maxCopyBytes: number;
+  maxChangedFiles: number;
+  secretExclusions?: readonly string[];
+  secretExceptions?: SecretExceptionsPolicy | readonly string[];
+}
+export const DEFAULT_PROJECT_LIMITS: ProjectLimits = {
+  maxCopyFiles: 10000,
+  maxCopyBytes: 256 * 1024 * 1024,
+  maxChangedFiles: 100,
+  secretExclusions: [],
+  secretExceptions: { version: 2, namePatterns: [] },
+};
 
 export interface Config extends ProjectLimits {
   approvalMode: ApprovalMode;
@@ -45,7 +64,7 @@ export interface Config extends ProjectLimits {
   windowsNodeRuntime: WindowsNodeRuntime;
   windowsNodeCacheDirectory: string;
   secretExclusions: string[];
-  secretExceptions: string[];
+  secretExceptions: SecretExceptionsPolicy;
   allowedEnvVars: string[];
 }
 
@@ -84,6 +103,17 @@ function windowsNodeCacheDirectory(value: string | undefined): string {
   return resolved;
 }
 
+function parseSecretExceptionsConfig(value: string | undefined): SecretExceptionsPolicy {
+  if (value === undefined) return { version: 2, namePatterns: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error('BRIDGE_SECRET_EXCEPTIONS must be a valid JSON object: {"version":2,"namePatterns":[...]}');
+  }
+  return normalizeSecretExceptionsPolicy(parsed, 'BRIDGE_SECRET_EXCEPTIONS');
+}
+
 function parseStringArray(value: string | undefined, envName: string): string[] {
   if (value === undefined) return [];
   let parsed: unknown;
@@ -95,7 +125,7 @@ function parseStringArray(value: string | undefined, envName: string): string[] 
   if (envName === 'BRIDGE_ALLOWED_ENV_VARS' && items.some(item => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
     throw new Error(envName + ' must contain exact environment variable names');
   }
-  if ((envName === 'BRIDGE_SECRET_EXCLUSIONS' || envName === 'BRIDGE_SECRET_EXCEPTIONS') &&
+  if (envName === 'BRIDGE_SECRET_EXCLUSIONS' &&
       items.some(item => item.startsWith('/') || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some(part => part === '..'))) {
     throw new Error(envName + ' must contain relative glob patterns without traversal');
   }
@@ -140,7 +170,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
     secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, 'BRIDGE_SECRET_EXCLUSIONS'),
-    secretExceptions: parseStringArray(env.BRIDGE_SECRET_EXCEPTIONS, 'BRIDGE_SECRET_EXCEPTIONS'),
-    allowedEnvVars: parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, 'BRIDGE_ALLOWED_ENV_VARS'),
+    secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
+    allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, 'BRIDGE_ALLOWED_ENV_VARS'), 'BRIDGE_ALLOWED_ENV_VARS'),
   };
 }

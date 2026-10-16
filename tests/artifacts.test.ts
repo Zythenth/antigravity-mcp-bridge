@@ -201,6 +201,7 @@ test('adversarial: collectArtifacts rejects new file ignored by .git/info/exclud
     execFileSync('git', ['commit', '-m', 'init'], { cwd: repo });
 
     // Add local exclude rule to .git/info/exclude
+    await mkdir(path.join(repo, '.git', 'info'), { recursive: true });
     await writeFile(path.join(repo, '.git', 'info', 'exclude'), 'local-secret.txt\n');
 
     project = await createProjectCopy(repo);

@@ -37,13 +37,19 @@ const result = (status = 'SUCCESS', extra = {}) => send({ event: 'result', resul
   ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}), ...extra } });
 send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
 if (scenario === 'resolve-command') {
-  const script = "$ErrorActionPreference='Stop'; try { (Get-Command -Name 'bridge-environment-fixture' -CommandType Application -ErrorAction Stop).Source } catch { [Console]::Write($_.Exception.Message); exit 42 }";
-  const resolved = spawnSync(path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
-    ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', windowsHide: true });
+  const executable = path.join(process.env.SystemRoot, 'System32', 'where.exe');
+  const commandLine = '"' + executable + '" bridge-environment-fixture';
+  const resolved = spawnSync(executable, ['bridge-environment-fixture'],
+    { encoding: 'utf8', windowsHide: true, timeout: 10000 });
+  if (resolved.error) {
+    console.error(resolved.error.message);
+    process.exit(3);
+  }
+  const exitCode = resolved.status === 1 ? 42 : resolved.status;
   send({ event: 'step_update', step_update: { step_type: 'tool', state: 'DONE', tool_name: 'run_command',
-    tool_info: { parameters: { CommandLine: script }, output: JSON.stringify({ exitCode: resolved.status, source: resolved.stdout.trim(), pathExt: process.env.PATHEXT }) } } });
-  result(resolved.status === 0 ? 'SUCCESS' : 'ERROR');
-  process.exit(resolved.status === 0 ? 0 : 1);
+    tool_info: { parameters: { CommandLine: commandLine }, output: JSON.stringify({ exitCode, source: resolved.stdout.trim(), pathExt: process.env.PATHEXT }) } } });
+  result(exitCode === 0 ? 'SUCCESS' : 'ERROR');
+  process.exit(exitCode === 0 ? 0 : 1);
 }
 const nativeTest = prompt.match(/<bridge-test-command>(.*?)<\/bridge-test-command>/s);
 if (nativeTest && args.includes('denied-admin-result')) {

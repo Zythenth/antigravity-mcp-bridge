@@ -5,6 +5,8 @@ import {
   cliEnvironment,
   WINDOWS_PATHEXT_FALLBACK,
 } from '../src/cli-environment.js';
+import { loadConfig } from '../src/config.js';
+import { BridgeError } from '../src/types.js';
 
 test('preserves required system, home, temp, locale, proxy, cert, and keyring variables', () => {
   const source: NodeJS.ProcessEnv = {
@@ -215,12 +217,12 @@ test('supports configurable opt-in through allowedEnvVars', () => {
     OPENAI_API_KEY: 'synthetic-openai-secret',
     GOOGLE_API_KEY: 'synthetic-opted-in-google-key',
     CUSTOM_DEPLOY_SECRET: 'synthetic-deploy-key',
-    NODE_OPTIONS: '--max-old-space-size=4096',
+    CUSTOM_NON_INJECTABLE_VAR: 'synthetic-safe-val-123',
     AWS_SECRET_ACCESS_KEY: 'synthetic-aws-still-excluded',
   };
 
   const env = cliEnvironment(
-    ['OPENAI_API_KEY', 'GOOGLE_API_KEY', '  CUSTOM_DEPLOY_SECRET  ', 'NODE_OPTIONS'],
+    ['OPENAI_API_KEY', 'GOOGLE_API_KEY', '  CUSTOM_DEPLOY_SECRET  ', 'CUSTOM_NON_INJECTABLE_VAR'],
     source,
     'linux'
   );
@@ -228,7 +230,7 @@ test('supports configurable opt-in through allowedEnvVars', () => {
   assert.equal(env.OPENAI_API_KEY, 'synthetic-openai-secret');
   assert.equal(env.GOOGLE_API_KEY, 'synthetic-opted-in-google-key');
   assert.equal(env.CUSTOM_DEPLOY_SECRET, 'synthetic-deploy-key');
-  assert.equal(env.NODE_OPTIONS, '--max-old-space-size=4096');
+  assert.equal(env.CUSTOM_NON_INJECTABLE_VAR, 'synthetic-safe-val-123');
   assert.equal(env.AWS_SECRET_ACCESS_KEY, undefined, 'Non-opted-in secret remains excluded');
 });
 
@@ -446,4 +448,143 @@ test('default parameters use process.env and process.platform while safely resto
       process.env[testKey] = original;
     }
   }
+});
+
+test('strictly forbids runtime injection opt-ins in allowedEnvVars across all platforms and casing/whitespace aliases', () => {
+  const forbiddenCandidates = [
+    'NODE_OPTIONS',
+    'node_options',
+    '  Node_Options  ',
+    'NODE_PATH',
+    'node_path',
+    '  Node_Path  ',
+    'LD_PRELOAD',
+    'ld_preload',
+    '  Ld_Library_Path  ',
+    'DYLD_INSERT_LIBRARIES',
+    'dyld_library_path',
+    '  Dyld_Insert_Libraries  ',
+  ];
+
+  for (const candidate of forbiddenCandidates) {
+    // 1. Direct cliEnvironment call on Linux
+    assert.throws(
+      () => cliEnvironment([candidate], {}, 'linux'),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'FORBIDDEN_ENV_VAR');
+        assert.match(err.message, /cannot include runtime injection variable/);
+        return true;
+      },
+      `Expected ${candidate} to be forbidden on linux`
+    );
+
+    // 2. Direct cliEnvironment call on Windows
+    assert.throws(
+      () => cliEnvironment([candidate], {}, 'win32'),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'FORBIDDEN_ENV_VAR');
+        assert.match(err.message, /cannot include runtime injection variable/);
+        return true;
+      },
+      `Expected ${candidate} to be forbidden on win32`
+    );
+
+    // 3. Environment configuration via loadConfig
+    assert.throws(
+      () => loadConfig({ BRIDGE_ALLOWED_ENV_VARS: JSON.stringify([candidate.trim()]) }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.match(err.message, /cannot include runtime injection variable/);
+        return true;
+      },
+      `Expected loadConfig to reject ${candidate}`
+    );
+  }
+});
+
+test('injection rejection error message names the variable but never exposes its value', () => {
+  const dangerousSecretValue = '--import=data:text/javascript,console.log("synthetic-evil-token-998877")';
+  const preloadSecretValue = '/opt/malicious/synthetic-secret-preload-library.so';
+
+  const sourceEnv: NodeJS.ProcessEnv = {
+    NODE_OPTIONS: dangerousSecretValue,
+    LD_PRELOAD: preloadSecretValue,
+  };
+
+  // Rejection in direct cliEnvironment call
+  assert.throws(
+    () => cliEnvironment(['NODE_OPTIONS'], sourceEnv, 'linux'),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('NODE_OPTIONS'), 'Error must name the forbidden variable');
+      assert.ok(!err.message.includes(dangerousSecretValue), 'Error must never expose the variable value');
+      assert.ok(!err.message.includes('synthetic-evil-token-998877'), 'Error must not leak sensitive tokens');
+      return true;
+    }
+  );
+
+  assert.throws(
+    () => cliEnvironment(['  LD_PRELOAD  '], sourceEnv, 'win32'),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('LD_PRELOAD'), 'Error must name the forbidden variable');
+      assert.ok(!err.message.includes(preloadSecretValue), 'Error must never expose the variable value');
+      return true;
+    }
+  );
+
+  // Rejection in loadConfig
+  assert.throws(
+    () => loadConfig({ BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS']) }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('NODE_OPTIONS'), 'Error must name the forbidden variable');
+      assert.ok(!err.message.includes(dangerousSecretValue), 'Error must never expose the variable value');
+      return true;
+    }
+  );
+});
+
+test('preserves official authentication environment and certificate roots including NODE_EXTRA_CA_CERTS', () => {
+  const source: NodeJS.ProcessEnv = {
+    GEMINI_API_KEY: 'synthetic-gemini-key-preserve',
+    GOOGLE_GEMINI_BASE_URL: 'https://custom.gemini.endpoint',
+    GOOGLE_APPLICATION_CREDENTIALS: '/secrets/sa.json',
+    GOOGLE_CLOUD_PROJECT: 'proj-123',
+    GCLOUD_PROJECT: 'legacy-proj-123',
+    GOOGLE_CLOUD_UNIVERSE_DOMAIN: 'googleapis.com',
+    NODE_EXTRA_CA_CERTS: '/etc/ssl/certs/custom-ca.pem',
+    CUSTOM_LEGIT_SETTING: 'legit-val',
+  };
+
+  const env = cliEnvironment(['CUSTOM_LEGIT_SETTING'], source, 'linux');
+
+  assert.equal(env.GEMINI_API_KEY, 'synthetic-gemini-key-preserve');
+  assert.equal(env.GOOGLE_GEMINI_BASE_URL, 'https://custom.gemini.endpoint');
+  assert.equal(env.GOOGLE_APPLICATION_CREDENTIALS, '/secrets/sa.json');
+  assert.equal(env.GOOGLE_CLOUD_PROJECT, 'proj-123');
+  assert.equal(env.GCLOUD_PROJECT, 'legacy-proj-123');
+  assert.equal(env.GOOGLE_CLOUD_UNIVERSE_DOMAIN, 'googleapis.com');
+  assert.equal(env.NODE_EXTRA_CA_CERTS, '/etc/ssl/certs/custom-ca.pem');
+  assert.equal(env.CUSTOM_LEGIT_SETTING, 'legit-val');
+});
+
+test('runtime injection opt-in is rejected before a real Node preload can execute', () => {
+  const hook = 'process.stdout.write("BRIDGE_SYNTHETIC_PRELOAD_EXECUTED")';
+  const source: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH,
+    SystemRoot: process.env.SystemRoot,
+    NODE_OPTIONS: '--import=data:text/javascript,' + encodeURIComponent(hook),
+  };
+  assert.throws(() => execFileSync(process.execPath, ['-e', 'process.stdout.write("MAIN")'], {
+    env: cliEnvironment(['NODE_OPTIONS'], source),
+    encoding: 'utf8',
+    windowsHide: true,
+  }), (error: unknown) => {
+    assert.ok(error instanceof BridgeError);
+    assert.equal(error.code, 'FORBIDDEN_ENV_VAR');
+    return true;
+  });
 });

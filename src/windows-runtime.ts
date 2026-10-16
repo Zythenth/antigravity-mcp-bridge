@@ -336,35 +336,62 @@ async function resolveGitExecutable(requested?: string): Promise<string | undefi
       throw error;
     }
     const candidateDir = path.dirname(candidate);
-    if (path.basename(candidateDir).toLocaleLowerCase('en-US') === 'cmd') {
-      const realCandidates = [
-        path.resolve(candidateDir, '..', 'ucrt64', 'bin', 'git.exe'),
-        path.resolve(candidateDir, '..', 'mingw64', 'bin', 'git.exe'),
-      ];
-      let realGit: string | undefined;
-      for (const realCandidate of realCandidates) {
-        if (isUnsafeWindowsPath(realCandidate)) continue;
+    const candidateDirName = path.basename(candidateDir).toLocaleLowerCase('en-US');
+    const parentDir = path.dirname(candidateDir);
+    const parentDirName = path.basename(parentDir).toLocaleLowerCase('en-US');
+
+    // If candidate is already in a native layout directory, preserve candidate as native
+    if (candidateDirName === 'bin' && (parentDirName === 'mingw64' || parentDirName === 'ucrt64')) {
+      return candidate;
+    }
+
+    const isCmdWrapper = candidateDirName === 'cmd';
+    const isBinDir = candidateDirName === 'bin';
+
+    if (isCmdWrapper || isBinDir) {
+      let hasNativeLayout = false;
+      for (const layout of ['ucrt64', 'mingw64']) {
         try {
-          const realInfo = await lstat(realCandidate);
-          if (realInfo.isSymbolicLink()) {
-            fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + realCandidate);
-          }
-          if (!realInfo.isFile()) continue;
-          await regularFile(realCandidate, true);
-          realGit = realCandidate;
-          break;
+          const info = await lstat(path.join(parentDir, layout));
+          if (info.isSymbolicLink()) fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + path.join(parentDir, layout));
+          if (info.isDirectory()) hasNativeLayout = true;
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') {
-            continue;
-          }
-          throw error;
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'ENOTDIR') throw error;
         }
       }
-      if (!realGit) {
-        fail('WINDOWS_EXECUTABLE_UNSUPPORTED', 'Git wrapper does not contain a real bin layout: ' + candidate);
+      const isKnownDistribution = isCmdWrapper || hasNativeLayout;
+
+      if (isKnownDistribution) {
+        const nativeLayouts = ['ucrt64', 'mingw64'];
+        let realGit: string | undefined;
+
+        for (const layout of nativeLayouts) {
+          const nativeCandidate = path.resolve(parentDir, layout, 'bin', 'git.exe');
+          if (isUnsafeWindowsPath(nativeCandidate)) continue;
+          try {
+            const realInfo = await lstat(nativeCandidate);
+            if (realInfo.isSymbolicLink()) {
+              fail('UNSAFE_RUNTIME_PATH', 'Runtime files and directories cannot use links: ' + nativeCandidate);
+            }
+            if (!realInfo.isFile()) continue;
+            await regularFile(nativeCandidate, true);
+            realGit = nativeCandidate;
+            break;
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT' || (error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        if (!realGit) {
+          fail('WINDOWS_EXECUTABLE_UNSUPPORTED', 'Git wrapper does not contain a real bin layout: ' + candidate);
+        }
+        return realGit;
       }
-      return realGit;
     }
+
     return candidate;
   }
   return undefined;

@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { lstatSync, realpathSync, readFileSync, rmSync, mkdirSync, writeFileSync, type BigIntStats } from 'node:fs';
+
 import { copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { loadConfig } from '../src/config.js';
-import { executeWindowsTest } from '../src/windows-executor.js';
+import { stageWindowsCommand } from '../src/windows-runtime.js';
+import { executeWindowsTest, type WindowsExecutionOptions } from '../src/windows-executor.js';
 
 const runtime = loadConfig();
 const settings = { timeoutSeconds: 15, maxRuntimeBytes: 256 * 1024 * 1024,
@@ -42,6 +46,37 @@ return sd.GetSddlForm(AccessControlSections.Access);}}`;
   return JSON.parse(execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
     windowsHide: true, encoding: 'utf8', env: { ...process.env, BRIDGE_ACL_FIXTURE_SOURCE: source, BRIDGE_ACL_FIXTURE_TARGETS: JSON.stringify(targets) },
   })) as string[];
+}
+
+function readHostNullDeviceDacl(): string {
+  const source = `using System;using System.ComponentModel;using System.Runtime.InteropServices;using System.Security.AccessControl;using Microsoft.Win32.SafeHandles;
+public static class HostNullDaclDiagnostic {
+[DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern SafeFileHandle CreateFile(string lpFileName,uint dwDesiredAccess,uint dwShareMode,IntPtr lpSecurityAttributes,uint dwCreationDisposition,uint dwFlagsAndAttributes,IntPtr hTemplateFile);
+[DllImport("advapi32.dll",SetLastError=true)]static extern bool GetKernelObjectSecurity(SafeFileHandle handle,int securityInformation,[Out] byte[] pSecurityDescriptor,uint nLength,out uint lpnLengthNeeded);
+public static string Query(){
+try{
+using(SafeFileHandle handle=CreateFile(@"\\\\?\\GLOBALROOT\\Device\\Null",0x20000,3,IntPtr.Zero,3,0,IntPtr.Zero)){
+if(handle.IsInvalid)return "CreateFile:"+Marshal.GetLastWin32Error();
+uint needed;
+GetKernelObjectSecurity(handle,4,null,0,out needed);
+if(needed<20||needed>65536)return "GetKernelObjectSecurity:size:"+Marshal.GetLastWin32Error();
+byte[] buffer=new byte[needed];
+if(!GetKernelObjectSecurity(handle,4,buffer,needed,out needed))return "GetKernelObjectSecurity:query:"+Marshal.GetLastWin32Error();
+var sd=new RawSecurityDescriptor(buffer,0);
+return sd.GetSddlForm(AccessControlSections.Access);
+}}catch(Win32Exception ex){return "Win32Exception:"+ex.NativeErrorCode;}
+catch(Exception){return "Exception:"+Marshal.GetLastWin32Error();}}}`;
+  const script = "$ErrorActionPreference='Stop'; Add-Type -TypeDefinition $env:BRIDGE_HOST_NULL_DACL_SOURCE; [HostNullDaclDiagnostic]::Query()";
+  try {
+    return execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true, encoding: 'utf8', stdio: 'pipe', timeout: 60000, maxBuffer: 65536,
+      env: { ...process.env, BRIDGE_HOST_NULL_DACL_SOURCE: source },
+    }).trim();
+  } catch (error) {
+    const err = error as { status?: number; code?: string };
+    const code = err.status !== undefined ? err.status : (err.code || 'unknown');
+    return `PowerShell:${code}`;
+  }
 }
 test('Windows executor protects the captured default runtime cache when options omit its path', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async (copy, outside) => {
@@ -333,30 +368,29 @@ test('Windows executor rejects remote executables, device names, streams and tru
 
 test('Windows executor stages real Git inside LPAC, isolates host config, verifies aliases, repository operations and source ACL/nlink invariants', { skip: process.platform !== 'win32' }, async t => {
   const resolveHostGit = async (): Promise<string | undefined> => {
-    const target = 'git.exe';
-    const dirs = (process.env.PATH || '')
-      .split(path.delimiter)
-      .map(d => d.trim().replace(/^"(.*)"$/, '$1'))
-      .filter(d => d && path.isAbsolute(d));
-    for (const d of dirs) {
-      const candidate = path.join(d, target);
+    const cleanEnv = { ...process.env };
+    for (const key of Object.keys(cleanEnv)) if (key.toUpperCase() === 'GIT_EXEC_PATH') delete cleanEnv[key];
+    let execPath: string;
+    try {
+      execPath = execFileSync('git.exe', ['--exec-path'], {
+        windowsHide: true, encoding: 'utf8', env: cleanEnv, timeout: 10000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+    assert.ok(execPath, 'Installed Git must announce its executable path');
+    for (const candidate of [path.resolve(execPath, '..', '..', 'bin', 'git.exe'), path.resolve(execPath, 'git.exe')]) {
       try {
         const info = await lstat(candidate);
-        if (info.isFile() && !info.isSymbolicLink()) {
-          const dir = path.dirname(candidate);
-          if (path.basename(dir).toLowerCase() === 'cmd') {
-            for (const sub of ['ucrt64', 'mingw64']) {
-              const real = path.resolve(dir, '..', sub, 'bin', target);
-              try {
-                if ((await lstat(real)).isFile()) return real;
-              } catch {}
-            }
-          }
-          return candidate;
-        }
-      } catch {}
+        assert.ok(info.isFile() && !info.isSymbolicLink(), 'Host Git must be a regular native executable');
+        return candidate;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' && (error as NodeJS.ErrnoException).code !== 'ENOTDIR') throw error;
+      }
     }
-    return undefined;
+    throw new Error('Installed Git native executable was not found from --exec-path');
   };
 
   const hostGit = await resolveHostGit();
@@ -365,6 +399,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
     return;
   }
 
+  const hostGitHash = createHash('sha256').update(await readFile(hostGit)).digest('hex');
   const aclBefore = execFileSync('icacls.exe', [hostGit], { windowsHide: true, encoding: 'utf8' });
   const statBefore = await lstat(hostGit);
 
@@ -395,12 +430,19 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "if (process.env.GIT_CONFIG_NOSYSTEM !== '1') { process.stderr.write('GIT_CONFIG_NOSYSTEM was not set'); process.exit(104); }" +
         "if (process.env.GIT_TERMINAL_PROMPT !== '0') { process.stderr.write('GIT_TERMINAL_PROMPT was not set'); process.exit(105); }" +
         "if (process.env.GIT_DEFAULT_REF_FORMAT !== 'reftable') { process.stderr.write('GIT_DEFAULT_REF_FORMAT was not set to reftable'); process.exit(106); }" +
+        "const nullSlash = String.fromCharCode(92); const nullPaths = ['NUL', nullSlash + nullSlash + '.' + nullSlash + 'NUL', nullSlash + nullSlash + '?' + nullSlash + 'GLOBALROOT' + nullSlash + 'Device' + nullSlash + 'Null'];" +
+        "const nullProbe = nullPaths.map(name => { let fd; try { fd = fs.openSync(name, 'r+'); const read = fs.readSync(fd, Buffer.alloc(1), 0, 1, null); const written = fs.writeSync(fd, Buffer.from('nul')); return { name, opened: true, eof: read === 0, written }; } catch (error) { return { name, opened: false, code: error.code }; } finally { if (fd !== undefined) fs.closeSync(fd); } });" +
+        "process.stdout.write('null device probe: ' + JSON.stringify(nullProbe) + '\\n');" +
+        "process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = '1';" +
         "const versionRes = cp.spawnSync('git.exe', ['--version'], { encoding: 'utf8' });" +
         "if (versionRes.status !== 0 || !versionRes.stdout.includes('git version')) { process.stderr.write('git --version failed: ' + (versionRes.stderr || versionRes.error)); process.exit(107); }" +
+        "process.stdout.write('git probe version: ' + versionRes.stdout.trim() + '\\n');" +
         "const initRes = cp.spawnSync('git.exe', ['init', '-b', 'main'], { encoding: 'utf8' });" +
         "if (initRes.status !== 0) { process.stderr.write('git init failed: ' + initRes.stderr); process.exit(108); }" +
         "const refStorageRes = cp.spawnSync('git.exe', ['config', '--get', 'extensions.refStorage'], { encoding: 'utf8' });" +
-        "if (refStorageRes.status !== 0 || refStorageRes.stdout.trim() !== 'reftable') { process.stderr.write('extensions.refStorage was not reftable: ' + refStorageRes.stdout); process.exit(109); }" +
+        "const diskRefStorage = (() => { try { return fs.readFileSync('.git/config', 'utf8').match(/(?:^|[\\r\\n])\\s*refstorage\\s*=\\s*([^\\r\\n]+)/i)?.[1]?.trim() || null; } catch (error) { return { readError: error.code }; } })();" +
+        "process.stdout.write('git probe init: ' + JSON.stringify({ diskRefStorage }) + '\\n');" +
+        "if (refStorageRes.status !== 0 || refStorageRes.stdout.trim() !== 'reftable') { const discovery = cp.spawnSync('git.exe', ['rev-parse', '--show-ref-format'], { encoding: 'utf8' }); const scopedTrust = cp.spawnSync('git.exe', ['-c', 'safe.directory=' + process.cwd(), 'rev-parse', '--show-ref-format'], { encoding: 'utf8' }); const explicitDir = cp.spawnSync('git.exe', ['--git-dir=.git', 'rev-parse', '--show-ref-format'], { encoding: 'utf8' }); const summarize = result => ({ status: result.status, stdout: result.stdout, stderr: result.stderr, code: result.error?.code }); process.stderr.write('extensions.refStorage query failed: ' + JSON.stringify({ query: summarize(refStorageRes), discovery: summarize(discovery), scopedTrust: summarize(scopedTrust), explicitDir: summarize(explicitDir) })); process.exit(109); }" +
         "const refFormatRes = cp.spawnSync('git.exe', ['rev-parse', '--show-ref-format'], { encoding: 'utf8' });" +
         "if (refFormatRes.status !== 0 || refFormatRes.stdout.trim() !== 'reftable') { process.stderr.write('rev-parse --show-ref-format was not reftable: ' + refFormatRes.stdout); process.exit(110); }" +
         "const existingFormatRes = cp.spawnSync('git.exe', ['-C', 'existing-repo', 'rev-parse', '--show-ref-format'], { encoding: 'utf8' });" +
@@ -427,11 +469,39 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         "console.log('git lpac integration passed successfully');";
 
       await writeFile(path.join(copy, 'git-flow.cjs'), script);
+      const nullDaclBefore = readHostNullDeviceDacl();
+      console.log('host null device DACL before: ' + nullDaclBefore);
+      assert.match(nullDaclBefore, /^D:/, 'Null DACL inspection must succeed');
       const result = await executeWindowsTest({ executable: process.execPath, args: ['git-flow.cjs'] }, copy, settings);
       assert.equal(result.sandbox, 'windows-lpac');
+      for (const probeLine of result.output.split(/\r?\n/)) {
+        if (probeLine.startsWith('null device probe:') || probeLine.startsWith('git probe ')) console.log(probeLine);
+      }
       assert.equal(result.error, undefined, JSON.stringify(result));
       assert.equal(result.exitCode, 0, result.output);
       assert.match(result.output, /git lpac integration passed successfully/);
+      const nullDaclAfter = readHostNullDeviceDacl();
+      console.log('host null device DACL after: ' + nullDaclAfter);
+      assert.match(nullDaclAfter, /^D:/, 'Null DACL inspection after cleanup must succeed');
+      assert.equal(nullDaclAfter, nullDaclBefore, 'host null device DACL must remain exact and unchanged after verified cleanup');
+
+      // Verify the staged git.exe hash against the independently resolved host native git binary
+      const tempRoot = await realpath(os.tmpdir());
+      const testRuntime = await realpath(await mkdtemp(path.join(tempRoot, 'agy-mcp-verify-git-')));
+      try {
+        const stagedGitCmd = await stageWindowsCommand({ executable: 'git.exe', args: ['--version'] }, testRuntime, {
+          maxBytes: 256 * 1024 * 1024,
+          maxFiles: 10_000,
+        });
+        const stagedGitBytes = await readFile(stagedGitCmd.executable);
+        const stagedGitHash = createHash('sha256').update(stagedGitBytes).digest('hex');
+        assert.equal(stagedGitHash, hostGitHash);
+      } finally {
+        assert.equal(path.dirname(testRuntime), tempRoot);
+        assert.ok(path.basename(testRuntime).startsWith('agy-mcp-verify-git-'));
+        assert.equal((await lstat(testRuntime)).isSymbolicLink(), false);
+        await rm(testRuntime, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
     } finally {
       if (prevGitConfigGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
       else process.env.GIT_CONFIG_GLOBAL = prevGitConfigGlobal;
@@ -441,5 +511,122 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
       const statAfter = await lstat(hostGit);
       assert.equal(statAfter.nlink, statBefore.nlink);
     }
+  });
+});
+
+test('Windows executor reports early native failure as bounded redacted BridgeError', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    await assert.rejects(
+      executeWindowsTest(command("process.stdout.write('test')"), copy, {
+        ...settings,
+        maxFiles: 0,
+        maxRuntimeFiles: 10000,
+      }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, 'must throw an Error');
+        const isBridgeError = 'code' in err && (err as { code: string }).code === 'WINDOWS_EXECUTOR_FAILED';
+        assert.ok(isBridgeError, 'must be BridgeError with code WINDOWS_EXECUTOR_FAILED');
+        assert.ok(!err.message.includes('ZodError'), 'must not be raw ZodError');
+        assert.ok(!err.message.includes('aliasesDeleted'), 'must not complain about aliasesDeleted');
+        assert.match(err.message, /Invalid request/);
+        return true;
+      }
+    );
+  });
+});
+
+async function scratchCleanupFault(replace: boolean) {
+  let directory = '', applied = false;
+  let replacement: BigIntStats | undefined;
+  let failure: unknown;
+  const temporary = await realpath(os.tmpdir());
+  const owned = (target: string) => {
+    assert.equal(path.dirname(target), temporary);
+    assert.ok(path.basename(target).startsWith('agy-mcp-scratch-'));
+    const info = lstatSync(target, { bigint: true });
+    assert.equal(info.isSymbolicLink(), false);
+    assert.equal(info.isDirectory(), true);
+    assert.equal(realpathSync(target), target);
+    return info;
+  };
+  const same = (actual: BigIntStats, expected: BigIntStats) => {
+    assert.equal(actual.dev, expected.dev);
+    assert.equal(actual.ino, expected.ino);
+    assert.equal(actual.birthtimeNs, expected.birthtimeNs);
+  };
+  const onProcess: NonNullable<WindowsExecutionOptions['onProcess']> = child => {
+    const requestPath = child.spawnargs.at(-1);
+    if (typeof requestPath !== 'string' || !requestPath.endsWith('.json')) return;
+    const request = JSON.parse(readFileSync(requestPath, 'utf8')) as { action: string; scratch: string; nonce: string };
+    if (request.action !== 'write') return;
+    directory = request.scratch;
+    const identity = owned(directory);
+    let output = '';
+    child.stdout.on('data', chunk => { output += String(chunk); });
+    child.once('close', code => {
+      try {
+        const receipt = JSON.parse(output) as { nonce: string; sandbox: string; profileDeleted: boolean; aliasesDeleted: boolean };
+        assert.equal(code, 0);
+        assert.equal(receipt.nonce, request.nonce);
+        assert.equal(receipt.sandbox, 'windows-lpac');
+        assert.equal(receipt.profileDeleted, true);
+        assert.equal(receipt.aliasesDeleted, true);
+        same(owned(directory), identity);
+        rmSync(directory, { recursive: true, force: true });
+        if (replace) {
+          mkdirSync(directory);
+          writeFileSync(path.join(directory, 'marker.txt'), 'preserved-marker');
+          replacement = owned(directory);
+        }
+        applied = true;
+      } catch (error) { failure = error; }
+    });
+  };
+  return {
+    onProcess,
+    assertApplied() { if (failure) throw failure; assert.equal(applied, true, 'controlled cleanup boundary was not exercised'); },
+    async assertPreserved() { assert.ok(replacement); same(owned(directory), replacement); assert.equal(await readFile(path.join(directory, 'marker.txt'), 'utf8'), 'preserved-marker'); },
+    async dispose() {
+      if (!replacement) return;
+      const current = await lstat(directory, { bigint: true }).catch(error => { if (error.code !== 'ENOENT') throw error; });
+      if (!current) return;
+      same(owned(directory), replacement);
+      await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    },
+  };
+}
+
+test('Windows executor succeeds and cleans up remaining directories even if owned scratch is already absent on exit', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    const fault = await scratchCleanupFault(false);
+    const result = await executeWindowsTest(command("process.stdout.write('scratch-absent-success')"), copy, { ...settings, onProcess: fault.onProcess });
+    fault.assertApplied();
+    assert.equal(result.exitCode, 0, JSON.stringify(result));
+    assert.equal(result.output, 'scratch-absent-success');
+    assert.equal(result.profileDeleted, true);
+    assert.equal(result.aliasesDeleted, true);
+  });
+});
+
+test('Windows executor preserves distinct nonzero exitCode when owned scratch is already absent on exit', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    const fault = await scratchCleanupFault(false);
+    const result = await executeWindowsTest(command("process.stdout.write('scratch-absent-nonzero');process.exit(42)"), copy, { ...settings, onProcess: fault.onProcess });
+    fault.assertApplied();
+    assert.equal(result.exitCode, 42, JSON.stringify(result));
+    assert.equal(result.output, 'scratch-absent-nonzero');
+    assert.equal(result.profileDeleted, true);
+    assert.equal(result.aliasesDeleted, true);
+  });
+});
+
+test('Windows executor rejects replacement directory at owned temporary path during cleanup and preserves replacement', { skip: process.platform !== 'win32' }, async () => {
+  await fixture(async copy => {
+    const fault = await scratchCleanupFault(true);
+    try {
+      await assert.rejects(executeWindowsTest(command("process.stdout.write('replacement-fixture')"), copy, { ...settings, onProcess: fault.onProcess }), { code: 'UNSAFE_RUNTIME_PATH' });
+      fault.assertApplied();
+      await fault.assertPreserved();
+    } finally { await fault.dispose(); }
   });
 });
