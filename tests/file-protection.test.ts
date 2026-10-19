@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import childProcess, { execFileSync } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import fsPromises, { link, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, rmdir, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
+import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -22,6 +24,10 @@ import {
   validRelative,
   writeAll,
   getFenceMarkerPath,
+  copyGit,
+  snapshotCopyFiles,
+  fingerprintProjectCopy,
+  type ProjectCopy,
 } from '../src/isolation.js';
 import { BridgeError } from '../src/types.js';
 import {
@@ -387,7 +393,11 @@ test('paths: external symbolic links are denied where supported', async (t) => {
   const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'agy-external-fixture-'));
   try {
     const outsideTarget = path.join(outsideDir, 'target.txt');
-    await writeFile(outsideTarget, 'outside file content\n');
+    try {
+      await link(path.join(dir, 'source.txt'), outsideTarget);
+    } catch {
+      await writeFile(outsideTarget, 'outside file content\n');
+    }
     let symlinksSupported = true;
     try {
       await symlink(outsideTarget, path.join(dir, 'external_link.txt'));
@@ -418,7 +428,10 @@ test('paths: external symbolic links are denied where supported', async (t) => {
       try {
         await symlink(outsideDir, junctionDir, 'junction');
         await assert.rejects(checkedPath(dir, 'ext_junction/target.txt', false), { code: 'UNSAFE_PROJECT_PATH' });
-        await rm(junctionDir, { force: true });
+        await unlink(junctionDir).catch(async error => {
+        if (!['EPERM', 'EISDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+        await rmdir(junctionDir);
+      });
       } catch (err) {
         const code = (err as NodeJS.ErrnoException).code;
         if (code !== 'EPERM' && code !== 'ENOSYS') throw err;
@@ -1387,4 +1400,971 @@ test('v2 policy rejects blank configuration and hides invalid version values', (
   assert.deepEqual(normalizeSecretExceptionsPolicy({
     version: 2, namePatterns: [' ./fixtures\\.env.local ', 'fixtures/.env.local'],
   }), { version: 2, namePatterns: ['fixtures/.env.local'] });
+});
+
+const OUTPUT_SYNTHETIC_KEY = '-----BEGIN PRIVATE KEY-----\nBRIDGE_SYNTHETIC_NOT_A_USABLE_KEY\n-----END PRIVATE KEY-----\n';
+
+async function withOutputFixture(
+  run: (project: ProjectCopy, source: string) => Promise<void>,
+  prepare?: (source: string) => Promise<void>
+): Promise<void> {
+  const dir = await createRepo();
+  try {
+    await prepare?.(dir);
+    const project = await createProjectCopy(dir);
+    try { await run(project, dir); }
+    finally { await discardProjectCopy(project); }
+  } finally {
+    const actual = await realpath(dir);
+    const info = await lstat(dir);
+    if (path.dirname(actual) !== await realpath(os.tmpdir()) || !path.basename(actual).startsWith('agy-file-protection-') ||
+        info.isSymbolicLink() || !info.isDirectory()) throw new Error('Unsafe output fixture cleanup');
+    await rm(actual, { recursive: true, force: true });
+  }
+}
+
+async function assertNoOutputBlob(project: ProjectCopy, content: string): Promise<void> {
+  const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+  const oid = (await copyGit(project, [...scope, 'hash-object', '--stdin'], Buffer.from(content))).toString().trim();
+  const object = (await copyGit(project, [...scope, 'cat-file', '--batch-check'], Buffer.from(oid + '\n'))).toString().trim();
+  assert.equal(object, oid + ' missing', 'Rejected bytes must not enter the Git object database');
+}
+
+test('output protection rejects a generated credential name before Git persists its bytes', async () => {
+  await withOutputFixture(async project => {
+    const content = 'PORT=9876\nBRIDGE_SYNTHETIC_FILENAME_ONLY\n';
+    await writeFile(path.join(project.copyDirectory, '.env.synthetic'), content);
+    await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+      assert.match(error.message, /SECRET_FILE/);
+      assert.equal(error.message.includes('9876'), false);
+      return true;
+    });
+    await assertNoOutputBlob(project, content);
+    await assert.rejects(readProjectPatch(project, '.env.synthetic'), { code: 'BLOCKED_FILE_DETECTED' });
+  });
+});
+
+test('output protection rejects sensitive baseline changes without modifying the source', async () => {
+  await withOutputFixture(async (project, source) => {
+    const original = await readFile(path.join(source, 'source.txt'), 'utf8');
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), OUTPUT_SYNTHETIC_KEY);
+    await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+      assert.match(error.message, /baseline file.*SECRET_CONTENT/);
+      assert.equal(error.message.includes('BRIDGE_SYNTHETIC_NOT_A_USABLE_KEY'), false);
+      return true;
+    });
+    assert.equal(await readFile(path.join(source, 'source.txt'), 'utf8'), original);
+    await assertNoOutputBlob(project, OUTPUT_SYNTHETIC_KEY);
+  });
+});
+
+test('output protection preserves exclusion precedence and name-only v2 exceptions', async () => {
+  await withOutputFixture(async project => {
+    await writeFile(path.join(project.copyDirectory, '.env.local'), 'PORT=8080\n');
+    const limits = { ...DEFAULT_PROJECT_LIMITS, secretExceptions: { version: 2 as const, namePatterns: ['.env.local'] } };
+    const allowed = await previewProjectCopy(project, limits);
+    assert.ok(allowed.files.some(file => file.path === '.env.local'));
+    await assert.rejects(previewProjectCopy(project, { ...limits, secretExclusions: ['.env.local'] }), { code: 'BLOCKED_FILE_DETECTED' });
+    await writeFile(path.join(project.copyDirectory, '.env.local'), OUTPUT_SYNTHETIC_KEY);
+    await assert.rejects(previewProjectCopy(project, limits), { code: 'BLOCKED_FILE_DETECTED' });
+    await assertNoOutputBlob(project, OUTPUT_SYNTHETIC_KEY);
+  });
+});
+
+test('output protection omits blocked generated context and rejects a contaminated baseline', async () => {
+  await withOutputFixture(async project => {
+    const before = await fingerprintProjectCopy(project);
+    await writeFile(path.join(project.copyDirectory, '.env.synthetic'), 'PORT=8080\n');
+    const snapshot = await snapshotCopyFiles(project, DEFAULT_PROJECT_LIMITS);
+    assert.equal(snapshot.has('.env.synthetic'), false);
+    assert.ok(snapshot.has('source.txt'));
+    assert.equal(await fingerprintProjectCopy(project), before);
+    const fork = await forkProjectCopy(project, DEFAULT_PROJECT_LIMITS);
+    try { assert.equal(existsSync(path.join(fork.copyDirectory, '.env.synthetic')), false); }
+    finally { await discardProjectCopy(fork); }
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), OUTPUT_SYNTHETIC_KEY);
+    await assert.rejects(snapshotCopyFiles(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(fingerprintProjectCopy(project), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(forkProjectCopy(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+  });
+});
+
+test('output protection respects source and copy ignore rules before staging', async () => {
+  await withOutputFixture(async project => {
+    await writeFile(path.join(project.copyDirectory, '.gitignore'), 'source-ignored.log\ncopy-ignored.log\n');
+    await writeFile(path.join(project.copyDirectory, 'source-ignored.log'), OUTPUT_SYNTHETIC_KEY);
+    await writeFile(path.join(project.copyDirectory, 'copy-ignored.log'), OUTPUT_SYNTHETIC_KEY);
+    await writeFile(path.join(project.copyDirectory, 'legit.txt'), 'BRIDGE_SYNTHETIC_SAFE_OUTPUT\n');
+    const preview = await previewProjectCopy(project);
+    assert.ok(preview.files.some(file => file.path === 'legit.txt'));
+    assert.equal(preview.files.some(file => file.path.endsWith('ignored.log')), false);
+    assert.equal(preview.patch.includes('BRIDGE_SYNTHETIC_NOT_A_USABLE_KEY'), false);
+  }, async source => { await writeFile(path.join(source, '.gitignore'), 'source-ignored.log\n'); });
+});
+
+test('output protection binds Git input to verified bytes when the copy changes immediately before staging', async t => {
+  await withOutputFixture(async project => {
+    const marker = 'BRIDGESYNTHETICNOTAREALKEY1234567890';
+    const sensitive = 'AWS_SECRET_ACCESS_KEY=' + marker + '\n';
+    const file = path.join(project.copyDirectory, 'race-config.txt');
+    await writeFile(file, 'x'.repeat(Buffer.byteLength(sensitive)));
+    const originalSpawn = childProcess.spawn;
+    let changed = false;
+    t.mock.method(childProcess, 'spawn', (...args: Parameters<typeof childProcess.spawn>) => {
+      if (!changed && Array.isArray(args[1]) && args[1].includes('add')) {
+        changed = true;
+        writeFileSync(file, sensitive);
+      }
+      return originalSpawn(...args);
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+        assert.ok(error instanceof BridgeError);
+        assert.ok(['BLOCKED_FILE_DETECTED', 'CONTEXT_CHANGED'].includes(error.code));
+        assert.equal(error.message.includes(marker), false);
+        return true;
+      });
+      assert.equal(changed, true, 'The deterministic staging boundary must be exercised');
+    } finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
+    await assertNoOutputBlob(project, sensitive);
+  });
+});
+
+test('output protection refreshes stale indexed bytes for both restored and missing working files', async () => {
+  await withOutputFixture(async project => {
+    const content = 'AWS_SECRET_ACCESS_KEY=BRIDGESYNTHETICNOTAREALKEY1234567890\n';
+    const relative = 'staged-config.txt';
+    const file = path.join(project.copyDirectory, relative);
+    const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+    for (const missing of [false, true]) {
+      await writeFile(file, content);
+      // Controlled legacy-index fixture, not a production staging path.
+      await copyGit(project, [...scope, 'add', '--', relative]);
+      if (missing) await rm(file);
+      else await writeFile(file, 'BRIDGE_SYNTHETIC_SAFE_CURRENT_CONTENT\n');
+      const patch = await readProjectPatch(project, relative);
+      assert.equal(patch.includes('BRIDGESYNTHETICNOTAREALKEY1234567890'), false);
+    }
+  });
+});
+
+test('output protection readProjectPatch slices reviewed preview patch without shared index reread', async () => {
+  await withOutputFixture(async project => {
+    await writeFile(path.join(project.copyDirectory, 'file-a.txt'), 'content A modified\n');
+    await writeFile(path.join(project.copyDirectory, 'file-b.txt'), 'content B modified\n');
+    await writeFile(path.join(project.copyDirectory, 'ação espaço.txt'), 'non-ASCII path content\n');
+    await writeFile(path.join(project.copyDirectory, 'binary.dat'), Buffer.from([0, 255, 1, 0]));
+    const preview = await previewProjectCopy(project);
+    assert.equal(preview.files.length, 4);
+
+    const unicodePatch = await readProjectPatch(project, 'ação espaço.txt', DEFAULT_PROJECT_LIMITS, preview.sha256);
+    assert.ok(unicodePatch.includes('non-ASCII path content'));
+    assert.equal(unicodePatch.includes('content A modified'), false);
+    const binaryPatch = await readProjectPatch(project, 'binary.dat', DEFAULT_PROJECT_LIMITS, preview.sha256);
+    assert.ok(binaryPatch.includes('GIT binary patch'));
+    assert.equal(binaryPatch.includes('content B modified'), false);
+
+    // Slice for file-a.txt
+    const patchA = await readProjectPatch(project, 'file-a.txt', DEFAULT_PROJECT_LIMITS, preview.sha256);
+    assert.ok(patchA.includes('diff --git a/file-a.txt b/file-a.txt'));
+    assert.ok(patchA.includes('content A modified'));
+    assert.equal(patchA.includes('file-b.txt'), false);
+    assert.equal(patchA.includes('content B modified'), false);
+
+    // Slice for file-b.txt
+    const patchB = await readProjectPatch(project, 'file-b.txt', DEFAULT_PROJECT_LIMITS, preview.sha256);
+    assert.ok(patchB.includes('diff --git a/file-b.txt b/file-b.txt'));
+    assert.ok(patchB.includes('content B modified'));
+    assert.equal(patchB.includes('file-a.txt'), false);
+    assert.equal(patchB.includes('content A modified'), false);
+
+    // Unchanged path rejected with INVALID_PATCH_PATH when expectedSha256 is supplied
+    await assert.rejects(
+      readProjectPatch(project, 'source.txt', DEFAULT_PROJECT_LIMITS, preview.sha256),
+      { code: 'INVALID_PATCH_PATH' }
+    );
+
+    // Concurrently altering the copy invalidates preview and throws REVIEW_CHANGED or CONTEXT_CHANGED
+    await writeFile(path.join(project.copyDirectory, 'file-a.txt'), 'content A altered after preview\n');
+    await assert.rejects(
+      readProjectPatch(project, 'file-a.txt', DEFAULT_PROJECT_LIMITS, preview.sha256),
+      (err: unknown) => err instanceof BridgeError && ['REVIEW_CHANGED', 'CONTEXT_CHANGED'].includes(err.code)
+    );
+  });
+});
+
+test('paths: directory junction ancestry rejection with identical file bytes and inode', async (t) => {
+  if (process.platform !== 'win32') {
+    t.skip('Directory junctions are specific to Windows');
+    return;
+  }
+  const dir = await createRepo();
+  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'agy-external-junction-'));
+  try {
+    const localTarget = path.join(dir, 'source.txt');
+    const outsideTarget = path.join(outsideDir, 'external-source.txt');
+    await link(localTarget, outsideTarget);
+
+    const junctionDir = path.join(dir, 'junction-ancestor');
+    try {
+      await symlink(outsideDir, junctionDir, 'junction');
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' || code === 'ENOSYS') {
+        t.skip('Junction creation not permitted in this environment');
+        return;
+      }
+      throw err;
+    }
+
+    try {
+      // Prove that outsideTarget shares the exact same inode, device and size
+      const localStat = await lstat(localTarget, { bigint: true });
+      const extStat = await lstat(path.join(junctionDir, 'external-source.txt'), { bigint: true });
+      assert.equal(extStat.ino, localStat.ino, 'Hard link must share inode number');
+      assert.equal(extStat.dev, localStat.dev, 'Hard link must share device number');
+      assert.equal(extStat.size, localStat.size);
+      assert.equal(extStat.mtimeNs, localStat.mtimeNs);
+
+      // checkedPath must reject traversal/ancestry even though inode, dev, and content match
+      await assert.rejects(
+        checkedPath(dir, 'junction-ancestor/external-source.txt', false),
+        { code: 'UNSAFE_PROJECT_PATH' }
+      );
+      await assert.rejects(
+        createProjectCopy(dir, ['junction-ancestor/external-source.txt']),
+        { code: 'INVALID_INCLUDE_PATH' }
+      );
+    } finally {
+      await rm(junctionDir, { force: true });
+    }
+  } finally {
+    await rm(outsideDir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+const SYNTHETIC_PEM_BEGIN = '-----BEGIN ' + 'PRIVATE KEY-----\n';
+const SYNTHETIC_PEM_END = '-----END ' + 'PRIVATE KEY-----\n';
+
+test('regression defect 1: private historical baseline blobs are inspected against current policy before patch or fork object creation', async () => {
+  await withOutputFixture(async (project, source) => {
+    const originalSource = await readFile(path.join(source, 'source.txt'), 'utf8');
+    const legacySecretMarker = 'BRIDGE_SYNTHETIC_LEGACY_BASELINE_KEY_MARKER_01';
+    const legacySecretBlob =
+      SYNTHETIC_PEM_BEGIN +
+      legacySecretMarker + '\n' +
+      SYNTHETIC_PEM_END;
+    const sanitizedCopyContent = 'BRIDGE_SYNTHETIC_SANITIZED_CURRENT_COPY_CONTENT\n';
+    const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+
+    // Fixture-only representation of a legacy snapshot whose private HEAD and baseline record
+    // contain a synthetic secret in source.txt and a smudge attribute, while the current working copy is sanitized.
+    await writeFile(path.join(project.copyDirectory, '.gitattributes'), 'source.txt filter=synthetic_smudge\n');
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), legacySecretBlob);
+    await copyGit(project, [...scope, 'add', '-f', '--', '.gitattributes', 'source.txt']);
+    await copyGit(project, [
+      ...scope,
+      '-c', 'user.name=Bridge Snapshot',
+      '-c', 'user.email=bridge@invalid.local',
+      'commit', '--quiet', '-m', 'legacy-contaminated-baseline',
+    ]);
+    await copyGit(project, [
+      '--git-dir=' + project.gitDirectory,
+      'config',
+      'filter.synthetic_smudge.smudge',
+      `"${process.execPath.replaceAll('\\', '/')}" -e "process.stdout.write('smudged harmless checkout\\n')"`,
+    ]);
+    project.baseline.set('.gitattributes', createHash('sha256').update('source.txt filter=synthetic_smudge\n').digest('hex'));
+    project.baseline.set('source.txt', createHash('sha256').update(legacySecretBlob).digest('hex'));
+
+    // Sanitize current working copy so only private HEAD holds the secret bytes
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), sanitizedCopyContent);
+    await copyGit(project, [...scope, 'read-tree', 'HEAD']);
+
+    await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+      assert.match(error.message, /baseline file.*SECRET_CONTENT/);
+      assert.equal(error.message.includes(legacySecretMarker), false);
+      assert.equal(error.message.includes(sanitizedCopyContent.trim()), false);
+      return true;
+    });
+
+    // Rejected before staging the sanitized current copy into the Git object database
+    await assertNoOutputBlob(project, sanitizedCopyContent);
+    assert.equal(await readFile(path.join(source, 'source.txt'), 'utf8'), originalSource);
+
+    await assert.rejects(readProjectPatch(project, 'source.txt'), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+      assert.equal(error.message.includes(legacySecretMarker), false);
+      return true;
+    });
+
+    for (const op of [
+      () => snapshotCopyFiles(project, DEFAULT_PROJECT_LIMITS),
+      () => fingerprintProjectCopy(project),
+      () => forkProjectCopy(project, DEFAULT_PROJECT_LIMITS),
+    ]) {
+      await assert.rejects(op(), (error: unknown) => {
+        assert.ok(error instanceof BridgeError);
+        assert.equal(error.code, 'CONTEXT_CHANGED');
+        assert.equal(error.message.includes(legacySecretMarker), false);
+        return true;
+      });
+    }
+  });
+});
+
+test('regression defect 1: binary secret blobs and policy-revoked deleted baseline files in HEAD fail closed', async () => {
+  await withOutputFixture(async project => {
+    const binaryMarker = 'BRIDGE_SYNTHETIC_BINARY_BASELINE_SECRET_02';
+    const binarySecret = Buffer.concat([
+      Buffer.from([0x00, 0xff, 0x00, 0x0a]),
+      Buffer.from(`${SYNTHETIC_PEM_BEGIN}${binaryMarker}\n${SYNTHETIC_PEM_END}`, 'utf8'),
+    ]);
+    const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+
+    await writeFile(path.join(project.copyDirectory, 'legacy.bin'), binarySecret);
+    await copyGit(project, [...scope, 'add', '-f', '--', 'legacy.bin']);
+    await copyGit(project, [
+      ...scope,
+      '-c', 'user.name=Bridge Snapshot',
+      '-c', 'user.email=bridge@invalid.local',
+      'commit', '--quiet', '-m', 'legacy-binary-secret',
+    ]);
+    project.baseline.set('legacy.bin', createHash('sha256').update(binarySecret).digest('hex'));
+
+    // Even when deleted in the current working copy, removed binary secret in HEAD must be rejected
+    await rm(path.join(project.copyDirectory, 'legacy.bin'));
+    const extraChange = 'BRIDGE_SYNTHETIC_UNSTAGED_EXTRA_CHANGE\n';
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), extraChange);
+
+    await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+      assert.match(error.message, /baseline file.*SECRET_CONTENT.*legacy\.bin/);
+      assert.equal(error.message.includes(binaryMarker), false);
+      return true;
+    });
+    await assertNoOutputBlob(project, extraChange);
+    await assert.rejects(forkProjectCopy(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+  });
+
+  // Policy-revoked baseline file deleted in copyDirectory must not be silently omitted or emitted as deletion patch
+  await withOutputFixture(async project => {
+    await rm(path.join(project.copyDirectory, 'source.txt'));
+    const revokedLimits = { ...DEFAULT_PROJECT_LIMITS, secretExclusions: ['source.txt'] };
+    await assert.rejects(previewProjectCopy(project, revokedLimits), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+      assert.match(error.message, /baseline file.*SECRET_EXCLUSION.*source\.txt/);
+      return true;
+    });
+    await assert.rejects(forkProjectCopy(project, revokedLimits), { code: 'CONTEXT_CHANGED' });
+  });
+});
+
+test('regression defect 2: newly ignored baseline files are rejected even when private index is emptied', async () => {
+  await withOutputFixture(async (project, source) => {
+    const originalSource = await readFile(path.join(source, 'source.txt'), 'utf8');
+    const mutatedIgnored = 'BRIDGE_SYNTHETIC_MUTATED_NOW_IGNORED_CONTENT\n';
+    const gitignoreContent = 'source.txt\n';
+    const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+
+    await writeFile(path.join(project.copyDirectory, '.gitignore'), gitignoreContent);
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), mutatedIgnored);
+    // Fixture empties mutable private index
+    await copyGit(project, [...scope, 'read-tree', '--empty']);
+
+    await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+      assert.ok(error instanceof BridgeError);
+      assert.equal(error.code, 'CONTEXT_CHANGED');
+      assert.match(error.message, /Baseline file became ignored: source\.txt/);
+      assert.equal(error.message.includes(mutatedIgnored.trim()), false);
+      assert.equal(error.message.includes(originalSource.trim()), false);
+      return true;
+    });
+
+    await assertNoOutputBlob(project, mutatedIgnored);
+    await assertNoOutputBlob(project, gitignoreContent);
+
+    await assert.rejects(readProjectPatch(project, 'source.txt'), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(snapshotCopyFiles(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(fingerprintProjectCopy(project), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(forkProjectCopy(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+
+    // Also when the newly ignored baseline file is deleted from disk while index is empty
+    await rm(path.join(project.copyDirectory, 'source.txt'));
+    await assert.rejects(previewProjectCopy(project), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(forkProjectCopy(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+  });
+
+  // Also when source repository ignore rules (.git/info/exclude) newly ignore a baseline file while index is empty
+  await withOutputFixture(async (project, source) => {
+    const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+    await mkdir(path.join(source, '.git', 'info'), { recursive: true });
+    await writeFile(path.join(source, '.git', 'info', 'exclude'), 'source.txt\n');
+    await copyGit(project, [...scope, 'read-tree', '--empty']);
+    await rm(path.join(project.copyDirectory, 'source.txt'));
+    await assert.rejects(previewProjectCopy(project), { code: 'CONTEXT_CHANGED' });
+    await assert.rejects(forkProjectCopy(project, DEFAULT_PROJECT_LIMITS), { code: 'CONTEXT_CHANGED' });
+  });
+});
+
+test('regression defect 2b: ignored directories are pruned by Git ls-files without unbounded recursive directory walks', async t => {
+  await withOutputFixture(
+    async project => {
+      // Create an ignored node_modules tree with more files than tight maxCopyFiles limit
+      const ignoredRoot = path.join(project.copyDirectory, 'node_modules');
+      const nmDir = path.join(ignoredRoot, 'pkg-heavy', 'nested');
+      await mkdir(nmDir, { recursive: true });
+      for (let i = 0; i < 12; i++) {
+        await writeFile(path.join(nmDir, `mod-${i}.js`), `module.exports = ${i};\n`);
+      }
+      await writeFile(path.join(project.copyDirectory, 'source.txt'), 'updated application source\n');
+
+      const originalReaddir = fsPromises.readdir;
+      let ignoredReaddirAttempts = 0;
+      t.mock.method(fsPromises, 'readdir', ((...args: Parameters<typeof originalReaddir>) => {
+        const target = path.resolve(String(args[0]));
+        const normalized = target.replaceAll('\\', '/');
+        if (
+          target === path.resolve(ignoredRoot) ||
+          target.startsWith(path.resolve(ignoredRoot) + path.sep) ||
+          normalized.endsWith('/node_modules') ||
+          normalized.includes('/node_modules/')
+        ) {
+          ignoredReaddirAttempts++;
+          return Promise.reject(new Error('Unexpected Node readdir traversal into ignored node_modules: ' + target));
+        }
+        return Reflect.apply(originalReaddir, fsPromises, args);
+      }) as typeof originalReaddir);
+      syncBuiltinESMExports();
+
+      try {
+        // Control check proving instrumentation catches an attempted ignored-directory read via named binding
+        await assert.rejects(
+          readdir(ignoredRoot),
+          /Unexpected Node readdir traversal into ignored node_modules/
+        );
+        assert.equal(ignoredReaddirAttempts, 1, 'Control check must confirm readdir spy intercepts ignored directory reads');
+        ignoredReaddirAttempts = 0;
+
+        const tightLimits = { ...DEFAULT_PROJECT_LIMITS, maxCopyFiles: 5 };
+        const snapshot = await snapshotCopyFiles(project, tightLimits);
+        assert.deepEqual([...snapshot.keys()], ['.gitignore', 'source.txt']);
+
+        const preview = await previewProjectCopy(project, tightLimits);
+        assert.deepEqual(preview.files, [{ status: 'M', path: 'source.txt' }]);
+        assert.equal(ignoredReaddirAttempts, 0, 'Snapshot and preview must never traverse ignored node_modules via Node readdir');
+      } finally {
+        t.mock.restoreAll();
+        syncBuiltinESMExports();
+      }
+    },
+    async source => {
+      await writeFile(path.join(source, '.gitignore'), 'node_modules/\n');
+    }
+  );
+});
+
+test('regression defect 3: intact managed skills are excluded from gitattributes-driven patch diffs and source writes while preserving manifest verification and rejecting contaminated historical skill blobs', async () => {
+  const dir = await createRepo();
+  try {
+    const skillMarker = '$Id: SYNTHETIC_IDENTIFIER_ONLY$';
+    const skillContent =
+      '---\n' +
+      'name: ident-helper\n' +
+      'description: Managed helper skill fixture\n' +
+      '---\n' +
+      `# Managed Helper Skill\n${skillMarker}\n`;
+    const skills = [{ name: 'ident-helper', content: skillContent }];
+    const copy = await createProjectCopy(dir, undefined, undefined, DEFAULT_PROJECT_LIMITS, skills);
+    try {
+      const skillRelPath = '.agents/skills/ident-helper/SKILL.md';
+      const attrContent = `${skillRelPath} ident\n`;
+      await writeFile(path.join(copy.copyDirectory, '.gitattributes'), attrContent);
+
+      // Even if a legacy copy had the managed skill committed in HEAD, preview and integrate must exclude it
+      const preview = await previewProjectCopy(copy);
+      assert.deepEqual(preview.files, [{ status: 'A', path: '.gitattributes' }]);
+      assert.equal(
+        preview.patch.split(/\r?\n/).some((line) => line.startsWith('diff --git ') && line.includes(skillRelPath)),
+        false,
+      );
+      assert.equal(preview.patch.includes(`+${skillRelPath} ident`), true);
+      assert.equal(preview.patch.includes('SYNTHETIC_IDENTIFIER_ONLY'), false);
+
+      // Simulate legacy copy where safe SKILL.md was also committed in HEAD before .gitattributes added ident
+      const scope = ['--git-dir=' + copy.gitDirectory, '--work-tree=' + copy.copyDirectory];
+      await copyGit(copy, [...scope, 'read-tree', 'HEAD']);
+      await copyGit(copy, [...scope, 'add', '-f', '--', skillRelPath]);
+      await copyGit(copy, [
+        ...scope,
+        '-c', 'user.name=Bridge Snapshot',
+        '-c', 'user.email=bridge@invalid.local',
+        'commit', '--quiet', '-m', 'legacy-skill-in-head',
+      ]);
+
+      const legacyPreview = await previewProjectCopy(copy);
+      assert.deepEqual(legacyPreview.files, [{ status: 'A', path: '.gitattributes' }]);
+      assert.equal(
+        legacyPreview.patch.split(/\r?\n/).some((line) => line.startsWith('diff --git ') && line.includes(skillRelPath)),
+        false,
+      );
+      assert.equal(legacyPreview.patch.includes(`+${skillRelPath} ident`), true);
+      assert.equal(legacyPreview.patch.includes('SYNTHETIC_IDENTIFIER_ONLY'), false);
+
+      // Integrate legitimate .gitattributes change and verify no auxiliary skill is written to sourceDirectory
+      await integrateProjectCopy(copy, legacyPreview.sha256);
+      assert.equal(await readFile(path.join(dir, '.gitattributes'), 'utf8'), attrContent);
+      assert.equal(existsSync(path.join(dir, '.agents')), false);
+      assert.equal(await readFile(path.join(copy.copyDirectory, skillRelPath), 'utf8'), skillContent);
+
+      // Positive inheritance: fork preserves safe provided skills and tree fingerprint
+      const forked = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+      try {
+        assert.equal(await readFile(path.join(forked.copyDirectory, skillRelPath), 'utf8'), skillContent);
+        assert.equal(await fingerprintProjectCopy(forked), await fingerprintProjectCopy(copy));
+      } finally {
+        await discardProjectCopy(forked);
+      }
+
+      // Negative historical auxiliary contamination: synthetic PEM private key committed ONLY to legacy private HEAD
+      // at the managed SKILL path while working SKILL is restored to original safe bytes matching current manifest.
+      const contaminatedSkillMarker = 'BRIDGE_SYNTHETIC_HISTORICAL_SKILL_KEY_MARKER_04';
+      const contaminatedSkillBlob =
+        skillContent +
+        SYNTHETIC_PEM_BEGIN +
+        contaminatedSkillMarker + '\n' +
+        SYNTHETIC_PEM_END;
+      await writeFile(path.join(copy.copyDirectory, skillRelPath), contaminatedSkillBlob);
+      await copyGit(copy, [...scope, 'read-tree', 'HEAD']);
+      await copyGit(copy, [...scope, 'add', '-f', '--', skillRelPath]);
+      await copyGit(copy, [
+        ...scope,
+        '-c', 'user.name=Bridge Snapshot',
+        '-c', 'user.email=bridge@invalid.local',
+        'commit', '--quiet', '-m', 'legacy-contaminated-skill-in-head',
+      ]);
+      // Restore working SKILL to original safe bytes matching current manifest
+      await writeFile(path.join(copy.copyDirectory, skillRelPath), skillContent);
+      await copyGit(copy, [...scope, 'read-tree', 'HEAD']);
+
+      await assert.rejects(previewProjectCopy(copy), (error: unknown) => {
+        assert.ok(error instanceof BridgeError);
+        assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+        assert.match(error.message, /baseline file.*SECRET_CONTENT/);
+        assert.equal(error.message.includes(contaminatedSkillMarker), false);
+        return true;
+      });
+      await assert.rejects(readProjectPatch(copy, '.gitattributes'), (error: unknown) => {
+        assert.ok(error instanceof BridgeError);
+        assert.equal(error.code, 'BLOCKED_FILE_DETECTED');
+        assert.equal(error.message.includes(contaminatedSkillMarker), false);
+        return true;
+      });
+      for (const op of [
+        () => snapshotCopyFiles(copy, DEFAULT_PROJECT_LIMITS),
+        () => fingerprintProjectCopy(copy),
+        () => forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS),
+      ]) {
+        await assert.rejects(op(), (error: unknown) => {
+          assert.ok(error instanceof BridgeError);
+          assert.equal(error.code, 'CONTEXT_CHANGED');
+          assert.equal(error.message.includes(contaminatedSkillMarker), false);
+          return true;
+        });
+      }
+
+      // Tampering with the managed skill file still fails manifest verification before baseline inspection
+      await writeFile(path.join(copy.copyDirectory, skillRelPath), '# Tampered skill\n');
+      await assert.rejects(previewProjectCopy(copy), { code: 'SKILL_VERIFICATION_FAILED' });
+      await assert.rejects(forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS), { code: 'SKILL_VERIFICATION_FAILED' });
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('regression: deterministic after-scan HEAD swap in previewProjectCopy rejects with CONTEXT_CHANGED without exposing unscanned commit bytes', async t => {
+  await withOutputFixture(async project => {
+    const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+    const originalHead = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'])).toString('utf8').trim();
+
+    // Create an unreferenced commit in gitDirectory containing a synthetic secret, then restore HEAD to originalHead
+    const swappedMarker = 'BRIDGE_SYNTHETIC_AFTER_SCAN_SWAPPED_HEAD_SECRET_03';
+    const swappedSecret = `${SYNTHETIC_PEM_BEGIN}${swappedMarker}\n${SYNTHETIC_PEM_END}`;
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), swappedSecret);
+    await copyGit(project, [...scope, 'add', '-f', '--', 'source.txt']);
+    await copyGit(project, [
+      ...scope,
+      '-c', 'user.name=Bridge Snapshot',
+      '-c', 'user.email=bridge@invalid.local',
+      'commit', '--quiet', '-m', 'unscanned-swapped-head',
+    ]);
+    const swappedCommit = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'])).toString('utf8').trim();
+    await copyGit(project, ['--git-dir=' + project.gitDirectory, 'update-ref', 'HEAD', originalHead]);
+    await copyGit(project, [...scope, 'read-tree', originalHead]);
+
+    // Write safe working copy edit
+    await writeFile(path.join(project.copyDirectory, 'source.txt'), 'safe working copy update\n');
+
+    const originalSpawn = childProcess.spawn;
+    let swapped = false;
+    let verifiedMovedHead = '';
+    t.mock.method(childProcess, 'spawn', (...args: Parameters<typeof childProcess.spawn>) => {
+      if (!swapped && Array.isArray(args[1]) && args[1].includes('diff')) {
+        swapped = true;
+        const gitFile = String(args[0]);
+        const spawnOpts = (args[2] ?? {}) as { cwd?: string; env?: NodeJS.ProcessEnv };
+        execFileSync(
+          gitFile,
+          ['--git-dir=' + project.gitDirectory, 'update-ref', 'HEAD', swappedCommit],
+          { cwd: spawnOpts.cwd, env: spawnOpts.env, windowsHide: true }
+        );
+        verifiedMovedHead = execFileSync(
+          gitFile,
+          ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'],
+          { cwd: spawnOpts.cwd, env: spawnOpts.env, encoding: 'utf8', windowsHide: true }
+        ).trim();
+      }
+      return originalSpawn(...args);
+    });
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(previewProjectCopy(project), (error: unknown) => {
+        assert.ok(error instanceof BridgeError);
+        assert.equal(error.code, 'CONTEXT_CHANGED');
+        assert.equal(error.message.includes(swappedMarker), false);
+        return true;
+      });
+      assert.equal(swapped, true, 'Deterministic after-scan HEAD swap must trigger during diff');
+      assert.equal(verifiedMovedHead, swappedCommit, 'Git update-ref must move HEAD to swappedCommit across files/reftable backends');
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+      await copyGit(project, ['--git-dir=' + project.gitDirectory, 'update-ref', 'HEAD', originalHead]).catch(() => {});
+    }
+  });
+});
+
+test('regression: conflicting execution policy path in source rejects before first Git add and persisted copy without HEAD fails closed', async t => {
+  const dir = await createRepo();
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-policy-state-'));
+  try {
+    await mkdir(path.join(dir, '.agents'), { recursive: true });
+    const conflictMarker = 'BRIDGE_SYNTHETIC_CONFLICTING_HOOKS_CONTENT';
+    await writeFile(path.join(dir, '.agents', 'hooks.json'), `{"conflict":"${conflictMarker}"}\n`);
+
+    const { resolveAgentPolicy } = await import('../src/agent-policy.js');
+    const { randomUUID } = await import('node:crypto');
+    const executionId = randomUUID();
+    const policy = resolveAgentPolicy({ allowedTools: ['finish', 'view_file'] }, ['finish', 'view_file'], [], 'read-only', executionId);
+
+    const originalSpawn = childProcess.spawn;
+    let gitAddCalled = false;
+    t.mock.method(childProcess, 'spawn', (...args: Parameters<typeof childProcess.spawn>) => {
+      if (Array.isArray(args[1]) && args[1].includes('add')) {
+        gitAddCalled = true;
+      }
+      return originalSpawn(...args);
+    });
+    syncBuiltinESMExports();
+
+    let capturedProject: ProjectCopy | undefined;
+    try {
+      await assert.rejects(
+        createProjectCopy(
+          dir,
+          undefined,
+          p => { capturedProject = p; },
+          DEFAULT_PROJECT_LIMITS,
+          [],
+          { policy, catalog: [], stateDirectory: stateDir, executionId }
+        ),
+        { code: 'CONFLICTING_EXECUTION_POLICY' }
+      );
+      assert.equal(gitAddCalled, false, 'Conflicting helper content must be rejected before first Git add');
+      assert.ok(capturedProject, 'onCreated should capture project before stageProjectExecutionPolicy');
+      assert.equal(existsSync(capturedProject.copyDirectory), false, 'Failed createProjectCopy must clean up copyDirectory');
+      assert.equal(existsSync(capturedProject.gitDirectory), false, 'Failed createProjectCopy must clean up gitDirectory');
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
+
+    // Persisted copy whose HEAD is missing/unborn fails closed with GIT_OPERATION_FAILED
+    await rm(path.join(dir, '.agents'), { recursive: true, force: true });
+    const persisted = await createProjectCopy(dir);
+    try {
+      await copyGit(persisted, ['--git-dir=' + persisted.gitDirectory, 'symbolic-ref', 'HEAD', 'refs/heads/unborn-branch']);
+      await assert.rejects(previewProjectCopy(persisted), { code: 'GIT_OPERATION_FAILED' });
+      await assert.rejects(snapshotCopyFiles(persisted, DEFAULT_PROJECT_LIMITS), { code: 'GIT_OPERATION_FAILED' });
+      await assert.rejects(forkProjectCopy(persisted, DEFAULT_PROJECT_LIMITS), { code: 'GIT_OPERATION_FAILED' });
+    } finally {
+      await discardProjectCopy(persisted);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(stateDir, { recursive: true, force: true });
+  }
+});
+
+test('positive regressions: safe legacy baseline, legitimate deletions, and safe 12MB baseline larger than 10MB default Git output cap', async () => {
+  const dir = await createRepo();
+  try {
+    await writeFile(path.join(dir, 'delete-me.txt'), 'legitimate file to delete\n');
+    // 12 MiB safe baseline file (> 10,000,000 bytes MAX_GIT_OUTPUT default buffer limit, within 256MiB)
+    const largeSize = 12 * 1024 * 1024;
+    const largeBuffer = Buffer.alloc(largeSize, 'A');
+    await writeFile(path.join(dir, 'large-safe.bin'), largeBuffer);
+
+    const copy = await createProjectCopy(dir);
+    try {
+      // Simulate safe legacy snapshot with an additional safe file in HEAD and legitimate deletion of delete-me.txt
+      const scope = ['--git-dir=' + copy.gitDirectory, '--work-tree=' + copy.copyDirectory];
+      const legacySafeContent = 'safe legacy baseline file content\n';
+      await writeFile(path.join(copy.copyDirectory, 'legacy-safe.txt'), legacySafeContent);
+      await copyGit(copy, [...scope, 'add', '-f', '--', 'legacy-safe.txt']);
+      await copyGit(copy, [
+        ...scope,
+        '-c', 'user.name=Bridge Snapshot',
+        '-c', 'user.email=bridge@invalid.local',
+        'commit', '--quiet', '-m', 'safe-legacy-baseline',
+      ]);
+      copy.baseline.set('legacy-safe.txt', createHash('sha256').update(legacySafeContent).digest('hex'));
+
+      // Legitimate deletion and modification
+      await rm(path.join(copy.copyDirectory, 'delete-me.txt'));
+      await writeFile(path.join(copy.copyDirectory, 'source.txt'), 'updated safe source\n');
+
+      const preview = await previewProjectCopy(copy);
+      assert.deepEqual(preview.files, [
+        { status: 'D', path: 'delete-me.txt' },
+        { status: 'M', path: 'source.txt' },
+      ]);
+      assert.equal(preview.summary.deleted, 1);
+      assert.equal(preview.summary.modified, 1);
+
+      const snapshot = await snapshotCopyFiles(copy, DEFAULT_PROJECT_LIMITS);
+      assert.equal(snapshot.has('delete-me.txt'), false);
+      assert.equal(snapshot.has('large-safe.bin'), true);
+      assert.equal(snapshot.has('legacy-safe.txt'), true);
+
+      const fork = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+      try {
+        assert.equal(existsSync(path.join(fork.copyDirectory, 'delete-me.txt')), false);
+        assert.equal((await lstat(path.join(fork.copyDirectory, 'large-safe.bin'))).size, largeSize);
+        const forkPreview = await previewProjectCopy(fork);
+        assert.deepEqual(forkPreview.files, preview.files);
+      } finally {
+        await discardProjectCopy(fork);
+      }
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+function encodeUtf16Le(text: string, withBom = false): Buffer {
+  const body = Buffer.from(text, 'utf16le');
+  return withBom ? Buffer.concat([Buffer.from([0xff, 0xfe]), body]) : body;
+}
+
+function encodeUtf16Be(text: string, withBom = false): Buffer {
+  const le = Buffer.from(text, 'utf16le');
+  const body = Buffer.alloc(le.length);
+  for (let i = 0; i < le.length; i += 2) {
+    body[i] = le[i + 1]!;
+    body[i + 1] = le[i]!;
+  }
+  return withBom ? Buffer.concat([Buffer.from([0xfe, 0xff]), body]) : body;
+}
+
+function encodeUtf32Le(text: string, withBom = false): Buffer {
+  const cps = Array.from(text, ch => ch.codePointAt(0)!);
+  const body = Buffer.alloc(cps.length * 4);
+  for (let i = 0; i < cps.length; i++) {
+    body.writeUInt32LE(cps[i]!, i * 4);
+  }
+  return withBom ? Buffer.concat([Buffer.from([0xff, 0xfe, 0x00, 0x00]), body]) : body;
+}
+
+function encodeUtf32Be(text: string, withBom = false): Buffer {
+  const cps = Array.from(text, ch => ch.codePointAt(0)!);
+  const body = Buffer.alloc(cps.length * 4);
+  for (let i = 0; i < cps.length; i++) {
+    body.writeUInt32BE(cps[i]!, i * 4);
+  }
+  return withBom ? Buffer.concat([Buffer.from([0x00, 0x00, 0xfe, 0xff]), body]) : body;
+}
+
+test('regression: BOM/NUL-padded Unicode secret signatures are blocked before Git object insertion even with working-tree-encoding while preserving safe Unicode sources', async () => {
+  const dir = await createRepo();
+  try {
+    const marker = 'BRIDGE_SYNTHETIC_UNICODE_PEM_KEY_MARKER_09';
+    const pemPayload = `${SYNTHETIC_PEM_BEGIN}${marker}\n${SYNTHETIC_PEM_END}`;
+    const safeUnicodeText = 'legitimate UTF-16 source text — Café 日本語\n';
+    const safeUnicodeBuf = encodeUtf16Le(safeUnicodeText, true);
+    const gitattributesContent =
+      'source.txt working-tree-encoding=UTF-16\n' +
+      'safe-unicode.txt working-tree-encoding=UTF-16\n';
+
+    await writeFile(path.join(dir, '.gitattributes'), gitattributesContent);
+    await writeFile(path.join(dir, 'source.txt'), encodeUtf16Le(pemPayload, true));
+    await writeFile(path.join(dir, 'safe-unicode.txt'), safeUnicodeBuf);
+
+    // BOM and non-BOM endian variants under neutral .txt names
+    const variantFiles: Array<[string, Buffer]> = [
+      ['utf16le-bom.txt', encodeUtf16Le(pemPayload, true)],
+      ['utf16le-nobom.txt', encodeUtf16Le(pemPayload, false)],
+      ['utf16be-bom.txt', encodeUtf16Be(pemPayload, true)],
+      ['utf16be-nobom.txt', encodeUtf16Be(pemPayload, false)],
+      ['utf32le-bom.txt', encodeUtf32Le(pemPayload, true)],
+      ['utf32le-nobom.txt', encodeUtf32Le(pemPayload, false)],
+      ['utf32be-bom.txt', encodeUtf32Be(pemPayload, true)],
+      ['utf32be-nobom.txt', encodeUtf32Be(pemPayload, false)],
+    ];
+    for (const [name, buf] of variantFiles) {
+      await writeFile(path.join(dir, name), buf);
+    }
+
+    // Bounded generated fixture where the UTF-16LE PEM header crosses the 64KiB (65536-byte) read window boundary
+    const padUnit = Buffer.from('safe-window-pad\n', 'utf16le'); // 32 bytes
+    const prefixTargetBytes = 65520 - 2; // 2 bytes for BOM -> header starts at offset 65520 and crosses 65536
+    const fullUnits = Math.floor(prefixTargetBytes / padUnit.length);
+    const remBytes = prefixTargetBytes - fullUnits * padUnit.length;
+    const remPad = Buffer.from(' '.repeat(remBytes / 2 - 1) + '\n', 'utf16le');
+    const windowCrossingBuf = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      ...Array.from({ length: fullUnits }, () => padUnit),
+      remPad,
+      encodeUtf16Le(pemPayload, false),
+    ]);
+    assert.ok(windowCrossingBuf.length > 65536);
+    await writeFile(path.join(dir, 'window-crossing-utf16le.txt'), windowCrossingBuf);
+
+    // Name-only v2 secretExceptions cannot bypass encoded secret content
+    const awsMarker = 'BRIDGESYNTHETICENCODEDAWSKEY1234567890';
+    await writeFile(
+      path.join(dir, '.env.local'),
+      encodeUtf16Be(`AWS_SECRET_ACCESS_KEY=${awsMarker}\n`, true),
+    );
+    await writeFile(path.join(dir, 'server.key'), encodeUtf16Le(pemPayload, true));
+    const harmlessEnvBuf = encodeUtf16Le('PORT=8080\nAPP_NAME=safe-unicode-env\n', true);
+    await writeFile(path.join(dir, 'harmless.env.local'), harmlessEnvBuf);
+
+    // Safe UTF-16 source file with synthetic string literal and safe UTF-16 public certificate
+    await mkdir(path.join(dir, 'src'), { recursive: true });
+    const safeSourceBuf = encodeUtf16Le(
+      `export const MOCK_KEY = "${SYNTHETIC_PEM_BEGIN.trim()}\\nMOCK\\n${SYNTHETIC_PEM_END.trim()}";\n`,
+      true,
+    );
+    await writeFile(path.join(dir, 'src', 'unicode-auth.ts'), safeSourceBuf);
+    const safeCertBuf = encodeUtf16Le(
+      '-----BEGIN ' + 'CERTIFICATE-----\nSAFE_CERT_BODY\n-----END ' + 'CERTIFICATE-----\n',
+      true,
+    );
+    await writeFile(path.join(dir, 'cert-utf16.pem'), safeCertBuf);
+
+    const limits = {
+      ...DEFAULT_PROJECT_LIMITS,
+      secretExceptions: {
+        version: 2 as const,
+        namePatterns: ['.env.local', 'server.key', 'harmless.env.local'],
+      },
+    };
+
+    const listed = await listProjectFiles(dir);
+    assert.equal(listed.includes('source.txt'), false);
+    assert.equal(listed.includes('window-crossing-utf16le.txt'), false);
+    for (const [name] of variantFiles) {
+      assert.equal(listed.includes(name), false);
+    }
+    assert.ok(listed.includes('safe-unicode.txt'));
+    assert.ok(listed.includes('src/unicode-auth.ts'));
+    assert.ok(listed.includes('cert-utf16.pem'));
+
+    const copy = await createProjectCopy(dir, undefined, undefined, limits);
+    try {
+      const blockedExpected = [
+        'source.txt',
+        'window-crossing-utf16le.txt',
+        '.env.local',
+        'server.key',
+        ...variantFiles.map(([name]) => name),
+      ];
+      for (const blockedPath of blockedExpected) {
+        assert.equal(copy.includedFiles.includes(blockedPath), false, `${blockedPath} must not be included`);
+        assert.equal(existsSync(path.join(copy.copyDirectory, blockedPath)), false, `${blockedPath} must not exist in copy`);
+        assert.ok(
+          copy.blockedFiles?.some(b => b.path === blockedPath && b.reason === 'SECRET_CONTENT'),
+          `${blockedPath} must be recorded as SECRET_CONTENT`,
+        );
+      }
+
+      // Verify neither canonical UTF-8 PEM nor raw encoded bytes entered the private Git object database
+      await assertNoOutputBlob(copy, pemPayload);
+      const rawUtf16Oid = (
+        await copyGit(copy, ['--git-dir=' + copy.gitDirectory, 'hash-object', '--stdin'], encodeUtf16Le(pemPayload, true))
+      ).toString('utf8').trim();
+      const rawUtf16Check = (
+        await copyGit(copy, ['--git-dir=' + copy.gitDirectory, 'cat-file', '--batch-check'], Buffer.from(rawUtf16Oid + '\n'))
+      ).toString('utf8').trim();
+      assert.equal(rawUtf16Check, `${rawUtf16Oid} missing`);
+      const headTree = (
+        await copyGit(copy, ['--git-dir=' + copy.gitDirectory, 'ls-tree', '-r', '--name-only', 'HEAD'])
+      ).toString('utf8');
+      assert.equal(headTree.includes('source.txt'), false);
+      assert.equal(headTree.includes('window-crossing-utf16le.txt'), false);
+
+      // Verify safe Unicode source was copied byte-for-byte and Git canonical content is converted UTF-8
+      assert.ok(copy.includedFiles.includes('safe-unicode.txt'));
+      const copiedSafeBytes = await readFile(path.join(copy.copyDirectory, 'safe-unicode.txt'));
+      assert.deepEqual(copiedSafeBytes, safeUnicodeBuf);
+      assert.equal(
+        copy.baseline.get('safe-unicode.txt'),
+        createHash('sha256').update(safeUnicodeBuf).digest('hex'),
+      );
+      const canonicalGitBlob = (
+        await copyGit(copy, ['--git-dir=' + copy.gitDirectory, 'show', 'HEAD:safe-unicode.txt'])
+      ).toString('utf8');
+      assert.equal(canonicalGitBlob, safeUnicodeText);
+
+      // Verify safe source, public certificate, and harmless excepted env remain intact byte-for-byte
+      assert.deepEqual(await readFile(path.join(copy.copyDirectory, 'src', 'unicode-auth.ts')), safeSourceBuf);
+      assert.deepEqual(await readFile(path.join(copy.copyDirectory, 'cert-utf16.pem')), safeCertBuf);
+      assert.deepEqual(await readFile(path.join(copy.copyDirectory, 'harmless.env.local')), harmlessEnvBuf);
+
+      // Verify post-copy contamination of safe-unicode.txt with UTF-16LE private key fails closed before Git staging
+      await writeFile(path.join(copy.copyDirectory, 'safe-unicode.txt'), encodeUtf16Le(pemPayload, true));
+      await assert.rejects(previewProjectCopy(copy, limits), (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'BLOCKED_FILE_DETECTED');
+        assert.match(err.message, /SECRET_CONTENT/);
+        assert.equal(err.message.includes(marker), false);
+        return true;
+      });
+      await assertNoOutputBlob(copy, pemPayload);
+      await assert.rejects(snapshotCopyFiles(copy, limits), { code: 'CONTEXT_CHANGED' });
+      await assert.rejects(fingerprintProjectCopy(copy), { code: 'CONTEXT_CHANGED' });
+      await assert.rejects(forkProjectCopy(copy, limits), { code: 'CONTEXT_CHANGED' });
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

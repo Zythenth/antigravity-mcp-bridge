@@ -738,10 +738,13 @@ export async function stageExecutionPolicy(
   }
 
   // Prepare private receipt file
-  const receiptsDir = path.join(canonicalState, 'execution-receipts');
-  await fsp.mkdir(receiptsDir, { recursive: true, mode: 0o700 });
-  const receiptPath = path.join(receiptsDir, `${setup.executionId}.jsonl`);
-  await assertNoLinkAncestry(receiptPath, 'receiptPath');
+  const canonicalReceiptsDir = path.join(canonicalState, 'execution-receipts');
+  const canonicalReceiptPath = path.join(canonicalReceiptsDir, `${setup.executionId}.jsonl`);
+  const authorizedReceiptsDir = path.join(resolvedState, 'execution-receipts');
+  const authorizedReceiptPath = path.join(authorizedReceiptsDir, `${setup.executionId}.jsonl`);
+
+  await fsp.mkdir(authorizedReceiptsDir, { recursive: true, mode: 0o700 });
+  await assertNoLinkAncestry(authorizedReceiptPath, 'receiptPath');
 
   const createdFiles: string[] = [];
   let receiptIdentity!: { dev: string; ino: string };
@@ -749,15 +752,27 @@ export async function stageExecutionPolicy(
   try {
     // Create receipt file exclusively (flag 'wx')
     try {
-      const handle = await fsp.open(receiptPath, 'wx', 0o600);
+      const handle = await fsp.open(authorizedReceiptPath, 'wx', 0o600);
       try { const stat = await handle.stat({ bigint: true }); receiptIdentity = { dev: stat.dev.toString(), ino: stat.ino.toString() }; } finally { await handle.close(); }
-      createdFiles.push(receiptPath);
+      createdFiles.push(authorizedReceiptPath);
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-        throw new BridgeError('RECEIPT_COLLISION', `Preexisting receipt file: ${receiptPath}`);
+        throw new BridgeError('RECEIPT_COLLISION', `Preexisting receipt file: ${canonicalReceiptPath}`);
       }
       throw err;
     }
+
+    const canonicalActual = await fsp.realpath(authorizedReceiptPath);
+    if (!pathsEqual(canonicalActual, canonicalReceiptPath)) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Receipt path canonical identity mismatch');
+    }
+    const receiptStat = await fsp.lstat(authorizedReceiptPath, { bigint: true });
+    if (receiptStat.isSymbolicLink() || !receiptStat.isFile() || receiptStat.nlink !== 1n ||
+        receiptStat.dev.toString() !== receiptIdentity.dev || receiptStat.ino.toString() !== receiptIdentity.ino) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Receipt file identity or link check failed');
+    }
+
+    const receiptPath = canonicalReceiptPath;
 
     // Build hooks.json
     const hooksJsonContent = JSON.stringify(
@@ -904,8 +919,20 @@ export async function stageExecutionPolicy(
     for (const created of createdFiles) {
       try {
         await assertNoLinkAncestry(created, 'created helper');
-        const relative = path.relative(canonicalCopy, created);
-        if (created !== receiptPath && (!relative || relative.startsWith('..') || path.isAbsolute(relative))) throw new Error('Unsafe helper cleanup');
+        const isReceipt = pathsEqual(created, authorizedReceiptPath);
+        if (!isReceipt && !EXECUTION_POLICY_PATHS.some(file => pathsEqual(created, path.join(absoluteCopy, file)))) {
+          throw new Error('Unsafe helper cleanup');
+        }
+        const expectedParent = isReceipt ? canonicalReceiptsDir : path.join(canonicalCopy, '.agents');
+        if (!pathsEqual(await fsp.realpath(path.dirname(created)), expectedParent)) throw new Error('Helper cleanup parent changed');
+        const current = await fsp.lstat(created, { bigint: true }).catch(error => {
+          if (error.code === 'ENOENT') return undefined;
+          throw error;
+        });
+        if (current && (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1n ||
+            (isReceipt && (current.dev.toString() !== receiptIdentity.dev || current.ino.toString() !== receiptIdentity.ino)))) {
+          throw new Error('Helper cleanup identity changed');
+        }
         await fsp.rm(created, { force: true });
       } catch { cleanupFailed = true; }
     }
@@ -933,21 +960,31 @@ export async function verifyExecutionPolicy(
   }
 
   // Validate state directory and receipt path boundary
-  const stateInfo = await fsp.lstat(stateDirectory).catch(() => undefined);
+  const resolvedState = path.resolve(stateDirectory);
+  const stateInfo = await fsp.lstat(resolvedState).catch(() => undefined);
   if (!stateInfo || !stateInfo.isDirectory() || stateInfo.isSymbolicLink()) {
     throw new BridgeError('EXECUTION_POLICY_VERIFICATION_FAILED', 'stateDirectory must be a non-link directory');
   }
-  const canonicalState = await fsp.realpath(stateDirectory);
+  const canonicalState = await fsp.realpath(resolvedState);
   const expectedReceiptPath = path.join(canonicalState, 'execution-receipts', `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError('EXECUTION_POLICY_VERIFICATION_FAILED', 'Receipt path boundary mismatch');
   }
 
-  // Receipt must exist and be regular non-link file
-  await assertNoLinkAncestry(staged.receiptPath, 'receiptPath');
-  const identity = await fsp.lstat(staged.receiptPath, { bigint: true });
-  if (identity.nlink !== 1n || identity.dev.toString() !== staged.receiptIdentity.dev || identity.ino.toString() !== staged.receiptIdentity.ino) throw new BridgeError('EXECUTION_POLICY_VERIFICATION_FAILED', 'Private receipt file identity changed');
-  const receiptStat = await fsp.lstat(staged.receiptPath).catch(() => undefined);
+  // Receipt must exist and be regular non-link file verified through authorized state address
+  const authorizedReceiptPath = path.join(resolvedState, 'execution-receipts', `${staged.executionId}.jsonl`);
+  await assertNoLinkAncestry(authorizedReceiptPath, 'receiptPath');
+  const canonicalActual = await fsp.realpath(authorizedReceiptPath).catch(() => undefined);
+  if (!canonicalActual || !pathsEqual(canonicalActual, expectedReceiptPath)) {
+    throw new BridgeError('EXECUTION_POLICY_VERIFICATION_FAILED', 'Receipt canonical path mismatch');
+  }
+
+  const identity = await fsp.lstat(authorizedReceiptPath, { bigint: true });
+  if (identity.isSymbolicLink() || !identity.isFile() || identity.nlink !== 1n ||
+      identity.dev.toString() !== staged.receiptIdentity.dev || identity.ino.toString() !== staged.receiptIdentity.ino) {
+    throw new BridgeError('EXECUTION_POLICY_VERIFICATION_FAILED', 'Private receipt file identity changed');
+  }
+  const receiptStat = await fsp.lstat(authorizedReceiptPath).catch(() => undefined);
   if (!receiptStat || receiptStat.isSymbolicLink() || !receiptStat.isFile()) {
     throw new BridgeError('EXECUTION_POLICY_VERIFICATION_FAILED', 'Receipt file is missing or not a regular file');
   }
@@ -1009,21 +1046,32 @@ export async function readExecutionPolicyReceipt(
   }
 
   // Validate stateDirectory
-  const stateInfo = await fsp.lstat(stateDirectory).catch(() => undefined);
+  await assertNoLinkAncestry(stateDirectory, 'stateDirectory');
+  const resolvedState = path.resolve(stateDirectory);
+  const stateInfo = await fsp.lstat(resolvedState).catch(() => undefined);
   if (!stateInfo || !stateInfo.isDirectory() || stateInfo.isSymbolicLink()) {
     throw new BridgeError('INVALID_RECEIPT', 'stateDirectory must be an existing non-link directory');
   }
-  const canonicalState = await fsp.realpath(stateDirectory);
+  const canonicalState = await fsp.realpath(resolvedState);
   const expectedReceiptPath = path.join(canonicalState, 'execution-receipts', `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError('INVALID_RECEIPT', 'Receipt path does not match stateDirectory and executionId');
   }
 
-  await assertNoLinkAncestry(staged.receiptPath, 'receiptPath');
-  const identity = await fsp.lstat(staged.receiptPath, { bigint: true });
-  if (identity.nlink !== 1n || identity.dev.toString() !== staged.receiptIdentity.dev || identity.ino.toString() !== staged.receiptIdentity.ino) throw new BridgeError('INVALID_RECEIPT', 'Private receipt file identity changed');
+  const authorizedReceiptPath = path.join(resolvedState, 'execution-receipts', `${staged.executionId}.jsonl`);
+  await assertNoLinkAncestry(authorizedReceiptPath, 'receiptPath');
+  const canonicalActual = await fsp.realpath(authorizedReceiptPath).catch(() => undefined);
+  if (!canonicalActual || !pathsEqual(canonicalActual, expectedReceiptPath)) {
+    throw new BridgeError('INVALID_RECEIPT', 'Receipt path does not match canonical stateDirectory and executionId');
+  }
+
+  const identity = await fsp.lstat(authorizedReceiptPath, { bigint: true });
+  if (identity.isSymbolicLink() || !identity.isFile() || identity.nlink !== 1n ||
+      identity.dev.toString() !== staged.receiptIdentity.dev || identity.ino.toString() !== staged.receiptIdentity.ino) {
+    throw new BridgeError('INVALID_RECEIPT', 'Private receipt file identity changed');
+  }
   // Validate receipt file
-  const receiptStat = await fsp.lstat(staged.receiptPath).catch(() => undefined);
+  const receiptStat = await fsp.lstat(authorizedReceiptPath).catch(() => undefined);
   if (!receiptStat || receiptStat.isSymbolicLink() || !receiptStat.isFile()) {
     throw new BridgeError('INVALID_RECEIPT', 'Receipt file is missing or not a regular file');
   }
@@ -1049,7 +1097,7 @@ export async function readExecutionPolicyReceipt(
     };
   }
 
-  const handle = await fsp.open(staged.receiptPath, 'r');
+  const handle = await fsp.open(authorizedReceiptPath, 'r');
   let fullBuffer: Buffer;
   try {
     const stat = await handle.stat({ bigint: true });
@@ -1138,12 +1186,21 @@ export async function readExecutionPolicyReceipt(
 export async function discardExecutionPolicy(staged: StagedExecutionPolicy, stateDirectory: string): Promise<void> {
   stagedExecutionPolicySchema.parse(staged);
   await assertNoLinkAncestry(stateDirectory, 'stateDirectory');
-  const state = await fsp.realpath(stateDirectory);
+  const resolvedState = path.resolve(stateDirectory);
+  const state = await fsp.realpath(resolvedState);
   const expected = path.join(state, 'execution-receipts', staged.executionId + '.jsonl');
   if (!pathsEqual(expected, staged.receiptPath)) throw new BridgeError('INVALID_RECEIPT', 'Private receipt cleanup boundary mismatch');
-  await assertNoLinkAncestry(expected, 'receiptPath');
+  const authorizedReceiptPath = path.join(resolvedState, 'execution-receipts', staged.executionId + '.jsonl');
+  await assertNoLinkAncestry(authorizedReceiptPath, 'receiptPath');
+  let canonicalActual: string | undefined;
+  try { canonicalActual = await fsp.realpath(authorizedReceiptPath); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  if (canonicalActual && !pathsEqual(canonicalActual, expected)) {
+    throw new BridgeError('INVALID_RECEIPT', 'Private receipt cleanup canonical mismatch');
+  }
   let identity;
-  try { identity = await fsp.lstat(expected, { bigint: true }); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+  try { identity = await fsp.lstat(authorizedReceiptPath, { bigint: true }); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
   if (!identity.isFile() || identity.isSymbolicLink() || identity.nlink !== 1n || identity.dev.toString() !== staged.receiptIdentity.dev || identity.ino.toString() !== staged.receiptIdentity.ino) throw new BridgeError('INVALID_RECEIPT', 'Refusing to delete a replaced private receipt');
-  await fsp.unlink(expected);
+  if (!canonicalActual) throw new BridgeError('INVALID_RECEIPT', 'Cannot verify the canonical identity of an existing receipt');
+  await fsp.unlink(authorizedReceiptPath);
 }

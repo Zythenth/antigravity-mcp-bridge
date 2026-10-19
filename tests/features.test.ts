@@ -146,8 +146,9 @@ test('role handoff transfers plans, criteria and decisions to independent copies
       expectedContextSha256: context.treeSha256, role: 'reviewer', prompt: 'review:test' } });
     assert.equal((stale.structuredContent as any).error.code, 'CONTEXT_CHANGED');
     await writeFile(path.join(implementation.copyDirectory, '.gitignore'), 'source.txt\n');
-    const changedSelection = await f.call('antigravity_context', { taskId: run.task.taskId });
-    const excluded = await f.client.callTool({ name: 'antigravity_handoff', arguments: { sourceTaskId: run.task.taskId, expectedContextSha256: changedSelection.treeSha256,
+    const changedSelection = await f.client.callTool({ name: 'antigravity_context', arguments: { taskId: run.task.taskId } });
+    assert.equal((changedSelection.structuredContent as any).error.code, 'CONTEXT_CHANGED');
+    const excluded = await f.client.callTool({ name: 'antigravity_handoff', arguments: { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'review:test' } });
     assert.equal((excluded.structuredContent as any).error.code, 'CONTEXT_CHANGED');
     assert.equal(await readFile(path.join(implementation.copyDirectory, 'source.txt'), 'utf8'), 'changed');

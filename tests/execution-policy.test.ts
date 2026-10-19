@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm, mkdir, lstat, symlink, rename, link } from 'node:fs/promises';
@@ -10,6 +12,7 @@ import {
   stageExecutionPolicy,
   verifyExecutionPolicy,
   readExecutionPolicyReceipt,
+  discardExecutionPolicy,
   stagedExecutionPolicySchema,
   EXECUTION_POLICY_PATHS,
 } from '../src/execution-policy.js';
@@ -640,4 +643,99 @@ test('Windows LPAC tests can read project files but cannot read private MCP conf
     assert.equal(result.exitCode, 0, JSON.stringify(result)); assert.equal(result.error, undefined); assert.ok(result.output.includes('PUBLIC_READ_OK')); assert.ok(result.output.includes('PRIVATE_READ_DENIED:')); assert.ok(!result.output.includes('synthetic-private-marker')); assert.equal(result.profileDeleted, true); assert.equal(result.aliasesDeleted, true);
     await verifyExecutionPolicy(copyDir, staged, stateDir);
   } finally { await removeFixture(copyDir); await removeFixture(stateDir); }
+});
+
+test('receipts retain canonical identity while I/O stays under the authorized state address', async t => {
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
+  const originalRealpath = fsPromises.realpath;
+  const canonicalState = path.join(await originalRealpath(path.dirname(stateDir)), 'foreign-state-' + randomUUID());
+  const canonicalCopy = path.join(await originalRealpath(path.dirname(copyDir)), 'agy-mcp-copy-canonical-' + randomUUID());
+  const within = (root: string, input: unknown) => {
+    const relative = path.relative(root, path.resolve(String(input)));
+    return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+  };
+  let deniedCalls = 0;
+  try {
+    t.mock.method(fsPromises, 'realpath', (async (...args: Parameters<typeof originalRealpath>) => {
+      const actual = await Reflect.apply(originalRealpath, fsPromises, args);
+      if (typeof actual !== 'string') return actual;
+      if (within(stateDir, args[0])) return path.join(canonicalState, path.relative(stateDir, path.resolve(String(args[0]))));
+      if (within(copyDir, args[0])) return path.join(canonicalCopy, path.relative(copyDir, path.resolve(String(args[0]))));
+      return actual;
+    }) as typeof originalRealpath);
+    for (const method of ['mkdir', 'lstat', 'open', 'unlink'] as const) {
+      const original = fsPromises[method];
+      t.mock.method(fsPromises, method, ((...args: Parameters<typeof original>) => {
+        if (within(canonicalState, args[0]) || within(canonicalCopy, args[0])) {
+          deniedCalls++;
+          throw Object.assign(new Error('Canonical address is inaccessible'), { code: 'EPERM' });
+        }
+        return Reflect.apply(original, fsPromises, args);
+      }) as typeof original);
+    }
+    syncBuiltinESMExports();
+    const executionId = randomUUID(), catalog = createCatalog();
+    const policy = resolveAgentPolicy({ allowedTools: ['finish', 'view_file'] }, ['finish', 'view_file'], catalog, 'read-only', executionId);
+    const staged = await stageExecutionPolicy(copyDir, { policy, catalog, stateDirectory: stateDir, executionId }, DEFAULT_PROJECT_LIMITS);
+    assert.equal(staged.receiptPath, path.join(canonicalState, 'execution-receipts', executionId + '.jsonl'));
+    await verifyExecutionPolicy(copyDir, staged, stateDir);
+    const addressedReceipt = path.join(stateDir, 'execution-receipts', executionId + '.jsonl');
+    await fsPromises.appendFile(addressedReceipt, JSON.stringify({ executionId, policySha256: policy.sha256,
+      conversationId: 'authorized-address', toolName: 'finish', decision: 'allow' }) + '\n');
+    const receipt = await readExecutionPolicyReceipt(staged, stateDir, 0, 'authorized-address');
+    assert.equal(receipt.decisionCount, 1);
+    assert.equal(receipt.guardedFinish, true);
+    await discardExecutionPolicy(staged, stateDir);
+    await discardExecutionPolicy(staged, stateDir);
+    await assert.rejects(fsPromises.lstat(addressedReceipt), { code: 'ENOENT' });
+    for (const file of EXECUTION_POLICY_PATHS) await fsPromises.rm(path.join(copyDir, file));
+    const originalWrite = fsPromises.writeFile;
+    t.mock.method(fsPromises, 'writeFile', (async (...args: Parameters<typeof originalWrite>) => {
+      if (path.basename(String(args[0])) === 'bridge-execution-hook.mjs') {
+        throw Object.assign(new Error('Controlled helper write failure'), { code: 'EACCES' });
+      }
+      return Reflect.apply(originalWrite, fsPromises, args);
+    }) as typeof originalWrite);
+    syncBuiltinESMExports();
+    const rejectedId = randomUUID();
+    await assert.rejects(stageExecutionPolicy(copyDir, { policy, catalog, stateDirectory: stateDir, executionId: rejectedId }, DEFAULT_PROJECT_LIMITS), { code: 'EACCES' });
+    await assert.rejects(fsPromises.lstat(path.join(copyDir, '.agents/hooks.json')), { code: 'ENOENT' });
+    await assert.rejects(fsPromises.lstat(path.join(stateDir, 'execution-receipts', rejectedId + '.jsonl')), { code: 'ENOENT' });
+    assert.equal(deniedCalls, 0, 'Canonical identity must not become an I/O address');
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    await removeFixture(copyDir);
+    await removeFixture(stateDir);
+  }
+});
+
+test('receipt cleanup preserves the file when canonical verification is denied', async t => {
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
+  try {
+    const executionId = randomUUID(), catalog = createCatalog();
+    const policy = resolveAgentPolicy({ allowedTools: ['finish'] }, ['finish'], catalog, 'read-only', executionId);
+    const staged = await stageExecutionPolicy(copyDir, { policy, catalog, stateDirectory: stateDir, executionId }, DEFAULT_PROJECT_LIMITS);
+    const addressedReceipt = path.join(stateDir, 'execution-receipts', executionId + '.jsonl');
+    const originalRealpath = fsPromises.realpath;
+    let denied = false;
+    t.mock.method(fsPromises, 'realpath', (async (...args: Parameters<typeof originalRealpath>) => {
+      if (path.resolve(String(args[0])) === path.resolve(addressedReceipt)) {
+        denied = true;
+        throw Object.assign(new Error('Receipt canonical verification denied'), { code: 'EACCES' });
+      }
+      return Reflect.apply(originalRealpath, fsPromises, args);
+    }) as typeof originalRealpath);
+    syncBuiltinESMExports();
+    await assert.rejects(discardExecutionPolicy(staged, stateDir), { code: 'EACCES' });
+    assert.equal(denied, true);
+    assert.equal((await fsPromises.lstat(addressedReceipt)).isFile(), true);
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    await removeFixture(copyDir);
+    await removeFixture(stateDir);
+  }
 });

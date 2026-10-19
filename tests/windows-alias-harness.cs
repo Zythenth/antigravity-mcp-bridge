@@ -173,14 +173,43 @@ public static class AliasHarness
     {
         object controller = Invoke("CurrentControllerIdentity");
         string logon = (string)Get(controller, "logon");
-        const char letter = 'Z'; string name = "Global\\AGY.TEST.DOS." + logon + "." + letter;
-        bool created = false;
-        var owner = new Thread(new ThreadStart(delegate { new Mutex(true, name, out created); }));
-        owner.Start(); owner.Join();
-        if (!created) throw new Exception("Abandoned mutex name was unexpectedly occupied");
-        Mutex recovered = (Mutex)Invoke("AcquireRecoveryDriveGate", letter, controller, logon);
-        try { if (recovered == null) throw new Exception("Abandoned mutex was not recovered"); }
-        finally { if (recovered != null) { recovered.ReleaseMutex(); recovered.Close(); } }
+        string prefix = "Global\\AGY.TEST.DOS." + logon + ".";
+        bool pinnedCreated;
+        Mutex pinned = new Mutex(true, prefix + 'Z', out pinnedCreated);
+        Mutex abandoned = null, recovered = null;
+        try
+        {
+            // A busy gate belongs to its owner; abandon only a newly created fixture gate.
+            char letter = '\0';
+            for (char candidate = 'Z'; candidate >= 'D'; candidate--)
+            {
+                char current = candidate;
+                bool created = false;
+                Mutex candidateOwner = null;
+                var owner = new Thread(new ThreadStart(delegate
+                {
+                    candidateOwner = new Mutex(true, prefix + current, out created);
+                    if (!created) { candidateOwner.Close(); candidateOwner = null; }
+                }));
+                owner.Start(); owner.Join();
+                if (created) { letter = current; abandoned = candidateOwner; break; }
+            }
+            if (abandoned == null) throw new Exception("No unused drive gate is available for the abandoned-mutex fixture");
+            recovered = (Mutex)Invoke("AcquireRecoveryDriveGate", letter, controller, logon);
+            if (recovered == null) throw new Exception("Abandoned mutex was not recovered");
+        }
+        finally
+        {
+            try
+            {
+                if (recovered != null) { try { recovered.ReleaseMutex(); } finally { recovered.Close(); } }
+            }
+            finally
+            {
+                if (abandoned != null) abandoned.Close();
+                try { if (pinnedCreated) pinned.ReleaseMutex(); } finally { pinned.Close(); }
+            }
+        }
     }
 
     static string LogonName(Luid value) { return ((uint)value.high).ToString("x8") + "." + value.low.ToString("x8"); }
