@@ -52,9 +52,15 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
-async function until(predicate: () => boolean) {
-  const deadline = Date.now() + 30000;
-  while (!predicate()) { if (Date.now() > deadline) throw Error('Fixture condition timed out'); await delay(20); }
+async function until(predicate: () => boolean, timeoutMs = 30000, describeFailure?: () => string) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) {
+      const detail = describeFailure ? `: ${describeFailure()}` : '';
+      throw Error(`Fixture condition timed out${detail}`);
+    }
+    await delay(20);
+  }
 }
 
 import { GroupStore } from '../src/group-store.js';
@@ -170,17 +176,35 @@ test('a selected predecessor supplies its changed files to a separate readonly r
     input.jobs[0]!.task.acceptanceCriteria![0]!.check = { kind: 'file-contains', path: 'source.txt', text: 'changed source' };
     input.jobs[1]!.task.acceptanceCriteria![0]!.check = { kind: 'file-contains', path: 'source.txt', text: 'changed source' };
     const group = await tasks.groups.create(randomUUID(), input); tasks.groups.start(group.groupId, group.definitionSha256);
+    const describeState = () => {
+      const status = tasks.groups.status(group.groupId);
+      return `adapterCalls=${adapter.calls.length} state=${status.state} error=${status.error?.code ?? 'none'}`;
+    };
     await until(() => adapter.calls.length === 1);
     const first = tasks.list().find(task => task.group?.nodeKey === 'first')!;
     await writeFile(path.join(first.copyDirectory!, 'source.txt'), 'changed source\n');
     adapter.calls[0]!.finish('Public response', { summary: 'Changed source code' });
-    await until(() => adapter.calls.length === 2);
+    // Preparing and verifying inherited context and forking the predecessor copy precedes reviewer launch.
+    await until(
+      () => {
+        const status = tasks.groups.status(group.groupId);
+        return adapter.calls.length === 2 || status.state !== 'running' || status.error !== undefined;
+      },
+      120000,
+      describeState,
+    );
+    assert.equal(adapter.calls.length, 2, JSON.stringify(tasks.groups.status(group.groupId)));
     const final = tasks.list().find(task => task.group?.nodeKey === 'final')!;
     assert.notEqual(first.copyDirectory, final.copyDirectory);
     assert.equal(await (await import('node:fs/promises')).readFile(path.join(final.copyDirectory!, 'source.txt'), 'utf8'), 'changed source\n');
     assert.equal(adapter.calls[1]!.options.contextTaskId, first.taskId);
     adapter.calls[1]!.finish('Public response', { summary: 'Reviewed changed source' });
-    await until(() => tasks.groups.status(group.groupId).state === 'completed');
+    await until(
+      () => tasks.groups.status(group.groupId).state !== 'running',
+      120000,
+      describeState,
+    );
+    assert.equal(tasks.groups.status(group.groupId).state, 'completed', JSON.stringify(tasks.groups.status(group.groupId)));
     assert.equal((await tasks.groups.workflowResult(group.groupId)).summary, 'Reviewed changed source');
   });
 });

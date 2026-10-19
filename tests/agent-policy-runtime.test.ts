@@ -54,7 +54,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
   finally {
     for (const manager of managers) await manager.shutdown();
     for (const project of new Map(new StateStore(config.stateDirectory).load().flatMap(item => item.project ? [[item.project.copyDirectory, item.project] as const] : [])).values()) await discardProjectCopy(project);
-    assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert.ok(path.basename(root).startsWith('agy-policy-runtime-')); await rm(root, { recursive: true, force: true });
+    assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert.ok(path.basename(root).startsWith('agy-policy-runtime-')); await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 async function end(tasks: TaskManager, task: TaskRecord) { await tasks.wait(task.taskId); return tasks.status(task.taskId); }

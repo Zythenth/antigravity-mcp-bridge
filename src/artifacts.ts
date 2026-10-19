@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { lstat, readdir } from 'node:fs/promises';
+import { open, lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { BridgeError } from './types.js';
 import { checkedPath, checkFenceMarker, managedGit, type ProjectCopy } from './isolation.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
+import { preflightProjectFiles } from './secret-preflight.js';
 
 const WINDOWS_DEVICE_NAMES = new Set([
   'CON', 'PRN', 'AUX', 'NUL',
@@ -104,7 +104,6 @@ export interface ReadArtifactResult {
   offsetUnit: 'bytes';
 }
 
-
 function splitNull(bytes: Buffer): string[] {
   return bytes.toString('utf8').split('\0').filter(Boolean);
 }
@@ -147,6 +146,37 @@ async function verifyExactDiskCase(rootDir: string, relativePath: string): Promi
   return current;
 }
 
+async function checkArtifactIgnoreRules(
+  project: ProjectCopy,
+  paths: readonly string[]
+): Promise<void> {
+  const stdinBuf = Buffer.from(paths.join('\0') + '\0');
+  const copyScope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+  const copyIgnoreOutput = await managedGit(
+    project,
+    project.copyDirectory,
+    [...copyScope, 'check-ignore', '--no-index', '--stdin', '-z'],
+    stdinBuf,
+    [0, 1]
+  );
+  const sourceIgnoreOutput = await managedGit(
+    project,
+    project.sourceDirectory,
+    ['check-ignore', '--no-index', '--stdin', '-z'],
+    stdinBuf,
+    [0, 1]
+  );
+  const ignoredSet = new Set([
+    ...splitNull(copyIgnoreOutput),
+    ...splitNull(sourceIgnoreOutput),
+  ]);
+  for (const p of paths) {
+    if (ignoredSet.has(p)) {
+      throw new BridgeError('IGNORED_ARTIFACT_PATH', 'Artifact path is ignored by repository rules: ' + p);
+    }
+  }
+}
+
 export async function collectArtifacts(
   project: ProjectCopy,
   paths: readonly string[],
@@ -173,29 +203,15 @@ export async function collectArtifacts(
     }
   }
 
-  // Preserve git ignore rules: check all paths on the original repository root (including .gitignore and .git/info/exclude)
-  const stdinBuf = Buffer.from(normalizedPaths.join('\0') + '\0');
-  const ignoreOutput = await managedGit(
-    project,
-    project.sourceDirectory,
-    ['check-ignore', '--no-index', '--stdin', '-z'],
-    stdinBuf,
-    [0, 1]
-  );
-  const ignoredSet = new Set(splitNull(ignoreOutput));
-  for (const p of normalizedPaths) {
-    if (ignoredSet.has(p)) {
-      throw new BridgeError('IGNORED_ARTIFACT_PATH', 'Artifact path is ignored by repository rules: ' + p);
-    }
+  for (const relative of normalizedPaths) {
+    await checkedPath(project.copyDirectory, relative, false);
   }
 
-  let totalBytes = 0;
-  const references: ArtifactReference[] = [];
+  await checkArtifactIgnoreRules(project, normalizedPaths);
 
   for (const relative of normalizedPaths) {
-    let filePath: string;
     try {
-      filePath = await checkedPath(project.copyDirectory, relative, true);
+      await checkedPath(project.copyDirectory, relative, true);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
         throw new BridgeError('ARTIFACT_NOT_FOUND', 'Artifact file does not exist: ' + relative);
@@ -204,32 +220,33 @@ export async function collectArtifacts(
     }
 
     await verifyExactDiskCase(project.copyDirectory, relative);
+  }
 
-    const st = await lstat(filePath);
-    if (!st.isFile() || st.isSymbolicLink()) {
-      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact must be a regular non-link file: ' + relative);
+  const preflight = await preflightProjectFiles(project.copyDirectory, normalizedPaths, limits);
+  if (preflight.blocked.length > 0) {
+    const blocked = preflight.blocked[0]!;
+    if (blocked.reason === 'UNSAFE_PATH') {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact path is unsafe: ' + blocked.path);
     }
+    throw new BridgeError('BLOCKED_ARTIFACT_PATH', `Artifact path blocked by secret policy (${blocked.reason}): ${blocked.path}`);
+  }
 
-    if (st.size > limits.maxCopyBytes) {
-      throw new BridgeError('COPY_LIMIT_EXCEEDED', `Artifact size exceeds copy limit of ${limits.maxCopyBytes} bytes`);
+  let totalBytes = 0;
+  const references: ArtifactReference[] = [];
+
+  for (const relative of normalizedPaths) {
+    const record = preflight.records.get(relative);
+    if (!record) {
+      throw new BridgeError('ARTIFACT_NOT_FOUND', 'Artifact file does not exist: ' + relative);
     }
-
-    const hasher = createHash('sha256');
-    let fileBytes = 0;
-    for await (const chunk of createReadStream(filePath)) {
-      fileBytes += chunk.length;
-      totalBytes += chunk.length;
-      if (totalBytes > limits.maxCopyBytes) {
-        throw new BridgeError('COPY_LIMIT_EXCEEDED', `Total artifact bytes exceed limit of ${limits.maxCopyBytes} bytes`);
-      }
-      hasher.update(chunk);
+    totalBytes += record.size;
+    if (record.size > limits.maxCopyBytes || totalBytes > limits.maxCopyBytes) {
+      throw new BridgeError('COPY_LIMIT_EXCEEDED', `Total artifact bytes exceed limit of ${limits.maxCopyBytes} bytes`);
     }
-
-    const sha256 = hasher.digest('hex');
     references.push({
       path: relative,
-      sha256,
-      bytes: fileBytes,
+      sha256: record.sha256,
+      bytes: record.size,
     });
   }
 
@@ -242,7 +259,8 @@ export async function readArtifact(
   expectedSha256: string,
   offset = 0,
   limit = 65536,
-  maxBytes: number = DEFAULT_PROJECT_LIMITS.maxCopyBytes
+  maxBytes: number = DEFAULT_PROJECT_LIMITS.maxCopyBytes,
+  limits?: ProjectLimits
 ): Promise<ReadArtifactResult> {
   const parsedRef = artifactReferenceSchema.safeParse(reference);
   if (!parsedRef.success) {
@@ -269,10 +287,33 @@ export async function readArtifact(
     throw new BridgeError('CONTENT_CHANGED', 'expectedSha256 does not match reference sha256');
   }
 
+  const effectiveLimits: ProjectLimits = limits ?? {
+    ...DEFAULT_PROJECT_LIMITS,
+    maxCopyBytes: maxBytes,
+  };
+  const effectiveMaxBytes = Math.min(maxBytes, effectiveLimits.maxCopyBytes);
+  if (reference.bytes > effectiveMaxBytes) {
+    throw new BridgeError('COPY_LIMIT_EXCEEDED', `Artifact size (${reference.bytes} bytes) exceeds limit of ${effectiveMaxBytes} bytes`);
+  }
+
   await checkFenceMarker(project);
   await verifyCopyRoot(project.copyDirectory);
 
   const relative = validArtifactRelative(reference.path);
+
+  if (project.providedSkills) {
+    for (const skill of project.providedSkills) {
+      for (const f of skill.files) {
+        if (f.path.toLowerCase() === relative.toLowerCase()) {
+          throw new BridgeError('UNSAFE_ARTIFACT_PATH', 'Artifact path refers to a provided skill file: ' + relative);
+        }
+      }
+    }
+  }
+
+  await checkedPath(project.copyDirectory, relative, false);
+  await checkArtifactIgnoreRules(project, [relative]);
+
   let filePath: string;
   try {
     filePath = await checkedPath(project.copyDirectory, relative, true);
@@ -285,76 +326,145 @@ export async function readArtifact(
 
   await verifyExactDiskCase(project.copyDirectory, relative);
 
-  const st = await lstat(filePath);
-  if (!st.isFile() || st.isSymbolicLink()) {
-    throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact must be a regular non-link file: ' + relative);
+  const scanLimits: ProjectLimits = {
+    ...effectiveLimits,
+    maxCopyBytes: effectiveMaxBytes,
+  };
+  const preflight = await preflightProjectFiles(project.copyDirectory, [relative], scanLimits);
+  if (preflight.blocked.length > 0) {
+    const blocked = preflight.blocked[0]!;
+    if (blocked.reason === 'UNSAFE_PATH') {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact path is unsafe: ' + blocked.path);
+    }
+    throw new BridgeError('BLOCKED_ARTIFACT_PATH', `Artifact path blocked by secret policy (${blocked.reason}): ${blocked.path}`);
   }
 
-  if (st.size > maxBytes) {
-    throw new BridgeError('COPY_LIMIT_EXCEEDED', `Artifact size (${st.size} bytes) exceeds limit of ${maxBytes} bytes`);
-  }
-  if (st.size !== reference.bytes) {
-    throw new BridgeError('CONTENT_CHANGED', `Artifact size on disk (${st.size}) does not match reference bytes (${reference.bytes})`);
+  const preflightRecord = preflight.records.get(relative);
+  if (!preflightRecord) {
+    throw new BridgeError('ARTIFACT_NOT_FOUND', 'Artifact file does not exist: ' + relative);
   }
 
-  // Streaming hash and retention of only requested window <= 65536
-  const windowStart = offset;
-  const windowEnd = Math.min(reference.bytes, offset + limit);
-  const windowLen = Math.max(0, windowEnd - windowStart);
-  const windowBuf = Buffer.alloc(windowLen);
-  let streamBytes = 0;
-  const hasher = createHash('sha256');
-
-  const stream = createReadStream(filePath);
+  const handle = await open(filePath, 'r');
   try {
-    for await (const chunk of stream) {
-      const chunkBuf = chunk as Buffer;
+    await verifyCopyRoot(project.copyDirectory);
+    const recheckedPath = await checkedPath(project.copyDirectory, relative, true);
+    await verifyExactDiskCase(project.copyDirectory, relative);
+
+    const fstat = await handle.stat();
+    const currentLstat = await lstat(recheckedPath);
+    if (!fstat.isFile() || currentLstat.isSymbolicLink() || !currentLstat.isFile()) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact must be a regular non-link file: ' + relative);
+    }
+    if (
+      currentLstat.ino !== fstat.ino ||
+      currentLstat.dev !== fstat.dev ||
+      currentLstat.size !== fstat.size
+    ) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact detected file replacement: ' + relative);
+    }
+
+    if (fstat.size !== preflightRecord.size) {
+      throw new BridgeError('CONTENT_CHANGED', `Artifact size on disk (${fstat.size}) does not match preflight record (${preflightRecord.size})`);
+    }
+    if (fstat.size !== reference.bytes) {
+      throw new BridgeError('CONTENT_CHANGED', `Artifact size on disk (${fstat.size}) does not match reference bytes (${reference.bytes})`);
+    }
+    if (fstat.mtimeMs !== preflightRecord.mtimeMs) {
+      throw new BridgeError('CONTENT_CHANGED', 'Artifact modification time changed after preflight: ' + relative);
+    }
+    if (fstat.ino !== preflightRecord.ino || fstat.dev !== preflightRecord.dev) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact file identity changed after preflight: ' + relative);
+    }
+
+    if (fstat.size > effectiveMaxBytes) {
+      throw new BridgeError('COPY_LIMIT_EXCEEDED', `Artifact size (${fstat.size} bytes) exceeds limit of ${effectiveMaxBytes} bytes`);
+    }
+
+    const windowStart = offset;
+    const windowEnd = Math.min(reference.bytes, offset + limit);
+    const windowLen = Math.max(0, windowEnd - windowStart);
+    const windowBuf = Buffer.alloc(windowLen);
+
+    const CHUNK_SIZE = 64 * 1024;
+    const readBuf = Buffer.allocUnsafe(CHUNK_SIZE);
+    const hash = createHash('sha256');
+    let streamBytes = 0;
+
+    for (;;) {
+      const { bytesRead } = await handle.read(readBuf, 0, CHUNK_SIZE, null);
+      if (bytesRead === 0) break;
+
       const chunkStart = streamBytes;
-      const chunkEnd = streamBytes + chunkBuf.length;
+      const chunkEnd = streamBytes + bytesRead;
       streamBytes = chunkEnd;
 
-      if (streamBytes > maxBytes) {
-        throw new BridgeError('COPY_LIMIT_EXCEEDED', `Artifact exceeded maximum byte limit (${maxBytes}) during reading`);
+      if (streamBytes > effectiveMaxBytes) {
+        throw new BridgeError('COPY_LIMIT_EXCEEDED', `Artifact exceeded maximum byte limit (${effectiveMaxBytes}) during reading`);
       }
       if (streamBytes > reference.bytes) {
         throw new BridgeError('CONTENT_CHANGED', 'Artifact grew beyond reference bytes during reading');
       }
 
-      hasher.update(chunkBuf);
+      const slice = readBuf.subarray(0, bytesRead);
+      hash.update(slice);
 
       const overlapStart = Math.max(chunkStart, windowStart);
       const overlapEnd = Math.min(chunkEnd, windowEnd);
       if (overlapStart < overlapEnd) {
-        const slice = chunkBuf.subarray(overlapStart - chunkStart, overlapEnd - chunkStart);
-        slice.copy(windowBuf, overlapStart - windowStart);
+        slice.copy(windowBuf, overlapStart - windowStart, overlapStart - chunkStart, overlapEnd - chunkStart);
       }
     }
+
+    if (streamBytes !== reference.bytes) {
+      throw new BridgeError('CONTENT_CHANGED', `Artifact size changed during reading (expected ${reference.bytes}, observed ${streamBytes})`);
+    }
+
+    const finalFstat = await handle.stat();
+    if (finalFstat.size !== reference.bytes || finalFstat.mtimeMs !== preflightRecord.mtimeMs) {
+      throw new BridgeError('CONTENT_CHANGED', 'Artifact mutated during reading: ' + relative);
+    }
+    if (finalFstat.ino !== preflightRecord.ino || finalFstat.dev !== preflightRecord.dev) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact descriptor identity changed: ' + relative);
+    }
+
+    await verifyCopyRoot(project.copyDirectory);
+    const finalCheckedPath = await checkedPath(project.copyDirectory, relative, true);
+    const finalLstat = await lstat(finalCheckedPath);
+    if (!finalLstat.isFile() || finalLstat.isSymbolicLink()) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact must be a regular non-link file: ' + relative);
+    }
+    if (
+      finalLstat.ino !== finalFstat.ino ||
+      finalLstat.dev !== finalFstat.dev ||
+      finalLstat.size !== finalFstat.size
+    ) {
+      throw new BridgeError('UNSAFE_PROJECT_PATH', 'Artifact path replaced during read: ' + relative);
+    }
+
+    const actualSha256 = hash.digest('hex');
+    if (actualSha256 !== preflightRecord.sha256) {
+      throw new BridgeError('CONTENT_CHANGED', 'Artifact content on disk does not match preflight sha256');
+    }
+    if (actualSha256 !== reference.sha256 || actualSha256 !== expectedSha256) {
+      throw new BridgeError('CONTENT_CHANGED', 'Artifact content on disk has changed; sha256 mismatch');
+    }
+
+    const content = windowBuf.toString('base64');
+    const nextOffset = windowEnd;
+    const hasMore = windowEnd < reference.bytes;
+
+    return {
+      path: reference.path,
+      sha256: actualSha256,
+      bytes: reference.bytes,
+      offset,
+      nextOffset,
+      hasMore,
+      encoding: 'base64',
+      content,
+      offsetUnit: 'bytes',
+    };
   } finally {
-    stream.destroy();
+    await handle.close().catch(() => {});
   }
-
-  if (streamBytes !== reference.bytes) {
-    throw new BridgeError('CONTENT_CHANGED', `Artifact size changed during reading (expected ${reference.bytes}, observed ${streamBytes})`);
-  }
-
-  const actualSha256 = hasher.digest('hex');
-  if (actualSha256 !== expectedSha256) {
-    throw new BridgeError('CONTENT_CHANGED', 'Artifact content on disk has changed; sha256 mismatch');
-  }
-
-  const content = windowBuf.toString('base64');
-  const nextOffset = windowEnd;
-  const hasMore = windowEnd < reference.bytes;
-
-  return {
-    path: reference.path,
-    sha256: actualSha256,
-    bytes: reference.bytes,
-    offset,
-    nextOffset,
-    hasMore,
-    encoding: 'base64',
-    content,
-    offsetUnit: 'bytes',
-  };
 }

@@ -892,3 +892,67 @@ test('host-git & isolation: unverified process cleanup rejects with GIT_CLEANUP_
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('host-git: onStdoutChunk streams output without buffering, validates maxOutputBytes, rejects Promise sinks, and omits raw stdout from diagnostics', async () => {
+  const dir = await createTempRepo();
+  try {
+    for (const invalidMax of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      await assert.rejects(
+        git(dir, ['version'], undefined, [0], { maxOutputBytes: invalidMax }),
+        (err: unknown) => err instanceof BridgeError && err.code === 'GIT_OPERATION_FAILED' && err.message.includes('Invalid maxOutputBytes')
+      );
+    }
+
+    await assert.rejects(
+      git(dir, ['version'], undefined, [0], {
+        onStdoutChunk: 'not-a-function' as unknown as (chunk: Buffer) => void,
+      }),
+      (err: unknown) => err instanceof BridgeError && err.code === 'GIT_OPERATION_FAILED' && err.message.includes('Invalid onStdoutChunk')
+    );
+
+    const streamedChunks: Buffer[] = [];
+    const bufferedResult = await git(dir, ['version'], undefined, [0], {
+      onStdoutChunk: chunk => streamedChunks.push(Buffer.from(chunk)),
+    });
+    assert.equal(bufferedResult.length, 0, 'Streaming sink call must not retain buffered stdout');
+    assert.ok(Buffer.concat(streamedChunks).toString('utf8').includes('git version'));
+
+    // Rejects asynchronous / Promise-returning sink
+    await assert.rejects(
+      git(dir, ['version'], undefined, [0], {
+        onStdoutChunk: (() => Promise.resolve()) as unknown as (chunk: Buffer) => void,
+      }),
+      (err: unknown) =>
+        err instanceof BridgeError &&
+        err.code === 'GIT_OPERATION_FAILED' &&
+        err.message.includes('asynchronous sink is not supported') &&
+        !err.message.includes('git version')
+    );
+
+    await assert.rejects(
+      git(dir, ['version'], undefined, [0], {
+        maxOutputBytes: 4,
+        onStdoutChunk: () => {},
+      }),
+      (err: unknown) =>
+        err instanceof BridgeError &&
+        err.code === 'ISOLATION_TOO_LARGE' &&
+        !err.message.includes('git version')
+    );
+
+    await assert.rejects(
+      git(dir, ['version'], undefined, [0], {
+        onStdoutChunk: () => {
+          throw new BridgeError('GIT_OPERATION_FAILED', 'Synthetic sink rejection');
+        },
+      }),
+      (err: unknown) =>
+        err instanceof BridgeError &&
+        err.code === 'GIT_OPERATION_FAILED' &&
+        err.message.includes('Synthetic sink rejection') &&
+        !err.message.includes('git version')
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

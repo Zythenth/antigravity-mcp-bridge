@@ -167,6 +167,32 @@ describe('Task results and artifacts runtime', () => {
     await fs.promises.writeFile(path.join(copyDir, 'artifact.txt'), 'hello world');
   });
 
+  it('artifact readers enforce current exclusions after state reload', async () => {
+    const policyState = path.join(tempRoot, 'artifact-policy-state');
+    const initialConfig = loadConfig({ BRIDGE_STATE_DIRECTORY: policyState, BRIDGE_TEST_EXECUTOR: 'agy' });
+    const initial = new TaskManager(new ControlledAdapter(initialConfig), initialConfig);
+    let reloaded: TaskManager | undefined;
+    try {
+      const task = await initial.run({ prompt: 'artifact policy', workingDirectory: repoDir, artifactPaths: ['artifact.txt'] });
+      await initial.wait(task.taskId);
+      assert.equal(initial.status(task.taskId).status, 'completed');
+      const ref = initial.listArtifacts(task.taskId).artifacts[0]!;
+      assert.ok(ref);
+      const allowed = await initial.readArtifact(task.taskId, ref.path, ref.sha256);
+      assert.equal(Buffer.from(allowed.content, 'base64').toString('utf8'), 'hello world');
+      await initial.shutdown();
+      const currentConfig = { ...initialConfig, secretExclusions: ['artifact.txt'] };
+      reloaded = new TaskManager(new ControlledAdapter(currentConfig), currentConfig);
+      await assert.rejects(reloaded.readArtifact(task.taskId, ref.path, ref.sha256), { code: 'BLOCKED_ARTIFACT_PATH' });
+    } finally {
+      await initial.shutdown();
+      await reloaded?.shutdown();
+      for (const entry of new StateStore(policyState).load()) {
+        if (entry.project) await discardProjectCopy(entry.project);
+      }
+    }
+  });
+
   it('compact metadata omits values, schema, and artifact manifest', async () => {
     const list = tasks.list();
     const taskWithSchema = list.find(t => t.structuredResult);

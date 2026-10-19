@@ -531,7 +531,7 @@ export class TaskManager {
       throw new BridgeError('ARTIFACT_NOT_FOUND', `Artifact not recorded: ${artifactPath}`);
     }
     return this.withProject(task.project, async () => {
-      const chunk = await readArtifact(task.project!, ref, expectedSha256, offset, limit, this.config.maxCopyBytes);
+      const chunk = await readArtifact(task.project!, ref, expectedSha256, offset, limit, this.config.maxCopyBytes, this.config);
       return { taskId, ...chunk };
     });
   }
@@ -541,12 +541,16 @@ export class TaskManager {
     const task = this.tasks.get(taskId);
     if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before reading its patch');
     return this.withProject(task.project, async () => {
-      const preview = await previewProjectCopy(task.project!, this.config);
-      if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'The patch changed; preview again before reading');
       const selected = relative?.replaceAll('\\', '/');
-      if (selected !== undefined && !preview.files.some(file => file.path === selected)) throw new BridgeError('INVALID_PATCH_PATH', 'Select a changed path from the preview');
-      const patch = selected === undefined ? preview.patch : await readProjectPatch(task.project!, selected);
-      return { taskId, sha256: preview.sha256, path: selected ?? null, ...textChunk(patch, offset, limit) };
+      let patch: string;
+      if (selected !== undefined) {
+        patch = await readProjectPatch(task.project!, selected, this.config, expectedSha256);
+      } else {
+        const preview = await previewProjectCopy(task.project!, this.config);
+        if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'The patch changed; preview again before reading');
+        patch = preview.patch;
+      }
+      return { taskId, sha256: expectedSha256, path: selected ?? null, ...textChunk(patch, offset, limit) };
     });
   }
 
