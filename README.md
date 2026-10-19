@@ -585,6 +585,14 @@ A ordem de precedência e segurança é estrita:
 
 O preflight preventivo não garante a detecção de segredos arbitrários embutidos em código-fonte, formatos proprietários ou desconhecidos, dados criptografados ou arquivos ofuscados.
 
+### Barreiras de segurança em prévias, contexto e artefatos
+
+A prévia inspeciona nomes e padrões de credenciais conhecidos antes de formar uma cópia dos bytes verificados para staging no Git privado, restaurando o índice privado com `read-tree HEAD` ao final. A leitura de patches por arquivo (`readProjectPatch`) extrai a fatia correspondente diretamente do patch revisado e verificado (`preview.patch`), vinculando-se estritamente ao mesmo hash SHA-256 e dispensando novas leituras inseguras do índice compartilhado ou da árvore de trabalho. Arquivos gerados ou modificados que violem a política falham com `BLOCKED_FILE_DETECTED`; alterações detectadas durante a preparação invalidam a operação. Restaurar o índice não remove objetos que já existiam no banco do Git.
+
+Snapshots, fingerprints e bifurcações aplicam os ignores da origem e da cópia e a política de segredos. Arquivos gerados bloqueados são omitidos; um arquivo do baseline que se torne bloqueado causa `CONTEXT_CHANGED`. Skills fornecidas e políticas de execução conservam verificações próprias de integridade.
+
+A coleta e a leitura de artefatos reaplicam a política de nomes, conteúdo e exclusões. Violações de segredo falham com `BLOCKED_ARTIFACT_PATH`. A leitura verifica os bytes contra o SHA-256 da inspeção e da referência, mantendo somente a janela solicitada em memória. Referências anteriores não dispensam os controles de caminho e política. Essas verificações cobrem os formatos reconhecidos pelo scanner e não garantem detectar segredos arbitrários nem eliminar toda corrida possível do filesystem.
+
 ### Ambiente do subprocesso do CLI (`cliEnvironment`)
 
 O subprocesso do CLI utiliza um ambiente estritamente filtrado por `cliEnvironment` em vez de herdar o ambiente do host indiscriminadamente. O bridge não registra valores de variáveis de ambiente nem passa tokens como argumentos. A variável `BRIDGE_ALLOWED_ENV_VARS` aceita um array JSON de nomes exatos adicionais para inclusão (opt-in), por exemplo `BRIDGE_ALLOWED_ENV_VARS='["MY_TOOL_SETTING"]'`. Por padrão, nenhuma injeção ou variável arbitrária é permitida; a inclusão de variáveis é estritamente opt-in e não é o comportamento padrão. A correspondência respeita as regras de plataforma (case-insensitive no Windows e exata/case-sensitive no Unix/Linux/macOS), preservando a deduplicação e `PATHEXT`.

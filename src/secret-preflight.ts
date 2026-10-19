@@ -159,6 +159,7 @@ export function isKnownCredentialFile(normalizedRelative: string): boolean {
  * Preserves source files and tests containing synthetic string literals or test fixtures.
  */
 export interface SecretScanState {
+  jsonStartedWithBrace?: boolean;
   jsonHasTypeServiceAccount?: boolean;
   jsonHasPrivateKeyField?: boolean;
 }
@@ -169,6 +170,45 @@ const KNOWN_SOURCE_EXTENSIONS = new Set([
   '.h', '.hpp', '.cs', '.rb', '.php', '.swift', '.kt'
 ]);
 
+function stripLeadingBom(content: Buffer): Buffer {
+  if (
+    content.length >= 4 &&
+    ((content[0] === 0x00 && content[1] === 0x00 && content[2] === 0xfe && content[3] === 0xff) ||
+      (content[0] === 0xff && content[1] === 0xfe && content[2] === 0x00 && content[3] === 0x00))
+  ) {
+    return content.subarray(4);
+  }
+  if (content.length >= 3 && content[0] === 0xef && content[1] === 0xbb && content[2] === 0xbf) {
+    return content.subarray(3);
+  }
+  if (
+    content.length >= 2 &&
+    ((content[0] === 0xff && content[1] === 0xfe) || (content[0] === 0xfe && content[1] === 0xff))
+  ) {
+    return content.subarray(2);
+  }
+  return content;
+}
+
+function normalizeScanTexts(content: Buffer): string[] {
+  const bomStripped = stripLeadingBom(content);
+  const utf8Text = bomStripped.toString('utf8').replace(/^\uFEFF/, '');
+  if (!bomStripped.includes(0x00)) {
+    return [utf8Text];
+  }
+  const nonNullBytes = Buffer.allocUnsafe(bomStripped.length);
+  let writeIndex = 0;
+  for (let i = 0; i < bomStripped.length; i++) {
+    const byte = bomStripped[i]!;
+    if (byte !== 0x00) {
+      nonNullBytes[writeIndex++] = byte;
+    }
+  }
+  const compactSlice = stripLeadingBom(nonNullBytes.subarray(0, writeIndex));
+  const compactText = compactSlice.toString('utf8').replace(/^\uFEFF/, '');
+  return compactText === utf8Text ? [utf8Text] : [utf8Text, compactText];
+}
+
 export function detectSecretContent(
   normalizedRelative: string,
   content: Buffer,
@@ -177,36 +217,7 @@ export function detectSecretContent(
   const norm = normalizedRelative.replaceAll('\\', '/').toLowerCase();
   const base = path.posix.basename(norm);
   const ext = path.posix.extname(norm);
-
-  const text = content.toString('utf8');
-  const trimmed = text.trimStart();
-
-  // Format 1: Standalone PEM / OpenSSH / PGP / PuTTY private key file
-  // Checks anchored unquoted private key headers across all allowed bytes in non-source files
   const isSource = KNOWN_SOURCE_EXTENSIONS.has(ext);
-  if (!isSource) {
-    if (/(?:^|[\r\n])\s*-----BEGIN[A-Z0-9 _-]*PRIVATE KEY-----/i.test(text)) {
-      return true;
-    }
-    if (/(?:^|[\r\n])\s*-----BEGIN PGP PRIVATE KEY BLOCK-----/.test(text)) return true;
-    if (/(?:^|[\r\n])\s*PuTTY-User-Key-File-/.test(text)) return true;
-  }
-
-  // Format 2: Standalone JSON credential document (e.g. Google Cloud service account)
-  // Tracked across chunk boundaries using bounded field signals
-  if (ext === '.json' || (!ext && trimmed.startsWith('{'))) {
-    if (text.includes('"type"') && text.includes('"service_account"')) {
-      scanState.jsonHasTypeServiceAccount = true;
-    }
-    if (text.includes('"private_key"') || text.includes('"private_key_id"')) {
-      scanState.jsonHasPrivateKeyField = true;
-    }
-    if (scanState.jsonHasTypeServiceAccount && scanState.jsonHasPrivateKeyField) {
-      return true;
-    }
-  }
-
-  // Format 3: Configuration files with recognized credential assignments
   const isConfigFile =
     CONFIG_EXTENSIONS.has(ext) ||
     base.startsWith('.env') ||
@@ -219,61 +230,93 @@ export function detectSecretContent(
     norm.includes('/.docker/') ||
     (ext === '.txt' && (base.includes('config') || base.includes('cred') || base.includes('secret') || base.includes('token') || base.includes('aws') || base.includes('auth')));
 
-  if (isConfigFile) {
-    // AWS Secret Access Key in config (non-placeholder, at least 20 base64 chars)
-    const awsMatch = text.match(
-      /^\s*(?:aws_secret_access_key|aws_session_token|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)\s*[:=]\s*([A-Za-z0-9/+=]{20,})/m
-    );
-    if (awsMatch) {
-      const val = awsMatch[1]!.toLowerCase();
-      if (
-        !val.includes('your_') &&
-        !val.includes('example') &&
-        !val.includes('placeholder') &&
-        !val.includes('changeme') &&
-        !val.includes('xxxx') &&
-        !val.includes('dummy')
-      ) {
+  for (const text of normalizeScanTexts(content)) {
+    const trimmed = text.trimStart();
+
+    // Format 1: Standalone PEM / OpenSSH / PGP / PuTTY private key file
+    // Checks anchored unquoted private key headers across all allowed bytes in non-source files
+    if (!isSource) {
+      if (/(?:^|[\r\n])\s*-----BEGIN[A-Z0-9 _-]*PRIVATE KEY-----/i.test(text)) {
+        return true;
+      }
+      if (/(?:^|[\r\n])\s*-----BEGIN PGP PRIVATE KEY BLOCK-----/.test(text)) return true;
+      if (/(?:^|[\r\n])\s*PuTTY-User-Key-File-/.test(text)) return true;
+    }
+
+    // Format 2: Standalone JSON credential document (e.g. Google Cloud service account)
+    // Tracked across chunk boundaries using bounded field signals
+    if (!ext && trimmed.startsWith('{')) {
+      scanState.jsonStartedWithBrace = true;
+    }
+    if (ext === '.json' || (!ext && scanState.jsonStartedWithBrace)) {
+      if (text.includes('"type"') && text.includes('"service_account"')) {
+        scanState.jsonHasTypeServiceAccount = true;
+      }
+      if (text.includes('"private_key"') || text.includes('"private_key_id"')) {
+        scanState.jsonHasPrivateKeyField = true;
+      }
+      if (scanState.jsonHasTypeServiceAccount && scanState.jsonHasPrivateKeyField) {
         return true;
       }
     }
 
-    // NPM auth token in config
-    const npmMatch = text.match(
-      /(?:\/\/registry\.[^:]+:_authToken|_authToken)\s*[:=]\s*([A-Za-z0-9_-]{20,})/
-    );
-    if (npmMatch) {
-      const val = npmMatch[1]!.toLowerCase();
-      if (!val.includes('your_') && !val.includes('example') && !val.includes('placeholder') && !val.includes('dummy')) {
+    // Format 3: Configuration files with recognized credential assignments
+    if (isConfigFile) {
+      // AWS Secret Access Key in config (non-placeholder, at least 20 base64 chars)
+      const awsMatch = text.match(
+        /^\s*(?:aws_secret_access_key|aws_session_token|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN)\s*[:=]\s*([A-Za-z0-9/+=]{20,})/m
+      );
+      if (awsMatch) {
+        const val = awsMatch[1]!.toLowerCase();
+        if (
+          !val.includes('your_') &&
+          !val.includes('example') &&
+          !val.includes('placeholder') &&
+          !val.includes('changeme') &&
+          !val.includes('xxxx') &&
+          !val.includes('dummy')
+        ) {
+          return true;
+        }
+      }
+
+      // NPM auth token in config
+      const npmMatch = text.match(
+        /(?:\/\/registry\.[^:]+:_authToken|_authToken)\s*[:=]\s*([A-Za-z0-9_-]{20,})/
+      );
+      if (npmMatch) {
+        const val = npmMatch[1]!.toLowerCase();
+        if (!val.includes('your_') && !val.includes('example') && !val.includes('placeholder') && !val.includes('dummy')) {
+          return true;
+        }
+      }
+
+      // GitHub PAT in config
+      if (/^\s*(?:token|access_token|github_token|password)\s*[:=]\s*['"]?(?:ghp|gho|ghs)_[A-Za-z0-9]{36}/m.test(text)) {
+        return true;
+      }
+
+      // Slack token in config
+      if (/^\s*(?:bot_token|token|api_token)\s*[:=]\s*['"]?xox[baprs]-[0-9]{10,}-[A-Za-z0-9]{10,}/m.test(text)) {
+        return true;
+      }
+
+      // Stripe secret key in config
+      if (/^\s*(?:stripe_key|secret_key|api_key)\s*[:=]\s*['"]?sk_live_[0-9a-zA-Z]{24,}/m.test(text)) {
+        return true;
+      }
+
+      // Embedded private key assigned in config
+      if (/^\s*(?:private_key|ssl_key|tls_key|key)\s*[:=]\s*['"]?-----BEGIN/im.test(text)) {
         return true;
       }
     }
 
-    // GitHub PAT in config
-    if (/^\s*(?:token|access_token|github_token|password)\s*[:=]\s*['"]?(?:ghp|gho|ghs)_[A-Za-z0-9]{36}/m.test(text)) {
-      return true;
-    }
-
-    // Slack token in config
-    if (/^\s*(?:bot_token|token|api_token)\s*[:=]\s*['"]?xox[baprs]-[0-9]{10,}-[A-Za-z0-9]{10,}/m.test(text)) {
-      return true;
-    }
-
-    // Stripe secret key in config
-    if (/^\s*(?:stripe_key|secret_key|api_key)\s*[:=]\s*['"]?sk_live_[0-9a-zA-Z]{24,}/m.test(text)) {
-      return true;
-    }
-
-    // Embedded private key assigned in config
-    if (/^\s*(?:private_key|ssl_key|tls_key|key)\s*[:=]\s*['"]?-----BEGIN/im.test(text)) {
-      return true;
-    }
-  }
-
-  // Also check if an ambiguous .key file contains actual private key block anywhere
-  if (base.endsWith('.key') && !base.includes('pub') && !base.includes('cert')) {
-    if (/(?:^|[\r\n])\s*-----BEGIN[A-Z0-9 _-]*PRIVATE KEY-----/i.test(text)) {
-      return true;
+    // Also check if an ambiguous .key file contains actual private key block anywhere
+    if (base.endsWith('.key') && !base.includes('pub') && !base.includes('cert')) {
+      if (/(?:^|[\r\n])\s*-----BEGIN[A-Z0-9 _-]*PRIVATE KEY-----/i.test(text)) {
+        return true;
+      }
     }
   }
 
@@ -397,11 +440,20 @@ export async function preflightProjectFiles(
           if (detectSecretContent(relative, window, scanState)) {
             hasSecret = true;
           }
-          const takeOverlap = Math.min(slice.length, OVERLAP_SIZE);
-          prevOverlap = Buffer.from(slice.subarray(slice.length - takeOverlap));
+          const takeOverlap = Math.min(window.length, OVERLAP_SIZE);
+          prevOverlap = Buffer.from(window.subarray(window.length - takeOverlap));
         }
       }
 
+      const finalStat = await handle.stat();
+      const finalPath = await checkedPathFn(directory, candidate, true);
+      const finalLstat = await lstat(finalPath);
+      if (totalRead !== fstat.size || finalStat.size !== fstat.size || finalStat.mtimeMs !== fstat.mtimeMs ||
+          finalStat.ctimeMs !== fstat.ctimeMs || finalLstat.isSymbolicLink() || !finalLstat.isFile() ||
+          finalLstat.ino !== fstat.ino || finalLstat.dev !== fstat.dev || finalLstat.size !== fstat.size ||
+          finalLstat.mtimeMs !== fstat.mtimeMs) {
+        throw new BridgeError('CONTENT_CHANGED', 'File changed during security inspection: ' + relative);
+      }
       if (hasSecret) {
         blocked.push({ path: relative, reason: 'SECRET_CONTENT' });
         continue;

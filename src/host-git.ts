@@ -12,6 +12,8 @@ export interface HostGitOptions {
   spawnImpl?: typeof spawn;
   excludedRoots?: readonly string[];
   shutdownGraceMs?: number;
+  maxOutputBytes?: number;
+  onStdoutChunk?: (chunk: Buffer) => void;
 }
 
 const MAX_GIT_OUTPUT = 10_000_000;
@@ -237,7 +239,9 @@ async function spawnGit(
   allowedCodes: number[] = [0],
   timeoutMs = DEFAULT_GIT_TIMEOUT_MS,
   spawnFn: typeof spawn = spawn,
-  shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS
+  shutdownGraceMs = DEFAULT_SHUTDOWN_GRACE_MS,
+  maxOutputBytes = MAX_GIT_OUTPUT,
+  onStdoutChunk?: (chunk: Buffer) => void
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     let childProc: ChildProcessWithoutNullStreams;
@@ -315,12 +319,26 @@ async function spawnGit(
     let stderrTruncated = false;
     const stderrDecoder = new StringDecoder('utf8');
     let overflow = false;
+    let sinkError: Error | null = null;
 
     child.stdout.on('data', (chunk: Buffer) => {
+      if (overflow || sinkError) return;
       length += chunk.length;
-      if (length > MAX_GIT_OUTPUT) {
+      if (length > maxOutputBytes) {
         overflow = true;
         requestTermination();
+      } else if (onStdoutChunk) {
+        try {
+          const result: unknown = onStdoutChunk(chunk);
+          if (result !== undefined && result !== null && (typeof (result as { then?: unknown }).then === 'function' || result instanceof Promise)) {
+            Promise.resolve(result).catch(() => {});
+            sinkError = new BridgeError('GIT_OPERATION_FAILED', 'Invalid onStdoutChunk: asynchronous sink is not supported');
+            requestTermination();
+          }
+        } catch (err) {
+          sinkError = err instanceof Error ? err : new Error(String(err));
+          requestTermination();
+        }
       } else {
         chunks.push(chunk);
       }
@@ -362,13 +380,15 @@ async function spawnGit(
         settleReject(new BridgeError('ISOLATION_TOO_LARGE', 'Git output exceeds the isolation limit'));
       } else if (timedOut) {
         settleReject(new BridgeError('GIT_OPERATION_FAILED', `Git operation timed out after ${timeoutMs}ms`));
+      } else if (sinkError) {
+        settleReject(sinkError instanceof BridgeError ? sinkError : new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(sinkError.message || 'Git output sink error')));
       } else if (ioError) {
         settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(ioError.message || 'Git stream communication error')));
       } else if (!allowedCodes.includes(code ?? -1)) {
         const diag = stderr.trim() || (signal ? 'git terminated with signal ' + signal : 'git exited with code ' + code);
         settleReject(new BridgeError('GIT_OPERATION_FAILED', redactDiagnostic(diag, {})));
       } else {
-        settleResolve(Buffer.concat(chunks));
+        settleResolve(onStdoutChunk ? Buffer.alloc(0) : Buffer.concat(chunks));
       }
     });
 
@@ -539,6 +559,13 @@ export async function git(
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid timeoutMs: must be a finite positive number');
   }
+  const maxOutputBytes = options?.maxOutputBytes ?? MAX_GIT_OUTPUT;
+  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes <= 0) {
+    throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid maxOutputBytes: must be a positive safe integer');
+  }
+  if (options?.onStdoutChunk !== undefined && typeof options.onStdoutChunk !== 'function') {
+    throw new BridgeError('GIT_OPERATION_FAILED', 'Invalid onStdoutChunk: must be a synchronous function');
+  }
 
   const envSource = options?.env ?? process.env;
   const safePath = await buildSafeGitPath(cwd, envSource.PATH, options?.excludedRoots);
@@ -647,6 +674,8 @@ export async function git(
     allowedCodes,
     timeoutMs,
     spawnFn,
-    options?.shutdownGraceMs
+    options?.shutdownGraceMs,
+    maxOutputBytes,
+    options?.onStdoutChunk
   );
 }
