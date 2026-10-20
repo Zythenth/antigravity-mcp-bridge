@@ -787,3 +787,32 @@ test('review digest gates integration and source edits block stale patches', asy
     assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'changed');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+for (const scenario of ['oversized-stream', 'oversized-stream-late-key', 'oversized-stream-plain']) {
+  test(`oversized subprocess streams suppress stderr and preserve the next result (${scenario})`, async () => {
+    const dir = await repository();
+    const { adapter, tasks, config } = setup();
+    try {
+      await adapter.discover();
+      const task = await tasks.run({ prompt: scenario + ':test', workingDirectory: dir, timeoutSeconds: 20 });
+      const final = await until(tasks, task.taskId, done);
+      assert.equal(final.status, 'completed');
+      assert.equal((final.result as { response: string }).response, 'valid result');
+      const events = tasks.readEvents(task.taskId).events;
+      assert.deepEqual(events.filter(event => event.type === 'process.output_rejected').map(event => event.data)
+        .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))), [
+        { stream: 'stderr', reason: 'line_limit', remainingStreamSuppressed: true }, { stream: 'stdout', reason: 'line_limit' },
+      ]);
+      assert.ok(events.some(event => event.type === 'process.stderr' && (event.data as { text: string }).text === 'safe before: Olá 🌍'));
+      assert.ok(events.some(event => event.type === 'process.stderr' && (event.data as { text: string }).text === '[private key redacted]'));
+      const persisted = await readFile(path.join(config.stateDirectory, task.taskId + '.json'), 'utf8');
+      const retained = JSON.stringify({ final, events }) + persisted;
+      for (const omitted of ['injected-tail', 'rejected-tail', 'private-body-fixture', 'private-before-limit-fixture', 'safe diagnostic']) {
+        assert.ok(!retained.includes(omitted), omitted);
+      }
+    } finally {
+      await tasks.shutdown();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}

@@ -171,7 +171,9 @@ test('TaskManager accepts disjoint source/cache siblings and preserves forbidden
     try {
       await assert.rejects(tasks.run({ prompt: 'split:test', workingDirectory: forbidden }), { code: 'INVALID_WORKING_DIRECTORY' });
       const task = await tasks.run({ prompt: 'split:test', workingDirectory: source, model: 'mock-pro' });
-      assert.equal((await tasks.wait(task.taskId, 0, 10)).status, 'completed');
+      const observed = await tasks.wait(task.taskId, 0, 60);
+      assert.equal(observed.ready, true);
+      assert.equal(observed.status, 'completed');
       const finished = tasks.status(task.taskId);
       assert.deepEqual(finished.includedFiles, ['source.txt']);
       assert.equal(await readFile(path.join(finished.copyDirectory!, 'source.txt'), 'utf8'), 'source');
