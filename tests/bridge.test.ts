@@ -787,3 +787,27 @@ test('review digest gates integration and source edits block stale patches', asy
     assert.equal(await readFile(path.join(dir, 'source.txt'), 'utf8'), 'changed');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+test('oversized subprocess streams discard tails and preserve the next result', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  try {
+    await adapter.discover();
+    const task = await tasks.run({ prompt: 'oversized-stream:test', workingDirectory: dir, timeoutSeconds: 20 });
+    const final = await until(tasks, task.taskId, done);
+    assert.equal(final.status, 'completed');
+    assert.equal((final.result as { response: string }).response, 'valid result');
+    const events = tasks.readEvents(task.taskId).events;
+    assert.deepEqual(events.filter(event => event.type === 'process.output_rejected').map(event => event.data)
+      .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))), [
+      { stream: 'stderr', reason: 'line_limit' }, { stream: 'stdout', reason: 'line_limit' },
+    ]);
+    assert.ok(events.some(event => event.type === 'process.stderr' && (event.data as { text: string }).text === 'safe diagnostic'));
+    assert.ok(!JSON.stringify({ final, events }).includes('injected-tail'));
+    assert.ok(!JSON.stringify({ final, events }).includes('rejected-tail'));
+    assert.ok(!JSON.stringify({ final, events }).includes('private-body-fixture'));
+  } finally {
+    await tasks.shutdown();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

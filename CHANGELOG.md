@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Descarta linhas de stdout e stderr acima do limite até a próxima quebra, sem reinterpretar prefixos ou caudas como eventos; registra a rejeição sem incluir o conteúdo e preserva os próximos frames válidos.
+
 - Compatibiliza `read_file`, `write_file` e `edit_file` com as capacidades de arquivo já selecionadas, preservando controles de caminho, modo somente leitura e nomes nos recibos. Rejeita argumentos modernos inválidos ou alvos ambíguos.
 
 - Limpeza Windows reconhece temporários próprios já ausentes e verifica a identidade dos diretórios existentes antes da remoção, preservando substituições detectadas.
