@@ -739,3 +739,276 @@ test('receipt cleanup preserves the file when canonical verification is denied',
     await removeFixture(stateDir);
   }
 });
+
+test('modern CLI file tool aliases normalize capabilities, validate envelopes, and preserve path and receipt invariants', async () => {
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
+
+  try {
+    const catalog = createCatalog();
+    const agentsDir = path.join(copyDir, '.agents');
+    const clearFixturePolicy = async (staged: Awaited<ReturnType<typeof stageExecutionPolicy>>) => {
+      await discardExecutionPolicy(staged, stateDir);
+      for (const relative of EXECUTION_POLICY_PATHS) await rm(path.join(copyDir, relative));
+    };
+    const existingFile = path.join(copyDir, 'hello.txt');
+    await writeFile(existingFile, 'Hello world');
+
+    const newFileInSubdir = path.join(copyDir, 'nested', 'created.txt');
+    const missingFile = path.join(copyDir, 'missing.txt');
+    const outsideFile = path.join(stateDir, 'outside.txt');
+    await writeFile(outsideFile, 'Outside content');
+
+    const gitDir = path.join(copyDir, '.git');
+    await mkdir(gitDir, { recursive: true });
+    const gitConfig = path.join(gitDir, 'config');
+    await writeFile(gitConfig, '[core]');
+
+    const skillDir = path.join(copyDir, '.agents', 'skills', 'sample-skill');
+    await mkdir(skillDir, { recursive: true });
+    const skillFile = path.join(skillDir, 'SKILL.md');
+    await writeFile(skillFile, '---\nname: sample-skill\n---\nBody');
+
+    const hardlinkSrc = path.join(copyDir, 'hardlink-src.txt');
+    const hardlinkDst = path.join(copyDir, 'hardlink-dst.txt');
+    await writeFile(hardlinkSrc, 'Hardlink data');
+    await link(hardlinkSrc, hardlinkDst);
+
+    const outsideLinkedDir = path.join(stateDir, 'linked-dir');
+    await mkdir(outsideLinkedDir, { recursive: true });
+    await writeFile(path.join(outsideLinkedDir, 'secret.txt'), 'Secret');
+    const symlinkDir = path.join(copyDir, 'symlink-dir');
+    await symlink(outsideLinkedDir, symlinkDir, process.platform === 'win32' ? 'junction' : 'dir');
+
+    // Stage 1: Full read/write/edit policy
+    const execFull = randomUUID();
+    const fullPolicy = resolveAgentPolicy(
+      {
+        allowedTools: ['finish', 'view_file', 'write_to_file', 'replace_file_content'],
+        mcpServers: [{ serverId: 'echo-server', tools: ['echo'] }],
+      },
+      ['finish', 'view_file', 'write_to_file', 'replace_file_content'],
+      catalog,
+      'write',
+      execFull
+    );
+    const stagedFull = await stageExecutionPolicy(
+      copyDir,
+      {
+        policy: fullPolicy,
+        catalog,
+        stateDirectory: stateDir,
+        executionId: execFull,
+        skillFiles: ['.agents/skills/sample-skill/SKILL.md'],
+      },
+      DEFAULT_PROJECT_LIMITS
+    );
+
+    const conversationId = 'conv-modern-aliases';
+    const unsafeInt = Number.MAX_SAFE_INTEGER + 1;
+
+    const cases: Array<[string, string, unknown, 'allow' | 'deny']> = [
+      // Positive modern aliases & legacy preservation
+      ['read_file positive', 'read_file', { Path: existingFile }, 'allow'],
+      ['read_file with range/offset/metadata', 'read_file', { Path: existingFile, StartLine: 1, EndLine: 10, ByteOffset: 0, toolSummary: 'Read file' }, 'allow'],
+      ['read_file allowed skill in .agents', 'read_file', { Path: skillFile }, 'allow'],
+      ['write_file existing file', 'write_file', { Path: existingFile, Content: 'Updated', Overwrite: true }, 'allow'],
+      ['write_file new file in non-existent subdir', 'write_file', { Path: newFileInSubdir, Content: 'New', Append: false }, 'allow'],
+      ['edit_file existing file', 'edit_file', { Path: existingFile, Target: 'Hello', Replacement: 'Hi' }, 'allow'],
+      ['legacy view_file', 'view_file', { AbsolutePath: existingFile }, 'allow'],
+      ['legacy write_to_file', 'write_to_file', { TargetFile: newFileInSubdir }, 'allow'],
+      ['legacy replace_file_content', 'replace_file_content', { TargetFile: existingFile }, 'allow'],
+
+      // Missing/invalid required modern fields, unknown fields, metadata, safe integers, non-object args
+      ['read_file null args', 'read_file', null, 'deny'],
+      ['read_file array args', 'read_file', [], 'deny'],
+      ['read_file missing Path', 'read_file', {}, 'deny'],
+      ['read_file relative Path', 'read_file', { Path: 'hello.txt' }, 'deny'],
+      ['read_file unknown field', 'read_file', { Path: existingFile, Extra: 1 }, 'deny'],
+      ['read_file invalid toolSummary type', 'read_file', { Path: existingFile, toolSummary: 123 }, 'deny'],
+      ['read_file oversized toolAction', 'read_file', { Path: existingFile, toolAction: 'x'.repeat(2001) }, 'deny'],
+      ['read_file StartLine 0', 'read_file', { Path: existingFile, StartLine: 0 }, 'deny'],
+      ['read_file StartLine float', 'read_file', { Path: existingFile, StartLine: 1.5 }, 'deny'],
+      ['read_file StartLine unsafe int', 'read_file', { Path: existingFile, StartLine: unsafeInt }, 'deny'],
+      ['read_file ByteOffset negative', 'read_file', { Path: existingFile, ByteOffset: -1 }, 'deny'],
+      ['read_file ByteOffset unsafe int', 'read_file', { Path: existingFile, ByteOffset: unsafeInt }, 'deny'],
+      ['read_file StartLine > EndLine', 'read_file', { Path: existingFile, StartLine: 10, EndLine: 2 }, 'deny'],
+      ['write_file missing Content', 'write_file', { Path: existingFile }, 'deny'],
+      ['write_file null Content', 'write_file', { Path: existingFile, Content: null }, 'deny'],
+      ['write_file non-string Content', 'write_file', { Path: existingFile, Content: 123 }, 'deny'],
+      ['write_file legacy CodeContent field', 'write_file', { Path: existingFile, Content: 'a', CodeContent: 'a' }, 'deny'],
+      ['write_file invalid Overwrite type', 'write_file', { Path: existingFile, Content: 'a', Overwrite: 'yes' }, 'deny'],
+      ['write_file conflicting Append and Overwrite', 'write_file', { Path: existingFile, Content: 'a', Append: true, Overwrite: true }, 'deny'],
+      ['write_file null ArtifactMetadata', 'write_file', { Path: existingFile, Content: 'a', ArtifactMetadata: null }, 'deny'],
+      ['write_file array ArtifactMetadata', 'write_file', { Path: existingFile, Content: 'a', ArtifactMetadata: [] }, 'deny'],
+      ['edit_file missing Target', 'edit_file', { Path: existingFile, Replacement: 'b' }, 'deny'],
+      ['edit_file missing Replacement', 'edit_file', { Path: existingFile, Target: 'a' }, 'deny'],
+      ['edit_file null Target', 'edit_file', { Path: existingFile, Target: null, Replacement: 'b' }, 'deny'],
+      ['edit_file non-string Replacement', 'edit_file', { Path: existingFile, Target: 'a', Replacement: 42 }, 'deny'],
+      ['edit_file legacy ReplacementChunks field', 'edit_file', { Path: existingFile, Target: 'a', Replacement: 'b', ReplacementChunks: [] }, 'deny'],
+
+      // Conflicting or ambiguous legacy/modern targets
+      ['read_file legacy AbsolutePath only', 'read_file', { AbsolutePath: existingFile }, 'deny'],
+      ['read_file conflicting Path and AbsolutePath', 'read_file', { Path: existingFile, AbsolutePath: outsideFile }, 'deny'],
+      ['read_file ambiguous identical Path and AbsolutePath', 'read_file', { Path: existingFile, AbsolutePath: existingFile }, 'deny'],
+      ['write_file conflicting Path and TargetFile', 'write_file', { Path: existingFile, TargetFile: outsideFile, Content: 'x' }, 'deny'],
+      ['edit_file legacy TargetFile only', 'edit_file', { TargetFile: existingFile, Target: 'Hello', Replacement: 'Hi' }, 'deny'],
+      ['legacy view_file with modern Path', 'view_file', { AbsolutePath: existingFile, Path: outsideFile }, 'deny'],
+      ['legacy write_to_file with modern Path', 'write_to_file', { TargetFile: existingFile, Path: existingFile }, 'deny'],
+
+      // Path, .git, .agents, Windows aliases, hardlinks, symlinks, missing targets
+      ['read_file missing target file', 'read_file', { Path: missingFile }, 'deny'],
+      ['edit_file missing target file', 'edit_file', { Path: missingFile, Target: 'a', Replacement: 'b' }, 'deny'],
+      ['read_file outside copy', 'read_file', { Path: outsideFile }, 'deny'],
+      ['write_file outside copy', 'write_file', { Path: outsideFile, Content: 'x' }, 'deny'],
+      ['edit_file outside copy', 'edit_file', { Path: outsideFile, Target: 'Outside', Replacement: 'In' }, 'deny'],
+      ['read_file .git', 'read_file', { Path: gitConfig }, 'deny'],
+      ['write_file .git', 'write_file', { Path: gitConfig, Content: 'x' }, 'deny'],
+      ['edit_file .git', 'edit_file', { Path: gitConfig, Target: 'core', Replacement: 'x' }, 'deny'],
+      ['read_file protected .agents hook', 'read_file', { Path: path.join(agentsDir, 'bridge-execution-hook.mjs') }, 'deny'],
+      ['write_file .agents skill file', 'write_file', { Path: skillFile, Content: 'pwn' }, 'deny'],
+      ['edit_file .agents skill file', 'edit_file', { Path: skillFile, Target: 'Body', Replacement: 'pwn' }, 'deny'],
+      ['write_file root node.exe', 'write_file', { Path: path.join(copyDir, 'node.exe'), Content: 'x' }, 'deny'],
+      ['write_file Windows device name CON.txt', 'write_file', { Path: path.join(copyDir, 'CON.txt'), Content: 'x' }, 'deny'],
+      ['read_file hardlinked file', 'read_file', { Path: hardlinkDst }, 'deny'],
+      ['write_file hardlinked file', 'write_file', { Path: hardlinkDst, Content: 'x' }, 'deny'],
+      ['edit_file hardlinked file', 'edit_file', { Path: hardlinkDst, Target: 'Hardlink', Replacement: 'x' }, 'deny'],
+      ['read_file symlinked ancestry', 'read_file', { Path: path.join(symlinkDir, 'secret.txt') }, 'deny'],
+      ['write_file symlinked ancestry', 'write_file', { Path: path.join(symlinkDir, 'new.txt'), Content: 'x' }, 'deny'],
+      ['edit_file symlinked ancestry', 'edit_file', { Path: path.join(symlinkDir, 'secret.txt'), Target: 'Secret', Replacement: 'x' }, 'deny'],
+    ];
+
+    for (const [label, name, args, expected] of cases) {
+      const res = await runHook(agentsDir, { toolCall: { name, args }, conversationId });
+      assert.equal(res.exitCode, 0, `${label}: expected exitCode 0`);
+      assert.equal(res.decision, expected, `${label}: unexpected decision (${res.reason})`);
+    }
+
+    const receiptEntries = (await readFile(stagedFull.receiptPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map(line => JSON.parse(line));
+    assert.equal(receiptEntries.length, cases.length);
+    assert.equal(receiptEntries[0].toolName, 'read_file');
+    assert.equal(receiptEntries[0].decision, 'allow');
+    assert.equal(receiptEntries[3].toolName, 'write_file');
+    assert.equal(receiptEntries[3].decision, 'allow');
+    assert.equal(receiptEntries[5].toolName, 'edit_file');
+    assert.equal(receiptEntries[5].decision, 'allow');
+    assert.equal(receiptEntries[6].toolName, 'view_file');
+    assert.equal(receiptEntries[6].decision, 'allow');
+
+    await clearFixturePolicy(stagedFull);
+
+    // Stage 2: write_to_file without replace/multi_replace does NOT authorize edit_file
+    const execWriteOnly = randomUUID();
+    const stagedWriteOnly = await stageExecutionPolicy(
+      copyDir,
+      {
+        policy: resolveAgentPolicy(
+          { allowedTools: ['finish', 'view_file', 'write_to_file'], mcpServers: [] },
+          ['finish', 'view_file', 'write_to_file'],
+          catalog,
+          'write',
+          execWriteOnly
+        ),
+        catalog,
+        stateDirectory: stateDir,
+        executionId: execWriteOnly,
+        skillFiles: [],
+      },
+      DEFAULT_PROJECT_LIMITS
+    );
+
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'write_file', args: { Path: existingFile, Content: 'ok' } }, conversationId })).decision,
+      'allow'
+    );
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'edit_file', args: { Path: existingFile, Target: 'Hello', Replacement: 'Hi' } }, conversationId })).decision,
+      'deny'
+    );
+    await clearFixturePolicy(stagedWriteOnly);
+
+    // Stage 3: multi_replace_file_content authorizes edit_file without granting write_file or read_file
+    const execMultiEdit = randomUUID();
+    const stagedMultiEdit = await stageExecutionPolicy(
+      copyDir,
+      {
+        policy: resolveAgentPolicy(
+          { allowedTools: ['finish', 'multi_replace_file_content'], mcpServers: [] },
+          ['finish', 'multi_replace_file_content'],
+          catalog,
+          'write',
+          execMultiEdit
+        ),
+        catalog,
+        stateDirectory: stateDir,
+        executionId: execMultiEdit,
+        skillFiles: [],
+      },
+      DEFAULT_PROJECT_LIMITS
+    );
+
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'edit_file', args: { Path: existingFile, Target: 'Hello', Replacement: 'Hi' } }, conversationId })).decision,
+      'allow'
+    );
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'write_file', args: { Path: existingFile, Content: 'no' } }, conversationId })).decision,
+      'deny'
+    );
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'read_file', args: { Path: existingFile } }, conversationId })).decision,
+      'deny'
+    );
+    await clearFixturePolicy(stagedMultiEdit);
+
+    // Stage 4: read-only mode rejects write capabilities at policy admission and denies write_file/edit_file in hook
+    assert.throws(() =>
+      resolveAgentPolicy(
+        { allowedTools: ['finish', 'view_file', 'write_to_file'], mcpServers: [] },
+        ['finish', 'view_file', 'write_to_file'],
+        catalog,
+        'read-only',
+        randomUUID()
+      )
+    );
+
+    const execReadOnly = randomUUID();
+    const stagedReadOnly = await stageExecutionPolicy(
+      copyDir,
+      {
+        policy: resolveAgentPolicy(
+          { allowedTools: ['finish', 'view_file'], mcpServers: [] },
+          ['finish', 'view_file'],
+          catalog,
+          'read-only',
+          execReadOnly
+        ),
+        catalog,
+        stateDirectory: stateDir,
+        executionId: execReadOnly,
+        skillFiles: [],
+      },
+      DEFAULT_PROJECT_LIMITS
+    );
+
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'read_file', args: { Path: existingFile } }, conversationId })).decision,
+      'allow'
+    );
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'write_file', args: { Path: existingFile, Content: 'no' } }, conversationId })).decision,
+      'deny'
+    );
+    assert.equal(
+      (await runHook(agentsDir, { toolCall: { name: 'edit_file', args: { Path: existingFile, Target: 'Hello', Replacement: 'Hi' } }, conversationId })).decision,
+      'deny'
+    );
+    await clearFixturePolicy(stagedReadOnly);
+  } finally {
+    await removeFixture(copyDir);
+    await removeFixture(stateDir);
+  }
+});
