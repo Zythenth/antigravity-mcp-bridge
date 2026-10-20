@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Compatibiliza `read_file`, `write_file` e `edit_file` com as capacidades de arquivo já selecionadas, preservando controles de caminho, modo somente leitura e nomes nos recibos. Rejeita argumentos modernos inválidos ou alvos ambíguos.
+
 - Limpeza Windows reconhece temporários próprios já ausentes e verifica a identidade dos diretórios existentes antes da remoção, preservando substituições detectadas.
 - Nova tentativa explícita de teste após falha da infraestrutura local reconcilia leases e aguarda a recuperação inicial, sem alterar o registro anterior nem liberar sessões do CLI expiradas ou canceladas.
 

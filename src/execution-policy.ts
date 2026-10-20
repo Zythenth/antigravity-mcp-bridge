@@ -367,16 +367,91 @@ async function hookMain() {
       decision = 'deny';
       reason = 'MCP server, tool or argument envelope is not authorized';
     }
-  } else if (['view_file', 'write_to_file', 'replace_file_content', 'multi_replace_file_content'].includes(toolName)) {
-    const isWrite = toolName !== 'view_file';
-    if (!manifest.policy.nativeTools || !manifest.policy.nativeTools.some(tool => tool === toolName)) {
+  } else if (
+    [
+      'view_file',
+      'read_file',
+      'write_to_file',
+      'write_file',
+      'replace_file_content',
+      'multi_replace_file_content',
+      'edit_file',
+    ].includes(toolName)
+  ) {
+    const isModernFileTool = toolName === 'read_file' || toolName === 'write_file' || toolName === 'edit_file';
+    const normalizedTool =
+      toolName === 'read_file'
+        ? 'view_file'
+        : toolName === 'write_file'
+          ? 'write_to_file'
+          : toolName === 'edit_file'
+            ? 'replace_file_content'
+            : toolName;
+    const requiredCapabilities =
+      toolName === 'edit_file'
+        ? ['replace_file_content', 'multi_replace_file_content']
+        : [normalizedTool];
+    const isWrite = normalizedTool !== 'view_file';
+    if (!manifest.policy.nativeTools || !manifest.policy.nativeTools.some(tool => requiredCapabilities.includes(tool))) {
       decision = 'deny';
       reason = `Tool ${toolName} not allowed by native tools policy`;
     } else if (isWrite && manifest.policy.mode === 'read-only') {
       decision = 'deny';
       reason = 'Write tools not allowed in read-only mode';
     } else {
-      const rawTarget = toolName === 'view_file' ? args?.AbsolutePath : args?.TargetFile;
+      const hasObjectArgs = Boolean(args) && typeof args === 'object' && !Array.isArray(args);
+      const expectedTargetKey = isModernFileTool
+        ? 'Path'
+        : toolName === 'view_file'
+          ? 'AbsolutePath'
+          : 'TargetFile';
+      const conflictingTargetKeys = [
+        'Path',
+        'AbsolutePath',
+        'TargetFile',
+        'path',
+        'filePath',
+        'file_path',
+        'targetFile',
+        'target_file',
+        'absolutePath',
+        'absolute_path',
+      ].filter(key => key !== expectedTargetKey);
+      const hasUnambiguousTarget =
+        hasObjectArgs && !conflictingTargetKeys.some(key => key in args);
+      const isPlainObject = (val: unknown): boolean =>
+        Boolean(val) && typeof val === 'object' && !Array.isArray(val);
+      const modernAllowedKeys =
+        toolName === 'read_file'
+          ? ['Path', 'StartLine', 'EndLine', 'ByteOffset', 'toolAction', 'toolSummary']
+          : toolName === 'write_file'
+            ? ['Path', 'Content', 'Overwrite', 'Append', 'ArtifactMetadata', 'toolAction', 'toolSummary']
+            : ['Path', 'Target', 'Replacement', 'ArtifactMetadata', 'toolAction', 'toolSummary'];
+      const modernMetadataValid =
+        hasObjectArgs &&
+        ['toolAction', 'toolSummary'].every(
+          key => args[key] === undefined || (typeof args[key] === 'string' && args[key].length <= 2000)
+        );
+      const modernEnvelopeValid =
+        !isModernFileTool ||
+        (modernMetadataValid &&
+          Object.keys(args).every(key => modernAllowedKeys.includes(key)) &&
+          (toolName !== 'read_file' ||
+            ((args.StartLine === undefined || (Number.isSafeInteger(args.StartLine) && args.StartLine >= 1)) &&
+              (args.EndLine === undefined || (Number.isSafeInteger(args.EndLine) && args.EndLine >= 1)) &&
+              (args.StartLine === undefined || args.EndLine === undefined || args.StartLine <= args.EndLine) &&
+              (args.ByteOffset === undefined || (Number.isSafeInteger(args.ByteOffset) && args.ByteOffset >= 0)))) &&
+          (toolName !== 'write_file' ||
+            (typeof args.Content === 'string' &&
+              (args.Overwrite === undefined || typeof args.Overwrite === 'boolean') &&
+              (args.Append === undefined || typeof args.Append === 'boolean') &&
+              !(args.Append === true && args.Overwrite === true) &&
+              (args.ArtifactMetadata === undefined || isPlainObject(args.ArtifactMetadata)))) &&
+          (toolName !== 'edit_file' ||
+            (typeof args.Target === 'string' &&
+              typeof args.Replacement === 'string' &&
+              (args.ArtifactMetadata === undefined || isPlainObject(args.ArtifactMetadata)))));
+      const rawTarget = hasUnambiguousTarget && modernEnvelopeValid ? args[expectedTargetKey] : undefined;
       let pathValid = typeof rawTarget === 'string' && rawTarget.length > 0 && rawTarget.length <= 4000;
       if (pathValid) {
         if (!path.isAbsolute(rawTarget)) {
@@ -496,7 +571,7 @@ async function hookMain() {
                   break;
                 }
               } catch (error) {
-                if (toolName === 'write_to_file' && (error as NodeJS.ErrnoException).code === 'ENOENT') break;
+                if (normalizedTool === 'write_to_file' && (error as NodeJS.ErrnoException).code === 'ENOENT') break;
                 ancSafe = false;
                 break;
               }
@@ -511,7 +586,7 @@ async function hookMain() {
                 leafSt = await fsp.lstat(resolvedTarget);
               } catch {}
 
-              if (toolName === 'view_file' || toolName === 'replace_file_content' || toolName === 'multi_replace_file_content') {
+              if (normalizedTool === 'view_file' || normalizedTool === 'replace_file_content' || normalizedTool === 'multi_replace_file_content') {
                 if (!leafSt || leafSt.isSymbolicLink() || !leafSt.isFile() || leafSt.nlink !== 1) {
                   decision = 'deny';
                   reason = 'Target file must exist and be a regular file';
@@ -530,7 +605,7 @@ async function hookMain() {
                     reason = 'Failed to verify target file realpath';
                   }
                 }
-              } else if (toolName === 'write_to_file') {
+              } else if (normalizedTool === 'write_to_file') {
                 if (leafSt) {
                   if (leafSt.isSymbolicLink() || !leafSt.isFile() || leafSt.nlink !== 1) {
                     decision = 'deny';
