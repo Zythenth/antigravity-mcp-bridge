@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Descarta linhas acima do limite até a próxima quebra ou EOF, sem reinterpretar caudas como eventos. Stdout recupera os próximos frames válidos; após excesso em stderr, suprime explicitamente o restante desse stream para evitar perda de contexto da redação, sem inspecionar ou guardar o prefixo rejeitado.
+
 - Compatibiliza `read_file`, `write_file` e `edit_file` com as capacidades de arquivo já selecionadas, preservando controles de caminho, modo somente leitura e nomes nos recibos. Rejeita argumentos modernos inválidos ou alvos ambíguos.
 
 - Limpeza Windows reconhece temporários próprios já ausentes e verifica a identidade dos diretórios existentes antes da remoção, preservando substituições detectadas.

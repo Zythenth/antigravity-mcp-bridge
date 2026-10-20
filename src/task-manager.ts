@@ -1297,10 +1297,14 @@ export class TaskManager {
       }, timeoutMs);
       task.timer.unref();
       let stderr = '';
+      let stderrSuppressed = false;
       const stderrRedactor = {};
       let lastWasRedactedKey = false;
-      const stdoutParser = new LineParser(line => this.handleStdout(task, line));
+      const stdoutParser = new LineParser(line => this.handleStdout(task, line), undefined, () => {
+        this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stdout', reason: 'line_limit' });
+      });
       const stderrParser = new LineParser(line => {
+        if (stderrSuppressed) return;
         const redacted = redactDiagnostic(line, stderrRedactor);
         if (redacted === '[private key redacted]') {
           if (!lastWasRedactedKey) {
@@ -1313,9 +1317,14 @@ export class TaskManager {
         lastWasRedactedKey = false;
         stderr = (stderr + '\n' + redacted).slice(-10000);
         this.events.append(record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
+      }, undefined, () => {
+        if (stderrSuppressed) return;
+        stderrSuppressed = true;
+        stderr = (stderr + '\n[stderr suppressed after line limit]').slice(-10000);
+        this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stderr', reason: 'line_limit', remainingStreamSuppressed: true });
       });
       child.stdout.on('data', chunk => stdoutParser.write(chunk));
-      child.stderr.on('data', chunk => stderrParser.write(chunk));
+      child.stderr.on('data', chunk => { if (!stderrSuppressed) stderrParser.write(chunk); });
       child.stdout.on('error', error => {
         const redacted = redactDiagnostic(error.message);
         stderr += '\n' + redacted;
@@ -1507,10 +1516,14 @@ export class TaskManager {
     task.record.status = 'running';
     this.events.append(task.record.taskId, 'process.started', { pid: child.pid, repair: true });
     let stderr = '';
+    let stderrSuppressed = false;
     const repairStderrRedactor = {};
     let lastRepairWasRedactedKey = false;
-    const stdoutParser = new LineParser(line => this.handleStdout(task, line));
+    const stdoutParser = new LineParser(line => this.handleStdout(task, line), undefined, () => {
+      this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stdout', reason: 'line_limit' });
+    });
     const stderrParser = new LineParser(line => {
+      if (stderrSuppressed) return;
       const redacted = redactDiagnostic(line, repairStderrRedactor);
       if (redacted === '[private key redacted]') {
         if (!lastRepairWasRedactedKey) {
@@ -1523,9 +1536,14 @@ export class TaskManager {
       lastRepairWasRedactedKey = false;
       stderr = (stderr + '\n' + redacted).slice(-10000);
       this.events.append(task.record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
+    }, undefined, () => {
+      if (stderrSuppressed) return;
+      stderrSuppressed = true;
+      stderr = (stderr + '\n[stderr suppressed after line limit]').slice(-10000);
+      this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stderr', reason: 'line_limit', remainingStreamSuppressed: true });
     });
     child.stdout.on('data', chunk => stdoutParser.write(chunk));
-    child.stderr.on('data', chunk => stderrParser.write(chunk));
+    child.stderr.on('data', chunk => { if (!stderrSuppressed) stderrParser.write(chunk); });
     child.stdout.on('error', error => {
       const redacted = redactDiagnostic(error.message);
       stderr += '\n' + redacted;

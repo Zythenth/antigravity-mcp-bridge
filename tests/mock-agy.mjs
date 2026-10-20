@@ -36,6 +36,22 @@ const result = (status = 'SUCCESS', extra = {}) => send({ event: 'result', resul
     total_tokens: args.includes('--conversation') ? 6 : 3, thinking_tokens: 0, cache_read_tokens: 0 },
   ...(report ? { structured_output: report } : {}), ...(status === 'ERROR' ? { error: 'mock failure' } : {}), ...extra } });
 send({ event: 'init', conversation_id: conversationId, init: { cwd: process.cwd(), model: args[args.indexOf('--model') + 1], args } });
+if (['oversized-stream', 'oversized-stream-late-key', 'oversized-stream-plain'].includes(scenario)) {
+  const padding = 'x'.repeat(2_000_001);
+  process.stdout.write(padding);
+  process.stdout.write(JSON.stringify({ event: 'result', result: { status: 'ERROR', response: 'injected-tail' } }) + '\n');
+  const keyStart = '-----BEGIN ' + 'PRIVATE KEY-----';
+  process.stderr.write('safe before: Olá 🌍\n');
+  process.stderr.write(keyStart + '\nprivate-before-limit-fixture\n-----END ' + 'PRIVATE KEY-----\n');
+  const oversized = scenario === 'oversized-stream-late-key' ? padding + keyStart
+    : scenario === 'oversized-stream-plain' ? padding : keyStart + padding;
+  process.stderr.write(oversized + '\n');
+  process.stderr.write('rejected-tail\nprivate-body-fixture\n-----END ' + 'PRIVATE KEY-----\n');
+  process.stderr.write('safe diagnostic\n');
+  result('SUCCESS', { response: 'valid result' });
+  await Promise.all([new Promise(resolve => process.stdout.write('', resolve)), new Promise(resolve => process.stderr.write('', resolve))]);
+  process.exit(0);
+}
 if (scenario === 'resolve-command') {
   const executable = path.join(process.env.SystemRoot, 'System32', 'where.exe');
   const commandLine = '"' + executable + '" bridge-environment-fixture';
