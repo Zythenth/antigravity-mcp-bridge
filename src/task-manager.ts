@@ -1299,7 +1299,9 @@ export class TaskManager {
       let stderr = '';
       const stderrRedactor = {};
       let lastWasRedactedKey = false;
-      const stdoutParser = new LineParser(line => this.handleStdout(task, line));
+      const stdoutParser = new LineParser(line => this.handleStdout(task, line), undefined, () => {
+        this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stdout', reason: 'line_limit' });
+      });
       const stderrParser = new LineParser(line => {
         const redacted = redactDiagnostic(line, stderrRedactor);
         if (redacted === '[private key redacted]') {
@@ -1313,6 +1315,9 @@ export class TaskManager {
         lastWasRedactedKey = false;
         stderr = (stderr + '\n' + redacted).slice(-10000);
         this.events.append(record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
+      }, undefined, prefix => {
+        redactDiagnostic(prefix, stderrRedactor);
+        this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stderr', reason: 'line_limit' });
       });
       child.stdout.on('data', chunk => stdoutParser.write(chunk));
       child.stderr.on('data', chunk => stderrParser.write(chunk));
@@ -1509,7 +1514,9 @@ export class TaskManager {
     let stderr = '';
     const repairStderrRedactor = {};
     let lastRepairWasRedactedKey = false;
-    const stdoutParser = new LineParser(line => this.handleStdout(task, line));
+    const stdoutParser = new LineParser(line => this.handleStdout(task, line), undefined, () => {
+      this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stdout', reason: 'line_limit' });
+    });
     const stderrParser = new LineParser(line => {
       const redacted = redactDiagnostic(line, repairStderrRedactor);
       if (redacted === '[private key redacted]') {
@@ -1523,6 +1530,9 @@ export class TaskManager {
       lastRepairWasRedactedKey = false;
       stderr = (stderr + '\n' + redacted).slice(-10000);
       this.events.append(task.record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
+    }, undefined, prefix => {
+      redactDiagnostic(prefix, repairStderrRedactor);
+      this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stderr', reason: 'line_limit' });
     });
     child.stdout.on('data', chunk => stdoutParser.write(chunk));
     child.stderr.on('data', chunk => stderrParser.write(chunk));
