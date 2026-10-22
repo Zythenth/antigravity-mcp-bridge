@@ -143,8 +143,9 @@ async function inspectReparsePoints(paths: string[]): Promise<void> {
     fail('UNSAFE_PORTABLE_NODE_CACHE', 'Native Windows reparse inspector source is unavailable');
   }
   const started = performance.now();
-  const totalTimeoutMs = 15_000;
-  const deadline = started + totalTimeoutMs;
+  // A cold .NET compiler on a fresh machine can take far longer than the inspection itself.
+  const compileTimeoutMs = 60_000, runTimeoutMs = 15_000;
+  let deadline = started + compileTimeoutMs;
   const timeRemainingMs = () => Math.max(0, Math.round(deadline - performance.now()));
 
   const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
@@ -220,6 +221,7 @@ async function inspectReparsePoints(paths: string[]): Promise<void> {
       throw new BridgeError('UNSAFE_PORTABLE_NODE_CACHE', 'Portable runtime cache contains a Windows reparse point or could not be safely inspected (' + diagnostics + ')');
     }
 
+    deadline = performance.now() + runTimeoutMs;
     const runTimeout = timeRemainingMs();
     if (runTimeout <= 0) {
       stopReason = 'timeout';

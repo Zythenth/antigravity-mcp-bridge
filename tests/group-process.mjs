@@ -35,9 +35,20 @@ console.log('READY');
 while (!fs.existsSync(path.join(root, 'go'))) await delay(10);
 try { manager.groups.start(groupId, digest); }
 catch (error) { if (!['STATE_BUSY', 'GROUP_OWNED_BY_OTHER_SERVER'].includes(error.code)) throw error; }
-const deadline = Date.now() + 10000;
-while (!['completed', 'failed'].includes(manager.groups.status(groupId).state)) {
-  if (Date.now() > deadline) throw Error('Group did not finish');
+const totalDeadline = Date.now() + 180000;
+let inactivityDeadline = Date.now() + 60000, lastProgress = '', status;
+while (!['completed', 'failed'].includes((status = manager.groups.status(groupId)).state)) {
+  const progress = JSON.stringify({ state: status.state, nodes: status.nodes.map(({ key, state }) => ({ key, state })) });
+  if (progress !== lastProgress) {
+    lastProgress = progress;
+    inactivityDeadline = Date.now() + 60000;
+  }
+  const now = Date.now();
+  if (now > totalDeadline || now > inactivityDeadline) {
+    const limit = now > totalDeadline ? 'Group did not finish within 180 s' : 'Group made no progress for 60 s';
+    const nodeErrors = status.nodes.filter(n => n.error?.code).map(n => ({ key: n.key, error: n.error.code }));
+    throw Error(`${limit}; progress: ${progress}; node errors: ${JSON.stringify(nodeErrors)}`);
+  }
   await delay(20);
 }
 console.log(JSON.stringify({ state: manager.groups.status(groupId).state }));

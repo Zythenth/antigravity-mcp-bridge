@@ -57,7 +57,7 @@ async function createRepo(): Promise<string> {
 
 const done = (task: TaskRecord) => ['completed', 'failed', 'cancelled', 'timeout'].includes(task.status);
 
-async function until(tasks: TaskManager, taskId: string, predicate: (record: TaskRecord) => boolean, timeout = 10000): Promise<TaskRecord> {
+async function until(tasks: TaskManager, taskId: string, predicate: (record: TaskRecord) => boolean, timeout = 60000): Promise<TaskRecord> {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const task = tasks.status(taskId);

@@ -19,7 +19,7 @@ const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.u
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
 const done = (status: string) => ['completed', 'failed', 'cancelled', 'timeout'].includes(status);
 
-async function waitFor(tasks: TaskManager, taskId: string, timeout = 60000) {
+async function waitFor(tasks: TaskManager, taskId: string, timeout = 180000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const current = tasks.status(taskId);

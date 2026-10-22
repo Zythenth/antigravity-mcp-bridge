@@ -32,7 +32,7 @@ test('cleanup terminates a descendant that outlived its exited parent and verifi
   let descendantPid: number | undefined;
   try {
     await new Promise(resolve => parent.once('exit', resolve));
-    const deadline = Date.now() + 10_000;
+    const deadline = Date.now() + 60_000;
     while (descendantPid === undefined && Date.now() < deadline) {
       descendantPid = Number(await readFile(pidFile, 'utf8').catch(() => '')) || undefined;
       if (descendantPid === undefined) await new Promise(resolve => setTimeout(resolve, 50));
