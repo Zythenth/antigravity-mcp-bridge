@@ -21,9 +21,10 @@ import { reconcileOwnedProcesses } from './process-tree.js';
 import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
+import { normalizeEditedLineEndings } from './line-endings.js';
 import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readBaselineFile, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
@@ -1487,7 +1488,17 @@ export class TaskManager {
           if (!record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'No new guarded finish was observed for this conversation');
           record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
         }
-        if (record.mode !== 'read-only') await previewProjectCopy(task.project, this.config);
+        if (record.mode !== 'read-only') {
+          const preview = await previewProjectCopy(task.project, this.config);
+          // CLI editing tools may change line endings; the original file format is restored.
+          const paths = preview.fileSummaries.filter(file => file.binary === false && file.status !== 'D').map(file => file.path);
+          // Files are rewritten only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
+          const normalized = record.processCleanup?.verified ? await normalizeEditedLineEndings(task.project.copyDirectory, paths, relative => readBaselineFile(task.project!, relative)) : [];
+          if (normalized.length > 0) {
+            this.events.append(record.taskId, 'patch.line-endings-normalized', { paths: normalized });
+            await previewProjectCopy(task.project, this.config);
+          }
+        }
         record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
           (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
         if (!task.options.nativeTest && record.outputSchema !== undefined) {
