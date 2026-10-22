@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Respostas de erro MCP passam pela redação de diagnósticos antes de chegar ao cliente, inclusive erros gerados pelo SDK antes do wrapper do bridge, como ferramenta desconhecida e validação de argumentos. Respostas válidas, IDs e hashes não são alterados. A redação de credenciais em URLs agora inicia no delimitador `://`, mantendo tempo linear em diagnósticos longos.
+
 - Descarta linhas acima do limite até a próxima quebra ou EOF, sem reinterpretar caudas como eventos. Stdout recupera os próximos frames válidos; após excesso em stderr, suprime explicitamente o restante desse stream para evitar perda de contexto da redação, sem inspecionar ou guardar o prefixo rejeitado.
 
 - Compatibiliza `read_file`, `write_file` e `edit_file` com as capacidades de arquivo já selecionadas, preservando controles de caminho, modo somente leitura e nomes nos recibos. Rejeita argumentos modernos inválidos ou alvos ambíguos.

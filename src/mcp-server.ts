@@ -19,6 +19,9 @@ import { effortSchema } from './roles.js';
 import { structuredResultInputSchema } from './structured-results.js';
 import { artifactPathsSchema } from './artifacts.js';
 import { nativeToolsSchema, mcpSelectionSchema } from './agent-policy.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { redactDiagnostic } from './subprocess.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -27,7 +30,7 @@ function response(value: unknown) {
 
 function failure(error: unknown) {
   const code = error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED';
-  const message = error instanceof Error ? error.message : String(error);
+  const message = redactDiagnostic(error instanceof Error ? error.message : String(error));
   return { isError: true, ...response({ error: { code, message } }) };
 }
 
@@ -48,6 +51,30 @@ function sandboxPolicyConfirmation(previous: SandboxPolicySnapshot, proposed: Sa
     'A confirmação humana autoriza apenas este teto global; o agente que chama o MCP seleciona concessões menores por teste e o Gemini delegado não pode autorizá-las nem alterá-las.\n' +
     'Rede habilitada concede internet e conexões de LAN de entrada e saída ao processo LPAC. localhost continua sujeito às restrições do sistema operacional. ' +
     'Processos-filho e o limite de saída acima serão aplicados como teto. Confirme apenas os caminhos canônicos, capacidades e limite de saída revisados.';
+}
+
+// The SDK formats unknown-tool and validation errors before the bridge wrapper, so error results are redacted at the transport boundary.
+function redactMessage(message: JSONRPCMessage): JSONRPCMessage {
+  if ('error' in message) {
+    const redacted = redactDiagnostic(message.error.message);
+    return redacted === message.error.message ? message : { ...message, error: { ...message.error, message: redacted } };
+  }
+  if (!('result' in message) || message.result.isError !== true || message.result.structuredContent || !Array.isArray(message.result.content)) return message;
+  let changed = false;
+  const content = message.result.content.map(item => {
+    if (!item || typeof item !== 'object' || item.type !== 'text' || typeof item.text !== 'string') return item;
+    const text = redactDiagnostic(item.text);
+    if (text === item.text) return item;
+    changed = true;
+    return { ...item, text };
+  });
+  return changed ? { ...message, result: { ...message.result, content } } : message;
+}
+
+function redactingTransport(transport: Transport): Transport {
+  const send = transport.send.bind(transport);
+  transport.send = (message, options) => send(redactMessage(message), options);
+  return transport;
 }
 
 export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
@@ -463,6 +490,9 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     },
     annotations: readOnly,
   }, async ({ taskId, path, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path, expectedSha256, offset, limit))());
+
+  const connect = server.connect.bind(server);
+  server.connect = transport => connect(redactingTransport(transport));
 
   return server;
 }
