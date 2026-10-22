@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- A inspeção nativa de pontos de reparse do cache do runtime portátil no Windows passa a dar à compilação do inspetor um limite próprio de 60 s; a execução do inspetor mantém o limite de 15 s. Em máquinas lentas, o preparo do runtime deixa de falhar só porque o compilador .NET demorou a iniciar; um prazo esgotado continua recusando o cache com `UNSAFE_PORTABLE_NODE_CACHE`.
+
 - O pacote passa a distribuir o snapshot do Anti-AI Craft 0.6.0 (revisão fixa `8f6d539`, seis skills, referências e biblioteca visual) em `plugin/anti-ai-craft/`, com manifesto de hashes verificado no build, nos testes e no tarball. O script `scripts/update-anti-ai-craft.mjs` obtém uma revisão completa informada pelo mantenedor, lê os blobs sem checkout nem execução de scripts, recusa links, submódulos e caminhos inseguros e aplica limites de 2.000 arquivos, 16 MiB por recurso e 64 MiB no total. Ferramentas de pesquisa do catálogo visual ficam fora do pacote.
 
 - Após cada execução do CLI, os processos pertencentes à execução são observados novamente, encerrados e confirmados como ausentes, inclusive descendentes que sobrevivem ao processo pai. O resultado fica em `processCleanup`; se não for confirmado, a cópia não é reutilizada (`PROCESS_CLEANUP_UNVERIFIED`) até nova observação. No Windows, descendentes cujo intermediário já terminou continuam fora do alcance da verificação.

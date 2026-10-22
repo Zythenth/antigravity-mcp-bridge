@@ -2,13 +2,34 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
   test:
+    name: test (${{ matrix.os }}, ${{ matrix.shard }}/${{ matrix.shards }})
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        include:
+          - os: ubuntu-latest
+            shard: 1
+            shards: 1
+          - os: windows-latest
+            shard: 1
+            shards: 5
+          - os: windows-latest
+            shard: 2
+            shards: 5
+          - os: windows-latest
+            shard: 3
+            shards: 5
+          - os: windows-latest
+            shard: 4
+            shards: 5
+          - os: windows-latest
+            shard: 5
+            shards: 5
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -17,25 +38,28 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
+      - if: matrix.shard == 1
+        run: npm run typecheck
+      - if: matrix.shard == 1
+        run: npm run lint
       - run: npm run build:plugin
       - if: runner.os == 'Windows'
         run: node plugin/server.mjs --prepare-windows-runtime
         env:
           BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
-      - if: runner.os == 'Windows'
+      - if: runner.os == 'Windows' && matrix.shard == 1
         run: node --test --test-name-pattern="Windows executor stages real Git inside LPAC" dist/tests/windows-executor.test.js
         env:
           BRIDGE_WINDOWS_NODE_RUNTIME: portable
           BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
       - if: runner.os == 'Windows'
-        run: npm test
+        run: node scripts/test-shard.mjs ${{ matrix.shard }} ${{ matrix.shards }}
         env:
           BRIDGE_WINDOWS_NODE_RUNTIME: portable
           BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
       - if: runner.os != 'Windows'
-        run: npm test
-      - run: npm run test:package
+        run: node scripts/test-shard.mjs ${{ matrix.shard }} ${{ matrix.shards }}
+      - if: matrix.shard == 1
+        run: npm run test:package
         env:
           BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
