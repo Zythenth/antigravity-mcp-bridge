@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { access, lstat, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { BridgeError } from './types.js';
+import { containsCredential } from './subprocess.js';
 
 function within(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
@@ -52,6 +53,8 @@ export function validatePrompt(prompt: string, maxChars: number): void {
   if (!prompt.trim() || prompt.length > maxChars || prompt.includes('\0')) {
     throw new BridgeError('INVALID_PROMPT', `prompt must contain 1 to ${maxChars} characters and no NUL`);
   }
+  // Prompts are persisted and sent to the provider, so credential formats are refused instead of rewritten.
+  if (containsCredential(prompt)) throw new BridgeError('INPUT_SECRET_DETECTED', 'prompt contains a credential-like value; remove it before delegation');
 }
 
 export async function validateStateSeparation(workingDirectory: string, stateDirectory: string): Promise<void> {

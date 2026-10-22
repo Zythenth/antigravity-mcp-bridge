@@ -346,6 +346,14 @@ test('task completion is not duplicated on cancel or multiple finish calls', asy
 test('diagnostics redact secrets and private keys', () => {
   const privateKey = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0\n-----END RSA PRIVATE KEY-----';
   assert.equal(redactDiagnostic(privateKey), '[private key redacted]');
+  assert.equal(redactDiagnostic('key: -----BEGIN RSA PRIVATE KEY-----\nMIIEunterminatedbody'), 'key: [private key redacted]');
+  assert.equal(redactDiagnostic('MIIEheadlesstail\n-----END RSA PRIVATE KEY-----\nafter'), '[private key redacted]\nafter');
+  const escapedKey = {};
+  const escapedLines = ['\\u002d----BEGIN PRIVATE KEY-----', 'MIIEescapedbody', '-----END PRIVATE KEY-----', 'visible'].map(line => redactDiagnostic(line, escapedKey));
+  assert.deepEqual(escapedLines, ['[private key redacted]', '[private key redacted]', '[private key redacted]', 'visible']);
+  const escaped = '{"text":"use \\u0067hp_' + 'E'.repeat(36) + '"}';
+  assert.equal(redactDiagnostic(escaped).includes('hp_' + 'E'.repeat(36)), false);
+  assert.equal(redactDiagnostic('{"path":"C:\\\\safe\\\\file.txt"}'), '{"path":"C:\\\\safe\\\\file.txt"}');
 
   const tokenDiagnostic = 'Error with token AIzaSyD12345678901234567890123456789012 and secret';
   assert.ok(!redactDiagnostic(tokenDiagnostic).includes('AIzaSyD12345678901234567890123456789012'));
@@ -373,6 +381,22 @@ test('diagnostics redact multiline private keys fed line-by-line without persist
   assert.equal(redacted[4], '[private key redacted]');
   assert.equal(redacted[5], 'Trailing info');
   assert.ok(!redacted.some(line => line.includes('sensitive1') || line.includes('sensitive2')));
+
+  const chained = {};
+  const chainedLines = ['-----BEGIN PRIVATE KEY-----', 'firstbody', '-----END PRIVATE KEY----- -----BEGIN PRIVATE KEY-----', 'secondbody', '-----END PRIVATE KEY-----', 'visible'];
+  assert.deepEqual(chainedLines.map(line => redactDiagnostic(line, chained)).slice(3), ['[private key redacted]', '[private key redacted]', 'visible']);
+});
+
+test('multi-line environment secrets are redacted line by line', () => {
+  process.env.BRIDGE_TEST_MULTILINE_SECRET = 'first-secret-line\nsecond-secret-line';
+  try {
+    const state = {};
+    const lines = ['before', 'first-secret-line', 'second-secret-line', 'after'].map(line => redactDiagnostic(line, state));
+    assert.deepEqual(lines, ['before', '[redacted]', '[redacted]', 'after']);
+    assert.equal(redactDiagnostic('x first-secret-line\nsecond-secret-line y'), 'x [redacted] y');
+  } finally {
+    delete process.env.BRIDGE_TEST_MULTILINE_SECRET;
+  }
 });
 
 test('diagnostics redact URL userinfo proxy credentials', () => {
