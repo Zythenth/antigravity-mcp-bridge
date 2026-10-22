@@ -24,6 +24,7 @@ import {
   previewProjectCopy,
   managedGit,
   getFenceMarkerPath,
+  readBaselineFile,
 } from '../src/isolation.js';
 import { collectArtifacts, readArtifact } from '../src/artifacts.js';
 import { BridgeError } from '../src/types.js';
@@ -954,5 +955,23 @@ test('host-git: onStdoutChunk streams output without buffering, validates maxOut
     );
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('baseline reads treat paths literally', { skip: process.platform === 'win32' }, async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-baseline-literal-'));
+  try {
+    execFileSync('git', ['init', '--quiet', dir]);
+    await writeFile(path.join(dir, 'a.txt'), 'A');
+    await writeFile(path.join(dir, ':a.txt'), 'COLON');
+    const copy = await createProjectCopy(dir, ['a.txt', ':a.txt']);
+    try {
+      assert.deepEqual(await readBaselineFile(copy, ':a.txt'), Buffer.from('COLON'));
+      assert.deepEqual(await readBaselineFile(copy, 'a.txt'), Buffer.from('A'));
+    } finally {
+      await discardProjectCopy(copy);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
