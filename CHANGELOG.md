@@ -2,6 +2,9 @@
 
 ## Não publicado
 
+- Frames do CLI passam por cópia iterativa limitada em profundidade e nós, com redação de strings e chaves, antes de eventos, resultados, mensagens e respostas. Frames profundos deixam de interromper o processamento com estouro de pilha. Deltas de resposta são liberados somente por linha completa e redigidos com estado por etapa, evitando credenciais divididas entre deltas; uma linha incompleta acima de 8 KiB é suprimida até a próxima quebra, com marcador e evento `response.truncated`. Saídas e erros de testes nativos, evidências relatadas e estado restaurado de versões anteriores também são redigidos.
+- Prompts, mensagens e memória privada com formatos de credencial de alta confiança são recusados com `INPUT_SECRET_DETECTED`. Memórias antigas com esses valores são lidas redigidas e não podem ser selecionadas.
+
 - Respostas de erro MCP passam pela redação de diagnósticos antes de chegar ao cliente, inclusive erros gerados pelo SDK antes do wrapper do bridge, como ferramenta desconhecida e validação de argumentos. Respostas válidas, IDs e hashes não são alterados. A redação de credenciais em URLs agora inicia no delimitador `://`, mantendo tempo linear em diagnósticos longos.
 
 - Descarta linhas acima do limite até a próxima quebra ou EOF, sem reinterpretar caudas como eventos. Stdout recupera os próximos frames válidos; após excesso em stderr, suprime explicitamente o restante desse stream para evitar perda de contexto da redação, sem inspecionar ou guardar o prefixo rejeitado.

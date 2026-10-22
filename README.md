@@ -345,6 +345,7 @@ O chamador escolhe até oito entradas. O texto selecionado é enviado ao CLI com
 `memory` também pode ser um padrão explícito de especialista. Uma lista vazia substitui esse padrão. A retomada conserva os snapshots originais, mesmo após substituir ou remover a memória armazenada; fornecer `memory` outra vez numa retomada é recusado. Handoffs herdam o snapshot por padrão e permitem uma seleção explícita diferente ou `memory: []`.
 
 Os padrões globais são 100 entradas, 1 MiB de texto e 64 KiB por entrada, medidos em UTF-8. Escritas usam comparação de hash e lock entre processos; versões divergentes retornam `MEMORY_CHANGED`. Links, junções de armazenamento, arquivos corrompidos e hashes inconsistentes são recusados. Perfis `query` e `review` permitem somente listar e ler.
+Textos com formatos de credencial de alta confiança são recusados com `INPUT_SECRET_DETECTED`, assim como prompts e mensagens. Entradas antigas com esses valores são lidas redigidas e não podem ser selecionadas.
 
 Remover uma entrada não apaga os snapshots já guardados nas tarefas retidas. O descarte da cópia também preserva esses registros. Consulte [Privacidade](PRIVACY.md) para apagar o estado local; o bridge não oferece criptografia própria.
 
