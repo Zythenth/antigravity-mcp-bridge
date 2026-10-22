@@ -50,7 +50,7 @@ async function fixture(customRoles: unknown[], body: (f: { root: string; repo: s
     for (const args of [['init'], ['config', 'user.name', 'Test'], ['config', 'user.email', 'test@example.com'], ['config', 'commit.gpgsign', 'false'], ['add', '.'], ['commit', '-m', 'fixture']]) {
       execFileSync('git', args, { cwd: repo, stdio: 'ignore' });
     }
-    const config = loadConfig({ BRIDGE_CUSTOM_ROLES: JSON.stringify(customRoles), BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_DEFAULT_MODEL: 'model-b' });
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify(customRoles), BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_DEFAULT_MODEL: 'model-b' });
     const adapter = new RecordingAdapter(config), tasks = new TaskManager(adapter, config); managers.push(tasks);
     await body({ root, repo, state, config, adapter, tasks, managers });
   } finally {
@@ -104,7 +104,7 @@ test('resume after restart retains original specialist snapshot, model, effort, 
     await tasks.shutdown();
     const changedRole = structuredClone(role); changedRole.defaults.model = 'model-b'; changedRole.defaults.effort = 'low'; changedRole.defaults.timeoutSeconds = 12;
     changedRole.defaults.skills[0]!.content += '\nChanged configuration.';
-    const config = loadConfig({ BRIDGE_CUSTOM_ROLES: JSON.stringify([changedRole]), BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_DEFAULT_MODEL: 'model-b' });
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([changedRole]), BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_DEFAULT_MODEL: 'model-b' });
     const adapter = new RecordingAdapter(config), resumedManager = new TaskManager(adapter, config); managers.push(resumedManager);
     const resumed = await completed(resumedManager, await resumedManager.run({ workingDirectory: repo, sessionId: original.sessionId, prompt: 'Continue original fixture.' }));
     assert.equal(resumed.model, 'model-a'); assert.equal(resumed.effort, 'high');
@@ -142,7 +142,7 @@ const args=process.argv.slice(2);
 if(args.includes('--version'))console.log('1');
 else if(args.includes('--help'))console.log('--sandbox --effort stream-json --output-format --conversation');
 else {process.stdin.resume();process.stdin.once('end',()=>{fs.writeFileSync(${JSON.stringify(receipt)},JSON.stringify(args));console.log(JSON.stringify({event:'result',result:{status:'SUCCESS'}}));});}`);
-    const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_EXECUTOR: 'agy' });
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_EXECUTOR: 'agy' });
     const actual = new CliAdapter(config, [script]); await actual.discover();
     const child = actual.spawnTask({ prompt: 'Public capture fixture.', workingDirectory: repo, effort: 'high' }, 'model-a', repo);
     await new Promise<void>((resolve, reject) => { child.once('error', reject); child.once('close', () => resolve()); });

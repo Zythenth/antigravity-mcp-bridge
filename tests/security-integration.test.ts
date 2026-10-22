@@ -54,7 +54,7 @@ async function createRepo(): Promise<string> {
 function setup(prefixArgs: string[], configOverrides: Record<string, string> = {}) {
   const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-sec-state-'));
   stateDirectories.push(stateDirectory);
-  const config = loadConfig({
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', 
     AGY_PATH: process.execPath,
     DEFAULT_TIMEOUT_SECONDS: '5',
     BRIDGE_TEST_EXECUTOR: 'agy',
@@ -101,7 +101,7 @@ test('CliAdapter filters environment in probes, models, and spawnTask, preservin
     process.env.NODE_OPTIONS = '--max-old-space-size=4096';
     process.env.MY_SAFE_EXTENSION_VAR = 'public-allowed-value';
 
-    const config = loadConfig({
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', 
       AGY_PATH: process.execPath,
       DEFAULT_TIMEOUT_SECONDS: '5',
       BRIDGE_TEST_EXECUTOR: 'agy',

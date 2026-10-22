@@ -9,6 +9,7 @@ import { ProjectMemoryStore, type MemorySnapshot } from './project-memory.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
 import { validateProjectRoot, listProjectFiles } from './isolation.js';
 import { createHash, randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { readExecutionPolicyReceipt } from './execution-policy.js';
 import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolicy } from './agent-policy.js';
 import { integrationPreauthorized, type IntegrationApproval } from './integration-policy.js';
@@ -19,6 +20,7 @@ import { terminateSubprocess, redactDiagnostic, containsCredential, isOwnedProce
 import { reconcileOwnedProcesses } from './process-tree.js';
 import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
+import { prepareCraft, mergePermanentSkills } from './craft.js';
 import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
 import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
@@ -352,6 +354,18 @@ export class TaskManager {
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
       if ((previous || contextSource) && options.skills !== undefined) throw new BridgeError('INVALID_SKILLS', 'Resume and handoff retain supplied skills; new bundles require a new task');
+      // Resumes and handoffs keep the snapshot they started with; only new sessions resolve the installed one.
+      if (previous || contextSource) options.craft = (previous ?? contextSource)!.options.craft;
+      else if (!options.sessionId) {
+        const craft = await prepareCraft(this.config);
+        if (craft) {
+          const skills = mergePermanentSkills(craft.permanent, options.skills ?? []);
+          if (!providedSkillsSchema.safeParse(skills).success) throw new BridgeError('INVALID_SKILL_INPUT', 'The two permanent Anti-AI Craft skills plus supplied skills exceed the bundle limits');
+          const bytes = skills.reduce((sum, skill) => sum + Buffer.byteLength(skill.content, 'utf8') + (skill.resources ?? []).reduce((n, file) => n + Buffer.byteLength(file.content, 'utf8'), 0), 0);
+          if (bytes > MAX_TOTAL_BUNDLES_BYTES) throw new BridgeError('COPY_LIMIT_EXCEEDED', 'Permanent and supplied skills exceed the 1 MiB text budget');
+          options = { ...options, skills, craft: craft.selection };
+        }
+      }
       if (previous && options.outputSchema !== undefined) throw new BridgeError('INVALID_SCHEMA', 'A resumed task retains its original structured output schema');
       if (previous && options.artifactPaths !== undefined) throw new BridgeError('INVALID_ARTIFACT_PATHS', 'A resumed task retains its original artifact paths');
       if (previous && options.memory !== undefined) throw new BridgeError('INVALID_MEMORY_SELECTION', 'Resume retains its original private memory snapshots; start a new task to select different memory');
@@ -478,7 +492,7 @@ export class TaskManager {
       const taskId = randomUUID();
       options.group = options.groupAdmission ? { ...options.groupAdmission, rootTaskId: taskId } : previous?.record.group && structuredClone(previous.record.group);
       delete options.groupAdmission;
-      const record: TaskRecord = { group: options.group, memory: summarizeMemory(options.memorySnapshots), parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId, sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
+      const record: TaskRecord = { group: options.group, memory: summarizeMemory(options.memorySnapshots), ...(options.craft ? { craft: { revision: options.craft.revision, manifestSha256: options.craft.manifestSha256, permanent: options.craft.permanent, catalog: options.craft.catalog.map(entry => entry.name) } } : {}), parentTaskId: options.parentTaskId, sourceMessage: options.sourceMessage, deliveryMode: options.deliveryMode, providedSkills: options.providedSkills, taskId, sessionId: options.sessionId, model, effort: options.effort, mode, role, roleDefinition, prompt: options.prompt,
         acceptanceCriteria, handoff: options.handoff ?? previous?.record.handoff, comparison: options.comparison,
         tests: previous?.record.tests ?? contextSource?.record.tests, usageIsResume: Boolean(previous),
         usageBaseline: previous ? this.latestObservedUsage(previous.record.sessionId, workingDirectory) : undefined,
@@ -1316,8 +1330,8 @@ export class TaskManager {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
         this.events.append(record.taskId, 'copy.created', { copyDirectory: project.copyDirectory });
-      }, this.config, task.options.skills, task.options.agentPolicy ? { policy: task.options.agentPolicy, catalog: this.config.mcpCatalog, stateDirectory: this.config.stateDirectory, executionId: record.taskId } : undefined);
-      if (task.options.agentPolicy && !task.project.executionPolicy) await stageProjectExecutionPolicy(task.project, { policy: task.options.agentPolicy, catalog: this.config.mcpCatalog, stateDirectory: this.config.stateDirectory, executionId: record.taskId }, this.config);
+      }, this.config, task.options.skills, task.options.agentPolicy ? { policy: task.options.agentPolicy, catalog: this.config.mcpCatalog, stateDirectory: this.config.stateDirectory, executionId: record.taskId, readOnlyRoots: task.options.craft ? [path.join(task.options.craft.root, 'skills')] : [] } : undefined);
+      if (task.options.agentPolicy && !task.project.executionPolicy) await stageProjectExecutionPolicy(task.project, { policy: task.options.agentPolicy, catalog: this.config.mcpCatalog, stateDirectory: this.config.stateDirectory, executionId: record.taskId, readOnlyRoots: task.options.craft ? [path.join(task.options.craft.root, 'skills')] : [] }, this.config);
       await verifyManagedCopy(task.project);
       if (task.project.executionPolicy?.policy.sha256 !== task.options.agentPolicy?.sha256) throw new BridgeError('AGENT_POLICY_CHANGED', 'Copy policy does not match the task snapshot');
       record.providedSkills = task.project.providedSkills;

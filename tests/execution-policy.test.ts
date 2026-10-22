@@ -329,6 +329,7 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
         stateDirectory: stateDir,
         executionId,
         skillFiles: ['.agents/skills/sample-skill/SKILL.md'],
+        readOnlyRoots: [path.join(stateDir, 'skill-snapshot')],
       },
       DEFAULT_PROJECT_LIMITS
     );
@@ -398,6 +399,16 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
           toolCall: { name: 'write_to_file', args: { TargetFile: path.join(copyDir, '.agents', 'hacked.txt') } },
           conversationId,
         },
+        expectedDecision: 'deny',
+      },
+      {
+        name: 'positive read of a bundled read-only skill resource',
+        input: { toolCall: { name: 'view_file', args: { AbsolutePath: path.join(stateDir, 'skill-snapshot', 'design', 'SKILL.md') } }, conversationId },
+        expectedDecision: 'allow',
+      },
+      {
+        name: 'negative write into a bundled read-only skill resource',
+        input: { toolCall: { name: 'write_to_file', args: { TargetFile: path.join(stateDir, 'skill-snapshot', 'design', 'SKILL.md') } }, conversationId },
         expectedDecision: 'deny',
       },
       {

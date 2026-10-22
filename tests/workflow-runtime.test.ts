@@ -40,7 +40,7 @@ class HeldAdapter extends CliAdapter {
 async function fixture(body: (f: { root: string; source: string; config: Config; tasks: TaskManager; adapter: HeldAdapter; managers: TaskManager[] }) => Promise<void>) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agy-group-runtime-')), source = path.join(root, 'source');
   await mkdir(source); execFileSync('git', ['init', '--quiet'], { cwd: source }); await writeFile(path.join(source, 'source.txt'), 'fixture\n');
-  const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', MAX_CONCURRENT_TASKS: '2',
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', MAX_CONCURRENT_TASKS: '2',
     BRIDGE_CUSTOM_ROLES: JSON.stringify([{ name: 'tester', baseRole: 'implementer', instruction: 'PRIVATE_PROFILE_INSTRUCTION', defaults: { effort: 'high' } }]) });
   const adapter = new HeldAdapter(config), tasks = new TaskManager(adapter, config), managers = [tasks];
   try { await body({ root, source: await realpath(source), config, tasks, adapter, managers }); }

@@ -215,7 +215,7 @@ async function hookMain() {
     emitDecision('deny', 'Denied by execution policy');
   }
 
-  let manifest: { version: number; policy: ResolvedAgentPolicy; originalCopyRoot: string; canonicalCopyRoot: string; hookSha256: string; executionId: string; receiptPath: string; receiptIdentity: { dev: string; ino: string }; skillFiles: string[] };
+  let manifest: { version: number; policy: ResolvedAgentPolicy; originalCopyRoot: string; canonicalCopyRoot: string; hookSha256: string; executionId: string; receiptPath: string; receiptIdentity: { dev: string; ino: string }; skillFiles: string[]; readOnlyRoots?: string[] };
   try {
     const manifestText = await fsp.readFile(manifestPath, 'utf8');
     manifest = JSON.parse(manifestText);
@@ -475,8 +475,10 @@ async function hookMain() {
         const insideCanonical = isInside(manifest.canonicalCopyRoot, resolvedTarget);
 
         if (!insideOriginal && !insideCanonical) {
-          decision = 'deny';
-          reason = 'Path is outside copy directory';
+          // Bundled skill snapshots outside the copy may be read, never written.
+          const readOnlyResource = (toolName === 'read_file' || toolName === 'view_file') && (manifest.readOnlyRoots ?? []).some(root => isInside(root, resolvedTarget));
+          decision = readOnlyResource ? 'allow' : 'deny';
+          reason = readOnlyResource ? 'Read-only bundled skill resource' : 'Path is outside copy directory';
         } else {
           const rootUsed = insideOriginal ? manifest.originalCopyRoot : manifest.canonicalCopyRoot;
           let relToRoot = path.relative(rootUsed, resolvedTarget);
@@ -692,6 +694,7 @@ export async function stageExecutionPolicy(
     stateDirectory: string;
     executionId: string;
     skillFiles?: readonly string[];
+    readOnlyRoots?: readonly string[];
   },
   remaining: ProjectLimits
 ): Promise<StagedExecutionPolicy> {
@@ -888,6 +891,7 @@ export async function stageExecutionPolicy(
       receiptPath,
       receiptIdentity,
       skillFiles: allowedSkillFiles,
+      readOnlyRoots: [...(setup.readOnlyRoots ?? [])],
       hookSha256: hookScriptSha256,
     };
     const manifestContent = JSON.stringify(manifestPayload, null, 2) + '\n';
