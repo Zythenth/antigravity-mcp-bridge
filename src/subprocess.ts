@@ -118,7 +118,7 @@ export function redactDiagnostic(value: string | undefined | null, state?: Redac
   }
   text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[private key redacted]')
              .replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, '[private key redacted]');
-  text = text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, '$1[redacted]@');
+  text = text.replace(/(:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, '$1[redacted]@');
   for (const [name, secret] of Object.entries(process.env)) {
     if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name)) text = text.split(secret).join('[redacted]');
   }

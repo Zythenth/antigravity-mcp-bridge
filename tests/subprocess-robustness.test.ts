@@ -388,6 +388,16 @@ test('diagnostics redact URL userinfo proxy credentials', () => {
     redactDiagnostic('socks5://useronly@127.0.0.1:1080 connected'),
     'socks5://[redacted]@127.0.0.1:1080 connected'
   );
+  assert.equal(redactDiagnostic('git+ssh://deploy@example.test/repo'), 'git+ssh://[redacted]@example.test/repo');
+});
+
+test('diagnostic redaction stays linear on long inputs without credentials', () => {
+  const safe = 'x'.repeat(200000);
+  const longScheme = 'a1'.repeat(100000) + '://example.test/path';
+  const started = performance.now();
+  assert.equal(redactDiagnostic(safe), safe);
+  assert.equal(redactDiagnostic(longScheme), longScheme);
+  assert.ok(performance.now() - started < 2000);
 });
 
 test('result-provided error messages are sanitized before terminal errors', async () => {
