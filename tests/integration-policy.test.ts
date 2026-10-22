@@ -113,11 +113,11 @@ test('remembered roots reject corrupt, oversized, noncanonical and linked state 
 });
 
 test('loadConfig validates BRIDGE_APPROVAL_MODE defaulting to auto, accepting ask, and rejecting invalid modes', () => {
-  assert.equal(loadConfig({}).approvalMode, 'auto');
-  assert.equal(loadConfig({ BRIDGE_APPROVAL_MODE: 'auto' }).approvalMode, 'auto');
-  assert.equal(loadConfig({ BRIDGE_APPROVAL_MODE: 'ask' }).approvalMode, 'ask');
+  assert.equal(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off' }).approvalMode, 'auto');
+  assert.equal(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_APPROVAL_MODE: 'auto' }).approvalMode, 'auto');
+  assert.equal(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_APPROVAL_MODE: 'ask' }).approvalMode, 'ask');
   for (const invalid of ['', 'manual', 'prompt', 'true', 'false', 'AUTO', 'ASK', '1']) {
-    assert.throws(() => loadConfig({ BRIDGE_APPROVAL_MODE: invalid }), {
+    assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_APPROVAL_MODE: invalid }), {
       message: 'BRIDGE_APPROVAL_MODE must be auto or ask',
     });
   }
@@ -126,7 +126,7 @@ test('loadConfig validates BRIDGE_APPROVAL_MODE defaulting to auto, accepting as
 test('MCP server instructions and health accurately expose automatic versus ask mode', async () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-approval-instructions-test-'));
   try {
-    const configAuto = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-auto') });
+    const configAuto = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-auto') });
     const adapterAuto = new CliAdapter(configAuto, [mockPath]);
     const tasksAuto = new TaskManager(adapterAuto, configAuto);
     const serverAuto = createMcpServer(adapterAuto, tasksAuto);
@@ -141,7 +141,7 @@ test('MCP server instructions and health accurately expose automatic versus ask 
     assert.ok(autoInstructions?.includes('BRIDGE_APPROVAL_MODE=auto'));
     assert.ok(autoInstructions?.includes('authorized automatically without human forms'));
 
-    const configAsk = loadConfig({ AGY_PATH: process.execPath, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-ask') });
+    const configAsk = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-ask') });
     const adapterAsk = new CliAdapter(configAsk, [mockPath]);
     const tasksAsk = new TaskManager(adapterAsk, configAsk);
     const serverAsk = createMcpServer(adapterAsk, tasksAsk);
@@ -225,7 +225,7 @@ test('automatic mode preserves verification, test evidence, readonly and review 
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'original');
-  const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') });
   const adapter = new CliAdapter(config, [mockPath]);
   const tasks = new TaskManager(adapter, config);
   try {
@@ -267,7 +267,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'original');
 
-  const config = loadConfig({
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', 
     AGY_PATH: process.execPath,
     BRIDGE_APPROVAL_MODE: 'ask',
     BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS: JSON.stringify([source]),

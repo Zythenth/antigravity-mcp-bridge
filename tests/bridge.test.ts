@@ -45,7 +45,7 @@ test('model preference survives restart, observes other servers and supports per
     const invalidState = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(invalidState);
     const invalid = new TaskManager(adapter, { ...config, stateDirectory: invalidState, defaultModel: 'not-available' }); managers.push(invalid);
     await assert.rejects(invalid.run({ prompt: 'split:test', workingDirectory: dir }), { code: 'MODEL_NOT_AVAILABLE' });
-    assert.throws(() => loadConfig({ BRIDGE_DEFAULT_MODEL: 'invalid model' }), /exact model ID/);
+    assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_DEFAULT_MODEL: 'invalid model' }), /exact model ID/);
   } finally { await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
@@ -578,7 +578,7 @@ test('cleanup expires only inactive copies and deletion rejects source paths', a
 
 function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> = {}) {
   const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(stateDirectory);
-  const config = loadConfig({ AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '30', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '30', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });
   const adapter = new CliAdapter(config, prefixArgs);
   const tasks = new TaskManager(adapter, config); managers.push(tasks);
   return { adapter, tasks, config };
@@ -605,7 +605,7 @@ async function repository(): Promise<string> {
 }
 
 test('discovery distinguishes missing executable and authentication', async () => {
-  const missing = new CliAdapter(loadConfig({ AGY_PATH: path.join(os.tmpdir(), 'absent-agy-executable') }));
+  const missing = new CliAdapter(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: path.join(os.tmpdir(), 'absent-agy-executable') }));
   assert.equal((await missing.discover()).installed, false);
   const { adapter } = setup([mockPath, 'auth']);
   const health = await adapter.health();

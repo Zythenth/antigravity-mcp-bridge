@@ -202,6 +202,14 @@ Nenhum modo introduz fallback automático para execução no host, nem altera as
 
 `antigravity_health.integrationApproval.preauthorizedProjectCount` informa a quantidade de raízes configuradas ou lembradas legadas; no modo `ask`, todas as integrações continuam exigindo confirmação humana independente desse total.
 
+## Anti-AI Craft incluído
+
+O pacote traz um snapshot verificado do [Anti-AI Craft](https://github.com/Zythenth/anti-ai-craft) com seis skills. Em toda tarefa nova, `anti-ai-code` e `anti-ai-security` são preparadas na cópia como skills permanentes e o Gemini é instruído a lê-las antes de trabalhar. `anti-ai-design`, `anti-ai-design-flow`, `anti-ai-audit` e `anti-ai-remediate` aparecem apenas como catálogo (nome, descrição e caminho, até 8 KiB); seus corpos, referências e imagens ficam fora do prompt e são lidos sob demanda, somente leitura, a partir de uma cópia privada por revisão em `<estado>/anti-ai-craft/`, adicionada ao CLI com `--add-dir`. Sob política de ferramentas, os hooks permitem apenas leitura nessa raiz. A seleção situacional é uma política desta integração: o Gemini escolhe pela pertinência da tarefa, sem exigir o nome literal da skill.
+
+O snapshot é verificado contra o manifesto (tamanho e SHA-256 de cada arquivo) antes de cada tarefa nova; conteúdo ausente ou adulterado falha com `CRAFT_SNAPSHOT_INVALID` ou `CRAFT_SNAPSHOT_MISSING`, sem download automático, e a correção é reinstalar a versão do bridge. Retomadas e handoffs conservam o snapshot da sessão original. As permanentes contam no limite de oito pacotes e de 1 MiB das skills fornecidas; uma skill fornecida com o mesmo nome e conteúdo idêntico é deduplicada, e conteúdo diferente falha com `SKILL_CONFLICT`. Arquivos das skills não entram no patch.
+
+`BRIDGE_ANTI_AI_CRAFT=off` desativa a política para todas as tarefas. `BRIDGE_ANTI_AI_CRAFT_DIRECTORY` aponta para outro snapshot com o mesmo formato, que também é verificado contra o próprio manifesto. Disponibilizar as skills não instala o MCP do Anti-AI Craft, Graphify, Python ou outras ferramentas que elas mencionem. As imagens da biblioteca visual mantêm as licenças de suas fontes; consulte [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Skills fornecidas pelo cliente
 
 O Codex ou outro cliente pode enviar skills selecionadas em `antigravity_run.skills`. No modo compacto, `providedSkillSummaries` contém apenas nome, hash e quantidade de arquivos. Cada pacote contém o texto de `SKILL.md` e, opcionalmente, recursos de texto com caminhos relativos à skill:

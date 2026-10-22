@@ -41,7 +41,7 @@ class ControlledAdapter extends CliAdapter {
 async function fixture() {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-message-delivery-test-'));
   const source = path.join(dir, 'source'); execFileSync('git', ['init', '--quiet', source]); await writeFile(path.join(source, 'source.txt'), 'Public fixture');
-  const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(dir, 'state'), BRIDGE_TEST_EXECUTOR: 'agy' });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(dir, 'state'), BRIDGE_TEST_EXECUTOR: 'agy' });
   const adapter = new ControlledAdapter(config); const tasks = new TaskManager(adapter, config);
   return { source, config, adapter, tasks, async close() {
     await tasks.shutdown();

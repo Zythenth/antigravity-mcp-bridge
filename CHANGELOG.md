@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Tarefas novas recebem automaticamente `anti-ai-code` e `anti-ai-security` como skills permanentes e um catálogo de até 8 KiB das demais skills do Anti-AI Craft, lidas sob demanda e somente leitura a partir de uma cópia privada e verificada por revisão, adicionada ao CLI com `--add-dir`. Retomadas e handoffs conservam o snapshot original; conflitos de nome falham com `SKILL_CONFLICT`; snapshot ausente ou adulterado falha com `CRAFT_SNAPSHOT_MISSING` ou `CRAFT_SNAPSHOT_INVALID`. `BRIDGE_ANTI_AI_CRAFT=off` desativa a política e `BRIDGE_ANTI_AI_CRAFT_DIRECTORY` define outro snapshot verificado. Sob política de ferramentas, os hooks permitem apenas leitura nessa raiz.
+
 - A inspeção nativa de pontos de reparse do cache do runtime portátil no Windows passa a dar à compilação do inspetor um limite próprio de 60 s; a execução do inspetor mantém o limite de 15 s. Em máquinas lentas, o preparo do runtime deixa de falhar só porque o compilador .NET demorou a iniciar; um prazo esgotado continua recusando o cache com `UNSAFE_PORTABLE_NODE_CACHE`.
 
 - O pacote passa a distribuir o snapshot do Anti-AI Craft 0.6.0 (revisão fixa `8f6d539`, seis skills, referências e biblioteca visual) em `plugin/anti-ai-craft/`, com manifesto de hashes verificado no build, nos testes e no tarball. O script `scripts/update-anti-ai-craft.mjs` obtém uma revisão completa informada pelo mantenedor, lê os blobs sem checkout nem execução de scripts, recusa links, submódulos e caminhos inseguros e aplica limites de 2.000 arquivos, 16 MiB por recurso e 64 MiB no total. Ferramentas de pesquisa do catálogo visual ficam fora do pacote.

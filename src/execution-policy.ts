@@ -203,6 +203,22 @@ async function hookMain() {
     process.exit(0);
   }
 
+  // Every ancestor must be a real directory and the leaf a single-link regular file, all resolving inside the canonical root.
+  async function safeRegularFile(root: string, canonicalRoot: string, segs: string[], target: string): Promise<boolean> {
+    try {
+      let current = root;
+      for (const seg of segs.slice(0, -1)) {
+        current = path.join(current, seg);
+        const st = await fsp.lstat(current);
+        if (st.isSymbolicLink() || !st.isDirectory() || !isInside(canonicalRoot, await fsp.realpath(current))) return false;
+      }
+      const leaf = await fsp.lstat(target);
+      return !leaf.isSymbolicLink() && leaf.isFile() && leaf.nlink === 1 && isInside(canonicalRoot, await fsp.realpath(target));
+    } catch {
+      return false;
+    }
+  }
+
   // 1. Read manifest relative to hook cwd (.agents)
   const manifestPath = path.resolve(process.cwd(), 'bridge-execution-policy.json');
   let manifestStat;
@@ -215,7 +231,7 @@ async function hookMain() {
     emitDecision('deny', 'Denied by execution policy');
   }
 
-  let manifest: { version: number; policy: ResolvedAgentPolicy; originalCopyRoot: string; canonicalCopyRoot: string; hookSha256: string; executionId: string; receiptPath: string; receiptIdentity: { dev: string; ino: string }; skillFiles: string[] };
+  let manifest: { version: number; policy: ResolvedAgentPolicy; originalCopyRoot: string; canonicalCopyRoot: string; hookSha256: string; executionId: string; receiptPath: string; receiptIdentity: { dev: string; ino: string }; skillFiles: string[]; readOnlyRoots?: string[] };
   try {
     const manifestText = await fsp.readFile(manifestPath, 'utf8');
     manifest = JSON.parse(manifestText);
@@ -475,8 +491,21 @@ async function hookMain() {
         const insideCanonical = isInside(manifest.canonicalCopyRoot, resolvedTarget);
 
         if (!insideOriginal && !insideCanonical) {
-          decision = 'deny';
-          reason = 'Path is outside copy directory';
+          // Bundled skill snapshots outside the copy may be read, never written, and only through real directories inside the root.
+          const roots = (manifest.readOnlyRoots ?? []).filter(root => isInside(root, resolvedTarget));
+          let readOnlyResource = false;
+          if (toolName === 'read_file' || toolName === 'view_file') {
+            for (const root of roots) {
+              const segs = path.relative(root, resolvedTarget).split(/[\\/]+/).filter(Boolean);
+              const canonicalRoot = await fsp.realpath(root).catch(() => undefined);
+              if (canonicalRoot && segs.length > 0 && await safeRegularFile(root, canonicalRoot, segs, resolvedTarget)) {
+                readOnlyResource = true;
+                break;
+              }
+            }
+          }
+          decision = readOnlyResource ? 'allow' : 'deny';
+          reason = readOnlyResource ? 'Read-only bundled skill resource' : roots.length > 0 ? 'Unsafe ancestry or non-regular file in read-only resource' : 'Path is outside copy directory';
         } else {
           const rootUsed = insideOriginal ? manifest.originalCopyRoot : manifest.canonicalCopyRoot;
           let relToRoot = path.relative(rootUsed, resolvedTarget);
@@ -510,42 +539,7 @@ async function hookMain() {
                 decision = 'deny';
                 reason = 'Reads in .agents only permitted for explicitly allowed skill files';
               } else {
-                let ancSafe = true;
-                let current = rootUsed;
-                for (let i = 0; i < segs.length - 1; i++) {
-                  current = path.join(current, segs[i]!);
-                  try {
-                    const st = await fsp.lstat(current);
-                    if (st.isSymbolicLink() || !st.isDirectory()) {
-                      ancSafe = false;
-                      break;
-                    }
-                    const r = await fsp.realpath(current);
-                    if (!isInside(manifest.canonicalCopyRoot, r)) {
-                      ancSafe = false;
-                      break;
-                    }
-                  } catch {
-                    ancSafe = false;
-                    break;
-                  }
-                }
-                if (ancSafe) {
-                  try {
-                    const leafSt = await fsp.lstat(resolvedTarget);
-                    if (leafSt.isSymbolicLink() || !leafSt.isFile() || leafSt.nlink !== 1) {
-                      ancSafe = false;
-                    } else {
-                      const realLeaf = await fsp.realpath(resolvedTarget);
-                      if (!isInside(manifest.canonicalCopyRoot, realLeaf)) {
-                        ancSafe = false;
-                      }
-                    }
-                  } catch {
-                    ancSafe = false;
-                  }
-                }
-                if (ancSafe) {
+                if (await safeRegularFile(rootUsed, manifest.canonicalCopyRoot, segs, resolvedTarget)) {
                   decision = 'allow';
                   reason = 'Skill file read permitted';
                 } else {
@@ -692,6 +686,7 @@ export async function stageExecutionPolicy(
     stateDirectory: string;
     executionId: string;
     skillFiles?: readonly string[];
+    readOnlyRoots?: readonly string[];
   },
   remaining: ProjectLimits
 ): Promise<StagedExecutionPolicy> {
@@ -888,6 +883,7 @@ export async function stageExecutionPolicy(
       receiptPath,
       receiptIdentity,
       skillFiles: allowedSkillFiles,
+      readOnlyRoots: [...(setup.readOnlyRoots ?? [])],
       hookSha256: hookScriptSha256,
     };
     const manifestContent = JSON.stringify(manifestPayload, null, 2) + '\n';

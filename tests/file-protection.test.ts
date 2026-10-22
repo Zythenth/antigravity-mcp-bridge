@@ -547,7 +547,7 @@ test('concurrent copies maintain complete isolation without interference', async
 
 test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS validation', () => {
   // Valid JSON array of relative glob patterns
-  const valid = loadConfig({
+  const valid = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', 
     BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['*.env', 'secrets/**']),
     BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.template'] }),
   });
@@ -555,17 +555,17 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
   assert.deepEqual(valid.secretExceptions, { version: 2, namePatterns: ['.env.template'] });
 
   // Invalid JSON format
-  assert.throws(() => loadConfig({ BRIDGE_SECRET_EXCLUSIONS: 'not-json' }), /must be a JSON array of strings/);
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: 'not-json' }), /must be a JSON array of strings/);
 
   // Invalid traversal pattern
   assert.throws(
-    () => loadConfig({ BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['../outside']) }),
+    () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['../outside']) }),
     /must contain relative glob patterns without traversal/
   );
 
   // Invalid absolute path pattern
   assert.throws(
-    () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/root/secret'] }) }),
+    () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/root/secret'] }) }),
     /must contain relative glob patterns without traversal/
   );
 });
@@ -1275,7 +1275,7 @@ test('v2 secret exceptions: legacy non-empty arrays fail with migration guidance
 
     // 1. In environment config: non-empty legacy array fails with migration message without echoing pattern
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify([sensitivePatternName]) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify([sensitivePatternName]) }),
       (err: unknown) => {
         assert.ok(err instanceof Error);
         assert.match(err.message, /uses legacy array format\. Migrate to strict version 2 object format/);
@@ -1313,10 +1313,10 @@ test('v2 secret exceptions: legacy non-empty arrays fail with migration guidance
     assert.deepEqual(omittedPreflight.eligible, ['source.txt']);
 
     // 4. Env config: empty array and omitted normalize to empty policy
-    const emptyConfig = loadConfig({ BRIDGE_SECRET_EXCEPTIONS: '[]' });
+    const emptyConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '[]' });
     assert.deepEqual(emptyConfig.secretExceptions, { version: 2, namePatterns: [] });
 
-    const omittedConfig = loadConfig({});
+    const omittedConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off' });
     assert.deepEqual(omittedConfig.secretExceptions, { version: 2, namePatterns: [] });
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -1328,37 +1328,37 @@ test('v2 secret exceptions: strict validation rejects unsupported versions, extr
   try {
     // Unsupported versions (v1, v3)
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 1, namePatterns: ['.env.local'] }) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 1, namePatterns: ['.env.local'] }) }),
       /unsupported version.*Only version 2 is supported/
     );
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 3, namePatterns: ['.env.local'] }) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 3, namePatterns: ['.env.local'] }) }),
       /unsupported version.*Only version 2 is supported/
     );
 
     // Extra fields
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.local'], extraField: true }) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.local'], extraField: true }) }),
       /contains unexpected fields\. Only version and namePatterns are allowed/
     );
 
     // Missing fields
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2 }) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2 }) }),
       /must contain version and namePatterns fields/
     );
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ namePatterns: ['.env.local'] }) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ namePatterns: ['.env.local'] }) }),
       /must contain version and namePatterns fields/
     );
 
     // Malformed / null
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: 'null' }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: 'null' }),
       /must be a strict JSON object/
     );
     assert.throws(
-      () => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: '123' }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '123' }),
       /must be a strict JSON object/
     );
 
@@ -1386,7 +1386,7 @@ test('v2 secret exceptions: strict validation rejects unsupported versions, extr
 
 test('v2 policy rejects blank configuration and hides invalid version values', () => {
   for (const input of ['', ' \t\n', '{']) {
-    assert.throws(() => loadConfig({ BRIDGE_SECRET_EXCEPTIONS: input }), /valid JSON object/);
+    assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: input }), /valid JSON object/);
   }
   const hidden = 'BRIDGE_SYNTHETIC_VERSION_SHOULD_NOT_ECHO';
   assert.throws(() => normalizeSecretExceptionsPolicy({ version: hidden, namePatterns: [] }), (error: unknown) => {
