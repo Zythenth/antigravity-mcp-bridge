@@ -479,6 +479,19 @@ test('read-only task cancelled retains cancellation instead of failing copy veri
   assert.equal(final.error?.code, 'TASK_CANCELLED');
 });
 
+test('a descendant that outlives a successful CLI exit is stopped and the cleanup is verified', async () => {
+  const dir = await createRepo();
+  const { adapter, tasks } = setup([fixturePath, '--scenario', 'orphan-descendant']);
+  await adapter.discover();
+  const task = await tasks.run({ prompt: 'test orphan descendant', workingDirectory: dir, timeoutSeconds: 30 });
+  const final = await until(tasks, task.taskId, done, 30000);
+  assert.equal(final.status, 'completed', JSON.stringify(final.error));
+  assert.equal(final.processCleanup?.verified, true, JSON.stringify(final.processCleanup));
+  const pid = Number(readFileSync(path.join(final.copyDirectory!, 'orphan.pid'), 'utf8'));
+  assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+  assert.ok(tasks.readEvents(task.taskId).events.some(event => event.type === 'process.cleanup'));
+});
+
 test('POSIX descendant holding stdio open is escalated to SIGKILL via owned process group', { skip: process.platform === 'win32' }, async () => {
   const dir = await createRepo();
   const { adapter, tasks } = setup([fixturePath, '--scenario', 'posix-descendant-hang'], {

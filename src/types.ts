@@ -81,6 +81,7 @@ export interface TaskRecord {
   artifacts?: ArtifactReference[];
   agentPolicy?: ResolvedAgentPolicy;
   agentPolicyReceipt?: { sha256: string; decisionCount: number; deniedCount: number };
+  processCleanup?: { verified: boolean; spawnedAt: string; checkedAt: string; remaining: number };
 }
 
 export type CallerReceiptState = 'queued' | 'sent' | 'failed' | 'cancelled';

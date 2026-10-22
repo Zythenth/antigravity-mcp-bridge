@@ -15,7 +15,8 @@ import { integrationPreauthorized, type IntegrationApproval } from './integratio
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
-import { terminateSubprocess, redactDiagnostic, containsCredential, type RedactionState } from './subprocess.js';
+import { terminateSubprocess, redactDiagnostic, containsCredential, isOwnedProcessGroup, type RedactionState } from './subprocess.js';
+import { reconcileOwnedProcesses } from './process-tree.js';
 import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import type { Config, ApprovalMode } from './config.js';
@@ -373,6 +374,7 @@ export class TaskManager {
       options.artifactPaths = previous?.record.artifactPaths ?? options.artifactPaths;
       if (options.outputSchema !== undefined) options.outputSchema = validateOutputSchema(options.outputSchema);
       if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
+      if (previous) await this.assertProcessesReconciled(previous.record);
       if (previous?.project) await verifyProvidedSkills(previous.project.copyDirectory, previous.project.providedSkills ?? []);
       options.handoff ??= previous?.record.handoff;
       if (previous) options.peerContext = structuredClone(previous.options.peerContext);
@@ -768,6 +770,7 @@ export class TaskManager {
     if (!Number.isInteger(retries) || retries < 0 || retries > 3) throw new BridgeError('INVALID_TEST_COMMAND', 'retries must be between 0 and 3');
     const task = this.status(taskId);
     if (!task.sessionId || task.mode === 'read-only') throw new BridgeError('TASK_NOT_READY', 'Tests require a completed write task with a CLI conversation');
+    await this.assertProcessesReconciled(this.tasks.get(taskId)!.record);
     const preview = await this.preview(taskId);
     if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview the current patch before starting tests');
     if (this.config.testExecutor === 'windows-lpac') return this.queueWindowsTest(taskId, task, expectedSha256, command, retries, timeoutSeconds, sandbox);
@@ -907,6 +910,7 @@ export class TaskManager {
     if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
     if (task.record.integratedAt) throw new BridgeError('ALREADY_INTEGRATED', 'This task was already integrated');
     if (task.record.mode === 'read-only') throw new BridgeError('READ_ONLY_TASK', 'Read-only tasks cannot be integrated');
+    await this.assertProcessesReconciled(task.record);
     if ([...this.tasks.values()].filter(other => other.project === task.project).at(-1) !== task) {
       throw new BridgeError('TASK_NOT_READY', 'Preview and integrate the latest task for this copy');
     }
@@ -971,6 +975,8 @@ export class TaskManager {
       peerOrigin = peerOriginSchema.parse(peerOrigin);
       peerOrigin = { ...peerOrigin, groupId: peerOrigin.groupId.toLowerCase(), sourceTaskId: peerOrigin.sourceTaskId.toLowerCase(), messageId: peerOrigin.messageId.toLowerCase() };
     }
+    const target = this.tasks.get(taskId);
+    if (target) await this.assertProcessesReconciled(target.record);
     const release = this.state.acquire('registry');
     let directory: string | undefined;
     try {
@@ -1337,6 +1343,7 @@ export class TaskManager {
         task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: new Set() };
       }
       if (task.project.executionPolicy) policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset;
+      const spawnedAt = Date.now();
       const child = this.adapter.spawnTask(native ? { ...task.options, prompt: native.prompt } : task.options, record.model, task.project.copyDirectory);
       task.child = child;
       record.pid = child.pid;
@@ -1404,6 +1411,7 @@ export class TaskManager {
       const exitCode = await new Promise<number | null>(resolve => {
         child.once('close', resolve);
       });
+      await this.reconcileProcesses(task, child, spawnedAt);
       stdoutParser.end(); stderrParser.end();
       if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
       task.child = undefined;
@@ -1562,6 +1570,7 @@ export class TaskManager {
     const receiptOffset = task.project.executionPolicy ? (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset : 0;
     task.record.result = undefined;
     task.record.usage = undefined;
+    const spawnedAt = Date.now();
     const child = this.adapter.spawnTask(options, task.record.model, task.project.copyDirectory);
     task.child = child;
     task.record.pid = child.pid;
@@ -1624,6 +1633,7 @@ export class TaskManager {
       const exitCode = await new Promise<number | null>(resolve => {
         child.once('close', resolve);
       });
+      await this.reconcileProcesses(task, child, spawnedAt);
       stdoutParser.end(); stderrParser.end();
       task.child = undefined;
       task.record.exitCode = exitCode;
@@ -1972,6 +1982,24 @@ export class TaskManager {
     appendMessage(task.record, status === 'completed' ? 'final' : 'error', source,
       status === 'completed' ? text : (task.record.error?.code ?? status) + ': ' + (task.record.error?.message ?? text), resultReference(task.record));
     this.events.append(task.record.taskId, `task.${status}`, task.record.error || { exitCode: task.record.exitCode });
+  }
+
+  // kill() and taskkill do not prove the tree ended: a descendant may outlive its parent, so ownership is re-observed after close.
+  private async reconcileProcesses(task: InternalTask, child: ChildProcessWithoutNullStreams, spawnedAt: number): Promise<void> {
+    // Without a PID the CLI never started, so there is no process tree to observe.
+    if (child.pid === undefined) return;
+    const cleanup = await reconcileOwnedProcesses({ pid: child.pid, spawnedAt, processGroup: isOwnedProcessGroup(child) });
+    task.record.processCleanup = { verified: cleanup.verified, spawnedAt: new Date(spawnedAt).toISOString(), checkedAt: new Date().toISOString(), remaining: cleanup.remaining.length };
+    this.events.append(task.record.taskId, 'process.cleanup', { verified: cleanup.verified, method: cleanup.method, remaining: cleanup.remaining.length });
+  }
+
+  // A copy whose processes may still run cannot be reused; another observation may confirm they ended.
+  private async assertProcessesReconciled(record: TaskRecord): Promise<void> {
+    const cleanup = record.processCleanup;
+    if (!cleanup || cleanup.verified) return;
+    const retry = await reconcileOwnedProcesses({ pid: record.pid, spawnedAt: Date.parse(cleanup.spawnedAt), processGroup: process.platform !== 'win32' });
+    record.processCleanup = { ...cleanup, verified: retry.verified, checkedAt: new Date().toISOString(), remaining: retry.remaining.length };
+    if (!retry.verified) throw new BridgeError('PROCESS_CLEANUP_UNVERIFIED', 'Processes started by this task may still be running; stop them before reusing its copy');
   }
 
   private terminate(child: ChildProcessWithoutNullStreams): void {
