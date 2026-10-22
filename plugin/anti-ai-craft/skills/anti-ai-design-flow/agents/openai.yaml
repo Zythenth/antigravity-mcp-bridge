@@ -1,0 +1,7 @@
+interface:
+  display_name: "Anti-AI Design Flow"
+  short_description: "Orchestrates design, build, and review"
+  default_prompt: "Use $anti-ai-design-flow to take this feature from briefing through review with resumable checkpoints."
+
+policy:
+  allow_implicit_invocation: false

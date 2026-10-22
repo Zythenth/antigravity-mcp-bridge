@@ -1,0 +1,7 @@
+interface:
+  display_name: "Anti-AI Security"
+  short_description: "Analyzes and fixes security risks"
+  default_prompt: "Use $anti-ai-security to model risks, plan evidence, and fix only what I authorize."
+
+policy:
+  allow_implicit_invocation: true

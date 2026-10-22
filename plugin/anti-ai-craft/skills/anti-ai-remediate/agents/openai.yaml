@@ -1,0 +1,7 @@
+interface:
+  display_name: "Anti-AI Remediation"
+  short_description: "Fixes only approved findings"
+  default_prompt: "Use $anti-ai-remediate to plan and apply only the findings I approved."
+
+policy:
+  allow_implicit_invocation: false

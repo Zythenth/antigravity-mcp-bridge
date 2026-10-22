@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- O pacote passa a distribuir o snapshot do Anti-AI Craft 0.6.0 (revisão fixa `8f6d539`, seis skills, referências e biblioteca visual) em `plugin/anti-ai-craft/`, com manifesto de hashes verificado no build, nos testes e no tarball. O script `scripts/update-anti-ai-craft.mjs` obtém uma revisão completa informada pelo mantenedor, lê os blobs sem checkout nem execução de scripts, recusa links, submódulos e caminhos inseguros e aplica limites de 2.000 arquivos, 16 MiB por recurso e 64 MiB no total. Ferramentas de pesquisa do catálogo visual ficam fora do pacote.
+
 - Após cada execução do CLI, os processos pertencentes à execução são observados novamente, encerrados e confirmados como ausentes, inclusive descendentes que sobrevivem ao processo pai. O resultado fica em `processCleanup`; se não for confirmado, a cópia não é reutilizada (`PROCESS_CLEANUP_UNVERIFIED`) até nova observação. No Windows, descendentes cujo intermediário já terminou continuam fora do alcance da verificação.
 
 - Frames do CLI passam por cópia iterativa limitada em profundidade e nós, com redação de strings e chaves, antes de eventos, resultados, mensagens e respostas. Frames profundos deixam de interromper o processamento com estouro de pilha. Deltas de resposta são liberados somente por linha completa e redigidos com estado por etapa, evitando credenciais divididas entre deltas; uma linha incompleta acima de 8 KiB é suprimida até a próxima quebra, com marcador e evento `response.truncated`. Saídas e erros de testes nativos, evidências relatadas e estado restaurado de versões anteriores também são redigidos.

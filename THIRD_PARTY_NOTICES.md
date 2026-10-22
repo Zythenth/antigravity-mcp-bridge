@@ -228,3 +228,7 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
+
+## Anti-AI Craft 0.6.0
+
+Conteúdo de skills distribuído em `plugin/anti-ai-craft/`, obtido de https://github.com/Zythenth/anti-ai-craft na revisão `8f6d539500d67c503a6cb32f5061147885b83c33` (176 arquivos, manifesto SHA-256 `9929b3dd0279cef62d3e4cebff6444f7d08a2ffb04a0da90e8fdf6bb7aa88190`). As imagens de `skills/anti-ai-design/references/visual-library/images/` permanecem sob as licenças e atribuições de suas fontes, descritas em `ATTRIBUTIONS.md`, `catalog.jsonl` e `LICENSES/` no mesmo diretório; a licença MIT deste pacote não se aplica a elas.

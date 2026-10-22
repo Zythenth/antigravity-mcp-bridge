@@ -6,8 +6,10 @@ import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { outputSchemas } from '../dist/src/output-schemas.js';
+import { verifyCraftSnapshot } from '../dist/src/craft-snapshot.js';
 
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
+const craft = JSON.parse(await readFile('plugin/anti-ai-craft/manifest.json', 'utf8'));
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw Error('Run with npm run test:package');
 const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-package-test-')));
@@ -16,6 +18,7 @@ const expectedFiles = [
   'plugin/.codex-plugin/plugin.json', 'plugin/.mcp.json',
   'plugin/skills/antigravity/SKILL.md', 'plugin/skills/antigravity/agents/openai.yaml',
   'LICENSE', 'README.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
+  'plugin/anti-ai-craft/manifest.json', ...craft.files.map(file => 'plugin/anti-ai-craft/' + file.path),
 ].sort();
 
 async function check(command, args, label) {
@@ -83,6 +86,7 @@ try {
   assert.deepEqual(packagedManifest.dependencies ?? {}, {});
   assert.equal(packagedManifest.bin['antigravity-mcp-bridge'], 'bin/antigravity-mcp-bridge.mjs');
   assert.equal(JSON.parse(await readFile(path.join(directory, 'package/plugin/.codex-plugin/plugin.json'), 'utf8')).version, manifest.version);
+  assert.equal((await verifyCraftSnapshot(path.join(directory, 'package/plugin/anti-ai-craft'))).manifest.revision, craft.revision);
   const bin = path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs');
   assert.ok((await readFile(bin, 'utf8')).startsWith('#!/usr/bin/env node\n'));
   checkRuntimeStatus(process.execPath, [bin], 'tarball');

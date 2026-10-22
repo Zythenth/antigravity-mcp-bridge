@@ -1,0 +1,7 @@
+interface:
+  display_name: "Anti-AI Code"
+  short_description: "Concise, verifiable code without excess"
+  default_prompt: "Use $anti-ai-code to plan and implement this scoped change with proportionate evidence."
+
+policy:
+  allow_implicit_invocation: true
