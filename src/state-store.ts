@@ -77,6 +77,8 @@ const snapshotSchema = z.object({
   }).optional(),
   events: z.array(z.object({ taskId: z.string().uuid(), sequence: z.number().int().positive(), timestamp: z.string(), type: z.string(), data: z.unknown(), raw: z.unknown().optional() })),
   cursor: z.number().int().nonnegative(),
+  // Written by versions that redact before persisting; older state is sanitized when restored.
+  redacted: z.literal(true).optional(),
 });
 
 export interface StoredTask {
@@ -86,6 +88,7 @@ export interface StoredTask {
   ownerPid: number;
   events: BridgeEvent[];
   cursor: number;
+  redacted?: true;
 }
 
 export function processAlive(pid: number): boolean {
@@ -202,7 +205,7 @@ export class StateStore {
   save(task: StoredTask): void {
     const target = this.file(task.record.taskId);
     const temporary = target + '.' + randomUUID() + '.tmp';
-    const snapshot = { ...task, version: 1, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
+    const snapshot = { ...task, version: 1, redacted: true, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600, flush: true });
       replaceStateFile(temporary, target);

@@ -109,7 +109,7 @@ if (scenario === 'timeout' || scenario === 'cancel' || scenario === 'slow') {
 if (scenario === 'stderr') console.error('mock diagnostic');
 if (scenario === 'malformed') process.stdout.write('not-json\n');
 if (scenario === 'split') {
-  const bytes = Buffer.from(JSON.stringify({ event: 'step_update', step_update: { step_type: 'agent_response', state: 'ACTIVE', text_delta: 'Olá' } }) + '\n');
+  const bytes = Buffer.from(JSON.stringify({ event: 'step_update', step_update: { step_index: 1, step_type: 'agent_response', state: 'ACTIVE', text_delta: 'Olá' } }) + '\n');
   const accent = bytes.indexOf(Buffer.from('á'));
   process.stdout.write(bytes.subarray(0, accent + 1));
   await new Promise(resolve => setTimeout(resolve, 10));
