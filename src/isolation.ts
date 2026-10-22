@@ -886,6 +886,17 @@ function extractFilePatch(preview: ChangePreview, file: string): string {
   return preview.patch.slice(boundaries[index], boundaries[index + 1] ?? preview.patch.length);
 }
 
+// Baseline bytes serve only as a formatting reference.
+export async function readBaselineFile(project: ProjectCopy, relative: string): Promise<Buffer | undefined> {
+  const file = validRelative(relative);
+  const commit = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'])).toString('utf8').trim();
+  const raw = await copyGit(project, ['--literal-pathspecs', '--git-dir=' + project.gitDirectory, 'ls-tree', '-l', '-z', commit, '--', file]);
+  const entry = /^\d+ (\w+) ([0-9a-f]+) +(\d+)\t/.exec(raw.toString('utf8'));
+  if (!entry || entry[1] !== 'blob' || Number(entry[3]) > 16 * 1024 * 1024) return undefined;
+  const oid = entry[2]!;
+  return copyGit(project, ['--git-dir=' + project.gitDirectory, 'cat-file', 'blob', oid], undefined, [0], { maxOutputBytes: 16 * 1024 * 1024 });
+}
+
 export async function readProjectPatch(
   project: ProjectCopy, relative: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, expectedSha256?: string
 ): Promise<string> {
