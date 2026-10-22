@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 
 const args = process.argv.slice(2);
@@ -54,6 +54,17 @@ if (scenario === 'posix-descendant-hang') {
   process.on('SIGINT', cleanup);
   setInterval(() => {}, 1000);
   await new Promise(() => {});
+}
+
+if (scenario === 'orphan-descendant') {
+  // The descendant outlives this process with closed stdio, so the bridge must find and stop it after close.
+  const child = spawn(process.execPath, ['-e', 'require("node:fs").writeFileSync("orphan.pid", String(process.pid)); setInterval(() => {}, 1000);'],
+    { detached: process.platform === 'win32', stdio: 'ignore' });
+  child.unref();
+  const deadline = Date.now() + 10000;
+  while (!existsSync('orphan.pid') && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+  console.log(JSON.stringify({ event: 'result', result: { status: 'SUCCESS', response: 'left a descendant' } }));
+  process.exit(0);
 }
 
 if (scenario === 'early-exit-epipe' || scenario === 'immediate-exit') {

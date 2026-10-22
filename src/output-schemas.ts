@@ -73,6 +73,7 @@ export const taskRecordSchema = z.object({
   artifactCount: count.optional(),
   agentPolicy: resolvedAgentPolicySchema.optional(),
   agentPolicyReceipt: z.object({ sha256: hash, decisionCount: count, deniedCount: count }).strict().optional(),
+  processCleanup: z.object({ verified: z.boolean(), spawnedAt: timestamp, checkedAt: timestamp, remaining: count }).strict().optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
