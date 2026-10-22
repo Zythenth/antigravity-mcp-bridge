@@ -26,7 +26,9 @@ Alterações textuais com bytes não-UTF-8 falham com `UNSUPPORTED_PATCH_ENCODIN
 
 ## Versões disponíveis
 
-Os exemplos de instalação selecionam a **0.8.0**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída.
+Os exemplos de instalação selecionam a **0.9.0**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída.
+
+A 0.9.0 inclui o Anti-AI Craft com as skills de código e segurança sempre carregadas e as demais sob demanda, redação de erros, frames, deltas, mensagens e estado antes da persistência, recusa de credenciais em entradas operacionais, confirmação do encerramento dos processos de cada execução, regras de delegação com restauração do fim de linha original nas prévias, sanitização única do estado salvo por versões anteriores e cancelamento efetivo de testes Windows recém-enfileirados.
 
 A 0.8.0 acrescenta workflows no servidor, checkpoints, hooks de validação, memória privada, perfis completos, seleção de MCPs e ferramentas por tarefa, responsáveis e dependências, mensagens entre nós, espera conjunta, resultados JSON, artefatos com hashes e orçamento por consumo observado.
 
@@ -40,14 +42,14 @@ A 0.5.1 inclui perfis, espera com progresso, transferência entre papéis, compa
 
 ### Servidor MCP via npm/npx
 
-Para iniciar o servidor pelo pacote npm 0.8.0, configure seu cliente MCP com:
+Para iniciar o servidor pelo pacote npm 0.9.0, configure seu cliente MCP com:
 
 ```json
 {
   "mcpServers": {
     "antigravity": {
       "command": "npx",
-      "args": ["--yes", "antigravity-mcp-bridge@0.8.0"]
+      "args": ["--yes", "antigravity-mcp-bridge@0.9.0"]
     }
   }
 }
@@ -87,10 +89,10 @@ No Windows x64, prepare explicitamente o runtime antes de usar o modo portátil:
 node plugin/server.mjs --prepare-windows-runtime
 ```
 
-Para preparar o runtime pelo pacote npm 0.8.0:
+Para preparar o runtime pelo pacote npm 0.9.0:
 
 ```powershell
-npx --yes antigravity-mcp-bridge@0.8.0 --prepare-windows-runtime
+npx --yes antigravity-mcp-bridge@0.9.0 --prepare-windows-runtime
 ```
 
 O status retorna JSON com `requestedMode`, `supported`, `ready`, `buildId`, `nodeVersion`, `libuvVersion`, `sha256` e, quando necessário, `error`. Uma consulta sem suporte, sem cache ou com cache inválido continua sendo uma consulta bem-sucedida; uma falha de preparação retorna exit code 1. Preparação baixa somente os arquivos declarados do GitHub Release, confere tamanho e SHA-256 e instala o cache privado de forma atômica. Em caches situados em pastas sincronizadas (como OneDrive), toleram-se contagens extras ou transitórias de links (`nlink`) exclusivamente na **leitura de assets** com descritor confiável, tamanho e SHA-256 fixados, no **staging da fonte do Node portátil** com `expectedSha256`, e no **lock de preparação** do Node portátil (desde que `device`, `inode` e `size` permaneçam idênticos e o nonce/payload exato seja conferido, liberando com `unlink` apenas a entrada do próprio processo para preservar aliases). Hash, tamanho, identidade de arquivo, marcas reparse e layout de diretório permanecem estritamente obrigatórios; qualquer conteúdo alterado é recusado e aliases não são modificados. Destinos de runtime, executáveis genéricos e concessões de ACL continuam exigindo link único. O `StateStore` não oferece suporte genérico a armazenamento em nuvem. Inicialização, saúde e testes não baixam arquivos. Cache ausente no modo portátil exige `--prepare-windows-runtime`, sem voltar silenciosamente ao Node do sistema. Cache corrompido, alterado ou inseguro é recusado também pela preparação, que não o repara nem remove automaticamente. Antes de preparar novamente, uma pessoa deve inspecionar o caminho e remover manualmente somente o cache do build afetado; depois, executar `--prepare-windows-runtime`.
