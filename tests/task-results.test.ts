@@ -90,7 +90,7 @@ describe('Task results and artifacts runtime', () => {
     execFileSync('git', ['add', '.'], { cwd: repoDir, stdio: 'ignore' });
     execFileSync('git', ['commit', '-m', 'init'], { cwd: repoDir, stdio: 'ignore' });
 
-    const config = loadConfig({ BRIDGE_STATE_DIRECTORY: stateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: stateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
     adapter = new ControlledAdapter(config);
     tasks = new TaskManager(adapter, config);
   });
@@ -169,7 +169,7 @@ describe('Task results and artifacts runtime', () => {
 
   it('artifact readers enforce current exclusions after state reload', async () => {
     const policyState = path.join(tempRoot, 'artifact-policy-state');
-    const initialConfig = loadConfig({ BRIDGE_STATE_DIRECTORY: policyState, BRIDGE_TEST_EXECUTOR: 'agy' });
+    const initialConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: policyState, BRIDGE_TEST_EXECUTOR: 'agy' });
     const initial = new TaskManager(new ControlledAdapter(initialConfig), initialConfig);
     let reloaded: TaskManager | undefined;
     try {
@@ -295,7 +295,7 @@ else {
   console.log(JSON.stringify({ event: 'init', conversation_id: 'session-cli-test' }));
   console.log(JSON.stringify({ event: 'result', result: { status: 'SUCCESS' } }));
 }`);
-    const cliCfg = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
+    const cliCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
     const realAdapter = new CliAdapter(cliCfg, [fixtureScript]);
     await realAdapter.discover();
     const child = realAdapter.spawnTask({ prompt: 'resume agy', workingDirectory: repoDir, sessionId: 'resume-session-xyz' }, undefined, repoDir);
@@ -333,7 +333,7 @@ else {
  console.log(JSON.stringify({event:'result',result:{status:'SUCCESS'}}));
 }`);
       const suppliedStateDir = process.platform === 'win32' ? stateDir.replace(/^[A-Z]:/, drive => drive.toLowerCase()) : stateDir;
-      const cfg = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: suppliedStateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
+      const cfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: suppliedStateDir, BRIDGE_TEST_EXECUTOR: 'agy' });
       const actual = new CliAdapter(cfg, [script]); await actual.discover();
       const schema = { type: 'object', description: 'x'.repeat(40000) };
       const child = actual.spawnTask({ prompt: 'public fixture', workingDirectory: repoDir, outputSchema: schema }, undefined, repoDir);

@@ -39,7 +39,7 @@ class MemoryAdapter extends CliAdapter {
 async function fixture(body: (f: { root: string; source: string; config: Config; tasks: TaskManager; adapter: MemoryAdapter; managers: TaskManager[] }) => Promise<void>, extra: Record<string, string> = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agy-memory-runtime-')), source = path.join(root, 'source');
   await mkdir(source); execFileSync('git', ['init', '--quiet'], { cwd: source }); await writeFile(path.join(source, 'source.txt'), 'fixture\n');
-  const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...extra });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...extra });
   const adapter = new MemoryAdapter(config), tasks = new TaskManager(adapter, config), managers = [tasks];
   try { await body({ root, source, config, tasks, adapter, managers }); }
   finally {
@@ -224,6 +224,6 @@ test('profile memory defaults require exact hashes and explicit empty selection 
 });
 
 test('memory limits reject invalid startup configuration', () => {
-  for (const value of ['0', '1.5', 'invalid', '1048577']) assert.throws(() => loadConfig({ BRIDGE_MEMORY_MAX_ENTRY_BYTES: value }));
-  assert.throws(() => loadConfig({ BRIDGE_MEMORY_MAX_BYTES: '1024' }), /cannot exceed/);
+  for (const value of ['0', '1.5', 'invalid', '1048577']) assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MEMORY_MAX_ENTRY_BYTES: value }));
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MEMORY_MAX_BYTES: '1024' }), /cannot exceed/);
 });

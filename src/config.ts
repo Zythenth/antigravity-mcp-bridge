@@ -40,6 +40,8 @@ export const DEFAULT_PROJECT_LIMITS: ProjectLimits = {
 
 export interface Config extends ProjectLimits {
   approvalMode: ApprovalMode;
+  antiAiCraft: boolean;
+  antiAiCraftDirectory?: string;
   toolProfile: ToolProfile;
   preauthorizedIntegrationRoots: string[];
   customRoles: RoleDefinition[];
@@ -66,6 +68,18 @@ export interface Config extends ProjectLimits {
   secretExclusions: string[];
   secretExceptions: SecretExceptionsPolicy;
   allowedEnvVars: string[];
+}
+
+function absoluteDirectory(value: string, name: string): string {
+  if (!path.isAbsolute(value) || value.includes('\0')) throw new Error(name + ' must be an absolute path');
+  return path.resolve(value);
+}
+
+// Enabled unless explicitly turned off; an override directory is still verified against its manifest.
+function antiAiCraft(value: string | undefined): boolean {
+  if (value === undefined || value === 'on') return true;
+  if (value === 'off') return false;
+  throw new Error('BRIDGE_ANTI_AI_CRAFT must be on or off');
 }
 
 function approvalMode(value: string | undefined): ApprovalMode {
@@ -143,6 +157,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (memoryMaxEntryBytes > memoryMaxBytes) throw new Error('BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES');
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
+    antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
+    ...(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY') } : {}),
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),

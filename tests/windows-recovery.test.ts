@@ -501,7 +501,7 @@ test('Windows test admission allows retry of terminal local-executor failure aft
   await mkdir(path.dirname(startupLease), { recursive: true });
   await writeFile(startupLease, 'invalid-initial-lease');
   const mockPath = path.resolve('tests/mock-agy.mjs');
-  const config = loadConfig({
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off',
     AGY_PATH: process.execPath,
     BRIDGE_TEST_EXECUTOR: 'windows-lpac',
     BRIDGE_STATE_DIRECTORY: stateDir,

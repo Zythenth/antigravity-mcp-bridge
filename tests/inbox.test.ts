@@ -37,7 +37,7 @@ class InboxAdapter extends CliAdapter {
 async function fixture(hold = true, configOverrides: Record<string, string> = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-inbox-test-'));
   const source = path.join(directory, 'source'); execFileSync('git', ['init', '--quiet', source]); await writeFile(path.join(source, 'source.txt'), 'source');
-  const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...configOverrides });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...configOverrides });
   const adapter = new InboxAdapter(config, hold); const managers: TaskManager[] = [new TaskManager(adapter, config)]; const tasks = managers[0]!;
   return { source, config, adapter, tasks, managers, async close() {
     for (const manager of managers) await manager.shutdown();
