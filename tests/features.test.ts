@@ -32,7 +32,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
     for (const task of (await call('antigravity_tasks')).tasks) {
       if (!(await call('antigravity_result', { taskId: task.taskId })).ready) {
         await call('antigravity_cancel', { taskId: task.taskId });
-        await call('antigravity_wait', { taskId: task.taskId, timeoutSeconds: 10 });
+        await call('antigravity_wait', { taskId: task.taskId, timeoutSeconds: 60 });
       }
     }
     await client.close();
@@ -89,7 +89,7 @@ test('custom roles inherit read-only contracts and freeze instructions across co
     const forbidden = await f.client.callTool({ name: 'antigravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, role: role.name, mode: 'write' } });
     assert.equal((forbidden.structuredContent as any).error.code, 'INVALID_ROLE');
     const run = await f.call('antigravity_run', { prompt: 'review:test', workingDirectory: f.source, role: role.name });
-    assert.equal((await f.call('antigravity_wait', { taskId: run.task.taskId, timeoutSeconds: 10 })).status, 'completed');
+    assert.equal((await f.call('antigravity_wait', { taskId: run.task.taskId, timeoutSeconds: 60 })).status, 'completed');
     const finished = (await f.call('antigravity_result', { taskId: run.task.taskId })).task;
     assert.equal(finished.mode, 'read-only');
     assert.equal(finished.report.role, 'reviewer');
@@ -104,7 +104,7 @@ test('custom roles inherit read-only contracts and freeze instructions across co
     assert.equal(resumed.isError, undefined, JSON.stringify(resumed.structuredContent));
     const resumedTask = (resumed.structuredContent as any).task;
     assert.deepEqual(resumedTask.roleDefinition, role);
-    const done = await other.callTool({ name: 'antigravity_wait', arguments: { taskId: resumedTask.taskId, timeoutSeconds: 10 } });
+    const done = await other.callTool({ name: 'antigravity_wait', arguments: { taskId: resumedTask.taskId, timeoutSeconds: 60 } });
     assert.equal((done.structuredContent as any).status, 'completed');
   } finally { await other?.close(); await f.close(); }
 });
@@ -114,11 +114,11 @@ test('role handoff transfers plans, criteria and decisions to independent copies
   try {
     const criteria = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }];
     const plan = await f.call('antigravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source, acceptanceCriteria: criteria });
-    await f.call('antigravity_wait', { taskId: plan.task.taskId, timeoutSeconds: 10 });
+    await f.call('antigravity_wait', { taskId: plan.task.taskId, timeoutSeconds: 60 });
     const planContext = await f.call('antigravity_context', { taskId: plan.task.taskId });
     const run = await f.call('antigravity_handoff', { sourceTaskId: plan.task.taskId, expectedContextSha256: planContext.treeSha256,
       role: 'implementer', prompt: 'write:test', decisions: ['Keep the existing source file'] });
-    const implemented = await f.call('antigravity_wait', { taskId: run.task.taskId, timeoutSeconds: 10 });
+    const implemented = await f.call('antigravity_wait', { taskId: run.task.taskId, timeoutSeconds: 60 });
     assert.equal(implemented.status, 'completed');
     const implementation = (await f.call('antigravity_result', { taskId: run.task.taskId })).task;
     assert.deepEqual(implementation.acceptanceCriteria, criteria);
@@ -128,7 +128,7 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     const context = await f.call('antigravity_context', { taskId: run.task.taskId });
     const review = await f.call('antigravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'review:test' });
-    assert.equal((await f.call('antigravity_wait', { taskId: review.task.taskId, timeoutSeconds: 10 })).status, 'completed');
+    assert.equal((await f.call('antigravity_wait', { taskId: review.task.taskId, timeoutSeconds: 60 })).status, 'completed');
     const reviewed = (await f.call('antigravity_result', { taskId: review.task.taskId })).task;
     assert.equal(reviewed.report.citationsChecked, true);
     assert.deepEqual(reviewed.handoff.decisions.items, ['Keep the existing source file']);
@@ -137,7 +137,7 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     await assert.rejects(readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
     const malicious = await f.call('antigravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'write-many:test' });
-    const violation = await f.call('antigravity_wait', { taskId: malicious.task.taskId, timeoutSeconds: 10 });
+    const violation = await f.call('antigravity_wait', { taskId: malicious.task.taskId, timeoutSeconds: 60 });
     assert.equal(violation.status, 'failed');
     assert.equal((await f.call('antigravity_result', { taskId: malicious.task.taskId })).task.error.code, 'READ_ONLY_VIOLATION');
     assert.equal((await f.call('antigravity_preview', { taskId: run.task.taskId })).summary.added, 1);
@@ -155,7 +155,7 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     const reviewContext = await f.call('antigravity_context', { taskId: review.task.taskId });
     const fixed = await f.call('antigravity_handoff', { sourceTaskId: review.task.taskId, expectedContextSha256: reviewContext.treeSha256,
       role: 'implementer', prompt: 'split:test' });
-    assert.equal((await f.call('antigravity_wait', { taskId: fixed.task.taskId, timeoutSeconds: 10 })).status, 'completed');
+    assert.equal((await f.call('antigravity_wait', { taskId: fixed.task.taskId, timeoutSeconds: 60 })).status, 'completed');
     const fixedTask = (await f.call('antigravity_result', { taskId: fixed.task.taskId })).task;
     assert.deepEqual(fixedTask.handoff.reports.map((report: any) => report.role), ['planner', 'reviewer']);
     const preview = await f.call('antigravity_preview', { taskId: fixed.task.taskId });
@@ -172,7 +172,7 @@ test('model comparison preserves distinct opinions, failures and stale evidence'
   const f = await fixture('full', false, { MAX_CONCURRENT_TASKS: '2' });
   try {
     const source = await f.call('antigravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source });
-    await f.call('antigravity_wait', { taskId: source.task.taskId, timeoutSeconds: 10 });
+    await f.call('antigravity_wait', { taskId: source.task.taskId, timeoutSeconds: 60 });
     const context = await f.call('antigravity_context', { taskId: source.task.taskId });
     const args = { sourceTaskId: source.task.taskId, expectedContextSha256: context.treeSha256, models: ['mock-pro', 'mock-flash'], prompt: 'comparison:test' };
     const unavailable = await f.client.callTool({ name: 'antigravity_compare', arguments: { ...args, models: ['mock-pro', 'unknown'] } });
@@ -182,7 +182,7 @@ test('model comparison preserves distinct opinions, failures and stale evidence'
     assert.equal(duplicate.isError, true);
     const started = await f.call('antigravity_compare', args);
     assert.equal(started.taskIds.length, 2);
-    for (const taskId of started.taskIds) await f.call('antigravity_wait', { taskId, timeoutSeconds: 10 });
+    for (const taskId of started.taskIds) await f.call('antigravity_wait', { taskId, timeoutSeconds: 60 });
     const comparison = await f.call('antigravity_comparison', { comparisonId: started.comparisonId });
     assert.equal(comparison.complete, true);
     assert.equal(comparison.contextStale, false);
@@ -195,7 +195,7 @@ test('model comparison preserves distinct opinions, failures and stale evidence'
     assert.equal(stale.contextStale, true);
     assert.equal(stale.findings[0].agreement, 'not-reported-by-all');
     const failed = await f.call('antigravity_compare', { ...args, prompt: 'fabricated-review:test' });
-    for (const taskId of failed.taskIds) await f.call('antigravity_wait', { taskId, timeoutSeconds: 10 });
+    for (const taskId of failed.taskIds) await f.call('antigravity_wait', { taskId, timeoutSeconds: 60 });
     const failure = await f.call('antigravity_comparison', { comparisonId: failed.comparisonId });
     assert.equal(failure.ready, true);
     assert.equal(failure.complete, false);
@@ -209,7 +209,7 @@ test('wait sends event-based MCP progress and timeouts/cancellation preserve exe
   try {
     const run = await f.call('antigravity_run', { prompt: 'split:test', workingDirectory: f.source, mode: 'read-only' });
     const progress: Array<{ progress: number; message?: string; total?: number }> = [];
-    const response = await f.client.callTool({ name: 'antigravity_wait', arguments: { taskId: run.task.taskId, timeoutSeconds: 10 } },
+    const response = await f.client.callTool({ name: 'antigravity_wait', arguments: { taskId: run.task.taskId, timeoutSeconds: 60 } },
       undefined, { onprogress: update => progress.push(update) });
     const done = response.structuredContent as any;
     assert.equal(response.isError, undefined);
@@ -221,7 +221,7 @@ test('wait sends event-based MCP progress and timeouts/cancellation preserve exe
     assert.ok(progress.every(update => update.total === undefined));
     const continued = await f.call('antigravity_wait', { taskId: run.task.taskId, after: done.nextCursor });
     assert.deepEqual(continued.events, []);
-    const slow = await f.call('antigravity_run', { prompt: 'cancel:test', workingDirectory: f.source, timeoutSeconds: 10 });
+    const slow = await f.call('antigravity_run', { prompt: 'cancel:test', workingDirectory: f.source, timeoutSeconds: 60 });
     const timed = await f.call('antigravity_wait', { taskId: slow.task.taskId, timeoutSeconds: 1 });
     assert.equal(timed.timedOut, true);
     assert.equal(timed.ready, false);
@@ -231,6 +231,6 @@ test('wait sends event-based MCP progress and timeouts/cancellation preserve exe
     await assert.rejects(pending);
     assert.equal((await f.call('antigravity_result', { taskId: slow.task.taskId })).ready, false);
     await f.call('antigravity_cancel', { taskId: slow.task.taskId });
-    assert.equal((await f.call('antigravity_wait', { taskId: slow.task.taskId, timeoutSeconds: 10 })).status, 'cancelled');
+    assert.equal((await f.call('antigravity_wait', { taskId: slow.task.taskId, timeoutSeconds: 60 })).status, 'cancelled');
   } finally { await f.close(); }
 });

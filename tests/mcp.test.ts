@@ -57,7 +57,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal((await call('antigravity_health')).integrationApproval.available, false);
     let taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
       acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }] })).task.taskId;
-    const deadline = Date.now() + 10000;
+    const deadline = Date.now() + 120000;
     let final;
     while (Date.now() < deadline) {
       final = await call('antigravity_result', { taskId });

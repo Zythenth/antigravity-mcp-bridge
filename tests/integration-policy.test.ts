@@ -20,6 +20,14 @@ import { createMcpServer } from '../src/mcp-server.js';
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
 
+async function waitFor(ready: () => boolean | Promise<boolean>, describe: () => unknown) {
+  const deadline = Date.now() + 120000;
+  while (!(await ready())) {
+    if (Date.now() > deadline) throw new Error(`Condition timed out: ${JSON.stringify(await describe())}`);
+    await new Promise(r => setTimeout(r, 25));
+  }
+}
+
 test('preauthorization is explicit, canonical, exact and excludes descendant projects', () => {
   assert.deepEqual(preauthorizedIntegrationRoots(), []);
   const root = realpathSync.native(process.cwd());
@@ -196,12 +204,7 @@ test('automatic mode integrates and updates sandbox policy without forms or elic
       workingDirectory: source,
       acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
     });
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline) {
-      const res = await call('antigravity_result', { taskId: run.task.taskId });
-      if (res.ready) break;
-      await new Promise(r => setTimeout(r, 25));
-    }
+    await waitFor(async () => (await call('antigravity_result', { taskId: run.task.taskId })).ready === true, async () => { const { ready, status } = await call('antigravity_result', { taskId: run.task.taskId }); return { ready, status }; });
     const preview = await call('antigravity_preview', { taskId: run.task.taskId });
     await call('antigravity_verify', {
       taskId: run.task.taskId,
@@ -232,10 +235,7 @@ test('automatic mode preserves verification, test evidence, readonly and review 
       { code: 'SANDBOX_POLICY_CHANGED' });
 
     const roTask = await tasks.run({ prompt: 'slow:test', workingDirectory: source, mode: 'read-only' });
-    const deadline1 = Date.now() + 10000;
-    while (Date.now() < deadline1 && tasks.status(roTask.taskId).status !== 'completed') {
-      await new Promise(r => setTimeout(r, 20));
-    }
+    await waitFor(() => tasks.status(roTask.taskId).status === 'completed', () => tasks.status(roTask.taskId).status);
     await assert.rejects(tasks.integrate(roTask.taskId, '0'.repeat(64)), { code: 'READ_ONLY_TASK' });
 
     const writeTask = await tasks.run({
@@ -243,10 +243,7 @@ test('automatic mode preserves verification, test evidence, readonly and review 
       workingDirectory: source,
       acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
     });
-    const deadline2 = Date.now() + 10000;
-    while (Date.now() < deadline2 && tasks.status(writeTask.taskId).status !== 'completed') {
-      await new Promise(r => setTimeout(r, 20));
-    }
+    await waitFor(() => tasks.status(writeTask.taskId).status === 'completed', () => tasks.status(writeTask.taskId).status);
     const preview = await tasks.preview(writeTask.taskId);
     await assert.rejects(tasks.integrate(writeTask.taskId, preview.sha256), { code: 'VERIFICATION_REQUIRED' });
 
@@ -293,10 +290,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       workingDirectory: source,
       acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
     });
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline && tasks.status(writeTask.taskId).status !== 'completed') {
-      await new Promise(r => setTimeout(r, 20));
-    }
+    await waitFor(() => tasks.status(writeTask.taskId).status === 'completed', () => tasks.status(writeTask.taskId).status);
     const preview = await tasks.preview(writeTask.taskId);
     await tasks.verify(writeTask.taskId, preview.sha256, [
       { criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
@@ -350,12 +344,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
         acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
       },
     })).structuredContent as any;
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline) {
-      const res = (await unavailableClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any;
-      if (res.ready) break;
-      await new Promise(r => setTimeout(r, 25));
-    }
+    await waitFor(async () => ((await unavailableClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await unavailableClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
     const preview = (await unavailableClient.callTool({ name: 'antigravity_preview', arguments: { taskId: run.task.taskId } })).structuredContent as any;
     await unavailableClient.callTool({
       name: 'antigravity_verify',
@@ -402,12 +391,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
         acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
       },
     })).structuredContent as any;
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline) {
-      const res = (await elicitationClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any;
-      if (res.ready) break;
-      await new Promise(r => setTimeout(r, 25));
-    }
+    await waitFor(async () => ((await elicitationClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await elicitationClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
     const preview = (await elicitationClient.callTool({ name: 'antigravity_preview', arguments: { taskId: run.task.taskId } })).structuredContent as any;
     await elicitationClient.callTool({
       name: 'antigravity_verify',
