@@ -14,9 +14,9 @@ import path from 'node:path';
 const namespace = '28c48913-763e-4ced-aee4-3fe6f0dd25eb';
 const catalog = [{ id: 'fixture', nativeServerName: 'bridge-policy-probe', command: process.execPath, args: ['private-service.mjs'], env: { FIXTURE_KEY: 'synthetic-secret' }, tools: [{ name: 'echo', readOnly: true }, { name: 'write', readOnly: false }] }];
 test('trusted configuration bounds native tools and private MCP transports; caller cannot supply transport', () => {
-  const config = loadConfig({ BRIDGE_ALLOWED_AGY_TOOLS: '["view_file"]', BRIDGE_MCP_CATALOG: JSON.stringify(catalog) });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: '["view_file"]', BRIDGE_MCP_CATALOG: JSON.stringify(catalog) });
   assert.deepEqual(config.allowedAgyTools, ['view_file']);
-  assert.throws(() => loadConfig({ BRIDGE_ALLOWED_AGY_TOOLS: '["run_command"]' }));
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: '["run_command"]' }));
   assert.throws(() => resolveAgentPolicy({ allowedTools: ['write_to_file'] }, config.allowedAgyTools, config.mcpCatalog, 'write', namespace), { code: 'POLICY_NOT_ALLOWED' });
   assert.throws(() => resolveAgentPolicy({ mcpServers: [{ serverId: 'fixture', command: process.execPath }] } as never, config.allowedAgyTools, config.mcpCatalog, 'write', namespace), { code: 'POLICY_NOT_ALLOWED' });
 });
@@ -46,7 +46,7 @@ test('profile selectors snapshot defaults while explicit empty lists replace the
 });
 test('catalog discovery returns IDs and ceilings without credentials or transport paths', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-policy-api-'));
-  const config = loadConfig({ BRIDGE_MCP_CATALOG: JSON.stringify(catalog), BRIDGE_STATE_DIRECTORY: directory, BRIDGE_TEST_EXECUTOR: 'agy' });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MCP_CATALOG: JSON.stringify(catalog), BRIDGE_STATE_DIRECTORY: directory, BRIDGE_TEST_EXECUTOR: 'agy' });
   const tasks = new TaskManager(new CliAdapter(config), config);
   try {
     const result = successOutputSchemas.antigravity_get_agent_policy.parse(tasks.agentPolicyCatalog());

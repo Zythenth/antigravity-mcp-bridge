@@ -5,7 +5,7 @@ import { loadConfig } from '../src/config.js';
 import { createMcpServer } from '../src/mcp-server.js';
 import { TaskManager } from '../src/task-manager.js';
 
-const config = loadConfig({ ...process.env, AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy' });
+const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', ...process.env, AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy' });
 const adapter = new CliAdapter(config, [fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url))]);
 await adapter.discover();
 const tasks = new TaskManager(adapter, config);

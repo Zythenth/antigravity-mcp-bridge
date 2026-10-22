@@ -23,7 +23,7 @@ import { normalizeSecretExceptionsPolicy } from './hardening-policy.js';
 
 export type { BlockedPath } from './secret-preflight.js';
 
-export interface ExecutionPolicyRequest { policy: ResolvedAgentPolicy; catalog: McpCatalogEntry[]; stateDirectory: string; executionId: string }
+export interface ExecutionPolicyRequest { policy: ResolvedAgentPolicy; catalog: McpCatalogEntry[]; stateDirectory: string; executionId: string; readOnlyRoots?: readonly string[] }
 
 export interface ProjectCopy {
   executionPolicy?: StagedExecutionPolicy;

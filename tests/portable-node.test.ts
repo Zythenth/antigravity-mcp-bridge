@@ -92,9 +92,9 @@ async function rejectsCode(operation: Promise<unknown>, code: string): Promise<v
 
 test('startup rejects non-local cache configuration before resolving it', { skip: process.platform !== 'win32' }, () => {
   for (const value of ['relative-cache', '..\\cache', '\\\\server\\share\\cache', '\\\\?\\C:\\cache', 'C:\\cache:stream', 'C:\\']) {
-    assert.throws(() => loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: value }), /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY/u);
+    assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: value }), /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY/u);
   }
-  assert.equal(loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(process.cwd(), '.cache') }).windowsNodeCacheDirectory,
+  assert.equal(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(process.cwd(), '.cache') }).windowsNodeCacheDirectory,
     path.resolve(process.cwd(), '.cache'));
 });
 
@@ -119,7 +119,7 @@ test('TaskManager rejects source/cache overlap before model lookup, queueing, or
         for (const [name, contents] of files) await writeFile(path.join(cache, name), contents);
       }
       for (const mode of ['system', 'portable'] as const) {
-        const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy',
+        const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy',
           BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-' + mode), BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: cache,
           ...(mode === 'portable' ? { BRIDGE_WINDOWS_NODE_RUNTIME: mode } : {}) });
         const adapter = new CliAdapter(config, [mockPath]);
@@ -162,7 +162,7 @@ test('TaskManager accepts disjoint source/cache siblings and preserves forbidden
     await mkdir(cache);
     const { files } = fixtureDescriptor();
     for (const [name, contents] of files) await writeFile(path.join(cache, name), contents);
-    const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy',
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy',
       BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: cache,
       FORBIDDEN_DIRECTORIES: forbidden });
     const adapter = new CliAdapter(config, [fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url))]);

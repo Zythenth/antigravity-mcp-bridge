@@ -44,7 +44,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
 }
 
 test('tool profiles reduce the MCP catalog and reject writes in query/review', async () => {
-  assert.throws(() => loadConfig({ BRIDGE_TOOL_PROFILE: 'unknown' }));
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_TOOL_PROFILE: 'unknown' }));
   for (const [profile, count] of [['full', 50], ['query', 36], ['review', 39], ['implementation', 50]] as const) {
     const f = await fixture(profile);
     try {
@@ -74,9 +74,9 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
 
 test('custom roles inherit read-only contracts and freeze instructions across configuration changes', async () => {
   const role = { name: 'security-review', baseRole: 'reviewer', instruction: 'Inspect the requested access-control boundary.', description: 'Review requested access controls.' };
-  assert.throws(() => loadConfig({ BRIDGE_CUSTOM_ROLES: 'not-json' }));
-  assert.throws(() => loadConfig({ BRIDGE_CUSTOM_ROLES: JSON.stringify([{ ...role, name: 'reviewer' }]) }));
-  assert.throws(() => loadConfig({ BRIDGE_CUSTOM_ROLES: JSON.stringify([role, role]) }));
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: 'not-json' }));
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([{ ...role, name: 'reviewer' }]) }));
+  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([role, role]) }));
   const f = await fixture('full', false, { BRIDGE_CUSTOM_ROLES: JSON.stringify([role]) });
   let other: Client | undefined;
   try {

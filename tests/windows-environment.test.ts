@@ -21,7 +21,7 @@ test('Windows commands resolve when an MCP client omits PATHEXT, preserving expl
     for (const pathExt of [undefined, '.EXE;.CMD', '']) {
       if (pathExt === undefined) delete process.env.PATHEXT;
       else process.env.PATHEXT = pathExt;
-      const adapter = new CliAdapter(loadConfig({ AGY_PATH: process.execPath }), [mockPath]);
+      const adapter = new CliAdapter(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath }), [mockPath]);
       await adapter.discover();
       const child = adapter.spawnTask({ prompt: 'resolve-command:', workingDirectory: directory, timeoutSeconds: 30 }, undefined, directory);
       let output = '', diagnostics = '';

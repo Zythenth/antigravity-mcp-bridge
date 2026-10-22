@@ -99,7 +99,7 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
 test('Windows test defaults to bridge-owned LPAC evidence and rejects forged stdout, failed commands, and cancelled commands', { skip: process.platform !== 'win32' }, async () => {
   const directory = await repository();
   const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-mcp-state-'));
-  const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20',
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20',
     ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
     ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });
   const adapter = new CliAdapter(config, [mockPath]);
@@ -164,7 +164,7 @@ test('a queued Windows test is denied when its frozen global ceiling is revoked'
   const sourceDirectory = await repository();
   const busyDirectory = await repository();
   const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-policy-state-'));
-  const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20', MAX_CONCURRENT_TASKS: '1',
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20', MAX_CONCURRENT_TASKS: '1',
     ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
     ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });
   class PolicyTestAdapter extends CliAdapter {
