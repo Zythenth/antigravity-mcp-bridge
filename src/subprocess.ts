@@ -101,27 +101,34 @@ export function redactDiagnostic(value: string | undefined | null, state?: Redac
   if (!value) return '';
   let text = String(value);
   if (state) {
-    if (state.inPrivateKey) {
-      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
-        state.inPrivateKey = false;
-      }
-      return '[private key redacted]';
-    }
-    if (/-----BEGIN [^-]*PRIVATE KEY-----/.test(text)) {
-      if (/-----END [^-]*PRIVATE KEY-----/.test(text)) {
-        state.inPrivateKey = false;
-      } else {
-        state.inPrivateKey = true;
-      }
-      return '[private key redacted]';
-    }
+    // The last delimiter on the line decides whether the following lines are still inside a key.
+    const delimiters = [...text.matchAll(/-----(BEGIN|END) [^-]*PRIVATE KEY-----/g)];
+    const insideBefore = state.inPrivateKey === true;
+    if (delimiters.length) state.inPrivateKey = delimiters.at(-1)![1] === 'BEGIN';
+    if (insideBefore || delimiters.some(match => match[1] === 'BEGIN')) return '[private key redacted]';
   }
-  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/g, '[private key redacted]')
-             .replace(/-----(?:BEGIN|END) [^-]*PRIVATE KEY-----/g, '[private key redacted]');
+  // An opening without its terminator hides the rest of the text, since the key body follows the header.
+  // A terminator left without its opening (output truncated from the head) hides everything before it, since the body precedes it.
+  text = text.replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g, '[private key redacted]')
+             .replace(/^[\s\S]*-----END [^-]*PRIVATE KEY-----/, '[private key redacted]');
   text = text.replace(/(:\/\/)(?:[^/\s:@]+:[^/\s:@]+|[^/\s@]+)@/g, '$1[redacted]@');
-  for (const [name, secret] of Object.entries(process.env)) {
-    if (secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name)) text = text.split(secret).join('[redacted]');
-  }
-  return text.replace(/\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/g, '[redacted]')
+  for (const secret of environmentSecrets()) text = text.split(secret).join('[redacted]');
+  return text.replace(new RegExp(TOKEN_PATTERN, 'g'), '[redacted]')
     .replace(/(Bearer\s+)[^\s"']+/gi, '$1[redacted]');
+}
+
+const TOKEN_PATTERN = /\b(?:AIza[0-9A-Za-z_-]{35}|(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z_]{36,255}|github_pat_[0-9A-Za-z_]{82}|[sr]k_live_[0-9A-Za-z]{24,})\b/.source;
+
+// Multi-line values are also matched line by line, because streams are redacted one line at a time.
+function environmentSecrets(): string[] {
+  return Object.entries(process.env).flatMap(([name, secret]) =>
+    secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name)
+      ? [secret, ...secret.split(/\r?\n/).filter(line => line !== secret && line.trim().length >= 8)] : [])
+    .sort((left, right) => right.length - left.length);
+}
+
+// High-confidence formats only: URL userinfo and generic Bearer text stay redacted in diagnostics but do not reject caller input.
+export function containsCredential(value: string): boolean {
+  return /-----BEGIN [^-]*PRIVATE KEY-----/.test(value) || new RegExp(TOKEN_PATTERN).test(value) ||
+    environmentSecrets().some(secret => value.includes(secret));
 }

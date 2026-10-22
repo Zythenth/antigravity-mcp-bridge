@@ -15,7 +15,8 @@ import { integrationPreauthorized, type IntegrationApproval } from './integratio
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
-import { terminateSubprocess, redactDiagnostic } from './subprocess.js';
+import { terminateSubprocess, redactDiagnostic, containsCredential, type RedactionState } from './subprocess.js';
+import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
@@ -40,8 +41,42 @@ import { normalizeSandboxPolicy, resolveSandboxSelection, sandboxPolicyDigest, t
 import { executeWindowsTest, recoverWindowsExecutions } from './windows-executor.js';
 import { portableNodeStatus, type PortableNodeStatus } from './portable-node.js';
 
-interface InternalTask { publicResponses?: Map<number, string>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
+const RESPONSE_HOLD_BACK_CHARS = 8192;
+const MAX_BUFFERED_RESPONSE_STEPS = 16;
+const MAX_RESPONSE_STEPS = 1000;
+const MAX_HELD_RESPONSE_LINES = 100;
+const RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5_000_000 };
+
+interface PendingResponse { text: string; redaction: RedactionState; suppressing: boolean; dropped: string; untilDone: boolean; held: string[]; overflow: boolean }
+
+interface InternalTask { publicResponses?: Map<number, string>; pendingResponses?: Map<number, PendingResponse>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
+
+function restoredEvents(stored: readonly BridgeEvent[]): BridgeEvent[] {
+  // Earlier versions kept raw deltas, so a credential split across chunks is only visible in the joined original text of its step.
+  const steps = new Map<number, number[]>();
+  const cleared = new Set<number>();
+  stored.forEach((event, position) => {
+    const data = event.data as { step_index?: unknown; text_delta?: unknown } | undefined;
+    if (event.type !== 'response.chunk' || typeof data?.text_delta !== 'string') return;
+    // Chunks without a usable step index cannot be joined for inspection, so their text is not restored.
+    if (!Number.isSafeInteger(data.step_index)) cleared.add(position);
+    else steps.set(data.step_index as number, [...steps.get(data.step_index as number) ?? [], position]);
+  });
+  for (const positions of steps.values()) {
+    const joined = positions.map(position => (stored[position]!.data as { text_delta: string }).text_delta).join('');
+    if (redactDiagnostic(joined) !== joined) for (const position of positions) cleared.add(position);
+  }
+  return stored.map((event, position) => {
+    let { data, raw } = event;
+    if (cleared.has(position)) {
+      data = { ...data as object, text_delta: '' };
+      const update = (raw as { step_update?: object } | undefined)?.step_update;
+      if (update) raw = { ...raw as object, step_update: { ...update, text_delta: '' } };
+    }
+    return { ...event, data: sanitizePayload(data).value, ...(raw === undefined ? {} : { raw: sanitizePayload(raw).value }) };
+  });
+}
 
 export class TaskManager {
   readonly events: EventStore;
@@ -96,9 +131,22 @@ export class TaskManager {
         if (!projects.has(item.project.copyDirectory)) projects.set(item.project.copyDirectory, item.project);
         item.project = projects.get(item.project.copyDirectory);
       }
+      // State written by earlier versions may hold unredacted results, reports, messages or tests; every returned field derives from the record.
+      const restored = item.redacted ? undefined : sanitizePayload(item.record, RESTORE_LIMITS);
+      if (restored && (restored.redacted || restored.truncated)) {
+        const { taskId, workingDirectory, copyDirectory, structuredResult } = item.record;
+        item.record = { ...restored.value as TaskRecord, taskId, workingDirectory, copyDirectory };
+        // The prompt is mirrored in the options and must stay identical for the state to load again.
+        item.options = { ...item.options, prompt: item.record.prompt };
+        const structured = structuredResult && sanitizePayload(structuredResult.value, RESTORE_LIMITS);
+        if (structured && (structured.redacted || structured.truncated)) {
+          item.record.structuredResult = { value: structured.value, sha256: createHash('sha256').update(JSON.stringify(structured.value)).digest('hex') };
+        } else if (structuredResult) item.record.structuredResult = structuredResult;
+        if (restored.truncated) item.record.error ??= { code: 'STATE_RESTORE_TRUNCATED', message: 'Retained state exceeded restore limits and was truncated; discard this task' };
+      }
       const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
       this.tasks.set(item.record.taskId, task);
-      this.events.restore(item.record.taskId, item.events, item.cursor);
+      this.events.restore(item.record.taskId, item.redacted ? item.events : restoredEvents(item.events), item.cursor);
       if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
         if (item.record.pid && processAlive(item.record.pid)) {
           item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };
@@ -202,11 +250,13 @@ export class TaskManager {
     const entry = await this.projectMemory().read(await this.memoryProject(workingDirectory), specialist);
     if (!entry) throw new BridgeError('MEMORY_NOT_FOUND', 'Selected memory does not exist');
     if (entry.sha256 !== expectedSha256) throw new BridgeError('MEMORY_CHANGED', 'Reload memory metadata before reading the current version');
-    return { memory: summarizeMemory([entry])![0]!, ...textChunk(entry.text, offset, limit) };
+    // Entries written before credential checks keep their identity hash but are never returned in plaintext.
+    return { memory: summarizeMemory([entry])![0]!, ...textChunk(redactDiagnostic(entry.text), offset, limit) };
   }
 
   async writeMemory(workingDirectory: string, specialist: string, text: string, expectedSha256: string | null) {
     if (profileReadOnly(this.config.toolProfile)) throw new BridgeError('PROFILE_READ_ONLY', 'This profile cannot change private memory');
+    if (containsCredential(text)) throw new BridgeError('INPUT_SECRET_DETECTED', 'Private memory cannot store credential-like values; remove them and retry');
     const entry = await this.projectMemory().write(await this.memoryProject(workingDirectory), specialist, { text, expectedSha256 });
     return { memory: summarizeMemory([entry])![0]! };
   }
@@ -313,6 +363,7 @@ export class TaskManager {
           const entry = await this.projectMemory().read(workingDirectory, selection.specialist);
           if (!entry) throw new BridgeError('MEMORY_NOT_FOUND', 'Selected memory does not exist: ' + selection.specialist);
           if (entry.sha256 !== selection.sha256) throw new BridgeError('MEMORY_CHANGED', 'Selected private memory changed; review its current content before dispatch');
+          if (containsCredential(entry.text)) throw new BridgeError('INPUT_SECRET_DETECTED', 'Selected private memory contains a credential-like value; rewrite it before dispatch: ' + selection.specialist);
           snapshots.push(entry);
         }
         options.memorySnapshots = memorySnapshotsSchema.parse(snapshots);
@@ -799,9 +850,9 @@ export class TaskManager {
     return this.withProject(task.project, async () => {
       const preview = await previewProjectCopy(task.project!, this.config);
       if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'Preview again before recording test evidence');
-      const evidence = { command, exitCode, output, sha256: expectedSha256, recordedAt: new Date().toISOString(), source: 'client-reported' as const };
+      const evidence = { command: redactDiagnostic(command), exitCode, output: redactDiagnostic(output), sha256: expectedSha256, recordedAt: new Date().toISOString(), source: 'client-reported' as const };
       task.record.tests = [...(task.record.tests || []).slice(-19), evidence];
-      this.events.append(taskId, 'review.test-recorded', { command, exitCode, sha256: expectedSha256 });
+      this.events.append(taskId, 'review.test-recorded', { command: evidence.command, exitCode, sha256: expectedSha256 });
       return evidence;
     });
   }
@@ -914,6 +965,7 @@ export class TaskManager {
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(messageId) || !text.trim() || text.length > 2000) {
       throw new BridgeError('INVALID_MESSAGE', 'Provide a UUID and between 1 and 2000 characters of caller text');
     }
+    if (containsCredential(text)) throw new BridgeError('INPUT_SECRET_DETECTED', 'Message contains a credential-like value; remove it before sending');
     messageId = messageId.toLowerCase();
     if (peerOrigin) {
       peerOrigin = peerOriginSchema.parse(peerOrigin);
@@ -1374,7 +1426,7 @@ export class TaskManager {
             command: JSON.stringify({ executable: task.options.nativeTest!.executable, args: task.options.nativeTest!.args }),
             exitCode: receipt.exitCode ?? 255, output: attempt.output, sha256: receipt.afterSha256 === tree ? preview.sha256 : task.options.nativeTest!.expectedSha256,
             recordedAt: new Date().toISOString(), source: 'agy-tool', treeSha256: receipt.afterSha256, beforeTreeSha256: receipt.beforeSha256,
-            executionError: receipt.error, truncated: receipt.truncated, attempt: index + 1, testTaskId: record.taskId, sandbox: 'agy-native-requested',
+            executionError: receipt.error && redactDiagnostic(receipt.error), truncated: receipt.truncated, attempt: index + 1, testTaskId: record.taskId, sandbox: 'agy-native-requested',
           }];
         }
         this.events.append(record.taskId, 'test.results', { attempts: attempts.length, sha256: preview.sha256 });
@@ -1633,8 +1685,8 @@ export class TaskManager {
         if (result.exitCode !== null) {
           task.record.tests = [...(task.record.tests || []).slice(-19), {
             command: JSON.stringify({ executable: request.executable, args: request.args }), exitCode: result.exitCode,
-            output: result.output, sha256: afterPreview.sha256, beforeSha256: beforePreview.sha256, recordedAt: new Date().toISOString(), source: 'windows-executor',
-            treeSha256: afterTree, beforeTreeSha256: beforeTree, executionError: result.error, truncated: result.truncated,
+            output: redactDiagnostic(result.output), sha256: afterPreview.sha256, beforeSha256: beforePreview.sha256, recordedAt: new Date().toISOString(), source: 'windows-executor',
+            treeSha256: afterTree, beforeTreeSha256: beforeTree, executionError: result.error && redactDiagnostic(result.error), truncated: result.truncated,
             attempt, testTaskId: task.record.taskId, sandbox: 'windows-lpac', sandboxSelection: request.sandbox,
             sandboxPolicySha256: request.policySha256,
             portableNode: result.portableNode,
@@ -1681,33 +1733,39 @@ export class TaskManager {
 
   private handleStdout(task: InternalTask, line: string): void {
     const record = task.record;
-    let raw: Record<string, unknown>;
+    let source: Record<string, unknown>;
     try {
       const parsed: unknown = JSON.parse(line);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Expected event object');
-      raw = parsed as Record<string, unknown>;
+      source = parsed as Record<string, unknown>;
     } catch {
       task.parseErrors = (task.parseErrors || 0) + 1;
       this.events.append(record.taskId, 'stream.unparsed', { line: redactDiagnostic(line).slice(0, 4000) });
       return;
     }
+    // Everything retained or returned derives from this bounded, redacted copy; the source frame is read only for native receipts and response deltas.
+    const sanitized = sanitizePayload(source);
+    const raw = sanitized.value as Record<string, unknown>;
+    if (sanitized.truncated) this.events.append(record.taskId, 'stream.truncated', { maxDepth: DEFAULT_MAX_PAYLOAD_DEPTH, maxNodes: DEFAULT_MAX_PAYLOAD_NODES });
     const sourceType = raw.event;
     if (sourceType === 'init') {
       if (typeof raw.conversation_id === 'string') record.sessionId = raw.conversation_id;
       this.events.append(record.taskId, 'agent.started', raw.init || {}, raw);
     } else if (sourceType === 'step_update' && raw.step_update && typeof raw.step_update === 'object') {
       const step = raw.step_update as Record<string, unknown>;
+      const sourceStep = source.step_update as Record<string, unknown>;
       if (task.nativeTest && typeof step.step_index === 'number' && !task.nativeTest.steps.has(step.step_index)) {
-        const failure = readNativeSandboxError(step, task.nativeTest);
+        const blocked = readNativeSandboxError(sourceStep, task.nativeTest);
+        const failure = blocked && new BridgeError(blocked.code, redactDiagnostic(blocked.message));
         if (failure) {
           if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = failure;
           this.events.append(record.taskId, 'test.blocked', { code: failure.code, message: failure.message });
         }
-        const attempt = readNativeReceipt(step, task.nativeTest);
+        const attempt = readNativeReceipt(sourceStep, task.nativeTest);
         if (attempt) {
           if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = undefined;
           task.nativeTest.steps.add(step.step_index);
-          task.nativeTest.attempts.push(attempt);
+          task.nativeTest.attempts.push({ ...attempt, output: redactDiagnostic(attempt.output) });
           this.events.append(record.taskId, 'test.executed', { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
           if (task.nativeTest.attempts.length > task.options.nativeTest!.maxAttempts) {
             task.termination ??= 'cancelled';
@@ -1715,31 +1773,25 @@ export class TaskManager {
           }
         }
       }
+      if (step.step_type === 'agent_response' && Number.isSafeInteger(step.step_index)) {
+        const index = step.step_index as number;
+        if (typeof sourceStep.text_delta === 'string') {
+          this.acceptResponseText(task, index, sourceStep.text_delta);
+          step.text_delta = this.releaseResponseDelta(task, index, sourceStep.text_delta, step.state === 'DONE');
+        }
+        else if (step.state === 'DONE' && task.pendingResponses?.has(index)) this.flushResponse(task, index);
+      } else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') {
+        // Without a usable step index, deltas cannot be joined for redaction, so their text is not retained.
+        step.text_delta = '';
+      }
       let type = 'step.update';
       if (step.step_type === 'tool') type = step.state === 'DONE' ? 'tool.completed' : 'tool.started';
       else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') type = 'response.chunk';
-      if (step.step_type === 'agent_response' && typeof step.text_delta === 'string' && Number.isSafeInteger(step.step_index)) {
-        const index = step.step_index as number;
-        task.publicResponses ??= new Map();
-        if (task.publicResponses.size < 200 || task.publicResponses.has(index)) {
-          const room = Math.max(0, 1024 * 1024 - (task.responseChars ?? 0));
-          const delta = step.text_delta.slice(0, room);
-          if (delta.length < step.text_delta.length && !task.messageBufferLimited) {
-            task.messageBufferLimited = true;
-            if (record.group) record.peerRequestsTruncated = true;
-            appendMessage(record, 'blocker', 'bridge', 'The public message buffer reached its limit; inspect retained history and the full result for omitted details.');
-            this.events.append(record.taskId, 'message.truncated', { limitChars: 1024 * 1024 });
-          }
-          task.responseChars = (task.responseChars ?? 0) + delta.length;
-          const text = (task.publicResponses.get(index) ?? '') + delta;
-          task.publicResponses.set(index, text);
-          this.captureMessages(task, text, String(index));
-        } else if (record.group) record.peerRequestsTruncated = true;
-      }
       this.events.append(record.taskId, type, step, raw);
       if (step.usage !== undefined) record.usage = step.usage;
       if (record.status === 'running') record.status = 'streaming';
     } else if (sourceType === 'result' && raw.result && typeof raw.result === 'object') {
+      for (const index of [...task.pendingResponses?.keys() ?? []]) this.flushResponse(task, index);
       const result = raw.result as Record<string, unknown>;
       if (typeof result.error === 'string') {
         result.error = redactDiagnostic(result.error);
@@ -1757,12 +1809,113 @@ export class TaskManager {
     } else this.events.append(record.taskId, 'agy.event', raw, raw);
   }
 
+  // Deltas may split a credential, so only complete lines are released, redacted with per-step state.
+  private releaseResponseDelta(task: InternalTask, index: number, delta: string, done: boolean): string {
+    task.pendingResponses ??= new Map();
+    let pending = task.pendingResponses.get(index);
+    if (!pending) {
+      if (task.pendingResponses.size >= MAX_RESPONSE_STEPS) return '';
+      // Redaction state outlives any buffered text, so a step that resumes mid-key is still treated as inside the key.
+      pending = { text: '', redaction: {}, suppressing: false, dropped: '', untilDone: false, held: [], overflow: false };
+      task.pendingResponses.set(index, pending);
+    }
+    let input = delta;
+    if (pending.suppressing) {
+      const newline = pending.untilDone ? -1 : input.indexOf('\n');
+      this.dropResponseText(pending, newline < 0 ? input : input.slice(0, newline));
+      input = newline < 0 || pending.untilDone ? '' : input.slice(newline + 1);
+      if (newline >= 0 && !pending.untilDone) pending.suppressing = false;
+    }
+    pending.text += input;
+    const cut = done ? pending.text.length : pending.text.lastIndexOf('\n') + 1;
+    const ready = pending.text.slice(0, cut);
+    pending.text = pending.text.slice(cut);
+    let marker = '';
+    const buffered = [...task.pendingResponses.values()].filter(item => item.text).length;
+    if (pending.text.length > RESPONSE_HOLD_BACK_CHARS || (pending.text && buffered > MAX_BUFFERED_RESPONSE_STEPS)) {
+      // An unfinished line too long (or too many unfinished lines) cannot be redacted safely; drop it until its newline.
+      this.dropResponseText(pending, pending.text);
+      pending.text = '';
+      pending.suppressing = true;
+      marker = '[response line suppressed before redaction]\n';
+      this.events.append(task.record.taskId, 'response.truncated', { step_index: index, maxPendingChars: RESPONSE_HOLD_BACK_CHARS });
+    }
+    // Finished steps keep their entry so the step limit never frees a slot for an index whose context was lost.
+    let released = '';
+    const redactLine = (line: string) => {
+      const redacted = redactDiagnostic(line, pending.redaction);
+      return line.endsWith('\n') && !redacted.endsWith('\n') ? redacted + '\n' : redacted;
+    };
+    // A key body may arrive before a terminator whose opening was never streamed, so base64-like lines wait for the next line.
+    for (const line of ready.split(/(?<=\n)/).filter(Boolean)) {
+      // Once a body may have started, its short final line is held too.
+      const minimum = pending.held.length || pending.overflow ? 1 : 16;
+      if (!pending.redaction.inPrivateKey && new RegExp(`^[A-Za-z0-9+/=]{${minimum},1024}\\r?\\n$`).test(line)) {
+        // After an overflow the rest of the same body is dropped, not released line by line.
+        if (pending.overflow) continue;
+        pending.held.push(line);
+        if (pending.held.length > MAX_HELD_RESPONSE_LINES) {
+          pending.held = [];
+          pending.overflow = true;
+          released += '[response lines suppressed before redaction]\n';
+        }
+        continue;
+      }
+      pending.overflow = false;
+      const orphanEnd = !pending.redaction.inPrivateKey && /-----END [^-]*PRIVATE KEY-----/.test(line) && !/-----BEGIN [^-]*PRIVATE KEY-----/.test(line);
+      if (orphanEnd && pending.held.length) released += '[private key redacted]\n';
+      else released += pending.held.map(redactLine).join('');
+      pending.held = [];
+      released += redactLine(line);
+    }
+    if (done) {
+      released += pending.held.map(redactLine).join('');
+      pending.held = [];
+    }
+    return released + marker;
+  }
+
+  // Dropped text may hold a key delimiter that redaction never saw, so the rest of that step stays suppressed.
+  private dropResponseText(pending: PendingResponse, text: string): void {
+    if ((pending.dropped + text).includes('-----')) pending.untilDone = true;
+    pending.dropped = (pending.dropped + text).slice(-4);
+  }
+
+  private flushResponse(task: InternalTask, index: number): void {
+    const text = this.releaseResponseDelta(task, index, '', true);
+    if (!text) return;
+    this.events.append(task.record.taskId, 'response.chunk', { step_index: index, step_type: 'agent_response', text_delta: text });
+  }
+
+  private acceptResponseText(task: InternalTask, index: number, text: string): void {
+    const record = task.record;
+    task.publicResponses ??= new Map();
+    if (task.publicResponses.size >= 200 && !task.publicResponses.has(index)) {
+      if (record.group) record.peerRequestsTruncated = true;
+      return;
+    }
+    const room = Math.max(0, 1024 * 1024 - (task.responseChars ?? 0));
+    const delta = text.slice(0, room);
+    if (delta.length < text.length && !task.messageBufferLimited) {
+      task.messageBufferLimited = true;
+      if (record.group) record.peerRequestsTruncated = true;
+      appendMessage(record, 'blocker', 'bridge', 'The public message buffer reached its limit; inspect retained history and the full result for omitted details.');
+      this.events.append(record.taskId, 'message.truncated', { limitChars: 1024 * 1024 });
+    }
+    task.responseChars = (task.responseChars ?? 0) + delta.length;
+    const accumulated = (task.publicResponses.get(index) ?? '') + delta;
+    task.publicResponses.set(index, accumulated);
+    // Envelopes are routed while the turn streams; captureMessages redacts each decoded body, after deltas are rejoined.
+    if (accumulated.includes('</antigravity-')) this.captureMessages(task, accumulated, String(index));
+  }
+
   private captureMessages(task: InternalTask, text: string, step: string, final = false): void {
     if (task.record.group) {
       const peers = extractPeerMessages(text);
       let changed = false;
       for (const input of peers.messages) {
-        const normalized = { ...input, messageId: input.messageId.toLowerCase() };
+        // Envelope bodies are JSON, so escaped credentials only become visible after decoding.
+        const normalized = { ...input, messageId: input.messageId.toLowerCase(), text: redactDiagnostic(input.text) };
         if (task.record.peerRequests?.some(old => old.messageId === normalized.messageId && old.toNode === normalized.toNode && old.text === normalized.text)) continue;
         if ((task.record.peerRequests?.length ?? 0) >= 20) { task.record.peerRequestsTruncated = true; break; }
         task.record.peerRequests = [...(task.record.peerRequests ?? []), normalized]; changed = true;
@@ -1771,7 +1924,8 @@ export class TaskManager {
       if (changed || task.record.peerRequestsTruncated) this.events.append(task.record.taskId, 'peer.requests-observed', { count: task.record.peerRequests?.length ?? 0, truncated: task.record.peerRequestsTruncated ?? false });
     }
     task.messageKeys ??= new Set();
-    for (const input of extractAgentMessages(text)) {
+    for (const decoded of extractAgentMessages(text)) {
+      const input = { ...decoded, text: redactDiagnostic(decoded.text) };
       const payload = JSON.stringify(input);
       const key = step + ':' + createHash('sha256').update(payload).digest('hex');
       if (task.messageKeys.has(key) || (final && task.record.messages?.some(message => message.source === 'agy-reported' && message.kind === input.kind && message.text === input.text))) continue;
@@ -1791,6 +1945,9 @@ export class TaskManager {
 
   private finish(task: InternalTask, status: 'completed' | 'failed' | 'cancelled' | 'timeout', code?: string, message?: string): void {
     if (terminal.has(task.record.status)) return;
+    // A CLI that stops before DONE or result still leaves its last unfinished line in the history, redacted.
+    for (const index of [...task.pendingResponses?.keys() ?? []]) this.flushResponse(task, index);
+    task.pendingResponses = undefined;
     if (task.record.result && typeof (task.record.result as Record<string, unknown>).error === 'string') {
       (task.record.result as Record<string, unknown>).error = redactDiagnostic((task.record.result as { error: string }).error);
     }
