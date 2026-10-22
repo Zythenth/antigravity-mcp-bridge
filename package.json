@@ -23,6 +23,7 @@
     "plugin/.mcp.json",
     "plugin/skills/antigravity/SKILL.md",
     "plugin/skills/antigravity/agents/openai.yaml",
+    "plugin/anti-ai-craft/",
     "LICENSE",
     "README.md",
     "CHANGELOG.md",

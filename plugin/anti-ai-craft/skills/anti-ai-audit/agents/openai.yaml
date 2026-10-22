@@ -1,0 +1,7 @@
+interface:
+  display_name: "Anti-AI Audit"
+  short_description: "Strictly read-only audit"
+  default_prompt: "Use $anti-ai-audit to audit this repository and propose verifiable batches without editing."
+
+policy:
+  allow_implicit_invocation: false

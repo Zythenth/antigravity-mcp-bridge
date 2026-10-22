@@ -19,5 +19,11 @@ for (const root of [...roots].sort()) {
   const texts = await Promise.all(names.map(name => readFile(path.join(root, name), 'utf8')));
   notices.push(`## ${manifest.name} ${manifest.version}\n\nLicença declarada: ${manifest.license}.\n\n\`\`\`text\n${texts.join('\n').replace(/[ \t]+$/gm, '').trim()}\n\`\`\`\n`);
 }
-await writeFile('THIRD_PARTY_NOTICES.md', '# Avisos de dependências\n\nEstas dependências estão incluídas em `plugin/server.mjs`. Seus avisos e licenças permanecem aplicáveis.\n\n' + notices.join('\n'), 'utf8');
+// The bundled skill content is verified against its pinned manifest before the plugin counts as built.
+const { verifyCraftSnapshot } = await import('../dist/src/craft-snapshot.js');
+const craft = await verifyCraftSnapshot(path.resolve('plugin', 'anti-ai-craft'));
+const craftNotice = `## Anti-AI Craft ${craft.manifest.version}\n\nConteúdo de skills distribuído em \`plugin/anti-ai-craft/\`, obtido de ${craft.manifest.origin} na revisão \`${craft.manifest.revision}\` ` +
+  `(${craft.manifest.files.length} arquivos, manifesto SHA-256 \`${craft.manifestSha256}\`). As imagens de \`skills/anti-ai-design/references/visual-library/images/\` ` +
+  'permanecem sob as licenças e atribuições de suas fontes, descritas em `ATTRIBUTIONS.md`, `catalog.jsonl` e `LICENSES/` no mesmo diretório; a licença MIT deste pacote não se aplica a elas.\n';
+await writeFile('THIRD_PARTY_NOTICES.md', '# Avisos de dependências\n\nEstas dependências estão incluídas em `plugin/server.mjs`. Seus avisos e licenças permanecem aplicáveis.\n\n' + notices.join('\n') + '\n' + craftNotice, 'utf8');
 console.log(`Plugin compilado; avisos de ${notices.length} dependências atualizados.`);
