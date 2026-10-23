@@ -493,7 +493,7 @@ test('strictly forbids runtime injection opt-ins in allowedEnvVars across all pl
 
     // 3. Environment configuration via loadConfig
     assert.throws(
-      () => loadConfig({ BRIDGE_ALLOWED_ENV_VARS: JSON.stringify([candidate.trim()]) }),
+      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: JSON.stringify([candidate.trim()]) }),
       (err: unknown) => {
         assert.ok(err instanceof Error);
         assert.match(err.message, /cannot include runtime injection variable/);
@@ -537,7 +537,7 @@ test('injection rejection error message names the variable but never exposes its
 
   // Rejection in loadConfig
   assert.throws(
-    () => loadConfig({ BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS']) }),
+    () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS']) }),
     (err: unknown) => {
       assert.ok(err instanceof Error);
       assert.ok(err.message.includes('NODE_OPTIONS'), 'Error must name the forbidden variable');

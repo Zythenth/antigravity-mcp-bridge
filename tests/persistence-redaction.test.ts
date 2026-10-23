@@ -22,7 +22,7 @@ async function setup(scenario?: string, existingState?: string, timeoutSeconds =
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'source content\n');
   const state = existingState ?? path.join(root, 'state');
-  const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, DEFAULT_TIMEOUT_SECONDS: String(timeoutSeconds) });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, DEFAULT_TIMEOUT_SECONDS: String(timeoutSeconds) });
   const adapter = new CliAdapter(config, scenario ? [fixture, '--scenario', scenario] : [fixture]);
   await adapter.discover();
   return { source, state, tasks: new TaskManager(adapter, config) };

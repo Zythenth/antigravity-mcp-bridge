@@ -20,7 +20,7 @@ async function fixture(extra: Record<string, string> = {}) {
   const source = path.join(dir, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'source');
-  const config = loadConfig({ AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(dir, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...extra });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(dir, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...extra });
   const adapter = new CliAdapter(config, [fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url))]);
   await adapter.discover();
   const managers = [new TaskManager(adapter, config)];

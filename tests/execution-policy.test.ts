@@ -306,8 +306,16 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
   // Use directory path containing spaces in os.tmpdir()
   const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-path with spaces-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-path with spaces-'));
+  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'foreign-state-'));
 
   try {
+    // A real read-only resource, plus a link inside the read-only root that points outside it.
+    const snapshotDir = path.join(stateDir, 'skill-snapshot');
+    await mkdir(path.join(snapshotDir, 'design'), { recursive: true });
+    await writeFile(path.join(snapshotDir, 'design', 'SKILL.md'), '---\nname: design\n---\nBody');
+    await writeFile(path.join(outsideDir, 'secret.txt'), 'Secret content');
+    await symlink(outsideDir, path.join(snapshotDir, 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+
     const catalog = createCatalog();
     const executionId = randomUUID();
     const policy = resolveAgentPolicy(
@@ -329,6 +337,7 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
         stateDirectory: stateDir,
         executionId,
         skillFiles: ['.agents/skills/sample-skill/SKILL.md'],
+        readOnlyRoots: [path.join(stateDir, 'skill-snapshot')],
       },
       DEFAULT_PROJECT_LIMITS
     );
@@ -398,6 +407,26 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
           toolCall: { name: 'write_to_file', args: { TargetFile: path.join(copyDir, '.agents', 'hacked.txt') } },
           conversationId,
         },
+        expectedDecision: 'deny',
+      },
+      {
+        name: 'positive read of a bundled read-only skill resource',
+        input: { toolCall: { name: 'view_file', args: { AbsolutePath: path.join(stateDir, 'skill-snapshot', 'design', 'SKILL.md') } }, conversationId },
+        expectedDecision: 'allow',
+      },
+      {
+        name: 'negative read escaping the read-only root through a link',
+        input: { toolCall: { name: 'view_file', args: { AbsolutePath: path.join(snapshotDir, 'escape', 'secret.txt') } }, conversationId },
+        expectedDecision: 'deny',
+      },
+      {
+        name: 'negative read of a missing file in the read-only root',
+        input: { toolCall: { name: 'view_file', args: { AbsolutePath: path.join(snapshotDir, 'missing.txt') } }, conversationId },
+        expectedDecision: 'deny',
+      },
+      {
+        name: 'negative write into a bundled read-only skill resource',
+        input: { toolCall: { name: 'write_to_file', args: { TargetFile: path.join(stateDir, 'skill-snapshot', 'design', 'SKILL.md') } }, conversationId },
         expectedDecision: 'deny',
       },
       {
@@ -476,6 +505,14 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
       assert.equal(res.exitCode, 0);
     }
 
+    // Swapping the read-only root itself for a link after staging must not redirect reads.
+    await mkdir(path.join(outsideDir, 'design'), { recursive: true });
+    await writeFile(path.join(outsideDir, 'design', 'SKILL.md'), 'Outside body');
+    await rename(snapshotDir, snapshotDir + '-original');
+    await symlink(outsideDir, snapshotDir, process.platform === 'win32' ? 'junction' : 'dir');
+    const swapped = await runHook(agentsDir, { toolCall: { name: 'view_file', args: { AbsolutePath: path.join(snapshotDir, 'design', 'SKILL.md') } }, conversationId });
+    assert.equal(swapped.decision, 'deny', swapped.reason ?? '');
+
     // Receipt window verification
     const receiptAfter = await readExecutionPolicyReceipt(staged, stateDir, 0, conversationId);
     assert.equal(receiptAfter.guardedFinish, true);
@@ -485,6 +522,7 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
   } finally {
     await removeFixture(copyDir);
     await removeFixture(stateDir);
+    await removeFixture(outsideDir);
   }
 });
 

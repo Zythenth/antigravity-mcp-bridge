@@ -74,6 +74,7 @@ export const taskRecordSchema = z.object({
   agentPolicy: resolvedAgentPolicySchema.optional(),
   agentPolicyReceipt: z.object({ sha256: hash, decisionCount: count, deniedCount: count }).strict().optional(),
   processCleanup: z.object({ verified: z.boolean(), spawnedAt: timestamp, checkedAt: timestamp, remaining: count }).strict().optional(),
+  craft: z.object({ revision: z.string(), manifestSha256: hash, permanent: z.array(z.string()), catalog: z.array(z.string()) }).strict().optional(),
 }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();

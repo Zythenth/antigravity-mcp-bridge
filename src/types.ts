@@ -1,3 +1,4 @@
+import type { CraftSelection } from './craft.js';
 import type { PeerMessageInput, PeerOrigin, PeerContext } from './peer-messages.js';
 import type { GroupAdmission, GroupAssignment } from './group-contract.js';
 import type { MemorySnapshot, MemorySummary } from './project-memory.js';
@@ -82,6 +83,7 @@ export interface TaskRecord {
   agentPolicy?: ResolvedAgentPolicy;
   agentPolicyReceipt?: { sha256: string; decisionCount: number; deniedCount: number };
   processCleanup?: { verified: boolean; spawnedAt: string; checkedAt: string; remaining: number };
+  craft?: { revision: string; manifestSha256: string; permanent: string[]; catalog: string[] };
 }
 
 export type CallerReceiptState = 'queued' | 'sent' | 'failed' | 'cancelled';
@@ -134,6 +136,7 @@ export interface RunOptions extends AgentPolicySelection {
   deliveryMode?: DeliveryMode;
   skills?: readonly ProvidedSkill[];
   providedSkills?: readonly StagedSkill[];
+  craft?: CraftSelection;
   roleDefinition?: RoleDefinition;
   comparison?: Comparison;
   contextTaskId?: string;
