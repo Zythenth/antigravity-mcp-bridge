@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Cancelar um teste Windows logo depois de enfileirá-lo passa a impedir sua execução. Antes, uma tarefa já despachada mas ainda marcada como enfileirada era dada como cancelada enquanto a execução seguia, iniciava o processo e terminava depois; agora o cancelamento usa o sinal de término e a execução para antes de iniciar.
+
 - Regras anexadas a todo prompt contra buscas fora da cópia, repetição de ferramentas negadas, duplicação, linhas reescritas, fins de linha, assinaturas, timers, valores alterados além do pedido e arquivos temporários; antes da prévia, os arquivos editados voltam ao formato de fim de linha do original guardado na baseline da cópia, inclusive quando a edição converteu o arquivo inteiro, e arquivos novos ou já mistos seguem o formato majoritário, com o evento `patch.line-endings-normalized`.
 
 - Tarefas novas recebem automaticamente `anti-ai-code` e `anti-ai-security` como skills permanentes e um catálogo de até 8 KiB das demais skills do Anti-AI Craft, lidas sob demanda e somente leitura a partir de uma cópia privada e verificada por revisão, adicionada ao CLI com `--add-dir`. Retomadas e handoffs conservam o snapshot original; conflitos de nome falham com `SKILL_CONFLICT`; snapshot ausente ou adulterado falha com `CRAFT_SNAPSHOT_MISSING` ou `CRAFT_SNAPSHOT_INVALID`. `BRIDGE_ANTI_AI_CRAFT=off` desativa a política e `BRIDGE_ANTI_AI_CRAFT_DIRECTORY` define outro snapshot verificado. Sob política de ferramentas, os hooks permitem apenas leitura nessa raiz.
