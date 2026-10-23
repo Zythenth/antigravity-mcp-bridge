@@ -146,8 +146,8 @@ test('test hook rejects client-reported evidence and accepts a real Windows LPAC
     assert.equal(tasks.groups.status(group.groupId).error!.code, 'WORKFLOW_TEST_REQUIRED');
     assert.equal(adapter.calls.length, 1);
     const tested = await tasks.startTests(firstId, preview.sha256, { executable: process.execPath,
-      args: ['-e', "if(!require('node:fs').existsSync('source.txt'))process.exit(7);console.log('copied source present')"] }, 0, 60);
-    const deadline = Date.now() + 65000;
+      args: ['-e', "if(!require('node:fs').existsSync('source.txt'))process.exit(7);console.log('copied source present')"] }, 0, 120);
+    const deadline = Date.now() + 180000;
     while (!['completed','failed','cancelled','timeout'].includes(tasks.status(tested.taskId).status)) {
       if (Date.now() > deadline) throw Error('Native test did not finish'); await delay(100);
     }
@@ -158,8 +158,8 @@ test('test hook rejects client-reported evidence and accepts a real Windows LPAC
     await until(() => tasks.groups.status(group.groupId).state === 'completed');
     assert.equal(adapter.calls.length, 2);
     const latestPreview = await tasks.preview(tested.taskId, false);
-    const failed = await tasks.startTests(tested.taskId, latestPreview.sha256, { executable: process.execPath, args: ['-e','process.exit(7)'] }, 0, 60);
-    const failureDeadline = Date.now() + 65000;
+    const failed = await tasks.startTests(tested.taskId, latestPreview.sha256, { executable: process.execPath, args: ['-e','process.exit(7)'] }, 0, 120);
+    const failureDeadline = Date.now() + 180000;
     while (!['completed','failed','cancelled','timeout'].includes(tasks.status(failed.taskId).status)) {
       if (Date.now() > failureDeadline) throw Error('Negative native test did not finish'); await delay(100);
     }

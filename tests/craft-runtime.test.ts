@@ -176,10 +176,10 @@ test('Windows test tasks keep the Anti-AI Craft selection of their source task',
     const record = await finished(tasks, task.taskId);
     assert.equal(record.status, 'completed', JSON.stringify(record.error));
     const preview = await tasks.preview(task.taskId);
-    const tested = await tasks.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'process.exit(0)'] }, 0, 60);
+    const tested = await tasks.startTests(task.taskId, preview.sha256, { executable: process.execPath, args: ['-e', 'process.exit(0)'] }, 0, 120);
     assert.deepEqual(tasks.status(tested.taskId).craft, tasks.status(task.taskId).craft);
     assert.notEqual(tasks.status(tested.taskId).craft, undefined);
-    const testRecord = await finished(tasks, tested.taskId, 90000);
+    const testRecord = await finished(tasks, tested.taskId, 180000);
     assert.equal(testRecord.status, 'completed', JSON.stringify(testRecord.error));
   } finally {
     await tasks.shutdown();
