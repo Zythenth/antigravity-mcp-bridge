@@ -45663,11 +45663,12 @@ import { randomUUID as randomUUID6 } from "node:crypto";
 import path17 from "node:path";
 
 // dist/src/state-store.js
-import { randomUUID as randomUUID5 } from "node:crypto";
+import { createHash as createHash16, randomUUID as randomUUID5 } from "node:crypto";
 import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import path16 from "node:path";
 import os6 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
+var SANITIZED_CACHE_VERSION = 1;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
 var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path16.isAbsolute(root) && path16.resolve(root) === root && root !== path16.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
@@ -45887,9 +45888,12 @@ var StateStore = class {
     }
   }
   save(task2) {
-    const target = this.file(task2.record.taskId);
+    this.writeSnapshot(this.file(task2.record.taskId), task2);
+  }
+  writeSnapshot(target, task2) {
     const temporary = target + "." + randomUUID5() + ".tmp";
     const snapshot = { ...task2, version: 1, redacted: true, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
+    delete snapshot.fingerprint;
     try {
       writeFileSync3(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
       replaceStateFile2(temporary, target);
@@ -45897,14 +45901,18 @@ var StateStore = class {
       rmSync2(temporary, { force: true });
     }
   }
-  load() {
-    return readdirSync2(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json")).map((name) => {
-      const file3 = path16.join(this.directory, name);
+  // With a source, only that file is read, validated as the snapshot the task file name would hold.
+  load(source) {
+    const names = source ? [source.name] : readdirSync2(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json"));
+    return names.map((name) => {
+      const file3 = source?.file ?? path16.join(this.directory, name);
       if (lstatSync3(file3).isSymbolicLink() || lstatSync3(file3).size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
-      let data;
+      let data, fingerprint;
       try {
-        data = snapshotSchema.parse(JSON.parse(readFileSync2(file3, "utf8")));
+        const text = readFileSync2(file3, "utf8");
+        fingerprint = createHash16("sha256").update(text).digest("hex");
+        data = snapshotSchema.parse(JSON.parse(text));
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
@@ -45945,14 +45953,52 @@ var StateStore = class {
       }
       return {
         ...data,
+        fingerprint,
         record: data.record,
         options: data.options,
         project: data.project && { ...data.project, baseline: new Map(data.project.baseline) }
       };
     }).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt));
   }
+  // Sanitized copies of legacy snapshots are cached per source file version; the source file itself is left to its writers.
+  sanitizedDirectory() {
+    const directory = path16.join(this.directory, "sanitized");
+    mkdirSync3(directory, { recursive: true, mode: 448 });
+    if (lstatSync3(directory).isSymbolicLink() || !lstatSync3(directory).isDirectory())
+      throw new BridgeError("INVALID_STATE", "Sanitized state cache must be a real directory");
+    return directory;
+  }
+  sanitizedFile(taskId, fingerprint) {
+    if (!uuid3.test(taskId) || !/^[a-f0-9]{64}$/.test(fingerprint))
+      throw new BridgeError("INVALID_STATE", "Invalid sanitized state key");
+    return path16.join(this.sanitizedDirectory(), taskId + "-" + fingerprint + ".v" + SANITIZED_CACHE_VERSION + ".json");
+  }
+  loadSanitized(taskId, fingerprint) {
+    const file3 = this.sanitizedFile(taskId, fingerprint);
+    try {
+      const [cached2] = this.load({ file: file3, name: taskId + ".json" });
+      return cached2?.redacted ? cached2 : void 0;
+    } catch {
+      rmSync2(file3, { force: true });
+      return void 0;
+    }
+  }
+  saveSanitized(task2, fingerprint) {
+    const target = this.sanitizedFile(task2.record.taskId, fingerprint);
+    this.writeSnapshot(target, task2);
+    this.dropSanitized(task2.record.taskId, target);
+  }
+  dropSanitized(taskId, keep) {
+    const directory = this.sanitizedDirectory();
+    for (const name of readdirSync2(directory)) {
+      const file3 = path16.join(directory, name);
+      if (name.startsWith(taskId + "-") && !name.endsWith(".tmp") && file3 !== keep)
+        rmSync2(file3, { force: true });
+    }
+  }
   drop(taskId) {
     rmSync2(this.file(taskId), { force: true });
+    this.dropSanitized(taskId);
   }
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
@@ -46110,11 +46156,11 @@ var GroupStore = class {
 };
 
 // dist/src/group-manager.js
-import { createHash as createHash16, randomUUID as randomUUID7 } from "node:crypto";
+import { createHash as createHash17, randomUUID as randomUUID7 } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 var finished = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
 function profileHash(value) {
-  return createHash16("sha256").update(JSON.stringify(value)).digest("hex");
+  return createHash17("sha256").update(JSON.stringify(value)).digest("hex");
 }
 function graph(record2) {
   return { nodes: record2.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) };
@@ -46234,7 +46280,7 @@ var GroupManager = class {
           messageId,
           toNode: input2.toNode,
           text: input2.text,
-          sha256: createHash16("sha256").update(input2.text).digest("hex"),
+          sha256: createHash17("sha256").update(input2.text).digest("hex"),
           transportId: randomUUID7(),
           state: allowed ? "pending" : "failed",
           ...!allowed ? { error: { code: "PEER_ROUTE_DENIED", message: "This directed peer route was not selected" } } : {}
@@ -46530,7 +46576,7 @@ var GroupManager = class {
         taskId: input2.taskId,
         outputSha256: input2.outputSha256,
         ...summary ? { summary: summary.slice(0, 2e3) } : {},
-        reference: { tool: "antigravity_read_result", taskId: task2.taskId, contentSha256: createHash16("sha256").update(JSON.stringify(task2.result ?? null)).digest("hex") }
+        reference: { tool: "antigravity_read_result", taskId: task2.taskId, contentSha256: createHash17("sha256").update(JSON.stringify(task2.result ?? null)).digest("hex") }
       };
     } finally {
       registry2?.();
@@ -46778,7 +46824,7 @@ var GroupManager = class {
 };
 
 // dist/src/task-manager.js
-import { createHash as createHash21, randomUUID as randomUUID12 } from "node:crypto";
+import { createHash as createHash22, randomUUID as randomUUID12 } from "node:crypto";
 import path24 from "node:path";
 
 // dist/src/process-tree.js
@@ -47075,7 +47121,7 @@ import path20 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // dist/src/craft-snapshot.js
-import { createHash as createHash17 } from "node:crypto";
+import { createHash as createHash18 } from "node:crypto";
 import { createReadStream as createReadStream4 } from "node:fs";
 import { lstat as lstat8, readFile as readFile4, readdir as readdir5 } from "node:fs/promises";
 import path19 from "node:path";
@@ -47255,7 +47301,7 @@ var craftManifestSchema = rawManifestSchema.superRefine((manifest, ctx) => {
   }
 });
 async function computeStreamSha256(filePath) {
-  const hash3 = createHash17("sha256");
+  const hash3 = createHash18("sha256");
   for await (const chunk of createReadStream4(filePath)) {
     hash3.update(chunk);
   }
@@ -47291,7 +47337,7 @@ async function verifyCraftSnapshot(root) {
   if (manifestBuffer.length > 1024 * 1024) {
     throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${manifestRel}: exceeds 1 MiB limit`);
   }
-  const manifestSha256 = createHash17("sha256").update(manifestBuffer).digest("hex");
+  const manifestSha256 = createHash18("sha256").update(manifestBuffer).digest("hex");
   let rawJson;
   try {
     rawJson = JSON.parse(manifestBuffer.toString("utf8"));
@@ -47737,9 +47783,9 @@ var LineParser = class {
 };
 
 // dist/src/chunks.js
-import { createHash as createHash18 } from "node:crypto";
+import { createHash as createHash19 } from "node:crypto";
 function textChunk(text, offset = 0, limit = 1e4, expectedSha256) {
-  const sha256 = createHash18("sha256").update(text).digest("hex");
+  const sha256 = createHash19("sha256").update(text).digest("hex");
   if (expectedSha256 !== void 0 && expectedSha256 !== sha256)
     throw new BridgeError("CONTENT_CHANGED", "The result changed; restart reading from offset zero");
   if (!Number.isInteger(offset) || offset < 0 || offset > text.length || !Number.isInteger(limit) || limit < 2 || limit > 5e4) {
@@ -49555,12 +49601,12 @@ internal static class ReparseInspector
 
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
-import { createHash as createHash20 } from "node:crypto";
+import { createHash as createHash21 } from "node:crypto";
 import { chmod as chmod2, lstat as lstat12, mkdir as mkdir7, open as open7, readdir as readdir7, unlink as unlink4 } from "node:fs/promises";
 import path22 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash19, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash20, randomUUID as randomUUID10 } from "node:crypto";
 import { spawn as spawn5 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
 import { lstat as lstat11, mkdir as mkdir6, mkdtemp as mkdtemp2, open as open6, readdir as readdir6, realpath as realpath7, rename as rename3, rm as rm5, unlink as unlink3, writeFile as writeFile6 } from "node:fs/promises";
@@ -49876,7 +49922,7 @@ async function sha256File3(file3, expectedSize, allowMultipleLinks = false) {
     if (allowMultipleLinks ? !sameAssetFile(opened, before) : !sameFile(opened, before)) {
       fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node cache file changed while it was verified." + cacheRepair);
     }
-    const hash3 = createHash19("sha256");
+    const hash3 = createHash20("sha256");
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, size)));
     let offset = 0;
     while (offset < size) {
@@ -49966,7 +50012,7 @@ async function downloadAsset(asset, destination, fetchImpl) {
     const file3 = await open6(destination, constants2.O_WRONLY | constants2.O_CREAT | constants2.O_EXCL, 384);
     try {
       const reader = response2.body.getReader();
-      const hash3 = createHash19("sha256");
+      const hash3 = createHash20("sha256");
       let bytes = 0;
       for (; ; ) {
         const item = await reader.read();
@@ -50458,7 +50504,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
     targetHandle = await open7(target, constants3.O_WRONLY | constants3.O_CREAT | constants3.O_EXCL, 292);
     created = true;
     const buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
-    const hash3 = expectedSha256 ? createHash20("sha256") : void 0;
+    const hash3 = expectedSha256 ? createHash21("sha256") : void 0;
     let offset = 0;
     while (offset < expected.size) {
       const length = Math.min(buffer.length, expected.size - offset);
@@ -50504,7 +50550,7 @@ async function hashStagedFile(file3) {
     const opened = await handle.stat();
     if (!isSameFile(opened, expected))
       fail2("UNSAFE_RUNTIME_PATH", "Staged runtime file changed while it was verified");
-    const hash3 = createHash20("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
+    const hash3 = createHash21("sha256"), buffer = Buffer.alloc(Math.min(64 * 1024, Math.max(1, expected.size)));
     let offset = 0;
     while (offset < expected.size) {
       const { bytesRead } = await handle.read(buffer, 0, Math.min(buffer.length, expected.size - offset), offset);
@@ -51326,7 +51372,7 @@ var TaskManager = class {
       this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
   }
   projectLock(project) {
-    return "copy-" + createHash21("sha256").update(project.copyDirectory).digest("hex");
+    return "copy-" + createHash22("sha256").update(project.copyDirectory).digest("hex");
   }
   refresh() {
     const stored = this.state.load();
@@ -51347,6 +51393,10 @@ var TaskManager = class {
           projects.set(item.project.copyDirectory, item.project);
         item.project = projects.get(item.project.copyDirectory);
       }
+      const legacy = item.redacted ? void 0 : item.fingerprint;
+      const cached2 = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : void 0;
+      if (cached2)
+        Object.assign(item, { record: cached2.record, options: cached2.options, events: cached2.events, redacted: true });
       const restored = item.redacted ? void 0 : sanitizePayload(item.record, RESTORE_LIMITS);
       if (restored && (restored.redacted || restored.truncated)) {
         const { taskId, workingDirectory, copyDirectory, structuredResult } = item.record;
@@ -51354,7 +51404,7 @@ var TaskManager = class {
         item.options = { ...item.options, prompt: item.record.prompt };
         const structured = structuredResult && sanitizePayload(structuredResult.value, RESTORE_LIMITS);
         if (structured && (structured.redacted || structured.truncated)) {
-          item.record.structuredResult = { value: structured.value, sha256: createHash21("sha256").update(JSON.stringify(structured.value)).digest("hex") };
+          item.record.structuredResult = { value: structured.value, sha256: createHash22("sha256").update(JSON.stringify(structured.value)).digest("hex") };
         } else if (structuredResult)
           item.record.structuredResult = structuredResult;
         if (restored.truncated)
@@ -51362,7 +51412,14 @@ var TaskManager = class {
       }
       const task2 = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
       this.tasks.set(item.record.taskId, task2);
-      this.events.restore(item.record.taskId, item.redacted ? item.events : restoredEvents(item.events), item.cursor);
+      const events = item.redacted ? item.events : restoredEvents(item.events);
+      this.events.restore(item.record.taskId, events, item.cursor);
+      if (legacy && !cached2) {
+        try {
+          this.state.saveSanitized({ ...item, events, redacted: true }, legacy);
+        } catch {
+        }
+      }
       if (!terminal3.has(item.record.status) && !processAlive2(item.ownerPid)) {
         if (item.record.pid && processAlive2(item.record.pid)) {
           item.record.error = { code: "ORPHAN_PROCESS_RUNNING", message: "The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination" };
@@ -52113,7 +52170,7 @@ var TaskManager = class {
       const observedTests = lastObservedTest && lastObservedTest.sha256 === preview.sha256 && lastObservedTest.treeSha256 === treeSha256 && lastObservedTest.beforeTreeSha256 === treeSha256 && lastObservedTest.exitCode === 0 && !lastObservedTest.executionError && !lastObservedTest.truncated ? [lastObservedTest] : [];
       const needsReview = hooks.requireReview || criteria.some((criterion) => !criterion.check) || reviewed?.status === "failed";
       const phase = needsReview && !reviewPassed ? "pending-review" : hooks.requireTests && !observedTests.length ? "pending-tests" : "validated";
-      const validationSha256 = createHash21("sha256").update(JSON.stringify({
+      const validationSha256 = createHash22("sha256").update(JSON.stringify({
         criteria,
         fileHashes: automatic.fileHashes,
         reviews: reviewed ? { checks: reviewed.checks, fileHashes: reviewed.fileHashes, evidence: previous.review.evidence } : null,
@@ -52127,7 +52184,7 @@ var TaskManager = class {
           sandboxPolicySha256: test.sandboxPolicySha256,
           portableNode: test.portableNode,
           testTaskId: test.testTaskId,
-          outputSha256: createHash21("sha256").update(test.output).digest("hex")
+          outputSha256: createHash22("sha256").update(test.output).digest("hex")
         })),
         phase
       })).digest("hex");
@@ -52404,7 +52461,7 @@ var TaskManager = class {
       if (!auto && approval !== true && (typeof approval !== "object" || approval?.confirmed !== true)) {
         throw new BridgeError("APPROVAL_DENIED", "Integration was not confirmed");
       }
-      const releaseSource = this.state.acquire("source-" + createHash21("sha256").update(task2.record.workingDirectory).digest("hex"));
+      const releaseSource = this.state.acquire("source-" + createHash22("sha256").update(task2.record.workingDirectory).digest("hex"));
       try {
         const current = await previewProjectCopy(task2.project, this.config);
         if (current.sha256 !== expectedSha256)
@@ -53661,7 +53718,7 @@ ${redacted}`;
     for (const decoded of extractAgentMessages(text)) {
       const input2 = { ...decoded, text: redactDiagnostic(decoded.text) };
       const payload = JSON.stringify(input2);
-      const key = step + ":" + createHash21("sha256").update(payload).digest("hex");
+      const key = step + ":" + createHash22("sha256").update(payload).digest("hex");
       if (task2.messageKeys.has(key) || final && task2.record.messages?.some((message2) => message2.source === "agy-reported" && message2.kind === input2.kind && message2.text === input2.text))
         continue;
       if (task2.messageKeys.size >= 1e3) {

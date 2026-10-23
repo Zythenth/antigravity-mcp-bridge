@@ -135,6 +135,10 @@ export class TaskManager {
         if (!projects.has(item.project.copyDirectory)) projects.set(item.project.copyDirectory, item.project);
         item.project = projects.get(item.project.copyDirectory);
       }
+      // A legacy snapshot is sanitized once per file version; later loads reuse the cached sanitized copy.
+      const legacy = item.redacted ? undefined : item.fingerprint;
+      const cached = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : undefined;
+      if (cached) Object.assign(item, { record: cached.record, options: cached.options, events: cached.events, redacted: true });
       // State written by earlier versions may hold unredacted results, reports, messages or tests; every returned field derives from the record.
       const restored = item.redacted ? undefined : sanitizePayload(item.record, RESTORE_LIMITS);
       if (restored && (restored.redacted || restored.truncated)) {
@@ -150,7 +154,12 @@ export class TaskManager {
       }
       const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
       this.tasks.set(item.record.taskId, task);
-      this.events.restore(item.record.taskId, item.redacted ? item.events : restoredEvents(item.events), item.cursor);
+      const events = item.redacted ? item.events : restoredEvents(item.events);
+      this.events.restore(item.record.taskId, events, item.cursor);
+      // The cache keeps the full sanitized event list, before the in-memory buffer limit.
+      if (legacy && !cached) {
+        try { this.state.saveSanitized({ ...item, events, redacted: true }, legacy); } catch { /* rebuilt on the next load */ }
+      }
       if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
         if (item.record.pid && processAlive(item.record.pid)) {
           item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };

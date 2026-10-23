@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Estado salvo por versões anteriores passa a ser sanitizado uma única vez por versão do arquivo e guardado numa cópia sanitizada em `sanitized/`, dentro do diretório de estado; cargas e consultas seguintes reaproveitam essa cópia, e o arquivo original não é reescrito. Antes, cada inicialização e cada consulta de status refaziam a sanitização de todos os snapshots antigos, o que podia atrasar a inicialização do servidor por minutos. Uma cópia inválida é descartada e refeita, e uma alteração no arquivo original invalida a cópia anterior.
+
 - Cancelar um teste Windows logo depois de enfileirá-lo passa a impedir sua execução. Antes, uma tarefa já despachada mas ainda marcada como enfileirada era dada como cancelada enquanto a execução seguia, iniciava o processo e terminava depois; agora o cancelamento usa o sinal de término e a execução para antes de iniciar.
 
 - Regras anexadas a todo prompt contra buscas fora da cópia, repetição de ferramentas negadas, duplicação, linhas reescritas, fins de linha, assinaturas, timers, valores alterados além do pedido e arquivos temporários; antes da prévia, os arquivos editados voltam ao formato de fim de linha do original guardado na baseline da cópia, inclusive quando a edição converteu o arquivo inteiro, e arquivos novos ou já mistos seguem o formato majoritário, com o evento `patch.line-endings-normalized`.

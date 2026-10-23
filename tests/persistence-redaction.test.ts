@@ -15,14 +15,14 @@ const token = 'gh' + 'p_' + 'D'.repeat(36);
 const directories: string[] = [];
 after(async () => { for (const directory of directories) await rm(directory, { recursive: true, force: true }); });
 
-async function setup(scenario?: string, existingState?: string, timeoutSeconds = 20) {
+async function setup(scenario?: string, existingState?: string, timeoutSeconds = 20, extra: Record<string, string> = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agy-persistence-redaction-'));
   directories.push(root);
   const source = path.join(root, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'source content\n');
   const state = existingState ?? path.join(root, 'state');
-  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, DEFAULT_TIMEOUT_SECONDS: String(timeoutSeconds) });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, DEFAULT_TIMEOUT_SECONDS: String(timeoutSeconds), ...extra });
   const adapter = new CliAdapter(config, scenario ? [fixture, '--scenario', scenario] : [fixture]);
   await adapter.discover();
   return { source, state, tasks: new TaskManager(adapter, config) };
@@ -198,6 +198,22 @@ test('text released by the result event still yields public messages', async () 
   }
 });
 
+async function legacyTask() {
+  const first = await setup('message-tail');
+  const started = await first.tasks.run({ prompt: 'synthetic legacy run', workingDirectory: first.source });
+  await finished(first.tasks, started.taskId);
+  await first.tasks.shutdown();
+  const file = path.join(first.state, started.taskId + '.json');
+  const stored = JSON.parse(await readFile(file, 'utf8'));
+  // Earlier versions did not mark their state as redacted.
+  delete stored.redacted;
+  return { state: first.state, taskId: started.taskId, file, stored };
+}
+async function sanitizedCopies(state: string, taskId: string) {
+  const directory = path.join(state, 'sanitized');
+  return (await readdir(directory).catch(() => [] as string[])).filter(name => name.startsWith(taskId + '-') && name.endsWith('.json')).map(name => path.join(directory, name));
+}
+
 test('state written before redaction is sanitized when restored', async () => {
   const first = await setup('message-tail');
   const started = await first.tasks.run({ prompt: 'synthetic legacy run', workingDirectory: first.source });
@@ -232,5 +248,91 @@ test('state written before redaction is sanitized when restored', async () => {
     assert.match(visible, /legacy prompt \[redacted\]/);
   } finally {
     await second.tasks.shutdown();
+  }
+});
+
+test('a legacy snapshot is sanitized once and the cached copy is reused', async () => {
+  const { state, taskId, file, stored } = await legacyTask();
+  stored.record.prompt = stored.options.prompt = 'legacy prompt ' + token;
+  await writeFile(file, JSON.stringify(stored));
+  await (await setup(undefined, state)).tasks.shutdown();
+  const copies = await sanitizedCopies(state, taskId);
+  assert.equal(copies.length, 1);
+  const cached = JSON.parse(await readFile(copies[0]!, 'utf8'));
+  assert.equal(cached.redacted, true);
+  assert.equal(JSON.stringify(cached).includes(token), false);
+  const source = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(source.redacted, undefined);
+  cached.record.prompt = cached.record.prompt.replace('legacy prompt [redacted]', 'legacy prompt [cached]');
+  cached.options.prompt = cached.options.prompt.replace('legacy prompt [redacted]', 'legacy prompt [cached]');
+  await writeFile(copies[0]!, JSON.stringify(cached));
+  const third = await setup(undefined, state);
+  try {
+    assert.equal(third.tasks.status(taskId).prompt, 'legacy prompt [cached]');
+  } finally {
+    await third.tasks.shutdown();
+  }
+});
+
+test('the cached copy keeps events beyond the in-memory buffer', async () => {
+  const { state, taskId, file, stored } = await legacyTask();
+  for (let i = 1; i <= 5; i++) {
+    stored.events.push({
+      taskId,
+      sequence: stored.cursor + i,
+      timestamp: new Date().toISOString(),
+      type: 'response.chunk',
+      data: { step_index: 9, step_type: 'agent_response', text_delta: `legacy line ${i}\n` },
+      raw: { event: 'step_update', step_update: { step_index: 9, text_delta: `legacy line ${i}\n` } },
+    });
+  }
+  stored.cursor += 5;
+  await writeFile(file, JSON.stringify(stored));
+  const total = stored.events.length;
+  const second = await setup(undefined, state, 20, { EVENT_BUFFER_SIZE: '2' });
+  try {
+    const copies = await sanitizedCopies(state, taskId);
+    assert.equal(copies.length, 1);
+    const cached = JSON.parse(await readFile(copies[0]!, 'utf8'));
+    assert.equal(cached.events.length, total);
+  } finally {
+    await second.tasks.shutdown();
+  }
+});
+
+test('a newer source file replaces its cached copy', async () => {
+  const { state, taskId, file, stored } = await legacyTask();
+  await writeFile(file, JSON.stringify(stored));
+  await (await setup(undefined, state)).tasks.shutdown();
+  stored.record.prompt = stored.options.prompt = 'newer write ' + token;
+  await writeFile(file, JSON.stringify(stored));
+  const third = await setup(undefined, state);
+  try {
+    assert.equal(third.tasks.status(taskId).prompt, 'newer write [redacted]');
+    const copies = await sanitizedCopies(state, taskId);
+    assert.equal(copies.length, 1);
+    const cachedText = await readFile(copies[0]!, 'utf8');
+    assert.ok(cachedText.includes('newer write'));
+  } finally {
+    await third.tasks.shutdown();
+  }
+});
+
+test('an invalid cached copy is rebuilt', async () => {
+  const { state, taskId, file, stored } = await legacyTask();
+  await writeFile(file, JSON.stringify(stored));
+  await (await setup(undefined, state)).tasks.shutdown();
+  const copies = await sanitizedCopies(state, taskId);
+  assert.equal(copies.length, 1);
+  await writeFile(copies[0]!, '{not json');
+  const third = await setup(undefined, state);
+  try {
+    assert.equal(third.tasks.status(taskId).status, stored.record.status);
+    const updated = await sanitizedCopies(state, taskId);
+    assert.equal(updated.length, 1);
+    const rebuilt = JSON.parse(await readFile(updated[0]!, 'utf8'));
+    assert.equal(rebuilt.redacted, true);
+  } finally {
+    await third.tasks.shutdown();
   }
 });

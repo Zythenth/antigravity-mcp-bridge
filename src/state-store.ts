@@ -2,7 +2,7 @@ import { peerMessageInputSchema, peerOriginSchema, peerContextSchema } from './p
 import { groupAssignmentSchema } from './group-contract.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
 import { computeProjectId, memorySummarySchema } from './project-memory.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -20,6 +20,7 @@ import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, t
 import { preauthorizedIntegrationRoots } from './integration-policy.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
+const SANITIZED_CACHE_VERSION = 1;
 const maxSandboxPolicyFileBytes = 2 * 20 * 1000 * 6 + 4096;
 const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
 const integrationApprovalsSchema = z.object({ version: z.literal(1), roots: z.array(z.string().min(1).max(1000).refine(root =>
@@ -89,6 +90,7 @@ export interface StoredTask {
   events: BridgeEvent[];
   cursor: number;
   redacted?: true;
+  fingerprint?: string;
 }
 
 export function processAlive(pid: number): boolean {
@@ -203,21 +205,27 @@ export class StateStore {
   }
 
   save(task: StoredTask): void {
-    const target = this.file(task.record.taskId);
+    this.writeSnapshot(this.file(task.record.taskId), task);
+  }
+
+  private writeSnapshot(target: string, task: StoredTask): void {
     const temporary = target + '.' + randomUUID() + '.tmp';
-    const snapshot = { ...task, version: 1, redacted: true, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
+    const snapshot: Record<string, unknown> = { ...task, version: 1, redacted: true, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
+    delete snapshot.fingerprint;
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600, flush: true });
       replaceStateFile(temporary, target);
     } finally { rmSync(temporary, { force: true }); }
   }
 
-  load(): StoredTask[] {
-    return readdirSync(this.directory).filter(name => uuid.test(name.slice(0, -5)) && name.endsWith('.json')).map(name => {
-      const file = path.join(this.directory, name);
+  // With a source, only that file is read, validated as the snapshot the task file name would hold.
+  load(source?: { file: string; name: string }): StoredTask[] {
+    const names = source ? [source.name] : readdirSync(this.directory).filter(name => uuid.test(name.slice(0, -5)) && name.endsWith('.json'));
+    return names.map(name => {
+      const file = source?.file ?? path.join(this.directory, name);
       if (lstatSync(file).isSymbolicLink() || lstatSync(file).size > 70_000_000) throw new BridgeError('INVALID_STATE', 'Unsafe persisted task file');
-      let data;
-      try { data = snapshotSchema.parse(JSON.parse(readFileSync(file, 'utf8'))); }
+      let data, fingerprint: string;
+      try { const text = readFileSync(file, 'utf8'); fingerprint = createHash('sha256').update(text).digest('hex'); data = snapshotSchema.parse(JSON.parse(text)); }
       catch { throw new BridgeError('INVALID_STATE', 'Invalid persisted task: ' + name); }
       if (data.record.taskId + '.json' !== name || !path.isAbsolute(data.record.workingDirectory) ||
           data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt ||
@@ -254,12 +262,54 @@ export class StateStore {
         }
         if (data.project.sourceDirectory !== data.record.workingDirectory) throw new BridgeError('INVALID_STATE', 'Persisted source differs from task');
       }
-      return { ...data, record: data.record as unknown as TaskRecord, options: data.options as RunOptions,
+      return { ...data, fingerprint, record: data.record as unknown as TaskRecord, options: data.options as RunOptions,
         project: data.project && { ...data.project, baseline: new Map(data.project.baseline) } };
     }).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt));
   }
 
-  drop(taskId: string): void { rmSync(this.file(taskId), { force: true }); }
+  // Sanitized copies of legacy snapshots are cached per source file version; the source file itself is left to its writers.
+  private sanitizedDirectory(): string {
+    const directory = path.join(this.directory, 'sanitized');
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (lstatSync(directory).isSymbolicLink() || !lstatSync(directory).isDirectory()) throw new BridgeError('INVALID_STATE', 'Sanitized state cache must be a real directory');
+    return directory;
+  }
+
+  private sanitizedFile(taskId: string, fingerprint: string): string {
+    if (!uuid.test(taskId) || !/^[a-f0-9]{64}$/.test(fingerprint)) throw new BridgeError('INVALID_STATE', 'Invalid sanitized state key');
+    return path.join(this.sanitizedDirectory(), taskId + '-' + fingerprint + '.v' + SANITIZED_CACHE_VERSION + '.json');
+  }
+
+  loadSanitized(taskId: string, fingerprint: string): StoredTask | undefined {
+    const file = this.sanitizedFile(taskId, fingerprint);
+    try {
+      const [cached] = this.load({ file, name: taskId + '.json' });
+      return cached?.redacted ? cached : undefined;
+    } catch {
+      // A missing or invalid copy is rebuilt from the source snapshot.
+      rmSync(file, { force: true });
+      return undefined;
+    }
+  }
+
+  saveSanitized(task: StoredTask, fingerprint: string): void {
+    const target = this.sanitizedFile(task.record.taskId, fingerprint);
+    this.writeSnapshot(target, task);
+    this.dropSanitized(task.record.taskId, target);
+  }
+
+  private dropSanitized(taskId: string, keep?: string): void {
+    const directory = this.sanitizedDirectory();
+    for (const name of readdirSync(directory)) {
+      const file = path.join(directory, name);
+      if (name.startsWith(taskId + '-') && !name.endsWith('.tmp') && file !== keep) rmSync(file, { force: true });
+    }
+  }
+
+  drop(taskId: string): void {
+    rmSync(this.file(taskId), { force: true });
+    this.dropSanitized(taskId);
+  }
 
   acquire(name: string): () => void {
     if (!/^[a-zA-Z0-9-]+$/.test(name)) throw new BridgeError('INVALID_STATE', 'Invalid lock name');
