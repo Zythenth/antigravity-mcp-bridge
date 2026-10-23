@@ -159,6 +159,8 @@ export class TaskManager {
           this.finish(task, 'failed', 'SERVER_RESTARTED', 'Previous execution was interrupted; inspect its copy before starting new work');
         }
       }
+      // Legacy state is sanitized once and saved with the redaction marker, so later loads skip the work and no plaintext stays on disk.
+      if (!item.redacted && (task.ownerPid === process.pid || !processAlive(item.ownerPid))) this.persist(item.record.taskId);
     }
   }
 

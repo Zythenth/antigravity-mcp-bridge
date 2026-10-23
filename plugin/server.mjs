@@ -51371,6 +51371,8 @@ var TaskManager = class {
           this.finish(task2, "failed", "SERVER_RESTARTED", "Previous execution was interrupted; inspect its copy before starting new work");
         }
       }
+      if (!item.redacted && (task2.ownerPid === process.pid || !processAlive2(item.ownerPid)))
+        this.persist(item.record.taskId);
     }
   }
   getModel() {

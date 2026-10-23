@@ -230,6 +230,11 @@ test('state written before redaction is sanitized when restored', async () => {
     assert.match(visible, /legacy \[redacted\]/);
     assert.match(visible, /leaked \[redacted\]/);
     assert.match(visible, /legacy prompt \[redacted\]/);
+    // The sanitized state replaces the legacy file once, so the plaintext is gone from disk and later loads skip the work.
+    const migrated = await readFile(file, 'utf8');
+    assert.equal(JSON.parse(migrated).redacted, true);
+    assert.equal(migrated.includes(token), false);
+    assert.equal(migrated.includes('MIIElegacybody'), false);
   } finally {
     await second.tasks.shutdown();
   }
