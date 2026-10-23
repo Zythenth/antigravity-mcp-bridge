@@ -243,3 +243,36 @@ test('a queued Windows test is denied when its frozen global ceiling is revoked'
     await rm(stateDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
+
+test('cancelling a Windows test right after it is queued stops it before execution', { skip: process.platform !== 'win32' }, async () => {
+  const directory = await repository();
+  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-mcp-state-'));
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20',
+    ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
+    ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });
+  const adapter = new CliAdapter(config, [mockPath]);
+  const tasks = new TaskManager(adapter, config);
+  try {
+    await adapter.discover();
+    const source = await tasks.run({ prompt: 'write:test', workingDirectory: directory });
+    const written = await waitFor(tasks, source.taskId);
+    assert.equal(written.status, 'completed', JSON.stringify(written.error));
+    const writtenPreview = await tasks.preview(written.taskId, false);
+    const tested = await tasks.startTests(written.taskId, writtenPreview.sha256, {
+      executable: process.execPath, args: ['-e', 'process.exit(0)'],
+    }, 0, 30);
+    // Capture the dispatched execution before cancel() can replace the internal record.
+    const completion = (tasks as unknown as { tasks: Map<string, { completion?: Promise<void> }> }).tasks.get(tested.taskId)?.completion;
+    assert.ok(completion, 'the Windows test must already be dispatched by pump()');
+    await tasks.cancel(tested.taskId);
+    await completion;
+
+    const result = tasks.status(tested.taskId);
+    assert.equal(result.status, 'cancelled');
+    assert.ok(!tasks.readEvents(tested.taskId).events.some(event => event.type === 'task.started' || event.type === 'process.started'));
+  } finally {
+    await tasks.shutdown();
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await rm(stateDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
