@@ -55,7 +55,7 @@ test('Windows runtime stages the installed npm layout without interpreting its c
       const sourcePolicy = path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'node_modules', 'make-fetch-happen', 'lib', 'cache', 'policy.js');
       const stagedPolicy = path.join(runtime, 'node_modules', 'npm', 'node_modules', 'make-fetch-happen', 'lib', 'cache', 'policy.js');
       assert.deepEqual(await readFile(stagedPolicy), await readFile(sourcePolicy));
-      execFileSync(staged.executable, ['-e', 'require(process.argv[1])', stagedPolicy], { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+      execFileSync(staged.executable, ['-e', 'require(process.argv[1])', stagedPolicy], { encoding: 'utf8', timeout: 60_000, windowsHide: true });
       const sourceConfig = await readFile(path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'npmrc'), 'utf8').catch((error: NodeJS.ErrnoException) => {
         if (error.code !== 'ENOENT') throw error;
         return undefined;

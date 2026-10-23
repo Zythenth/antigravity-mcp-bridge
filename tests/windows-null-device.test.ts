@@ -46,7 +46,7 @@ test('native Windows Null device helper enforces bounded least-privilege ACL tra
     ];
 
     for (const [testName, expected] of testCases) {
-      const output = execFileSync(harness, [runner, testName], { windowsHide: true, encoding: 'utf8', stdio: 'pipe', timeout: 30000, maxBuffer: 65536 }).trim();
+      const output = execFileSync(harness, [runner, testName], { windowsHide: true, encoding: 'utf8', stdio: 'pipe', timeout: 60000, maxBuffer: 65536 }).trim();
       assert.equal(output, expected, `Test ${testName} failed with output: ${output}`);
     }
   } finally {

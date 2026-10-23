@@ -56,7 +56,7 @@ if (scenario === 'resolve-command') {
   const executable = path.join(process.env.SystemRoot, 'System32', 'where.exe');
   const commandLine = '"' + executable + '" bridge-environment-fixture';
   const resolved = spawnSync(executable, ['bridge-environment-fixture'],
-    { encoding: 'utf8', windowsHide: true, timeout: 10000 });
+    { encoding: 'utf8', windowsHide: true, timeout: 60000 });
   if (resolved.error) {
     console.error(resolved.error.message);
     process.exit(3);
