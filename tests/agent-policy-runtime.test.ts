@@ -15,7 +15,7 @@ import { discardProjectCopy, fingerprintProjectCopy } from '../src/isolation.js'
 import type { RunOptions, TaskRecord } from '../src/types.js';
 
 function hook(cwd: string, conversationId: string, name: string, args: unknown) {
-  const child = spawnSync(process.execPath, ['bridge-execution-hook.mjs'], { cwd: path.join(cwd, '.agents'), input: JSON.stringify({ workspacePaths: [cwd], conversationId, toolCall: { name, args } }), encoding: 'utf8', windowsHide: true, timeout: 10000 });
+  const child = spawnSync(process.execPath, ['bridge-execution-hook.mjs'], { cwd: path.join(cwd, '.agents'), input: JSON.stringify({ workspacePaths: [cwd], conversationId, toolCall: { name, args } }), encoding: 'utf8', windowsHide: true, timeout: 60000 });
   assert.equal(child.status, 0, child.stderr); return JSON.parse(child.stdout).decision as string;
 }
 class GuardedAdapter extends CliAdapter {

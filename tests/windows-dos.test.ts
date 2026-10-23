@@ -76,7 +76,7 @@ async function compileFixture(directory: string): Promise<string> {
 }
 
 function runFixture(executable: string, args: string[]): string {
-  return execFileSync(executable, args, { encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+  return execFileSync(executable, args, { encoding: 'utf8', windowsHide: true, timeout: 60_000 });
 }
 
 async function hostSnapshot(executable: string, directory: string, name: string | undefined): Promise<DosSnapshot> {

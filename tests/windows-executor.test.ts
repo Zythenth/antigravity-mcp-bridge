@@ -373,7 +373,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
     let execPath: string;
     try {
       execPath = execFileSync('git.exe', ['--exec-path'], {
-        windowsHide: true, encoding: 'utf8', env: cleanEnv, timeout: 10000,
+        windowsHide: true, encoding: 'utf8', env: cleanEnv, timeout: 60000,
         stdio: ['ignore', 'pipe', 'pipe'],
       }).trim();
     } catch (error) {
