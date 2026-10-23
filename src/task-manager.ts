@@ -1272,9 +1272,10 @@ export class TaskManager {
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
     if (terminal.has(task.record.status)) return this.status(taskId);
     if (!task.owned) throw new BridgeError('TASK_OWNED_BY_OTHER_SERVER', 'Cancel the task in the bridge process that started it');
-    if (task.record.status === 'queued') {
-      const index = this.queue.indexOf(taskId);
-      if (index !== -1) this.queue.splice(index, 1);
+    // A task already taken by pump() is still marked queued until it starts; it is cancelled through its termination flag instead.
+    const index = this.queue.indexOf(taskId);
+    if (task.record.status === 'queued' && index !== -1) {
+      this.queue.splice(index, 1);
       task.record.status = 'cancelled';
       task.record.error = { code: 'TASK_CANCELLED', message: 'Task cancelled before execution' };
       task.record.completedAt = new Date().toISOString();
