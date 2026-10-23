@@ -2,7 +2,7 @@ import { peerMessageInputSchema, peerOriginSchema, peerContextSchema } from './p
 import { groupAssignmentSchema } from './group-contract.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
 import { computeProjectId, memorySummarySchema } from './project-memory.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -89,6 +89,7 @@ export interface StoredTask {
   events: BridgeEvent[];
   cursor: number;
   redacted?: true;
+  fingerprint?: string;
 }
 
 export function processAlive(pid: number): boolean {
@@ -216,8 +217,8 @@ export class StateStore {
     return readdirSync(this.directory).filter(name => uuid.test(name.slice(0, -5)) && name.endsWith('.json')).map(name => {
       const file = path.join(this.directory, name);
       if (lstatSync(file).isSymbolicLink() || lstatSync(file).size > 70_000_000) throw new BridgeError('INVALID_STATE', 'Unsafe persisted task file');
-      let data;
-      try { data = snapshotSchema.parse(JSON.parse(readFileSync(file, 'utf8'))); }
+      let data, fingerprint: string;
+      try { const text = readFileSync(file, 'utf8'); fingerprint = createHash('sha256').update(text).digest('hex'); data = snapshotSchema.parse(JSON.parse(text)); }
       catch { throw new BridgeError('INVALID_STATE', 'Invalid persisted task: ' + name); }
       if (data.record.taskId + '.json' !== name || !path.isAbsolute(data.record.workingDirectory) ||
           data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt ||
@@ -254,9 +255,24 @@ export class StateStore {
         }
         if (data.project.sourceDirectory !== data.record.workingDirectory) throw new BridgeError('INVALID_STATE', 'Persisted source differs from task');
       }
-      return { ...data, record: data.record as unknown as TaskRecord, options: data.options as RunOptions,
+      return { ...data, fingerprint, record: data.record as unknown as TaskRecord, options: data.options as RunOptions,
         project: data.project && { ...data.project, baseline: new Map(data.project.baseline) } };
     }).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt));
+  }
+
+  // A legacy snapshot is rewritten only while the file still holds the bytes it was loaded from; any newer write wins.
+  migrateLegacy(task: StoredTask): boolean {
+    const release = this.acquire('migrate-' + task.record.taskId.toLowerCase());
+    try {
+      let current: string;
+      try { current = createHash('sha256').update(readFileSync(this.file(task.record.taskId), 'utf8')).digest('hex'); }
+      catch { return false; }
+      if (!task.fingerprint || current !== task.fingerprint) return false;
+      const snapshot: StoredTask = { ...task };
+      delete snapshot.fingerprint;
+      this.save(snapshot);
+      return true;
+    } finally { release(); }
   }
 
   drop(taskId: string): void { rmSync(this.file(taskId), { force: true }); }

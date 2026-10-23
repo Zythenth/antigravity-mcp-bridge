@@ -7,6 +7,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { CliAdapter } from '../src/cli-adapter.js';
 import { loadConfig } from '../src/config.js';
+import { StateStore } from '../src/state-store.js';
 import { TaskManager } from '../src/task-manager.js';
 import { BridgeError } from '../src/types.js';
 
@@ -15,14 +16,14 @@ const token = 'gh' + 'p_' + 'D'.repeat(36);
 const directories: string[] = [];
 after(async () => { for (const directory of directories) await rm(directory, { recursive: true, force: true }); });
 
-async function setup(scenario?: string, existingState?: string, timeoutSeconds = 20) {
+async function setup(scenario?: string, existingState?: string, timeoutSeconds = 20, extra: Record<string, string> = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'agy-persistence-redaction-'));
   directories.push(root);
   const source = path.join(root, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'source content\n');
   const state = existingState ?? path.join(root, 'state');
-  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, DEFAULT_TIMEOUT_SECONDS: String(timeoutSeconds) });
+  const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, DEFAULT_TIMEOUT_SECONDS: String(timeoutSeconds), ...extra });
   const adapter = new CliAdapter(config, scenario ? [fixture, '--scenario', scenario] : [fixture]);
   await adapter.discover();
   return { source, state, tasks: new TaskManager(adapter, config) };
@@ -230,7 +231,59 @@ test('state written before redaction is sanitized when restored', async () => {
     assert.match(visible, /legacy \[redacted\]/);
     assert.match(visible, /leaked \[redacted\]/);
     assert.match(visible, /legacy prompt \[redacted\]/);
+    // The sanitized state replaces the legacy file once, so the plaintext is gone from disk and later loads skip the work.
+    const migrated = await readFile(file, 'utf8');
+    assert.equal(JSON.parse(migrated).redacted, true);
+    assert.equal(migrated.includes(token), false);
+    assert.equal(migrated.includes('MIIElegacybody'), false);
   } finally {
     await second.tasks.shutdown();
   }
+});
+
+async function runLegacy() {
+  const first = await setup('message-tail');
+  const started = await first.tasks.run({ prompt: 'synthetic legacy run', workingDirectory: first.source });
+  await finished(first.tasks, started.taskId);
+  await first.tasks.shutdown();
+  const file = path.join(first.state, started.taskId + '.json');
+  const stored = JSON.parse(await readFile(file, 'utf8'));
+  delete stored.redacted;
+  return { first, started, file, stored };
+}
+
+test('legacy migration keeps events beyond the in-memory buffer', async () => {
+  const { first, started, file, stored } = await runLegacy();
+  for (let index = 1; index <= 5; index++) {
+    const text = 'legacy line ' + index + '\n';
+    stored.events.push({
+      taskId: started.taskId, sequence: stored.cursor + index, timestamp: new Date().toISOString(), type: 'response.chunk',
+      data: { step_index: 9, step_type: 'agent_response', text_delta: text },
+      raw: { event: 'step_update', step_update: { step_index: 9, text_delta: text } },
+    });
+  }
+  stored.cursor += 5;
+  const total = stored.events.length;
+  await writeFile(file, JSON.stringify(stored));
+  const second = await setup(undefined, first.state, 20, { EVENT_BUFFER_SIZE: '2' });
+  try {
+    const migrated = JSON.parse(await readFile(file, 'utf8'));
+    assert.equal(migrated.redacted, true);
+    assert.equal(migrated.events.length, total);
+  } finally {
+    await second.tasks.shutdown();
+  }
+});
+
+test('legacy migration never overwrites a newer write', async () => {
+  const { first, started, file, stored } = await runLegacy();
+  await writeFile(file, JSON.stringify(stored));
+  const store = new StateStore(first.state);
+  const [loaded] = store.load().filter(item => item.record.taskId === started.taskId);
+  const concurrent = { ...stored, cursor: stored.cursor, record: { ...stored.record, prompt: 'newer write', title: 'newer write' }, options: { ...stored.options, prompt: 'newer write' } };
+  await writeFile(file, JSON.stringify(concurrent));
+  assert.equal(store.migrateLegacy(loaded!), false);
+  const content = await readFile(file, 'utf8');
+  assert.ok(content.includes('newer write'));
+  assert.equal(JSON.parse(content).redacted, undefined);
 });

@@ -28,7 +28,7 @@ import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, disc
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
-import { processAlive, StateStore } from './state-store.js';
+import { processAlive, StateStore, type StoredTask } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand, type WindowsNativeTestRequest } from './native-tests.js';
 import { textChunk } from './chunks.js';
@@ -127,6 +127,7 @@ export class TaskManager {
     for (const [id, task] of this.tasks) if (!ids.has(id) && !task.owned && !this.busyProjects.has(task.project!)) {
       this.tasks.delete(id); this.events.drop(id);
     }
+    const migrations: StoredTask[] = [];
     for (const item of stored) {
       item.record.usageIsResume ??= Boolean(item.options.sessionId);
       const existing = this.tasks.get(item.record.taskId);
@@ -150,7 +151,12 @@ export class TaskManager {
       }
       const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
       this.tasks.set(item.record.taskId, task);
-      this.events.restore(item.record.taskId, item.redacted ? item.events : restoredEvents(item.events), item.cursor);
+      const events = item.redacted ? item.events : restoredEvents(item.events);
+      this.events.restore(item.record.taskId, events, item.cursor);
+      // Legacy state is rewritten sanitized once, from the full event list, only when no other live process owns it.
+      if (!item.redacted && (item.ownerPid === process.pid || !processAlive(item.ownerPid))) {
+        migrations.push({ record: item.record, options: item.options, project: item.project, ownerPid: item.ownerPid, events, cursor: item.cursor, fingerprint: item.fingerprint });
+      }
       if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
         if (item.record.pid && processAlive(item.record.pid)) {
           item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };
@@ -159,6 +165,10 @@ export class TaskManager {
           this.finish(task, 'failed', 'SERVER_RESTARTED', 'Previous execution was interrupted; inspect its copy before starting new work');
         }
       }
+    }
+    for (const migration of migrations) {
+      // Another server may hold the migration lock; the next load retries.
+      try { this.state.migrateLegacy(migration); } catch { /* retried on the next load */ }
     }
   }
 
