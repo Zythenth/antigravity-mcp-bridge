@@ -3,7 +3,7 @@ import { open, lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { BridgeError } from './types.js';
-import { checkedPath, checkFenceMarker, managedGit, type ProjectCopy } from './isolation.js';
+import { assertLineEndingsRestored, checkedPath, checkFenceMarker, managedGit, type ProjectCopy } from './isolation.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
 import { preflightProjectFiles } from './secret-preflight.js';
 
@@ -183,6 +183,7 @@ export async function collectArtifacts(
   limits: ProjectLimits = DEFAULT_PROJECT_LIMITS
 ): Promise<ArtifactReference[]> {
   await checkFenceMarker(project);
+  await assertLineEndingsRestored(project);
   await verifyCopyRoot(project.copyDirectory);
 
   const parsed = artifactPathsSchema.safeParse(paths);
@@ -297,6 +298,7 @@ export async function readArtifact(
   }
 
   await checkFenceMarker(project);
+  await assertLineEndingsRestored(project);
   await verifyCopyRoot(project.copyDirectory);
 
   const relative = validArtifactRelative(reference.path);
