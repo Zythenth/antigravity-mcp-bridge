@@ -16,7 +16,7 @@ import { integrationPreauthorized, type IntegrationApproval } from './integratio
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
 import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
-import { terminateSubprocess, redactDiagnostic, containsCredential, isOwnedProcessGroup, type RedactionState } from './subprocess.js';
+import { terminateSubprocess, redactDiagnostic, redactionContextDigest, containsCredential, isOwnedProcessGroup, type RedactionState } from './subprocess.js';
 import { reconcileOwnedProcesses } from './process-tree.js';
 import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
@@ -131,6 +131,14 @@ export class TaskManager {
       item.record.usageIsResume ??= Boolean(item.options.sessionId);
       const existing = this.tasks.get(item.record.taskId);
       if (existing?.owned || (existing?.project && this.busyProjects.has(existing.project))) continue;
+      // A legacy snapshot is sanitized once per file version and redaction context; the key covers the source bytes and the environment secrets.
+      // The cached copy is a complete snapshot validated by StateStore.load() like any other, so it replaces the source as a whole. Anyone able to
+      // write the state directory could already mark a snapshot as redacted, so the cache only has to stay consistent and current.
+      const legacy = item.redacted || !item.fingerprint ? undefined : createHash('sha256').update(item.fingerprint + ':' + redactionContextDigest()).digest('hex');
+      const cached = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : undefined;
+      if (cached) Object.assign(item, cached);
+      // The cache keeps this snapshot's own project; sharing one object between snapshots of the same copy happens only in memory.
+      const ownProject = item.project;
       if (item.project) {
         if (!projects.has(item.project.copyDirectory)) projects.set(item.project.copyDirectory, item.project);
         item.project = projects.get(item.project.copyDirectory);
@@ -150,7 +158,14 @@ export class TaskManager {
       }
       const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
       this.tasks.set(item.record.taskId, task);
-      this.events.restore(item.record.taskId, item.redacted ? item.events : restoredEvents(item.events), item.cursor);
+      const events = item.redacted ? item.events : restoredEvents(item.events);
+      this.events.restore(item.record.taskId, events, item.cursor);
+      // The cache keeps the full sanitized event list, before the in-memory buffer limit.
+      // Restoration keeps some record fields, event metadata, the options and the project verbatim, so a copy is cached only when all of them are a fixed point of the sanitizer.
+      const verbatim = legacy && !cached ? sanitizePayload({ record: item.record, events: events.map(({ taskId, sequence, type, timestamp }) => ({ taskId, sequence, type, timestamp })), options: { ...item.options, prompt: '' }, project: ownProject && { ...ownProject, baseline: [...ownProject.baseline] } }, RESTORE_LIMITS) : undefined;
+      if (verbatim && !verbatim.redacted && !verbatim.truncated) {
+        try { this.state.saveSanitized({ ...item, project: ownProject, events, redacted: true }, legacy!); } catch { /* rebuilt on the next load */ }
+      }
       if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
         if (item.record.pid && processAlive(item.record.pid)) {
           item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };
