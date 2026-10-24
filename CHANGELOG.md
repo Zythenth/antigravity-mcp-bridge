@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## Não publicado
+## 0.9.0
 
 - Estado salvo por versões anteriores passa a ser sanitizado uma única vez por versão do arquivo e guardado numa cópia sanitizada em `sanitized/`, dentro do diretório de estado; cargas e consultas seguintes reaproveitam essa cópia, e o arquivo original não é reescrito. Antes, cada inicialização e cada consulta de status refaziam a sanitização de todos os snapshots antigos, o que podia atrasar a inicialização do servidor por minutos. Uma cópia inválida é descartada e refeita, e uma alteração no arquivo original invalida a cópia anterior.
 
