@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { git, type HostGitOptions } from './host-git.js';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
 import { BridgeError } from './types.js';
+import type { LfConversion } from './line-endings.js';
 import { stageExecutionPolicy, verifyExecutionPolicy, discardExecutionPolicy, EXECUTION_POLICY_PATHS, type StagedExecutionPolicy } from './execution-policy.js';
 import type { ResolvedAgentPolicy, McpCatalogEntry } from './agent-policy.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
@@ -78,6 +79,52 @@ export async function writeFenceMarker(project: { gitDirectory: string }): Promi
   } catch (err) {
     throw new BridgeError('GIT_CLEANUP_UNVERIFIED', 'Failed to persist cleanup fence marker: ' + ((err as Error).message || String(err)));
   }
+}
+
+// Lists the files rewritten from CRLF to LF for a CLI run and the task that launched it. It lives with the copy, outside
+// the CLI's reach, and is written before the first conversion, so a crash at any point still leaves the exact list to restore.
+const LINE_ENDINGS_MARKER_NAME = 'LINE_ENDINGS_CONVERTED';
+
+export interface LineEndingConversions { taskId: string; files: LfConversion[]; existingBefore: string[] }
+
+export async function writeLineEndingConversions(project: ProjectCopy, conversions: LineEndingConversions): Promise<void> {
+  const files = conversions.files.map(file => ({ path: validRelative(file.path), sha256: file.sha256 }));
+  await writeFile(path.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME),
+    JSON.stringify({ version: 1, taskId: conversions.taskId, files, existingBefore: conversions.existingBefore }) + '\n',
+    { encoding: 'utf8', flag: 'wx', mode: 0o600, flush: true });
+}
+
+export async function readLineEndingConversions(project: ProjectCopy): Promise<LineEndingConversions | undefined> {
+  const marker = path.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME);
+  let text: string;
+  try {
+    const info = await lstat(marker);
+    if (!info.isFile() || info.isSymbolicLink()) throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'The line ending conversion record is not a regular file');
+    text = await readFile(marker, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+  let record: { taskId?: unknown; files?: unknown; existingBefore?: unknown } | undefined;
+  try { record = JSON.parse(text) as typeof record; } catch { record = undefined; }
+  const files = record?.files as Array<{ path?: unknown; sha256?: unknown }> | undefined;
+  const existingBefore = record?.existingBefore;
+  if (typeof record?.taskId !== 'string' || !Array.isArray(files) || !Array.isArray(existingBefore) || existingBefore.some(item => typeof item !== 'string') ||
+      files.some(file => typeof file?.path !== 'string' || typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256))) {
+    throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'The line ending conversion record is unreadable; discard this copy');
+  }
+  return { taskId: record.taskId, files: files.map(file => ({ path: validRelative(file.path as string), sha256: file.sha256 as string })),
+    existingBefore: existingBefore as string[] };
+}
+
+export async function assertLineEndingsRestored(project: ProjectCopy): Promise<void> {
+  if (await readLineEndingConversions(project)) {
+    throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'Files converted to LF for the CLI have not regained their original line endings; this happens once its processes are confirmed to have ended');
+  }
+}
+
+export async function clearLineEndingConversions(project: ProjectCopy): Promise<void> {
+  await rm(path.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), { force: true });
 }
 
 export async function verifyManagedCopy(project: ProjectCopy): Promise<void> {
@@ -711,6 +758,7 @@ interface InspectedCopyResult extends SecretPreflightResult {
 }
 
 async function inspectCopyFiles(project: ProjectCopy, limits: ProjectLimits, rejectGenerated: boolean): Promise<InspectedCopyResult> {
+  await assertLineEndingsRestored(project);
   await verifyManagedCopy(project);
   const managed = new Map((project.providedSkills ?? []).flatMap(skill => skill.files.map(file => [validRelative(file.path), file] as const)));
   const auxPaths = managedAuxiliarySet(project);
@@ -886,17 +934,6 @@ function extractFilePatch(preview: ChangePreview, file: string): string {
   return preview.patch.slice(boundaries[index], boundaries[index + 1] ?? preview.patch.length);
 }
 
-// Baseline bytes serve only as a formatting reference.
-export async function readBaselineFile(project: ProjectCopy, relative: string): Promise<Buffer | undefined> {
-  const file = validRelative(relative);
-  const commit = (await copyGit(project, ['--git-dir=' + project.gitDirectory, 'rev-parse', '--verify', 'HEAD^{commit}'])).toString('utf8').trim();
-  const raw = await copyGit(project, ['--literal-pathspecs', '--git-dir=' + project.gitDirectory, 'ls-tree', '-l', '-z', commit, '--', file]);
-  const entry = /^\d+ (\w+) ([0-9a-f]+) +(\d+)\t/.exec(raw.toString('utf8'));
-  if (!entry || entry[1] !== 'blob' || Number(entry[3]) > 16 * 1024 * 1024) return undefined;
-  const oid = entry[2]!;
-  return copyGit(project, ['--git-dir=' + project.gitDirectory, 'cat-file', 'blob', oid], undefined, [0], { maxOutputBytes: 16 * 1024 * 1024 });
-}
-
 export async function readProjectPatch(
   project: ProjectCopy, relative: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS, expectedSha256?: string
 ): Promise<string> {
@@ -908,6 +945,13 @@ export async function readProjectPatch(
     throw new BridgeError('INVALID_PATCH_PATH', 'Select a changed path from the preview');
   }
   return extractFilePatch(preview, file);
+}
+
+// Every eligible file the CLI may edit, including files added by earlier runs, without the bridge's managed files.
+export async function editableCopyFiles(project: ProjectCopy, limits: ProjectLimits): Promise<string[]> {
+  const checked = await inspectCopyFiles(project, limits, false);
+  const auxPaths = managedAuxiliarySet(project);
+  return checked.eligible.filter(file => !auxPaths.has(file));
 }
 
 export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLimits): Promise<Map<string, string>> {

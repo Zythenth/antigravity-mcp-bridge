@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { z } from 'zod';
-import { checkedPath, type ProjectCopy } from './isolation.js';
+import { assertLineEndingsRestored, checkedPath, type ProjectCopy } from './isolation.js';
 import { BridgeError } from './types.js';
 
 export const criterionSchema = z.object({
@@ -35,6 +35,7 @@ export interface VerificationRecord {
 }
 
 export async function verifyCriteria(project: ProjectCopy, sha256: string, criteria: AcceptanceCriterion[] = [], reviews: ReviewEvidence[] = []): Promise<VerificationRecord> {
+  await assertLineEndingsRestored(project);
   if (criteria.length) criteria = criteriaSchema.parse(criteria);
   reviews = reviewSchema.parse(reviews);
   if (reviews.some(review => !criteria.some(criterion => criterion.id === review.criterionId))) {

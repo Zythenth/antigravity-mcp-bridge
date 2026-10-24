@@ -21,10 +21,10 @@ import { reconcileOwnedProcesses } from './process-tree.js';
 import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
-import { normalizeEditedLineEndings } from './line-endings.js';
+import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
 import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readBaselineFile, readProjectPatch, verifyReadOnlyCopy, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
@@ -1343,6 +1343,7 @@ export class TaskManager {
     let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
     let readOnlyBaseline: Map<string, string> | undefined;
     let policyReceiptOffset = 0;
+    let lineEndingStyles: Map<string, LineEndingStyle> | undefined;
     try {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
@@ -1376,7 +1377,10 @@ export class TaskManager {
       if (task.project.executionPolicy) policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset;
       if (task.options.craft) await verifyCraftSelection(task.options.craft);
       const spawnedAt = Date.now();
-      const child = this.adapter.spawnTask(native ? { ...task.options, prompt: native.prompt } : task.options, record.model, task.project.copyDirectory);
+      let child: CliProcess;
+      if (record.mode === 'read-only') child = this.adapter.spawnTask(task.options, record.model, task.project.copyDirectory);
+      // Native test runs keep the original bytes: the tests must see them, and their repairs happen inside the same CLI session.
+      else ({ child, styles: lineEndingStyles } = await this.spawnWithLfCopy(task, native ? { ...task.options, prompt: native.prompt } : task.options, !native));
       task.child = child;
       record.pid = child.pid;
       record.status = 'running';
@@ -1444,6 +1448,7 @@ export class TaskManager {
         child.once('close', resolve);
       });
       await this.reconcileProcesses(task, child, spawnedAt);
+      if (child.pid === undefined || record.processCleanup?.verified) await this.restoreLineEndings(task);
       stdoutParser.end(); stderrParser.end();
       if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
       task.child = undefined;
@@ -1504,17 +1509,7 @@ export class TaskManager {
           if (!record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'No new guarded finish was observed for this conversation');
           record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
         }
-        if (record.mode !== 'read-only') {
-          const preview = await previewProjectCopy(task.project, this.config);
-          // CLI editing tools may change line endings; the original file format is restored.
-          const paths = preview.fileSummaries.filter(file => file.binary === false && file.status !== 'D').map(file => file.path);
-          // Files are rewritten only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
-          const normalized = record.processCleanup?.verified ? await normalizeEditedLineEndings(task.project.copyDirectory, paths, relative => readBaselineFile(task.project!, relative)) : [];
-          if (normalized.length > 0) {
-            this.events.append(record.taskId, 'patch.line-endings-normalized', { paths: normalized });
-            await previewProjectCopy(task.project, this.config);
-          }
-        }
+        if (record.mode !== 'read-only') await this.normalizeEditedFiles(task, lineEndingStyles!);
         record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
           (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
         if (!task.options.nativeTest && record.outputSchema !== undefined) {
@@ -1614,7 +1609,7 @@ export class TaskManager {
     task.record.usage = undefined;
     if (options.craft) await verifyCraftSelection(options.craft);
     const spawnedAt = Date.now();
-    const child = this.adapter.spawnTask(options, task.record.model, task.project.copyDirectory);
+    const { child, styles } = await this.spawnWithLfCopy(task, options, true);
     task.child = child;
     task.record.pid = child.pid;
     task.record.status = 'running';
@@ -1677,6 +1672,7 @@ export class TaskManager {
         child.once('close', resolve);
       });
       await this.reconcileProcesses(task, child, spawnedAt);
+      if (child.pid === undefined || task.record.processCleanup?.verified) await this.restoreLineEndings(task);
       stdoutParser.end(); stderrParser.end();
       task.child = undefined;
       task.record.exitCode = exitCode;
@@ -1704,6 +1700,7 @@ export class TaskManager {
       if (!task.record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'Repair did not produce a new guarded finish');
       task.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
     }
+    await this.normalizeEditedFiles(task, styles);
   }
 
   private async executeWindowsNativeTest(task: InternalTask): Promise<void> {
@@ -2039,10 +2036,73 @@ export class TaskManager {
   // A copy whose processes may still run cannot be reused; another observation may confirm they ended.
   private async assertProcessesReconciled(record: TaskRecord): Promise<void> {
     const cleanup = record.processCleanup;
-    if (!cleanup || cleanup.verified) return;
-    const retry = await reconcileOwnedProcesses({ pid: record.pid, spawnedAt: Date.parse(cleanup.spawnedAt), processGroup: process.platform !== 'win32' });
-    record.processCleanup = { ...cleanup, verified: retry.verified, checkedAt: new Date().toISOString(), remaining: retry.remaining.length };
-    if (!retry.verified) throw new BridgeError('PROCESS_CLEANUP_UNVERIFIED', 'Processes started by this task may still be running; stop them before reusing its copy');
+    if (!cleanup) return;
+    if (!cleanup.verified) {
+      const retry = await reconcileOwnedProcesses({ pid: record.pid, spawnedAt: Date.parse(cleanup.spawnedAt), processGroup: process.platform !== 'win32' });
+      record.processCleanup = { ...cleanup, verified: retry.verified, checkedAt: new Date().toISOString(), remaining: retry.remaining.length };
+      if (!retry.verified) throw new BridgeError('PROCESS_CLEANUP_UNVERIFIED', 'Processes started by this task may still be running; stop them before reusing its copy');
+    }
+    // Only this task's own launch, whose cleanup is now confirmed, can release the files it converted. Every write of the
+    // conversion record happens under the copy's lock, so ownership is checked again while holding it.
+    const task = this.tasks.get(record.taskId);
+    const project = task?.project;
+    if (!project || (await readLineEndingConversions(project))?.taskId !== record.taskId) return;
+    if (this.busyProjects.has(project) || [...this.tasks.values()].some(other => other.project === project && !terminal.has(other.record.status))) {
+      throw new BridgeError('TASK_NOT_READY', 'Wait for all operations on this copy to finish');
+    }
+    this.busyProjects.add(project);
+    let release: (() => void) | undefined;
+    try {
+      release = this.state.acquire(this.projectLock(project));
+      if ((await readLineEndingConversions(project))?.taskId === record.taskId) await this.restoreLineEndings(task!);
+    } finally { release?.(); this.busyProjects.delete(project); }
+  }
+
+  // The CLI's edit tool matches text exactly and fails on CRLF, so pure CRLF files run as LF. The list is recorded with the
+  // copy before the first rewrite; until the files regain their exact bytes, the copy refuses to be previewed, tested, forked or integrated.
+  private async spawnWithLfCopy(task: InternalTask, options: RunOptions, convert: boolean): Promise<{ child: CliProcess; styles: Map<string, LineEndingStyle> }> {
+    const project = task.project!;
+    if (await readLineEndingConversions(project)) throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'A previous run left files converted to LF; confirm its processes ended before starting another');
+    const { styles, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
+    // The cleanup on record must describe this launch, never an earlier one; it is persisted before any file changes.
+    task.record.processCleanup = undefined;
+    this.persist(task.record.taskId);
+    try {
+      if (convert && conversions.length) {
+        await writeLineEndingConversions(project, { taskId: task.record.taskId, files: conversions, existingBefore: await listCopyFiles(project.copyDirectory) });
+        const converted = await convertCrlfToLf(project.copyDirectory, conversions);
+        this.events.append(task.record.taskId, 'copy.line-endings-converted', { files: converted.length });
+      }
+      if (task.termination) throw new BridgeError('TASK_TERMINATED', 'The task was stopped before the CLI started');
+      return { child: this.adapter.spawnTask(options, task.record.model, project.copyDirectory), styles };
+    } catch (error) {
+      // No process was started, so restoring is safe; if it fails, the record stays and keeps blocking every read of the copy.
+      await this.restoreLineEndings(task).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async restoreLineEndings(task: InternalTask): Promise<void> {
+    const project = task.project!;
+    const converted = await readLineEndingConversions(project);
+    if (!converted) return;
+    const restored = await restoreCrlfLineEndings(project.copyDirectory, converted.files, converted.existingBefore);
+    await clearLineEndingConversions(project);
+    this.events.append(task.record.taskId, 'copy.line-endings-restored', { files: converted.files.length, rewritten: restored.length });
+  }
+
+  // CLI editing tools may change line endings; each edited file regains the style it had before the run. Files are rewritten
+  // only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
+  private async normalizeEditedFiles(task: InternalTask, styles: ReadonlyMap<string, LineEndingStyle>): Promise<void> {
+    if (!task.record.processCleanup?.verified) return;
+    const project = task.project!;
+    const preview = await previewProjectCopy(project, this.config);
+    const paths = preview.fileSummaries.filter(file => file.binary === false && file.status !== 'D').map(file => file.path);
+    const normalized = await normalizeEditedLineEndings(project.copyDirectory, paths, async relative => styles.get(relative));
+    if (normalized.length > 0) {
+      this.events.append(task.record.taskId, 'patch.line-endings-normalized', { paths: normalized });
+      await previewProjectCopy(project, this.config);
+    }
   }
 
   private terminate(child: ChildProcessWithoutNullStreams): void {
