@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { BridgeError } from './types.js';
 
@@ -139,6 +140,11 @@ function environmentSecrets(): string[] {
     secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name)
       ? [secret, ...secret.split(/\r?\n/).filter(line => line !== secret && line.trim().length >= 8)] : [])
     .sort((left, right) => right.length - left.length);
+}
+
+// Digest of the environment secrets that redaction depends on; cached sanitized state is valid only for the same set.
+export function redactionContextDigest(): string {
+  return createHash('sha256').update(JSON.stringify(environmentSecrets())).digest('hex');
 }
 
 // High-confidence formats only: URL userinfo and generic Bearer text stay redacted in diagnostics but do not reject caller input.
