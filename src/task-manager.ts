@@ -21,7 +21,7 @@ import { reconcileOwnedProcesses } from './process-tree.js';
 import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
-import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
+import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
 import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
 import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
@@ -966,7 +966,9 @@ export class TaskManager {
         const preview = await integrateProjectCopy(task.project!, expectedSha256, this.config);
         for (const related of this.tasks.values()) if (related.project === task.project) {
           related.record.integratedAt = new Date().toISOString();
-          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: auto ? 'auto' : 'mcp-elicitation' });
+          this.events.append(related.record.taskId, 'copy.integrated', { sha256: expectedSha256, approvalSource: auto ? 'auto' : 'mcp-elicitation',
+            ...(preview.restoredByteOrderMarks ? { restoredByteOrderMarks: preview.restoredByteOrderMarks } : {}),
+            ...(preview.leftoverFiles ? { leftoverFiles: preview.leftoverFiles } : {}) });
         }
         if (typeof approval === 'object' && approval.rememberProject === true) {
           try { this.state.rememberIntegrationRoot(task.record.workingDirectory); }
@@ -1344,6 +1346,7 @@ export class TaskManager {
     let readOnlyBaseline: Map<string, string> | undefined;
     let policyReceiptOffset = 0;
     let lineEndingStyles: Map<string, LineEndingStyle> | undefined;
+    let byteOrderMarks: Set<string> | undefined;
     try {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
@@ -1380,7 +1383,7 @@ export class TaskManager {
       let child: CliProcess;
       if (record.mode === 'read-only') child = this.adapter.spawnTask(task.options, record.model, task.project.copyDirectory);
       // Native test runs keep the original bytes: the tests must see them, and their repairs happen inside the same CLI session.
-      else ({ child, styles: lineEndingStyles } = await this.spawnWithLfCopy(task, native ? { ...task.options, prompt: native.prompt } : task.options, !native));
+      else ({ child, styles: lineEndingStyles, boms: byteOrderMarks } = await this.spawnWithLfCopy(task, native ? { ...task.options, prompt: native.prompt } : task.options, !native));
       task.child = child;
       record.pid = child.pid;
       record.status = 'running';
@@ -1509,7 +1512,7 @@ export class TaskManager {
           if (!record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'No new guarded finish was observed for this conversation');
           record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
         }
-        if (record.mode !== 'read-only') await this.normalizeEditedFiles(task, lineEndingStyles!);
+        if (record.mode !== 'read-only') await this.normalizeEditedFiles(task, lineEndingStyles!, byteOrderMarks!);
         record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
           (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
         if (!task.options.nativeTest && record.outputSchema !== undefined) {
@@ -1609,7 +1612,7 @@ export class TaskManager {
     task.record.usage = undefined;
     if (options.craft) await verifyCraftSelection(options.craft);
     const spawnedAt = Date.now();
-    const { child, styles } = await this.spawnWithLfCopy(task, options, true);
+    const { child, styles, boms } = await this.spawnWithLfCopy(task, options, true);
     task.child = child;
     task.record.pid = child.pid;
     task.record.status = 'running';
@@ -1700,7 +1703,7 @@ export class TaskManager {
       if (!task.record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'Repair did not produce a new guarded finish');
       task.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
     }
-    await this.normalizeEditedFiles(task, styles);
+    await this.normalizeEditedFiles(task, styles, boms);
   }
 
   private async executeWindowsNativeTest(task: InternalTask): Promise<void> {
@@ -2060,10 +2063,10 @@ export class TaskManager {
 
   // The CLI's edit tool matches text exactly and fails on CRLF, so pure CRLF files run as LF. The list is recorded with the
   // copy before the first rewrite; until the files regain their exact bytes, the copy refuses to be previewed, tested, forked or integrated.
-  private async spawnWithLfCopy(task: InternalTask, options: RunOptions, convert: boolean): Promise<{ child: CliProcess; styles: Map<string, LineEndingStyle> }> {
+  private async spawnWithLfCopy(task: InternalTask, options: RunOptions, convert: boolean): Promise<{ child: CliProcess; styles: Map<string, LineEndingStyle>; boms: Set<string> }> {
     const project = task.project!;
     if (await readLineEndingConversions(project)) throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'A previous run left files converted to LF; confirm its processes ended before starting another');
-    const { styles, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
+    const { styles, boms, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
     // The cleanup on record must describe this launch, never an earlier one; it is persisted before any file changes.
     task.record.processCleanup = undefined;
     this.persist(task.record.taskId);
@@ -2074,7 +2077,7 @@ export class TaskManager {
         this.events.append(task.record.taskId, 'copy.line-endings-converted', { files: converted.length });
       }
       if (task.termination) throw new BridgeError('TASK_TERMINATED', 'The task was stopped before the CLI started');
-      return { child: this.adapter.spawnTask(options, task.record.model, project.copyDirectory), styles };
+      return { child: this.adapter.spawnTask(options, task.record.model, project.copyDirectory), styles, boms };
     } catch (error) {
       // No process was started, so restoring is safe; if it fails, the record stays and keeps blocking every read of the copy.
       await this.restoreLineEndings(task).catch(() => undefined);
@@ -2091,18 +2094,18 @@ export class TaskManager {
     this.events.append(task.record.taskId, 'copy.line-endings-restored', { files: converted.files.length, rewritten: restored.length });
   }
 
-  // CLI editing tools may change line endings; each edited file regains the style it had before the run. Files are rewritten
-  // only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
-  private async normalizeEditedFiles(task: InternalTask, styles: ReadonlyMap<string, LineEndingStyle>): Promise<void> {
+  // CLI editing tools may change line endings or drop a BOM; each edited file regains the style and the BOM it had before the
+  // run. Files are rewritten only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
+  private async normalizeEditedFiles(task: InternalTask, styles: ReadonlyMap<string, LineEndingStyle>, boms: ReadonlySet<string>): Promise<void> {
     if (!task.record.processCleanup?.verified) return;
     const project = task.project!;
     const preview = await previewProjectCopy(project, this.config);
     const paths = preview.fileSummaries.filter(file => file.binary === false && file.status !== 'D').map(file => file.path);
     const normalized = await normalizeEditedLineEndings(project.copyDirectory, paths, async relative => styles.get(relative));
-    if (normalized.length > 0) {
-      this.events.append(task.record.taskId, 'patch.line-endings-normalized', { paths: normalized });
-      await previewProjectCopy(project, this.config);
-    }
+    if (normalized.length > 0) this.events.append(task.record.taskId, 'patch.line-endings-normalized', { paths: normalized });
+    const restored = await restoreByteOrderMarks(project.copyDirectory, paths, boms);
+    if (restored.length > 0) this.events.append(task.record.taskId, 'patch.bom-restored', { paths: restored });
+    if (normalized.length > 0 || restored.length > 0) await previewProjectCopy(project, this.config);
   }
 
   private terminate(child: ChildProcessWithoutNullStreams): void {

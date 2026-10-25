@@ -29637,17 +29637,17 @@ var peerContextSchema = external_exports.object({
 }).strict();
 
 // dist/src/cli-adapter.js
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { randomUUID as randomUUID5 } from "node:crypto";
 import { lstatSync as lstatSync2, mkdirSync as mkdirSync2, realpathSync as realpathSync3, unlinkSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { access as access2 } from "node:fs/promises";
 import path13 from "node:path";
 
 // dist/src/roles.js
-import { createHash as createHash11 } from "node:crypto";
-import { readFile as readFile3, stat as stat2 } from "node:fs/promises";
+import { createHash as createHash12 } from "node:crypto";
+import { readFile as readFile4, stat as stat2 } from "node:fs/promises";
 
 // dist/src/isolation.js
-import { createHash as createHash7 } from "node:crypto";
+import { createHash as createHash8, randomUUID as randomUUID3 } from "node:crypto";
 
 // dist/src/host-git.js
 import { spawn as spawn2 } from "node:child_process";
@@ -30375,7 +30375,7 @@ async function git(cwd, args, input2, allowedCodes = [0], options) {
 
 // dist/src/isolation.js
 import { createReadStream as createReadStream2 } from "node:fs";
-import { lstat as lstat4, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir2, readFile as readFile2, realpath as realpath3, rm as rm2, writeFile as writeFile3 } from "node:fs/promises";
+import { link, lstat as lstat5, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir3, readFile as readFile3, realpath as realpath4, rename as rename2, rm as rm2, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
 import os4 from "node:os";
 import path10 from "node:path";
 
@@ -31475,6 +31475,260 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `File count mismatch in skill ${skill.name}: expected ${skill.files.length}, found ${onDiskFiles.length}`);
     }
   }
+}
+
+// dist/src/line-endings.js
+import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
+import { chmod, lstat as lstat2, readdir as readdir2, readFile, realpath as realpath2, rename, unlink, writeFile as writeFile2 } from "node:fs/promises";
+import { dirname, isAbsolute as isAbsolute2, join, relative as relativePath, sep } from "node:path";
+var MAX_FILE_SIZE = 16 * 1024 * 1024;
+var BOM = Buffer.from([239, 187, 191]);
+function countLineEndings(text) {
+  let crlf = 0;
+  let lf = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "\n") {
+      if (i > 0 && text[i - 1] === "\r") {
+        crlf++;
+      } else {
+        lf++;
+      }
+    }
+  }
+  return { crlf, lf };
+}
+function convertLineEndings(text, toCrlf) {
+  return toCrlf ? text.replace(/(?<!\r)\n/g, "\r\n") : text.replace(/\r\n/g, "\n");
+}
+function isUtf8Text(buffer) {
+  return !buffer.includes(0) && Buffer.from(buffer.toString("utf8"), "utf8").equals(buffer);
+}
+function isAcceptedText(buffer) {
+  return buffer.length <= MAX_FILE_SIZE && isUtf8Text(buffer);
+}
+function hasBom(buffer) {
+  return buffer.subarray(0, BOM.length).equals(BOM);
+}
+function textStyle(text) {
+  if (/\r(?!\n)/.test(text))
+    return void 0;
+  const { crlf, lf } = countLineEndings(text);
+  if (crlf > 0 && lf > 0)
+    return "mixed";
+  if (crlf > 0)
+    return "crlf";
+  if (lf > 0)
+    return "lf";
+  return void 0;
+}
+function fileStyle(buffer) {
+  return isAcceptedText(buffer) ? textStyle(buffer.toString("utf8")) : void 0;
+}
+async function directoryInside(canonicalRoot, directory) {
+  const stat4 = await lstat2(directory).catch(() => void 0);
+  if (!stat4?.isDirectory() || stat4.isSymbolicLink())
+    return false;
+  const inside = relativePath(canonicalRoot, await realpath2(directory));
+  return inside !== ".." && !inside.startsWith(".." + sep) && !isAbsolute2(inside);
+}
+async function replaceInsideRoot(canonicalRoot, absolutePath, content, mode) {
+  const directory = dirname(absolutePath);
+  if (!await directoryInside(canonicalRoot, directory)) {
+    throw new BridgeError("UNSAFE_PROJECT_PATH", "A file moved outside its project before it was rewritten");
+  }
+  const tempPath = join(directory, randomUUID2());
+  try {
+    await writeFile2(tempPath, content, { encoding: "utf8", flag: "wx", mode: 384 });
+    await chmod(tempPath, mode);
+    if (!await directoryInside(canonicalRoot, directory)) {
+      throw new BridgeError("UNSAFE_PROJECT_PATH", "A file moved outside its project before it was rewritten");
+    }
+    await rename(tempPath, absolutePath);
+  } catch (error62) {
+    await unlink(tempPath).catch(() => {
+    });
+    throw error62;
+  }
+}
+async function readCopyFile(root, relative2) {
+  let absolutePath;
+  try {
+    absolutePath = await checkedPath(root, relative2, true);
+  } catch (error62) {
+    if (error62.code === "ENOENT")
+      return void 0;
+    throw error62;
+  }
+  const stat4 = await lstat2(absolutePath);
+  return { path: absolutePath, buffer: stat4.size > MAX_FILE_SIZE ? void 0 : await readFile(absolutePath), mode: stat4.mode };
+}
+function contentSha256(content) {
+  return createHash5("sha256").update(content).digest("hex");
+}
+async function planLineEndings(root, relativePaths) {
+  const styles = /* @__PURE__ */ new Map();
+  const boms = /* @__PURE__ */ new Set();
+  const conversions = [];
+  for (const relative2 of relativePaths) {
+    const file3 = await readCopyFile(root, relative2);
+    if (!file3?.buffer || !isAcceptedText(file3.buffer))
+      continue;
+    if (hasBom(file3.buffer))
+      boms.add(relative2);
+    const style = textStyle(file3.buffer.toString("utf8"));
+    if (!style)
+      continue;
+    styles.set(relative2, style);
+    if (style === "crlf")
+      conversions.push({ path: relative2, sha256: contentSha256(convertLineEndings(file3.buffer.toString("utf8"), false)) });
+  }
+  return { styles, boms, conversions };
+}
+async function convertCrlfToLf(root, conversions) {
+  const converted = [];
+  const canonicalRoot = await realpath2(root);
+  for (const { path: relative2 } of conversions) {
+    const file3 = await readCopyFile(root, relative2);
+    if (!file3?.buffer || fileStyle(file3.buffer) !== "crlf")
+      continue;
+    await replaceInsideRoot(canonicalRoot, file3.path, convertLineEndings(file3.buffer.toString("utf8"), false), file3.mode);
+    converted.push(relative2);
+  }
+  return converted;
+}
+async function restoreFile(canonicalRoot, relative2, file3) {
+  if (!file3.buffer) {
+    throw new BridgeError("LINE_ENDINGS_UNRESTORED", "A file converted to LF grew beyond 16 MiB and cannot regain its line endings: " + relative2);
+  }
+  if (!isAcceptedText(file3.buffer))
+    return false;
+  const text = file3.buffer.toString("utf8");
+  const crlf = convertLineEndings(text, true);
+  if (crlf === text)
+    return false;
+  await replaceInsideRoot(canonicalRoot, file3.path, crlf, file3.mode);
+  return true;
+}
+async function listCopyFiles(root) {
+  const files = [];
+  const pending = [""];
+  for (let prefix = pending.pop(); prefix !== void 0; prefix = pending.pop()) {
+    for (const entry of await readdir2(join(root, prefix), { withFileTypes: true })) {
+      const relative2 = prefix ? prefix + "/" + entry.name : entry.name;
+      if (entry.isDirectory())
+        pending.push(relative2);
+      else if (entry.isFile())
+        files.push(relative2);
+    }
+  }
+  return files;
+}
+function exportablePath(relative2) {
+  try {
+    validRelative(relative2);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function restoreCrlfLineEndings(root, conversions, existingBefore) {
+  const restored = [];
+  const canonicalRoot = await realpath2(root);
+  for (const conversion of conversions) {
+    const file3 = await readCopyFile(root, conversion.path);
+    if (file3 && await restoreFile(canonicalRoot, conversion.path, file3))
+      restored.push(conversion.path);
+  }
+  const listed = /* @__PURE__ */ new Set([...conversions.map((conversion) => conversion.path), ...existingBefore]);
+  const handedOut = new Set(conversions.map((conversion) => conversion.sha256));
+  for (const relative2 of await listCopyFiles(root)) {
+    if (listed.has(relative2) || !exportablePath(relative2))
+      continue;
+    const file3 = await readCopyFile(root, relative2);
+    if (file3?.buffer && handedOut.has(contentSha256(file3.buffer)) && await restoreFile(canonicalRoot, relative2, file3))
+      restored.push(relative2);
+  }
+  return restored;
+}
+async function normalizeEditedLineEndings(root, relativePaths, original) {
+  const normalized = [];
+  const canonicalRoot = await realpath2(root);
+  for (const relative2 of relativePaths) {
+    const absolutePath = await checkedPath(root, relative2, true);
+    const stat4 = await lstat2(absolutePath);
+    if (stat4.size > MAX_FILE_SIZE) {
+      continue;
+    }
+    const buffer = await readFile(absolutePath);
+    if (!isAcceptedText(buffer)) {
+      continue;
+    }
+    const text = buffer.toString("utf8");
+    if (/\r(?!\n)/.test(text)) {
+      continue;
+    }
+    const { crlf, lf } = countLineEndings(text);
+    const style = await original?.(relative2);
+    if (style === "mixed") {
+      continue;
+    }
+    let targetCrlf = style === void 0 ? void 0 : style === "crlf";
+    if (targetCrlf === void 0) {
+      if (crlf === 0 || lf === 0) {
+        continue;
+      }
+      targetCrlf = crlf >= lf;
+    } else if (targetCrlf ? lf === 0 : crlf === 0) {
+      continue;
+    }
+    await replaceInsideRoot(canonicalRoot, absolutePath, convertLineEndings(text, targetCrlf), stat4.mode);
+    normalized.push(relative2);
+  }
+  return normalized;
+}
+async function restoreByteOrderMarks(root, relativePaths, boms) {
+  const restored = [];
+  const canonicalRoot = await realpath2(root);
+  for (const relative2 of relativePaths) {
+    if (!boms.has(relative2))
+      continue;
+    const file3 = await readCopyFile(root, relative2);
+    if (!file3?.buffer || hasBom(file3.buffer) || !isAcceptedText(file3.buffer))
+      continue;
+    await replaceInsideRoot(canonicalRoot, file3.path, Buffer.concat([BOM, file3.buffer]), file3.mode);
+    restored.push(relative2);
+  }
+  return restored;
+}
+function checkIntegratedText(before, after) {
+  let content = after;
+  let bomRestored = false;
+  if (hasBom(before) && !hasBom(after)) {
+    if (!isUtf8Text(before))
+      return { content, bomRestored, lineByLine: false, problem: "BOM removed from a file that is not UTF-8 text" };
+    content = Buffer.concat([BOM, after]);
+    bomRestored = true;
+  } else if (!hasBom(before) && hasBom(after)) {
+    return { content, bomRestored, lineByLine: false, problem: "BOM added" };
+  }
+  if (!isUtf8Text(before))
+    return { content, bomRestored, lineByLine: false };
+  if (!isUtf8Text(content))
+    return { content, bomRestored, lineByLine: false, problem: "no longer UTF-8 text, so its line endings cannot be checked" };
+  const beforeText = before.toString("utf8");
+  const style = textStyle(beforeText);
+  const text = content.toString("utf8");
+  if (style === "crlf" && /(?<!\r)\n|\r(?!\n)/.test(text) || style === "lf" && text.includes("\r")) {
+    return { content, bomRestored, lineByLine: false, problem: "line endings changed from " + style.toUpperCase() };
+  }
+  return { content, bomRestored, lineByLine: style === "mixed" || /\r(?!\n)/.test(beforeText) };
+}
+function renderLines(text) {
+  const lines = text.match(/[^\r\n]*(?:\r\n|\n|\r)|[^\r\n]+$/g) ?? [];
+  return {
+    withEndings: lines.map((line) => JSON.stringify(line) + "\n").join(""),
+    withoutEndings: lines.map((line) => JSON.stringify([line.replace(/(?:\r\n|\n|\r)$/, ""), /[\r\n]$/.test(line)]) + "\n").join("")
+  };
 }
 
 // dist/src/execution-policy.js
@@ -32584,8 +32838,8 @@ async function discardExecutionPolicy(staged, stateDirectory) {
 }
 
 // dist/src/secret-preflight.js
-import { createHash as createHash6 } from "node:crypto";
-import { lstat as lstat3, open as open3 } from "node:fs/promises";
+import { createHash as createHash7 } from "node:crypto";
+import { lstat as lstat4, open as open3 } from "node:fs/promises";
 import path9 from "node:path";
 var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
   ".env",
@@ -32845,7 +33099,7 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
         throw error62;
       }
       const fstat = await handle.stat();
-      const currentLstat = await lstat3(revalidatedPath);
+      const currentLstat = await lstat4(revalidatedPath);
       if (!fstat.isFile() || currentLstat.isSymbolicLink() || !currentLstat.isFile()) {
         blocked.push({ path: relative2, reason: "UNSAFE_PATH" });
         continue;
@@ -32860,7 +33114,7 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
       const CHUNK_SIZE = 64 * 1024;
       const OVERLAP_SIZE = 4 * 1024;
       const buf = Buffer.allocUnsafe(CHUNK_SIZE);
-      const hash3 = createHash6("sha256");
+      const hash3 = createHash7("sha256");
       let totalRead = 0;
       let hasSecret = false;
       let prevOverlap = Buffer.alloc(0);
@@ -32887,7 +33141,7 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
       }
       const finalStat = await handle.stat();
       const finalPath = await checkedPathFn(directory, candidate, true);
-      const finalLstat = await lstat3(finalPath);
+      const finalLstat = await lstat4(finalPath);
       if (totalRead !== fstat.size || finalStat.size !== fstat.size || finalStat.mtimeMs !== fstat.mtimeMs || finalStat.ctimeMs !== fstat.ctimeMs || finalLstat.isSymbolicLink() || !finalLstat.isFile() || finalLstat.ino !== fstat.ino || finalLstat.dev !== fstat.dev || finalLstat.size !== fstat.size || finalLstat.mtimeMs !== fstat.mtimeMs) {
         throw new BridgeError("CONTENT_CHANGED", "File changed during security inspection: " + relative2);
       }
@@ -32921,7 +33175,7 @@ async function checkFenceMarker(project) {
   const markerPath = getFenceMarkerPath(project);
   let exists = false;
   try {
-    await lstat4(markerPath);
+    await lstat5(markerPath);
     exists = true;
   } catch (err) {
     if (err.code === "ENOENT") {
@@ -32937,7 +33191,7 @@ async function checkFenceMarker(project) {
 async function writeFenceMarker(project) {
   const markerPath = getFenceMarkerPath(project);
   try {
-    await writeFile3(markerPath, JSON.stringify({ code: "GIT_CLEANUP_UNVERIFIED", version: 1 }) + "\n", { encoding: "utf8", flag: "wx", mode: 384 });
+    await writeFile4(markerPath, JSON.stringify({ code: "GIT_CLEANUP_UNVERIFIED", version: 1 }) + "\n", { encoding: "utf8", flag: "wx", mode: 384 });
   } catch (err) {
     throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Failed to persist cleanup fence marker: " + (err.message || String(err)));
   }
@@ -32945,16 +33199,16 @@ async function writeFenceMarker(project) {
 var LINE_ENDINGS_MARKER_NAME = "LINE_ENDINGS_CONVERTED";
 async function writeLineEndingConversions(project, conversions) {
   const files = conversions.files.map((file3) => ({ path: validRelative(file3.path), sha256: file3.sha256 }));
-  await writeFile3(path10.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), JSON.stringify({ version: 1, taskId: conversions.taskId, files, existingBefore: conversions.existingBefore }) + "\n", { encoding: "utf8", flag: "wx", mode: 384, flush: true });
+  await writeFile4(path10.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), JSON.stringify({ version: 1, taskId: conversions.taskId, files, existingBefore: conversions.existingBefore }) + "\n", { encoding: "utf8", flag: "wx", mode: 384, flush: true });
 }
 async function readLineEndingConversions(project) {
   const marker = path10.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME);
   let text;
   try {
-    const info = await lstat4(marker);
+    const info = await lstat5(marker);
     if (!info.isFile() || info.isSymbolicLink())
       throw new BridgeError("LINE_ENDINGS_UNRESTORED", "The line ending conversion record is not a regular file");
-    text = await readFile2(marker, "utf8");
+    text = await readFile3(marker, "utf8");
   } catch (error62) {
     if (error62.code === "ENOENT")
       return void 0;
@@ -33011,23 +33265,23 @@ async function stageProjectExecutionPolicy(project, request, limits) {
   const snapshot = await snapshotCopyFiles(project, limits);
   let bytes = 0;
   for (const file3 of snapshot.keys())
-    bytes += (await lstat4(await checkedPath(project.copyDirectory, file3, true))).size;
+    bytes += (await lstat5(await checkedPath(project.copyDirectory, file3, true))).size;
   project.executionPolicy = await stageExecutionPolicy(project.copyDirectory, { ...request, skillFiles: (project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => file3.path)) }, { ...limits, maxCopyFiles: limits.maxCopyFiles - snapshot.size, maxCopyBytes: limits.maxCopyBytes - bytes });
   project.executionStateDirectory = request.stateDirectory;
 }
 async function discardProjectCopy(project) {
   await checkFenceMarker(project);
-  const root = await realpath3(os4.tmpdir());
+  const root = await realpath4(os4.tmpdir());
   const targets = [
     [project.copyDirectory, "agy-mcp-copy-"],
     [project.gitDirectory, "agy-mcp-baseline-"]
   ];
   for (const [directory, prefix] of targets) {
     const absolute = path10.resolve(directory);
-    if (path10.relative(root, await realpath3(path10.dirname(absolute))) !== "" || !path10.basename(absolute).startsWith(prefix)) {
+    if (path10.relative(root, await realpath4(path10.dirname(absolute))) !== "" || !path10.basename(absolute).startsWith(prefix)) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
     }
-    const info = await lstat4(absolute).catch((error62) => {
+    const info = await lstat5(absolute).catch((error62) => {
       if (error62.code === "ENOENT")
         return void 0;
       throw error62;
@@ -33109,7 +33363,7 @@ async function checkedPath(root, relative2, mustExist) {
     current = path10.join(current, parts[index]);
     let info;
     try {
-      info = await lstat4(current);
+      info = await lstat5(current);
     } catch (error62) {
       if (!mustExist && error62.code === "ENOENT")
         break;
@@ -33122,7 +33376,7 @@ async function checkedPath(root, relative2, mustExist) {
   return current;
 }
 async function sha256File2(file3) {
-  const digest = createHash7("sha256");
+  const digest = createHash8("sha256");
   for await (const chunk of createReadStream2(file3))
     digest.update(chunk);
   return digest.digest("hex");
@@ -33134,7 +33388,7 @@ async function validateProjectRoot(sourceDirectory) {
   } catch {
     throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
   }
-  if (path10.relative(await realpath3(top), await realpath3(sourceDirectory)) !== "") {
+  if (path10.relative(await realpath4(top), await realpath4(sourceDirectory)) !== "") {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
   }
 }
@@ -33185,7 +33439,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
   try {
     const fstat = await srcHandle.stat();
     await checkedPath(root, relative2, true);
-    const currentLstat = await lstat4(source);
+    const currentLstat = await lstat5(source);
     if (currentLstat.isSymbolicLink() || !currentLstat.isFile() || !fstat.isFile()) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Project copy cannot use links or non-regular files: " + relative2);
     }
@@ -33202,7 +33456,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
     dstHandle = await open4(target, "w", fstat.mode);
     const CHUNK_SIZE = 64 * 1024;
     const buf = Buffer.allocUnsafe(CHUNK_SIZE);
-    const hash3 = createHash7("sha256");
+    const hash3 = createHash8("sha256");
     let copiedBytes = 0;
     for (; ; ) {
       const { bytesRead } = await srcHandle.read(buf, 0, CHUNK_SIZE, null);
@@ -33222,7 +33476,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
     }
     const finalStat = await srcHandle.stat();
     await checkedPath(root, relative2, true);
-    const finalPath = await lstat4(source);
+    const finalPath = await lstat5(source);
     if (finalPath.isSymbolicLink() || !finalPath.isFile() || finalPath.ino !== fstat.ino || finalPath.dev !== fstat.dev || finalPath.size !== fstat.size || finalStat.size !== fstat.size || finalStat.mtimeMs !== fstat.mtimeMs || finalStat.ctimeMs !== fstat.ctimeMs || finalPath.mtimeMs !== fstat.mtimeMs) {
       throw new BridgeError(errorCode, "File changed during verified copy: " + relative2);
     }
@@ -33277,7 +33531,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
   }
   let totalBytes = 0;
   for (const relative2 of selected) {
-    totalBytes += (await lstat4(await checkedPath(sourceDirectory, relative2, true))).size;
+    totalBytes += (await lstat5(await checkedPath(sourceDirectory, relative2, true))).size;
     if (totalBytes > limits.maxCopyBytes)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
@@ -33301,6 +33555,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
       project.providedSkills = staged;
     await verifyProvidedSkills(copyDirectory, staged);
     await copyGit(project, ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    await treatFilesAsBytes(gitDirectory);
     if (execution) {
       initializingProjects.add(project);
       try {
@@ -33332,6 +33587,10 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     await discardProjectCopy(project);
     throw error62;
   }
+}
+async function treatFilesAsBytes(gitDirectory) {
+  await mkdir3(path10.join(gitDirectory, "info"), { recursive: true });
+  await writeFile4(path10.join(gitDirectory, "info", "attributes"), "* -text\n", { flag: "wx", mode: 384 });
 }
 function ensurePatchUtf8RoundTrip(bytes) {
   const patchText = bytes.toString("utf8");
@@ -33570,7 +33829,7 @@ async function inspectCopyFiles(project, limits, rejectGenerated) {
   }
   for (const [relative2, expected] of managed) {
     const file3 = await checkedPath(project.copyDirectory, relative2, true);
-    const stat4 = await lstat4(file3);
+    const stat4 = await lstat5(file3);
     if (!stat4.isFile() || stat4.isSymbolicLink() || await sha256File2(file3) !== expected.sha256) {
       throw new BridgeError("PROVIDED_SKILL_CHANGED", "Provided skill file changed: " + relative2);
     }
@@ -33598,9 +33857,9 @@ function sameRecords(a, b) {
   });
 }
 async function removeVerifiedWorktree(project, directory, identity) {
-  const parent = await realpath3(project.gitDirectory);
-  const info = await lstat4(directory);
-  const actual = await realpath3(directory);
+  const parent = await realpath4(project.gitDirectory);
+  const info = await lstat5(directory);
+  const actual = await realpath4(directory);
   if (!info.isDirectory() || info.isSymbolicLink() || path10.dirname(actual) !== parent || !path10.basename(actual).startsWith("verified-worktree-") || info.ino !== identity.ino || info.dev !== identity.dev) {
     throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Verified worktree ownership changed");
   }
@@ -33612,7 +33871,7 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   const exclusions = managedExclusions(project);
   const diffPathspec = ["--", ".", ...exclusions];
   const worktree = await mkdtemp(path10.join(project.gitDirectory, "verified-worktree-"));
-  const identity = await lstat4(worktree);
+  const identity = await lstat5(worktree);
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + worktree];
   const snapshotGit = (args) => managedGit(project, worktree, [...scope, ...args]);
   try {
@@ -33666,7 +33925,7 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
     };
     const bytes = await snapshotGit(["diff", "--cached", "--no-ext-diff", "--no-textconv", "--binary", "--no-renames", checked.baselineCommit, ...diffPathspec]);
     const patch = ensurePatchUtf8RoundTrip(bytes);
-    const sha256 = createHash7("sha256").update(bytes).digest("hex");
+    const sha256 = createHash8("sha256").update(bytes).digest("hex");
     try {
       await snapshotGit(["read-tree", checked.baselineCommit]);
     } catch {
@@ -33708,7 +33967,7 @@ async function verifyReadOnlyCopy(project, baseline = project.baseline) {
   const expected = new Map([...baseline, ...(project.providedSkills ?? []).flatMap((skill) => skill.files.map((file3) => [file3.path, file3.sha256])), ...(project.executionPolicy?.files ?? []).map((file3) => [file3.path, file3.sha256])]);
   const seen = /* @__PURE__ */ new Set();
   async function visit2(directory, prefix = "") {
-    for (const entry of await readdir2(directory, { withFileTypes: true })) {
+    for (const entry of await readdir3(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
         await visit2(path10.join(directory, entry.name), relative2 + "/");
@@ -33814,6 +34073,7 @@ async function forkProjectCopy(project, limits) {
         "--quiet",
         gitDirectory
       ]);
+      await treatFilesAsBytes(gitDirectory);
       const forkBaselineScope = ["--git-dir=" + gitDirectory, "--work-tree=" + tempBaselineDir];
       await copyGit(fork, [...forkBaselineScope, "add", "-A", "-f", "--", "."]);
       await copyGit(fork, [
@@ -33839,9 +34099,9 @@ async function forkProjectCopy(project, limits) {
         throw new BridgeError("CONTEXT_CHANGED", "Source baseline HEAD changed during fork");
       return fork;
     } finally {
-      const root = await realpath3(os4.tmpdir());
-      const info = await lstat4(tempBaselineDir);
-      const absolute = await realpath3(tempBaselineDir);
+      const root = await realpath4(os4.tmpdir());
+      const info = await lstat5(tempBaselineDir);
+      const absolute = await realpath4(tempBaselineDir);
       if (info.isSymbolicLink() || !info.isDirectory() || path10.relative(root, path10.dirname(absolute)) !== "" || !path10.basename(absolute).startsWith("agy-mcp-worktree-")) {
         throw new BridgeError("UNSAFE_PROJECT_PATH", "Private baseline worktree was replaced or escaped temporary storage");
       }
@@ -33854,10 +34114,174 @@ async function forkProjectCopy(project, limits) {
 }
 async function fingerprintProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   const checked = await inspectCopyFiles(project, limits, false);
-  const digest = createHash7("sha256");
+  const digest = createHash8("sha256");
   for (const relative2 of checked.eligible)
     digest.update(relative2 + "\0" + checked.records.get(relative2).sha256 + "\0");
   return digest.digest("hex");
+}
+async function readIfPresent(file3) {
+  try {
+    return await readFile3(file3);
+  } catch (error62) {
+    if (error62.code === "ENOENT")
+      return void 0;
+    throw error62;
+  }
+}
+async function sourcePath(project, relative2) {
+  await checkedPath(project.sourceDirectory, relative2, false);
+  return path10.join(project.sourceDirectory, ...relative2.split("/"));
+}
+function integratedMode(original, filePatch) {
+  const changed = /^new mode (\d+)$/m.exec(filePatch)?.[1];
+  if (changed === void 0)
+    return original;
+  return changed === "100755" ? original | (original & 292) >> 2 : original & ~73;
+}
+async function lineEndingOnlyChanges(project, area, before, after) {
+  const directory = path10.join(area, "lines");
+  await mkdir3(directory, { recursive: true });
+  const rendered = [renderLines(before.toString("utf8")), renderLines(after.toString("utf8"))];
+  const numstat = async (key) => {
+    await writeFile4(path10.join(directory, "before"), rendered[0][key]);
+    await writeFile4(path10.join(directory, "after"), rendered[1][key]);
+    return (await managedGit(project, directory, [
+      "--git-dir=" + project.gitDirectory,
+      "diff",
+      "--no-index",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--numstat",
+      "--minimal",
+      "--",
+      "before",
+      "after"
+    ], void 0, [0, 1])).toString("utf8").split("	", 2).join("	");
+  };
+  return await numstat("withEndings") !== await numstat("withoutEndings");
+}
+async function applyInPrivateArea(project, preview, before) {
+  const area = await mkdtemp(path10.join(project.gitDirectory, "verified-worktree-"));
+  const identity = await lstat5(area);
+  try {
+    const worktree = path10.join(area, "after");
+    await mkdir3(worktree);
+    for (const [relative2, original] of before) {
+      if (!original)
+        continue;
+      const target = path10.join(worktree, ...relative2.split("/"));
+      await mkdir3(path10.dirname(target), { recursive: true });
+      await writeFile4(target, original.bytes, { flag: "wx" });
+    }
+    await managedGit(project, worktree, [
+      "-c",
+      "core.autocrlf=false",
+      "--git-dir=" + project.gitDirectory,
+      "--work-tree=" + worktree,
+      "apply",
+      "--binary",
+      "--whitespace=nowarn",
+      "-"
+    ], Buffer.from(preview.patch, "utf8"), [0]);
+    const after = /* @__PURE__ */ new Map();
+    const restoredByteOrderMarks = [];
+    const problems = [];
+    for (const file3 of preview.files) {
+      if (file3.status === "D")
+        continue;
+      const target = path10.join(worktree, ...file3.path.split("/"));
+      const stat4 = await lstat5(target);
+      const original = before.get(file3.path);
+      if (!original) {
+        after.set(file3.path, { bytes: await readFile3(target), mode: stat4.mode });
+        continue;
+      }
+      const checked = checkIntegratedText(original.bytes, await readFile3(target));
+      if (checked.bomRestored) {
+        restoredByteOrderMarks.push(file3.path);
+        await writeFile4(target, checked.content);
+      }
+      const problem = checked.problem ?? (checked.lineByLine && await lineEndingOnlyChanges(project, area, original.bytes, checked.content) ? "line endings changed on lines that were not edited" : void 0);
+      if (problem)
+        problems.push(file3.path + ": " + problem);
+      after.set(file3.path, { bytes: checked.content, mode: integratedMode(original.mode, extractFilePatch(preview, file3.path)) });
+    }
+    if (problems.length) {
+      throw new BridgeError("LINE_ENDINGS_CHANGED", "Integration refused and the original was not changed: " + problems.join("; ") + ". Restore the line endings and BOM of these files in the copy, for example by resuming the task, and preview again, or apply the reviewed patch yourself without line ending conversion.");
+    }
+    return { after, restoredByteOrderMarks };
+  } finally {
+    try {
+      await removeVerifiedWorktree(project, area, identity);
+    } catch {
+      await writeFenceMarker(project);
+      throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Could not remove the integration area; copy quarantined");
+    }
+  }
+}
+async function writeIntegration(project, files, before, after) {
+  const root = await realpath4(project.sourceDirectory);
+  const written = [];
+  const movedAside = /* @__PURE__ */ new Map();
+  const relativeToSource = (file3) => path10.relative(project.sourceDirectory, file3).split(path10.sep).join("/");
+  try {
+    for (const file3 of files) {
+      const target = await sourcePath(project, file3.path);
+      const original = before.get(file3.path);
+      const current = await readIfPresent(target);
+      if (original ? !current?.equals(original.bytes) : current !== void 0) {
+        throw new BridgeError("SOURCE_CHANGED", "Source changed during integration: " + file3.path);
+      }
+      if (file3.status === "D") {
+        const aside = path10.join(path10.dirname(target), "." + randomUUID3() + ".deleted");
+        await rename2(target, aside);
+        movedAside.set(file3.path, aside);
+      } else {
+        await mkdir3(path10.dirname(target), { recursive: true });
+        await replaceInsideRoot(root, target, after.get(file3.path).bytes, after.get(file3.path).mode);
+      }
+      written.push(file3);
+    }
+  } catch (error62) {
+    if (!written.length && error62 instanceof BridgeError)
+      throw error62;
+    const unrestored = [];
+    for (const file3 of written.reverse()) {
+      const aside = movedAside.get(file3.path);
+      try {
+        const target = await sourcePath(project, file3.path);
+        if (aside) {
+          if (!await link(aside, target).then(() => true, () => false)) {
+            unrestored.push(file3.path + " (kept as " + relativeToSource(aside) + ")");
+            continue;
+          }
+          await unlink3(aside).catch(() => {
+            unrestored.push(relativeToSource(aside) + " (a second name of " + file3.path + ")");
+          });
+          continue;
+        }
+        if (!(await readIfPresent(target))?.equals(after.get(file3.path).bytes)) {
+          unrestored.push(file3.path);
+          continue;
+        }
+        const original = before.get(file3.path);
+        if (original)
+          await replaceInsideRoot(root, target, original.bytes, original.mode);
+        else
+          await unlink3(target);
+      } catch {
+        unrestored.push(aside ? file3.path + " (kept as " + relativeToSource(aside) + ")" : file3.path);
+      }
+    }
+    const cause = error62 instanceof BridgeError ? error62.code : error62.code ?? "write error";
+    throw new BridgeError("INTEGRATION_FAILED", "Integration stopped before it finished (" + cause + "); " + (unrestored.length ? "these files could not get their previous bytes back: " + unrestored.join(", ") : "the files already written got their previous bytes back, so the original is as it was"));
+  }
+  const leftovers = [];
+  for (const aside of movedAside.values())
+    await unlink3(aside).catch(() => {
+      leftovers.push(relativeToSource(aside));
+    });
+  return leftovers;
 }
 async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PROJECT_LIMITS) {
   const preview = await previewProjectCopy(project, limits);
@@ -33865,32 +34289,33 @@ async function integrateProjectCopy(project, expectedSha256, limits = DEFAULT_PR
     throw new BridgeError("NO_CHANGES", "The isolated copy has no changes");
   if (preview.sha256 !== expectedSha256)
     throw new BridgeError("REVIEW_CHANGED", "The copy changed after review; preview it again");
+  const before = /* @__PURE__ */ new Map();
   for (const file3 of preview.files) {
-    const source = await checkedPath(project.sourceDirectory, file3.path, false);
+    const source = await sourcePath(project, file3.path);
     const expected = project.baseline.get(file3.path);
     if (expected) {
-      const current = await sha256File2(source).catch(() => void 0);
-      if (current !== expected)
+      const bytes = await readFile3(source).catch(() => void 0);
+      if (!bytes || createHash8("sha256").update(bytes).digest("hex") !== expected)
         throw new BridgeError("SOURCE_CHANGED", "Source changed since copy: " + file3.path);
+      before.set(file3.path, { bytes, mode: (await lstat5(source)).mode });
     } else {
       try {
-        await lstat4(source);
+        await lstat5(source);
         throw new BridgeError("SOURCE_CHANGED", "Source already has: " + file3.path);
       } catch (error62) {
         if (error62.code !== "ENOENT")
           throw error62;
       }
+      before.set(file3.path, void 0);
     }
   }
-  const patch = Buffer.from(preview.patch, "utf8");
-  const sourceScope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.sourceDirectory];
-  await managedGit(project, project.sourceDirectory, [...sourceScope, "apply", "--check", "--binary", "--whitespace=nowarn", "-"], patch, [0]);
-  await managedGit(project, project.sourceDirectory, [...sourceScope, "apply", "--binary", "--whitespace=nowarn", "-"], patch, [0]);
-  return preview;
+  const { after, restoredByteOrderMarks } = await applyInPrivateArea(project, preview, before);
+  const leftoverFiles = await writeIntegration(project, preview.files, before, after);
+  return { ...preview, ...restoredByteOrderMarks.length ? { restoredByteOrderMarks } : {}, ...leftoverFiles.length ? { leftoverFiles } : {} };
 }
 
 // dist/src/messages.js
-import { createHash as createHash8, randomUUID as randomUUID2 } from "node:crypto";
+import { createHash as createHash9, randomUUID as randomUUID4 } from "node:crypto";
 var deliveryModeSchema = external_exports.enum(["messages", "events"]);
 var MAX_MESSAGE_CHARS = 2e3;
 var MAX_TASK_MESSAGES = 100;
@@ -33912,7 +34337,7 @@ var bridgeMessageSchema = external_exports.object({
 function appendMessage(record2, kind, source, text, reference) {
   const sequence = (record2.messageCursor ?? 0) + 1;
   const message = bridgeMessageSchema.parse({
-    messageId: randomUUID2(),
+    messageId: randomUUID4(),
     taskId: record2.taskId,
     sequence,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -33968,7 +34393,7 @@ function resultReference(record2) {
   return {
     tool: "antigravity_read_result",
     taskId: record2.taskId,
-    contentSha256: createHash8("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
+    contentSha256: createHash9("sha256").update(JSON.stringify(record2.result ?? null)).digest("hex")
   };
 }
 function compactTask(task2) {
@@ -34001,8 +34426,8 @@ function compactTask(task2) {
 }
 
 // dist/src/artifacts.js
-import { createHash as createHash9 } from "node:crypto";
-import { open as open5, lstat as lstat5, readdir as readdir3 } from "node:fs/promises";
+import { createHash as createHash10 } from "node:crypto";
+import { open as open5, lstat as lstat6, readdir as readdir4 } from "node:fs/promises";
 import path11 from "node:path";
 var WINDOWS_DEVICE_NAMES4 = /* @__PURE__ */ new Set([
   "CON",
@@ -34098,7 +34523,7 @@ function splitNull2(bytes) {
 async function verifyCopyRoot(copyDirectory) {
   let rootStat;
   try {
-    rootStat = await lstat5(copyDirectory);
+    rootStat = await lstat6(copyDirectory);
   } catch (err) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "Cannot access copy directory: " + (err instanceof Error ? err.message : String(err)));
   }
@@ -34112,7 +34537,7 @@ async function verifyExactDiskCase(rootDir, relativePath2) {
   for (const seg of segments) {
     let entries;
     try {
-      entries = await readdir3(current);
+      entries = await readdir4(current);
     } catch (err) {
       if (err.code === "ENOENT") {
         throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath2);
@@ -34286,7 +34711,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
     const recheckedPath = await checkedPath(project.copyDirectory, relative2, true);
     await verifyExactDiskCase(project.copyDirectory, relative2);
     const fstat = await handle.stat();
-    const currentLstat = await lstat5(recheckedPath);
+    const currentLstat = await lstat6(recheckedPath);
     if (!fstat.isFile() || currentLstat.isSymbolicLink() || !currentLstat.isFile()) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative2);
     }
@@ -34314,7 +34739,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
     const windowBuf = Buffer.alloc(windowLen);
     const CHUNK_SIZE = 64 * 1024;
     const readBuf = Buffer.allocUnsafe(CHUNK_SIZE);
-    const hash3 = createHash9("sha256");
+    const hash3 = createHash10("sha256");
     let streamBytes = 0;
     for (; ; ) {
       const { bytesRead } = await handle.read(readBuf, 0, CHUNK_SIZE, null);
@@ -34349,7 +34774,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
     }
     await verifyCopyRoot(project.copyDirectory);
     const finalCheckedPath = await checkedPath(project.copyDirectory, relative2, true);
-    const finalLstat = await lstat5(finalCheckedPath);
+    const finalLstat = await lstat6(finalCheckedPath);
     if (!finalLstat.isFile() || finalLstat.isSymbolicLink()) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Artifact must be a regular non-link file: " + relative2);
     }
@@ -34384,7 +34809,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
 }
 
 // dist/src/structured-results.js
-import { createHash as createHash10 } from "node:crypto";
+import { createHash as createHash11 } from "node:crypto";
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
@@ -34731,7 +35156,7 @@ function validateStructuredResult(schema, value) {
   }
   validateOutputSchema(schema);
   const snapshot = JSON.parse(serialized);
-  const schemaHash = createHash10("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
+  const schemaHash = createHash11("sha256").update(Buffer.from(JSON.stringify(schema), "utf8")).digest("hex");
   let validatorFn = validatorCache.get(schemaHash);
   if (!validatorFn) {
     try {
@@ -34758,7 +35183,7 @@ function validateStructuredResult(schema, value) {
       throw err;
     throw new BridgeError("INVALID_STRUCTURED_RESULT", "Structured result validation failed: " + (err instanceof Error ? err.message : String(err)));
   }
-  const sha256 = createHash10("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
+  const sha256 = createHash11("sha256").update(Buffer.from(serialized, "utf8")).digest("hex");
   return { value: snapshot, sha256 };
 }
 
@@ -34868,10 +35293,10 @@ var builtinDefinitions = [
   { name: "reviewer", baseRole: "reviewer", instruction: "", description: "Review files in read-only mode with checked citations." }
 ];
 function hashJsonSchema(schema) {
-  return createHash11("sha256").update(JSON.stringify(schema)).digest("hex");
+  return createHash12("sha256").update(JSON.stringify(schema)).digest("hex");
 }
 function hashSkillBundle(skill) {
-  return createHash11("sha256").update(JSON.stringify(skill)).digest("hex");
+  return createHash12("sha256").update(JSON.stringify(skill)).digest("hex");
 }
 function resolveRole(name, customRoles = []) {
   const role = [...builtinDefinitions, ...customRoles].find((role2) => role2.name === name);
@@ -34994,7 +35419,7 @@ async function validateRoleReport(role, raw, copyDirectory) {
     const file3 = await checkedPath(copyDirectory, finding.path, true);
     if ((await stat2(file3)).size > 1e7)
       throw new BridgeError("VERIFICATION_TOO_LARGE", "Review citation exceeds the text file limit");
-    const lines = (await readFile3(file3, "utf8")).split(/\r?\n/);
+    const lines = (await readFile4(file3, "utf8")).split(/\r?\n/);
     const quote = finding.quote.split(/\r?\n/);
     if (lines.slice(finding.line - 1, finding.line - 1 + quote.length).join("\n") !== quote.join("\n")) {
       throw new BridgeError("ROLE_OUTPUT_INVALID", "Review citation does not match its file and line");
@@ -35005,7 +35430,7 @@ async function validateRoleReport(role, raw, copyDirectory) {
 
 // dist/src/validation.js
 import { constants } from "node:fs";
-import { access, lstat as lstat6, realpath as realpath4, stat as stat3 } from "node:fs/promises";
+import { access, lstat as lstat7, realpath as realpath5, stat as stat3 } from "node:fs/promises";
 import path12 from "node:path";
 function within(root, candidate) {
   const relative2 = path12.relative(root, candidate);
@@ -35015,12 +35440,12 @@ async function validateWorkingDirectory(input2, forbidden) {
   if (!path12.isAbsolute(input2))
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be absolute");
   try {
-    const directory = await realpath4(input2);
+    const directory = await realpath5(input2);
     if (!(await stat3(directory)).isDirectory())
       throw new Error("not a directory");
     await access(directory, constants.R_OK | constants.W_OK);
     for (const excluded of forbidden) {
-      const resolved = await realpath4(excluded).catch(() => path12.resolve(excluded));
+      const resolved = await realpath5(excluded).catch(() => path12.resolve(excluded));
       if (within(resolved, directory))
         throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory is forbidden");
     }
@@ -35037,7 +35462,7 @@ async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) 
   try {
     for (; ; ) {
       try {
-        await lstat6(existing);
+        await lstat7(existing);
         break;
       } catch (error62) {
         const parent = path12.dirname(existing);
@@ -35047,7 +35472,7 @@ async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) 
         existing = parent;
       }
     }
-    const cache = path12.join(await realpath4(existing), ...missing);
+    const cache = path12.join(await realpath5(existing), ...missing);
     if (within(workingDirectory, cache) || within(cache, workingDirectory)) {
       throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps the portable Node cache; move BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY outside the project");
     }
@@ -35065,7 +35490,7 @@ function validatePrompt(prompt, maxChars) {
     throw new BridgeError("INPUT_SECRET_DETECTED", "prompt contains a credential-like value; remove it before delegation");
 }
 async function validateStateSeparation(workingDirectory, stateDirectory) {
-  const state = await realpath4(stateDirectory);
+  const state = await realpath5(stateDirectory);
   if (within(workingDirectory, state) || within(state, workingDirectory)) {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory overlaps private bridge state; keep that storage outside projects");
   }
@@ -35229,7 +35654,7 @@ function stageSchemaFile(stateDirectory, content) {
     throw new BridgeError("INVALID_STATE_DIRECTORY", "Schema storage cannot be a link");
   const root = realpathSync3.native(stateDirectory);
   const identity = lstatSync2(root);
-  const file3 = path13.join(root, "cli-schema-" + randomUUID3() + ".json");
+  const file3 = path13.join(root, "cli-schema-" + randomUUID5() + ".json");
   writeFileSync2(file3, content, { flag: "wx", mode: 384 });
   let cleaned = false;
   return { file: file3, cleanup() {
@@ -35553,7 +35978,7 @@ var CliAdapter = class {
 };
 
 // dist/src/workflows.js
-import { createHash as createHash12 } from "node:crypto";
+import { createHash as createHash13 } from "node:crypto";
 var HASH_REGEX = /^[a-f0-9]{64}$/;
 var workflowHookSchema = external_exports.object({
   requireReview: external_exports.boolean().optional(),
@@ -35687,7 +36112,7 @@ function workflowCheckpointSha256(checkpoint) {
   if (!parsed.success) {
     throw new BridgeError("INVALID_WORKFLOW_CHECKPOINT", parsed.error.issues[0]?.message ?? "Invalid workflow checkpoint");
   }
-  return createHash12("sha256").update(Buffer.from(JSON.stringify(parsed.data), "utf8")).digest("hex");
+  return createHash13("sha256").update(Buffer.from(JSON.stringify(parsed.data), "utf8")).digest("hex");
 }
 var workflowInputSchema = external_exports.object({
   nodeKey: nodeKeySchema,
@@ -35762,7 +36187,7 @@ function buildWorkflowContext(inputs) {
   if (bytes > MAX_WORKFLOW_CONTEXT_BYTES) {
     throw new BridgeError("WORKFLOW_CONTEXT_TOO_LARGE", `Workflow context size (${bytes} bytes) exceeds limit of ${MAX_WORKFLOW_CONTEXT_BYTES} bytes`);
   }
-  const sha256 = createHash12("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  const sha256 = createHash13("sha256").update(Buffer.from(text, "utf8")).digest("hex");
   return { text, sha256, bytes };
 }
 
@@ -35933,10 +36358,10 @@ function requireGroupBudget(status2) {
 }
 
 // dist/src/group-contract.js
-import { createHash as createHash14 } from "node:crypto";
+import { createHash as createHash15 } from "node:crypto";
 
 // dist/src/verification.js
-import { createHash as createHash13 } from "node:crypto";
+import { createHash as createHash14 } from "node:crypto";
 import { createReadStream as createReadStream3 } from "node:fs";
 var criterionSchema = external_exports.object({
   id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
@@ -35980,7 +36405,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
         chunks.push(chunk);
       }
       const buffer = Buffer.concat(chunks);
-      fileHashes[relative2] = createHash13("sha256").update(buffer).digest("hex");
+      fileHashes[relative2] = createHash14("sha256").update(buffer).digest("hex");
       contents.set(relative2, buffer);
       return buffer;
     } catch (error62) {
@@ -36077,7 +36502,7 @@ var groupDefinitionSchema = external_exports.object({
     ctx.addIssue({ code: "custom", message: "Group definition exceeds 4 MiB" });
 });
 function groupDefinitionSha256(definition) {
-  return createHash14("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
+  return createHash15("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
 }
 var groupStateSchema = external_exports.enum(["created", "running", "paused", "completed", "failed", "cancelled"]);
 var groupNodeRecordSchema = external_exports.object({
@@ -36102,7 +36527,7 @@ var peerDeliverySchema = external_exports.object({
   error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
 }).strict().superRefine((delivery, ctx) => {
   if (typeof delivery.text === "string") {
-    const expectedSha256 = createHash14("sha256").update(delivery.text, "utf8").digest("hex");
+    const expectedSha256 = createHash15("sha256").update(delivery.text, "utf8").digest("hex");
     if (delivery.sha256 !== expectedSha256) {
       ctx.addIssue({
         code: "custom",
@@ -44199,8 +44624,8 @@ var EMPTY_COMPLETION_RESULT = {
 };
 
 // dist/src/native-tests.js
-import { createHash as createHash15, randomUUID as randomUUID4 } from "node:crypto";
-import { appendFile, mkdir as mkdir4, readFile as readFile4, rm as rm3, writeFile as writeFile4 } from "node:fs/promises";
+import { createHash as createHash16, randomUUID as randomUUID6 } from "node:crypto";
+import { appendFile, mkdir as mkdir4, readFile as readFile5, rm as rm3, writeFile as writeFile5 } from "node:fs/promises";
 import path14 from "node:path";
 var testCommandSchema = external_exports.object({
   executable: external_exports.string().min(1).max(1e3),
@@ -44299,15 +44724,15 @@ async function nativeRunner(settings) {
 }
 async function prepareNativeTest(project, request, settings) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
-  const nonce = randomUUID4();
+  const nonce = randomUUID6();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
   const absolute = path14.join(project.copyDirectory, file3);
   const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash3 = createHash15("sha256").update(script).digest("hex");
+  const hash3 = createHash16("sha256").update(script).digest("hex");
   const exclude = path14.join(project.gitDirectory, "info", "exclude");
   await mkdir4(path14.dirname(exclude), { recursive: true });
   await appendFile(exclude, "\n/" + file3 + "\n");
-  await writeFile4(absolute, script, { flag: "wx", mode: 384 });
+  await writeFile5(absolute, script, { flag: "wx", mode: 384 });
   const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
   let commandLine;
   if (process.platform === "win32") {
@@ -44325,8 +44750,8 @@ async function prepareNativeTest(project, request, settings) {
     prompt: "Execute this exact CommandLine with run_command in the current copy, inside the native sandbox: " + JSON.stringify(commandLine) + ". Do not replace, edit or summarize its execution. The runner prints the actual command output and a receipt. Maximum attempts: " + request.maxAttempts + ". Only after a nonzero command receipt, make relevant fixes and retry the same CommandLine if attempts remain. Do not run outside the sandbox, change the runner, weaken tests, or claim success without the receipt. Stop when the command passes or attempts are exhausted.\n<bridge-test-command>" + JSON.stringify({ commandLine, maxAttempts: request.maxAttempts }) + "</bridge-test-command>",
     async cleanup() {
       await rm3(absolute, { force: true });
-      const content = await readFile4(exclude, "utf8");
-      await writeFile4(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
+      const content = await readFile5(exclude, "utf8");
+      await writeFile5(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
     }
   };
 }
@@ -44444,8 +44869,8 @@ function compareFindings(tasks, models) {
 }
 
 // dist/src/sandbox-policy.js
-import { createHash as createHash16 } from "node:crypto";
-import { lstat as lstat7, readdir as readdir4, realpath as realpath5 } from "node:fs/promises";
+import { createHash as createHash17 } from "node:crypto";
+import { lstat as lstat8, readdir as readdir5, realpath as realpath6 } from "node:fs/promises";
 import os5 from "node:os";
 import path15 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
@@ -44535,7 +44960,7 @@ function requireNormalizedPolicy(value) {
 }
 function sandboxPolicyDigest(policy) {
   const normalized = requireNormalizedPolicy(policy);
-  return createHash16("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
+  return createHash17("sha256").update(JSON.stringify({ version: 1, policy: normalized })).digest("hex");
 }
 function parseSandboxPolicySnapshot(value) {
   const snapshot = external_exports.object({
@@ -44575,7 +45000,7 @@ async function inspectExistingPath(absolute) {
     current = path15.join(current, parts[index]);
     let info;
     try {
-      info = await lstat7(current);
+      info = await lstat8(current);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must already exist");
@@ -44588,11 +45013,11 @@ async function inspectExistingPath(absolute) {
   }
   let canonical;
   try {
-    canonical = await realpath5(absolute);
+    canonical = await realpath6(absolute);
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a sandbox permission target");
   }
-  const final = await lstat7(canonical).catch(() => void 0);
+  const final = await lstat8(canonical).catch(() => void 0);
   if (!final || final.isSymbolicLink() || !final.isDirectory() && !final.isFile() || final.isFile() && final.nlink > 1) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permission targets must resolve to regular files or directories");
   }
@@ -44603,7 +45028,7 @@ async function inspectDirectoryGrant(directory, limits) {
   const visit2 = async (current) => {
     let children;
     try {
-      children = await readdir4(current);
+      children = await readdir5(current);
     } catch {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
@@ -44611,7 +45036,7 @@ async function inspectDirectoryGrant(directory, limits) {
       const child = path15.join(current, name);
       let info;
       try {
-        info = await lstat7(child);
+        info = await lstat8(child);
       } catch {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox directory grants cannot change during validation");
       }
@@ -44645,7 +45070,7 @@ async function canonicalProtectedPath(value) {
     const next = path15.join(current, parts[index]);
     let info;
     try {
-      info = await lstat7(next);
+      info = await lstat8(next);
     } catch (error62) {
       if (error62.code === "ENOENT") {
         firstMissing = index;
@@ -44660,7 +45085,7 @@ async function canonicalProtectedPath(value) {
   }
   let canonical;
   try {
-    canonical = await realpath5(current);
+    canonical = await realpath6(current);
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
@@ -44989,7 +45414,7 @@ var successOutputSchemas = {
   antigravity_verify: verification,
   antigravity_test: task,
   antigravity_record_test: testEvidenceSchema,
-  antigravity_integrate: external_exports.object(previewShape).strict(),
+  antigravity_integrate: external_exports.object({ ...previewShape, restoredByteOrderMarks: external_exports.array(external_exports.string()).optional(), leftoverFiles: external_exports.array(external_exports.string()).optional() }).strict(),
   antigravity_discard: task,
   antigravity_cleanup: external_exports.object({ discardedTaskIds: external_exports.array(id) }).strict(),
   antigravity_status: task,
@@ -45705,11 +46130,11 @@ A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch 
 
 // dist/src/group-store.js
 import { lstatSync as lstatSync4, readdirSync as readdirSync3, readFileSync as readFileSync3, realpathSync as realpathSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import { randomUUID as randomUUID6 } from "node:crypto";
+import { randomUUID as randomUUID8 } from "node:crypto";
 import path17 from "node:path";
 
 // dist/src/state-store.js
-import { createHash as createHash17, randomUUID as randomUUID5 } from "node:crypto";
+import { createHash as createHash18, randomUUID as randomUUID7 } from "node:crypto";
 import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import path16 from "node:path";
 import os6 from "node:os";
@@ -45868,7 +46293,7 @@ var StateStore = class {
     const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0];
     const release = this.acquire("integration-approvals");
     const target = path16.join(this.directory, "integration-approvals.json");
-    const temporary = target + "." + randomUUID5() + ".tmp";
+    const temporary = target + "." + randomUUID7() + ".tmp";
     try {
       const roots = this.loadIntegrationRoots();
       if (roots.includes(canonical))
@@ -45917,7 +46342,7 @@ var StateStore = class {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
     const target = path16.join(this.directory, "sandbox-policy.json");
-    const temporary = target + "." + randomUUID5() + ".tmp";
+    const temporary = target + "." + randomUUID7() + ".tmp";
     try {
       this.loadSandboxPolicy();
       writeFileSync3(temporary, JSON.stringify(validated), { flag: "wx", mode: 384, flush: true });
@@ -45930,7 +46355,7 @@ var StateStore = class {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
     const target = path16.join(this.directory, "model-selection.json");
-    const temporary = target + "." + randomUUID5() + ".tmp";
+    const temporary = target + "." + randomUUID7() + ".tmp";
     try {
       this.loadModel();
       writeFileSync3(temporary, JSON.stringify(selection), { flag: "wx", mode: 384, flush: true });
@@ -45944,7 +46369,7 @@ var StateStore = class {
     this.writeSnapshot(this.file(task2.record.taskId), task2);
   }
   writeSnapshot(target, task2) {
-    const temporary = target + "." + randomUUID5() + ".tmp";
+    const temporary = target + "." + randomUUID7() + ".tmp";
     const snapshot = { ...task2, version: 1, redacted: true, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     delete snapshot.fingerprint;
     try {
@@ -45965,7 +46390,7 @@ var StateStore = class {
       let data, fingerprint;
       try {
         const text = readFileSync2(file3, "utf8");
-        fingerprint = createHash17("sha256").update(text).digest("hex");
+        fingerprint = createHash18("sha256").update(text).digest("hex");
         data = snapshotSchema.parse(JSON.parse(text));
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
@@ -46062,7 +46487,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path16.join(this.directory, name + ".lock"), token = randomUUID5();
+    const file3 = path16.join(this.directory, name + ".lock"), token = randomUUID7();
     const root = lstatSync3(this.directory, { bigint: true });
     const busy = () => new BridgeError("STATE_BUSY", "Another operation owns this task or copy, or its lock cannot be verified");
     const checkRoot = () => {
@@ -46116,7 +46541,7 @@ var StateStore = class {
       const observed = inspect(file3);
       if (processAlive2(observed.pid))
         throw busy();
-      const gate = file3 + ".recovery", gateToken = randomUUID5();
+      const gate = file3 + ".recovery", gateToken = randomUUID7();
       try {
         writeFileSync3(gate, JSON.stringify({ pid: process.pid, token: gateToken }), { flag: "wx", mode: 384, flush: true });
       } catch {
@@ -46194,11 +46619,11 @@ var GroupStore = class {
     }
   }
   list() {
-    this.file(randomUUID6());
+    this.file(randomUUID8());
     return readdirSync3(this.root).filter((name) => /^group-[a-f0-9-]{36}\.json$/.test(name)).map((name) => this.read(name.slice(6, -5)));
   }
   write(record2) {
-    const validated = groupRecordSchema.parse(record2), file3 = this.file(record2.groupId), temporary = file3 + "." + randomUUID6() + ".tmp";
+    const validated = groupRecordSchema.parse(record2), file3 = this.file(record2.groupId), temporary = file3 + "." + randomUUID8() + ".tmp";
     try {
       try {
         this.read(record2.groupId);
@@ -46215,11 +46640,11 @@ var GroupStore = class {
 };
 
 // dist/src/group-manager.js
-import { createHash as createHash18, randomUUID as randomUUID7 } from "node:crypto";
+import { createHash as createHash19, randomUUID as randomUUID9 } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 var finished = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
 function profileHash(value) {
-  return createHash18("sha256").update(JSON.stringify(value)).digest("hex");
+  return createHash19("sha256").update(JSON.stringify(value)).digest("hex");
 }
 function graph(record2) {
   return { nodes: record2.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) };
@@ -46238,7 +46663,7 @@ var GroupManager = class {
   tasks;
   config;
   store;
-  ownerId = randomUUID7();
+  ownerId = randomUUID9();
   loops = /* @__PURE__ */ new Map();
   stopped = false;
   waiting = 0;
@@ -46339,8 +46764,8 @@ var GroupManager = class {
           messageId,
           toNode: input2.toNode,
           text: input2.text,
-          sha256: createHash18("sha256").update(input2.text).digest("hex"),
-          transportId: randomUUID7(),
+          sha256: createHash19("sha256").update(input2.text).digest("hex"),
+          transportId: randomUUID9(),
           state: allowed ? "pending" : "failed",
           ...!allowed ? { error: { code: "PEER_ROUTE_DENIED", message: "This directed peer route was not selected" } } : {}
         });
@@ -46635,7 +47060,7 @@ var GroupManager = class {
         taskId: input2.taskId,
         outputSha256: input2.outputSha256,
         ...summary ? { summary: summary.slice(0, 2e3) } : {},
-        reference: { tool: "antigravity_read_result", taskId: task2.taskId, contentSha256: createHash18("sha256").update(JSON.stringify(task2.result ?? null)).digest("hex") }
+        reference: { tool: "antigravity_read_result", taskId: task2.taskId, contentSha256: createHash19("sha256").update(JSON.stringify(task2.result ?? null)).digest("hex") }
       };
     } finally {
       registry2?.();
@@ -46883,7 +47308,7 @@ var GroupManager = class {
 };
 
 // dist/src/task-manager.js
-import { createHash as createHash24, randomUUID as randomUUID12 } from "node:crypto";
+import { createHash as createHash24, randomUUID as randomUUID13 } from "node:crypto";
 import path24 from "node:path";
 
 // dist/src/process-tree.js
@@ -47173,16 +47598,16 @@ function sanitizePayload(value, options = {}) {
 }
 
 // dist/src/craft.js
-import { randomUUID as randomUUID8 } from "node:crypto";
+import { randomUUID as randomUUID10 } from "node:crypto";
 import { existsSync as existsSync2 } from "node:fs";
-import { cp, lstat as lstat9, mkdir as mkdir5, readFile as readFile6, rename, rm as rm4 } from "node:fs/promises";
+import { cp, lstat as lstat10, mkdir as mkdir5, readFile as readFile7, rename as rename3, rm as rm4 } from "node:fs/promises";
 import path20 from "node:path";
 import { fileURLToPath } from "node:url";
 
 // dist/src/craft-snapshot.js
-import { createHash as createHash19 } from "node:crypto";
+import { createHash as createHash20 } from "node:crypto";
 import { createReadStream as createReadStream4 } from "node:fs";
-import { lstat as lstat8, readFile as readFile5, readdir as readdir5 } from "node:fs/promises";
+import { lstat as lstat9, readFile as readFile6, readdir as readdir6 } from "node:fs/promises";
 import path19 from "node:path";
 var CRAFT_LIMITS = {
   maxTotalBytes: 64 * 1024 * 1024,
@@ -47360,7 +47785,7 @@ var craftManifestSchema = rawManifestSchema.superRefine((manifest, ctx) => {
   }
 });
 async function computeStreamSha256(filePath) {
-  const hash3 = createHash19("sha256");
+  const hash3 = createHash20("sha256");
   for await (const chunk of createReadStream4(filePath)) {
     hash3.update(chunk);
   }
@@ -47374,7 +47799,7 @@ async function verifyCraftSnapshot(root) {
   const manifestPath = path19.join(root, manifestRel);
   let manifestStat;
   try {
-    manifestStat = await lstat8(manifestPath);
+    manifestStat = await lstat9(manifestPath);
   } catch {
     throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${manifestRel}: missing or inaccessible`);
   }
@@ -47389,14 +47814,14 @@ async function verifyCraftSnapshot(root) {
   }
   let manifestBuffer;
   try {
-    manifestBuffer = await readFile5(manifestPath);
+    manifestBuffer = await readFile6(manifestPath);
   } catch {
     throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${manifestRel}: failed to read file`);
   }
   if (manifestBuffer.length > 1024 * 1024) {
     throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${manifestRel}: exceeds 1 MiB limit`);
   }
-  const manifestSha256 = createHash19("sha256").update(manifestBuffer).digest("hex");
+  const manifestSha256 = createHash20("sha256").update(manifestBuffer).digest("hex");
   let rawJson;
   try {
     rawJson = JSON.parse(manifestBuffer.toString("utf8"));
@@ -47414,7 +47839,7 @@ async function verifyCraftSnapshot(root) {
   const skillsRoot = path19.join(root, skillsRel);
   let skillsStat;
   try {
-    skillsStat = await lstat8(skillsRoot);
+    skillsStat = await lstat9(skillsRoot);
   } catch {
     throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${skillsRel}: missing or inaccessible`);
   }
@@ -47436,7 +47861,7 @@ async function verifyCraftSnapshot(root) {
     const current = stack.pop();
     let entries;
     try {
-      entries = await readdir5(current.fullDir, { withFileTypes: true });
+      entries = await readdir6(current.fullDir, { withFileTypes: true });
     } catch {
       throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${current.relDir}: failed to read directory`);
     }
@@ -47446,7 +47871,7 @@ async function verifyCraftSnapshot(root) {
       const fullPath = path19.join(current.fullDir, entry.name);
       let st;
       try {
-        st = await lstat8(fullPath);
+        st = await lstat9(fullPath);
       } catch {
         throw new BridgeError("CRAFT_SNAPSHOT_INVALID", `${relPath}: missing or inaccessible`);
       }
@@ -47512,7 +47937,7 @@ function bundledSnapshot() {
 }
 async function realDirectory(target) {
   try {
-    const stat4 = await lstat9(target);
+    const stat4 = await lstat10(target);
     return stat4.isDirectory() && !stat4.isSymbolicLink() ? "real" : "other";
   } catch (error62) {
     if (error62.code === "ENOENT")
@@ -47537,14 +47962,14 @@ async function cachedSnapshot(source, stateDirectory) {
     await rm4(target, { recursive: true, force: true });
   }
   await mkdir5(parent, { recursive: true, mode: 448 });
-  const temporary = path20.join(parent, `.tmp-${randomUUID8()}`);
+  const temporary = path20.join(parent, `.tmp-${randomUUID10()}`);
   try {
     await cp(source.root, temporary, { recursive: true, errorOnExist: true, force: false });
     const copied = await verifyCraftSnapshot(temporary);
     if (copied.manifestSha256 !== source.manifestSha256)
       throw new BridgeError("CRAFT_SNAPSHOT_INVALID", "Cached manifest differs from the installed snapshot");
     try {
-      await rename(temporary, target);
+      await rename3(temporary, target);
     } catch (error62) {
       if (!existsSync2(target))
         throw error62;
@@ -47561,7 +47986,7 @@ function frontmatterDescription(content) {
 }
 async function permanentBundle(snapshot, name) {
   const prefix = `skills/${name}/`;
-  const read = (relative2) => readFile6(path20.join(snapshot.root, ...relative2.split("/")), "utf8");
+  const read = (relative2) => readFile7(path20.join(snapshot.root, ...relative2.split("/")), "utf8");
   const resources = snapshot.manifest.files.filter((file3) => file3.path.startsWith(prefix) && file3.path !== prefix + "SKILL.md" && TEXT_MEDIA_TYPES.has(file3.mediaType));
   return {
     name,
@@ -47590,7 +48015,7 @@ async function prepareCraft(config2) {
   const permanent = await Promise.all(PERMANENT_SKILLS.map((name) => permanentBundle(snapshot, name)));
   const catalog = await Promise.all(snapshot.manifest.skills.filter((name) => !PERMANENT_SKILLS.includes(name)).map(async (name) => {
     const skillFile = path20.join(snapshot.root, "skills", name, "SKILL.md");
-    return { name, description: frontmatterDescription(await readFile6(skillFile, "utf8")), skillFile };
+    return { name, description: frontmatterDescription(await readFile7(skillFile, "utf8")), skillFile };
   }));
   return { permanent, selection: {
     revision: snapshot.manifest.revision,
@@ -47623,203 +48048,6 @@ function mergePermanentSkills(permanent, supplied) {
     }
   }
   return merged;
-}
-
-// dist/src/line-endings.js
-import { createHash as createHash20, randomUUID as randomUUID9 } from "node:crypto";
-import { chmod, lstat as lstat10, readdir as readdir6, readFile as readFile7, realpath as realpath6, rename as rename2, unlink as unlink2, writeFile as writeFile5 } from "node:fs/promises";
-import { dirname as dirname2, isAbsolute as isAbsolute3, join as join2, relative as relativePath, sep } from "node:path";
-var MAX_FILE_SIZE = 16 * 1024 * 1024;
-function countLineEndings(text) {
-  let crlf = 0;
-  let lf = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === "\n") {
-      if (i > 0 && text[i - 1] === "\r") {
-        crlf++;
-      } else {
-        lf++;
-      }
-    }
-  }
-  return { crlf, lf };
-}
-function convertLineEndings(text, toCrlf) {
-  return toCrlf ? text.replace(/(?<!\r)\n/g, "\r\n") : text.replace(/\r\n/g, "\n");
-}
-function isAcceptedText(buffer) {
-  if (buffer.length > MAX_FILE_SIZE || buffer.includes(0)) {
-    return false;
-  }
-  const text = buffer.toString("utf8");
-  return Buffer.from(text, "utf8").equals(buffer);
-}
-function pureStyle(buffer) {
-  if (!isAcceptedText(buffer))
-    return void 0;
-  const text = buffer.toString("utf8");
-  if (/\r(?!\n)/.test(text))
-    return void 0;
-  const { crlf, lf } = countLineEndings(text);
-  if (crlf > 0 && lf === 0)
-    return "crlf";
-  if (lf > 0 && crlf === 0)
-    return "lf";
-  return void 0;
-}
-async function directoryInside(canonicalRoot, directory) {
-  const stat4 = await lstat10(directory).catch(() => void 0);
-  if (!stat4?.isDirectory() || stat4.isSymbolicLink())
-    return false;
-  const inside = relativePath(canonicalRoot, await realpath6(directory));
-  return inside !== ".." && !inside.startsWith(".." + sep) && !isAbsolute3(inside);
-}
-async function replaceInsideCopy(canonicalRoot, absolutePath, content, mode) {
-  const directory = dirname2(absolutePath);
-  if (!await directoryInside(canonicalRoot, directory)) {
-    throw new BridgeError("UNSAFE_PROJECT_PATH", "A copy file moved outside the isolated copy before its line endings were rewritten");
-  }
-  const tempPath = join2(directory, randomUUID9());
-  try {
-    await writeFile5(tempPath, content, { encoding: "utf8", flag: "wx" });
-    await chmod(tempPath, mode);
-    if (!await directoryInside(canonicalRoot, directory)) {
-      throw new BridgeError("UNSAFE_PROJECT_PATH", "A copy file moved outside the isolated copy before its line endings were rewritten");
-    }
-    await rename2(tempPath, absolutePath);
-  } catch (error62) {
-    await unlink2(tempPath).catch(() => {
-    });
-    throw error62;
-  }
-}
-async function readCopyFile(root, relative2) {
-  let absolutePath;
-  try {
-    absolutePath = await checkedPath(root, relative2, true);
-  } catch (error62) {
-    if (error62.code === "ENOENT")
-      return void 0;
-    throw error62;
-  }
-  const stat4 = await lstat10(absolutePath);
-  return { path: absolutePath, buffer: stat4.size > MAX_FILE_SIZE ? void 0 : await readFile7(absolutePath), mode: stat4.mode };
-}
-function contentSha256(content) {
-  return createHash20("sha256").update(content).digest("hex");
-}
-async function planLineEndings(root, relativePaths) {
-  const styles = /* @__PURE__ */ new Map();
-  const conversions = [];
-  for (const relative2 of relativePaths) {
-    const file3 = await readCopyFile(root, relative2);
-    const style = file3?.buffer && pureStyle(file3.buffer);
-    if (!style)
-      continue;
-    styles.set(relative2, style);
-    if (style === "crlf")
-      conversions.push({ path: relative2, sha256: contentSha256(convertLineEndings(file3.buffer.toString("utf8"), false)) });
-  }
-  return { styles, conversions };
-}
-async function convertCrlfToLf(root, conversions) {
-  const converted = [];
-  const canonicalRoot = await realpath6(root);
-  for (const { path: relative2 } of conversions) {
-    const file3 = await readCopyFile(root, relative2);
-    if (!file3?.buffer || pureStyle(file3.buffer) !== "crlf")
-      continue;
-    await replaceInsideCopy(canonicalRoot, file3.path, convertLineEndings(file3.buffer.toString("utf8"), false), file3.mode);
-    converted.push(relative2);
-  }
-  return converted;
-}
-async function restoreFile(canonicalRoot, relative2, file3) {
-  if (!file3.buffer) {
-    throw new BridgeError("LINE_ENDINGS_UNRESTORED", "A file converted to LF grew beyond 16 MiB and cannot regain its line endings: " + relative2);
-  }
-  if (!isAcceptedText(file3.buffer))
-    return false;
-  const text = file3.buffer.toString("utf8");
-  const crlf = convertLineEndings(text, true);
-  if (crlf === text)
-    return false;
-  await replaceInsideCopy(canonicalRoot, file3.path, crlf, file3.mode);
-  return true;
-}
-async function listCopyFiles(root) {
-  const files = [];
-  const pending = [""];
-  for (let prefix = pending.pop(); prefix !== void 0; prefix = pending.pop()) {
-    for (const entry of await readdir6(join2(root, prefix), { withFileTypes: true })) {
-      const relative2 = prefix ? prefix + "/" + entry.name : entry.name;
-      if (entry.isDirectory())
-        pending.push(relative2);
-      else if (entry.isFile())
-        files.push(relative2);
-    }
-  }
-  return files;
-}
-function exportablePath(relative2) {
-  try {
-    validRelative(relative2);
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function restoreCrlfLineEndings(root, conversions, existingBefore) {
-  const restored = [];
-  const canonicalRoot = await realpath6(root);
-  for (const conversion of conversions) {
-    const file3 = await readCopyFile(root, conversion.path);
-    if (file3 && await restoreFile(canonicalRoot, conversion.path, file3))
-      restored.push(conversion.path);
-  }
-  const listed = /* @__PURE__ */ new Set([...conversions.map((conversion) => conversion.path), ...existingBefore]);
-  const handedOut = new Set(conversions.map((conversion) => conversion.sha256));
-  for (const relative2 of await listCopyFiles(root)) {
-    if (listed.has(relative2) || !exportablePath(relative2))
-      continue;
-    const file3 = await readCopyFile(root, relative2);
-    if (file3?.buffer && handedOut.has(contentSha256(file3.buffer)) && await restoreFile(canonicalRoot, relative2, file3))
-      restored.push(relative2);
-  }
-  return restored;
-}
-async function normalizeEditedLineEndings(root, relativePaths, original) {
-  const normalized = [];
-  const canonicalRoot = await realpath6(root);
-  for (const relative2 of relativePaths) {
-    const absolutePath = await checkedPath(root, relative2, true);
-    const stat4 = await lstat10(absolutePath);
-    if (stat4.size > MAX_FILE_SIZE) {
-      continue;
-    }
-    const buffer = await readFile7(absolutePath);
-    if (!isAcceptedText(buffer)) {
-      continue;
-    }
-    const text = buffer.toString("utf8");
-    if (/\r(?!\n)/.test(text)) {
-      continue;
-    }
-    const { crlf, lf } = countLineEndings(text);
-    const style = await original?.(relative2);
-    let targetCrlf = style === void 0 ? void 0 : style === "crlf";
-    if (targetCrlf === void 0) {
-      if (crlf === 0 || lf === 0) {
-        continue;
-      }
-      targetCrlf = crlf >= lf;
-    } else if (targetCrlf ? lf === 0 : crlf === 0) {
-      continue;
-    }
-    await replaceInsideCopy(canonicalRoot, absolutePath, convertLineEndings(text, targetCrlf), stat4.mode);
-    normalized.push(relative2);
-  }
-  return normalized;
 }
 
 // dist/src/logger.js
@@ -47975,7 +48203,7 @@ import { setTimeout as delay3 } from "node:timers/promises";
 // dist/src/windows-executor.js
 import { spawn as spawn6 } from "node:child_process";
 import { lstat as lstat13, mkdir as mkdir8, mkdtemp as mkdtemp3, realpath as realpath8, rm as rm6, writeFile as writeFile7 } from "node:fs/promises";
-import { randomUUID as randomUUID11 } from "node:crypto";
+import { randomUUID as randomUUID12 } from "node:crypto";
 import path23 from "node:path";
 import os8 from "node:os";
 
@@ -49761,14 +49989,14 @@ internal static class ReparseInspector
 // dist/src/windows-runtime.js
 import { constants as constants3 } from "node:fs";
 import { createHash as createHash23 } from "node:crypto";
-import { chmod as chmod2, lstat as lstat12, mkdir as mkdir7, open as open7, readdir as readdir8, unlink as unlink4 } from "node:fs/promises";
+import { chmod as chmod2, lstat as lstat12, mkdir as mkdir7, open as open7, readdir as readdir8, unlink as unlink5 } from "node:fs/promises";
 import path22 from "node:path";
 
 // dist/src/portable-node.js
-import { createHash as createHash22, randomUUID as randomUUID10 } from "node:crypto";
+import { createHash as createHash22, randomUUID as randomUUID11 } from "node:crypto";
 import { spawn as spawn5 } from "node:child_process";
 import { constants as constants2 } from "node:fs";
-import { lstat as lstat11, mkdir as mkdir6, mkdtemp as mkdtemp2, open as open6, readdir as readdir7, realpath as realpath7, rename as rename3, rm as rm5, unlink as unlink3, writeFile as writeFile6 } from "node:fs/promises";
+import { lstat as lstat11, mkdir as mkdir6, mkdtemp as mkdtemp2, open as open6, readdir as readdir7, realpath as realpath7, rename as rename4, rm as rm5, unlink as unlink4, writeFile as writeFile6 } from "node:fs/promises";
 import os7 from "node:os";
 import path21 from "node:path";
 import { setTimeout as delay2 } from "node:timers/promises";
@@ -50322,14 +50550,14 @@ async function recoverDeadPreparationLock(file3) {
     return false;
   if (!record2.isV1 && after.nlink !== before.nlink)
     return false;
-  await unlink3(file3);
+  await unlink4(file3);
   return true;
 }
 async function acquirePreparationLock(root, descriptor) {
   const file3 = path21.join(root, ".portable-node-" + descriptor.buildId + "-" + descriptor.assets.node.sha256 + ".lock");
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
-      const nonce = randomUUID10();
+      const nonce = randomUUID11();
       const record2 = { v: lockRecordVersion, pid: process.pid, nonce };
       const lockPayload = JSON.stringify(record2);
       const expectedSize = Buffer.byteLength(lockPayload, "utf8");
@@ -50372,7 +50600,7 @@ async function acquirePreparationLock(root, descriptor) {
         if (!finalPathStat.isFile() || finalPathStat.isSymbolicLink() || !sameLockFile(finalPathStat, expected)) {
           fail("UNSAFE_PORTABLE_NODE_CACHE", "Portable Node preparation lock was replaced before release");
         }
-        await unlink3(file3);
+        await unlink4(file3);
       };
     } catch (error62) {
       if (error62.code !== "EEXIST")
@@ -50405,7 +50633,7 @@ async function preparePortableNodeRuntime(options) {
       throw error62;
   }
   const release = await acquirePreparationLock(root, descriptor);
-  const temporary = path21.join(root, ".portable-node-" + randomUUID10());
+  const temporary = path21.join(root, ".portable-node-" + randomUUID11());
   try {
     try {
       return await resolvePortableNodeRuntime(root, descriptor);
@@ -50421,7 +50649,7 @@ async function preparePortableNodeRuntime(options) {
     }
     const final = path21.join(root, cacheLeafName(descriptor));
     try {
-      await rename3(temporary, final);
+      await rename4(temporary, final);
     } catch (error62) {
       if (error62.code !== "EEXIST" && error62.code !== "EPERM")
         throw error62;
@@ -50619,8 +50847,8 @@ async function stageDirectory(directory, state) {
   state.entries++;
   state.directories.add(targetKey);
 }
-async function stageFile(sourcePath, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
-  const source = path22.resolve(sourcePath);
+async function stageFile(sourcePath2, targetPath, state, requirePe = false, allowMultipleLinks = false, expectedSha256) {
+  const source = path22.resolve(sourcePath2);
   const target = path22.resolve(targetPath);
   const sourceKey = canonicalKey2(source);
   const targetKey = canonicalKey2(target);
@@ -50694,7 +50922,7 @@ async function stageFile(sourcePath, targetPath, state, requirePe = false, allow
     return target;
   } catch (error62) {
     if (created)
-      await unlink4(target).catch(() => {
+      await unlink5(target).catch(() => {
       });
     throw error62;
   } finally {
@@ -51144,7 +51372,7 @@ async function compileController(temp, options) {
   }
 }
 async function writeRequest(directory, request) {
-  const file3 = path23.join(directory, "request-" + randomUUID11() + ".json");
+  const file3 = path23.join(directory, "request-" + randomUUID12() + ".json");
   await writeFile7(file3, JSON.stringify(request), { flag: "wx", mode: 384 });
   return file3;
 }
@@ -51390,7 +51618,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     scratchStat = await lstat13(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
     const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
-    const nonce = randomUUID11(), systemRoot = process.env.SystemRoot || "C:\\Windows";
+    const nonce = randomUUID12(), systemRoot = process.env.SystemRoot || "C:\\Windows";
     const environment = {
       SystemRoot: systemRoot,
       WINDIR: systemRoot,
@@ -51499,7 +51727,7 @@ var TaskManager = class {
   waiting = 0;
   batching = 0;
   stopped = false;
-  inboxOwnerId = randomUUID12();
+  inboxOwnerId = randomUUID13();
   flushingInboxes = /* @__PURE__ */ new Set();
   claimingMessages = /* @__PURE__ */ new Set();
   busyProjects = /* @__PURE__ */ new Set();
@@ -51995,7 +52223,7 @@ var TaskManager = class {
         options.outputSchema = void 0;
         options.artifactPaths = void 0;
       }
-      const taskId = randomUUID12();
+      const taskId = randomUUID13();
       options.group = options.groupAdmission ? { ...options.groupAdmission, rootTaskId: taskId } : previous?.record.group && structuredClone(previous.record.group);
       delete options.groupAdmission;
       const record2 = {
@@ -52207,7 +52435,7 @@ var TaskManager = class {
     if (this.config.maxRetainedTasks < models.length + 1 || this.config.maxQueuedTasks < models.length)
       throw new BridgeError("COMPARISON_LIMIT_EXCEEDED", "Retention and queue limits must accommodate all comparison members and the source");
     const source = this.status(sourceTaskId);
-    const comparison = { comparisonId: randomUUID12(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
+    const comparison = { comparisonId: randomUUID13(), sourceTaskId, treeSha256: expectedContextSha256, models, startErrors: [] };
     const taskIds = [];
     this.batching++;
     try {
@@ -52467,7 +52695,7 @@ var TaskManager = class {
         craft: current.record.craft,
         deliveryMode: current.record.deliveryMode,
         providedSkills: current.project.providedSkills,
-        taskId: randomUUID12(),
+        taskId: randomUUID13(),
         sessionId: current.record.sessionId,
         model: current.record.model,
         effort: current.record.effort,
@@ -52632,7 +52860,12 @@ var TaskManager = class {
         for (const related of this.tasks.values())
           if (related.project === task2.project) {
             related.record.integratedAt = (/* @__PURE__ */ new Date()).toISOString();
-            this.events.append(related.record.taskId, "copy.integrated", { sha256: expectedSha256, approvalSource: auto ? "auto" : "mcp-elicitation" });
+            this.events.append(related.record.taskId, "copy.integrated", {
+              sha256: expectedSha256,
+              approvalSource: auto ? "auto" : "mcp-elicitation",
+              ...preview.restoredByteOrderMarks ? { restoredByteOrderMarks: preview.restoredByteOrderMarks } : {},
+              ...preview.leftoverFiles ? { leftoverFiles: preview.leftoverFiles } : {}
+            });
           }
         if (typeof approval === "object" && approval.rememberProject === true) {
           try {
@@ -53108,6 +53341,7 @@ var TaskManager = class {
     let readOnlyBaseline;
     let policyReceiptOffset = 0;
     let lineEndingStyles;
+    let byteOrderMarks;
     try {
       task2.project ??= await createProjectCopy(record2.workingDirectory, task2.options.includePaths, (project) => {
         task2.project = project;
@@ -53157,7 +53391,7 @@ var TaskManager = class {
       if (record2.mode === "read-only")
         child = this.adapter.spawnTask(task2.options, record2.model, task2.project.copyDirectory);
       else
-        ({ child, styles: lineEndingStyles } = await this.spawnWithLfCopy(task2, native ? { ...task2.options, prompt: native.prompt } : task2.options, !native));
+        ({ child, styles: lineEndingStyles, boms: byteOrderMarks } = await this.spawnWithLfCopy(task2, native ? { ...task2.options, prompt: native.prompt } : task2.options, !native));
       task2.child = child;
       record2.pid = child.pid;
       record2.status = "running";
@@ -53322,7 +53556,7 @@ ${redacted}`;
           record2.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
         }
         if (record2.mode !== "read-only")
-          await this.normalizeEditedFiles(task2, lineEndingStyles);
+          await this.normalizeEditedFiles(task2, lineEndingStyles, byteOrderMarks);
         record2.report = await validateRoleReport((record2.roleDefinition ?? resolveRole(record2.role ?? "implementer")).baseRole, record2.result.structured_output, task2.project.copyDirectory);
         if (!task2.options.nativeTest && record2.outputSchema !== void 0) {
           const rawStructured = record2.result?.structured_output;
@@ -53445,7 +53679,7 @@ ${redacted}`;
     if (options.craft)
       await verifyCraftSelection(options.craft);
     const spawnedAt = Date.now();
-    const { child, styles } = await this.spawnWithLfCopy(task2, options, true);
+    const { child, styles, boms } = await this.spawnWithLfCopy(task2, options, true);
     task2.child = child;
     task2.record.pid = child.pid;
     task2.record.status = "running";
@@ -53553,7 +53787,7 @@ ${redacted}`;
         throw new BridgeError("AGENT_POLICY_UNVERIFIED", "Repair did not produce a new guarded finish");
       task2.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
     }
-    await this.normalizeEditedFiles(task2, styles);
+    await this.normalizeEditedFiles(task2, styles, boms);
   }
   async executeWindowsNativeTest(task2) {
     const request = this.windowsRequest(task2);
@@ -53973,7 +54207,7 @@ ${redacted}`;
     const project = task2.project;
     if (await readLineEndingConversions(project))
       throw new BridgeError("LINE_ENDINGS_UNRESTORED", "A previous run left files converted to LF; confirm its processes ended before starting another");
-    const { styles, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
+    const { styles, boms, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
     task2.record.processCleanup = void 0;
     this.persist(task2.record.taskId);
     try {
@@ -53984,7 +54218,7 @@ ${redacted}`;
       }
       if (task2.termination)
         throw new BridgeError("TASK_TERMINATED", "The task was stopped before the CLI started");
-      return { child: this.adapter.spawnTask(options, task2.record.model, project.copyDirectory), styles };
+      return { child: this.adapter.spawnTask(options, task2.record.model, project.copyDirectory), styles, boms };
     } catch (error62) {
       await this.restoreLineEndings(task2).catch(() => void 0);
       throw error62;
@@ -53999,19 +54233,22 @@ ${redacted}`;
     await clearLineEndingConversions(project);
     this.events.append(task2.record.taskId, "copy.line-endings-restored", { files: converted.files.length, rewritten: restored.length });
   }
-  // CLI editing tools may change line endings; each edited file regains the style it had before the run. Files are rewritten
-  // only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
-  async normalizeEditedFiles(task2, styles) {
+  // CLI editing tools may change line endings or drop a BOM; each edited file regains the style and the BOM it had before the
+  // run. Files are rewritten only after every process of the run is confirmed gone, so nothing can swap directories mid-write.
+  async normalizeEditedFiles(task2, styles, boms) {
     if (!task2.record.processCleanup?.verified)
       return;
     const project = task2.project;
     const preview = await previewProjectCopy(project, this.config);
     const paths2 = preview.fileSummaries.filter((file3) => file3.binary === false && file3.status !== "D").map((file3) => file3.path);
     const normalized = await normalizeEditedLineEndings(project.copyDirectory, paths2, async (relative2) => styles.get(relative2));
-    if (normalized.length > 0) {
+    if (normalized.length > 0)
       this.events.append(task2.record.taskId, "patch.line-endings-normalized", { paths: normalized });
+    const restored = await restoreByteOrderMarks(project.copyDirectory, paths2, boms);
+    if (restored.length > 0)
+      this.events.append(task2.record.taskId, "patch.bom-restored", { paths: restored });
+    if (normalized.length > 0 || restored.length > 0)
       await previewProjectCopy(project, this.config);
-    }
   }
   terminate(child) {
     terminateSubprocess(child);
