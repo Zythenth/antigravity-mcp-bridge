@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { git, type HostGitOptions } from './host-git.js';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
 import { BridgeError } from './types.js';
-import type { LfConversion } from './line-endings.js';
+import { checkIntegratedText, renderLines, replaceInsideRoot, type LfConversion } from './line-endings.js';
 import { stageExecutionPolicy, verifyExecutionPolicy, discardExecutionPolicy, EXECUTION_POLICY_PATHS, type StagedExecutionPolicy } from './execution-policy.js';
 import type { ResolvedAgentPolicy, McpCatalogEntry } from './agent-policy.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
@@ -485,6 +485,7 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
     if (staged.length) project.providedSkills = staged;
     await verifyProvidedSkills(copyDirectory, staged);
     await copyGit(project, ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
+    await treatFilesAsBytes(gitDirectory);
     if (execution) {
       initializingProjects.add(project);
       try {
@@ -509,6 +510,14 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
     await discardProjectCopy(project);
     throw error;
   }
+}
+
+// The baseline, the patch and its application work on the bytes of each file: '* -text' in info/attributes outranks the
+// project's .gitattributes, so no line ending is converted on the way in or out (core.autocrlf stays off without system
+// and global configuration).
+async function treatFilesAsBytes(gitDirectory: string): Promise<void> {
+  await mkdir(path.join(gitDirectory, 'info'), { recursive: true });
+  await writeFile(path.join(gitDirectory, 'info', 'attributes'), '* -text\n', { flag: 'wx', mode: 0o600 });
 }
 
 function ensurePatchUtf8RoundTrip(bytes: Buffer): string {
@@ -1019,6 +1028,7 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
         '--quiet',
         gitDirectory
       ]);
+      await treatFilesAsBytes(gitDirectory);
 
       // 5. Stage private baseline worktree and commit with fixed identity
       const forkBaselineScope = ['--git-dir=' + gitDirectory, '--work-tree=' + tempBaselineDir];
@@ -1064,24 +1074,173 @@ export async function fingerprintProjectCopy(project: ProjectCopy, limits: Proje
   return digest.digest('hex');
 }
 
-export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS): Promise<ChangePreview> {
+interface FileImage { bytes: Buffer; mode: number }
+
+async function readIfPresent(file: string): Promise<Buffer | undefined> {
+  try { return await readFile(file); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+// checkedPath stops at the first missing component; an addition below it goes to the full path once the ancestors are checked.
+async function sourcePath(project: ProjectCopy, relative: string): Promise<string> {
+  await checkedPath(project.sourceDirectory, relative, false);
+  return path.join(project.sourceDirectory, ...relative.split('/'));
+}
+
+// The original's permissions stay; only a mode change written in the file's patch sets or clears its executable bits.
+function integratedMode(original: number, filePatch: string): number {
+  const changed = /^new mode (\d+)$/m.exec(filePatch)?.[1];
+  if (changed === undefined) return original;
+  return changed === '100755' ? original | ((original & 0o444) >> 2) : original & ~0o111;
+}
+
+// A line that changed only its ending counts as changed when its ending is part of the line and as unchanged when it is not.
+async function lineEndingOnlyChanges(project: ProjectCopy, area: string, before: Buffer, after: Buffer): Promise<boolean> {
+  const directory = path.join(area, 'lines');
+  await mkdir(directory, { recursive: true });
+  const rendered = [renderLines(before.toString('utf8')), renderLines(after.toString('utf8'))];
+  const numstat = async (key: 'withEndings' | 'withoutEndings') => {
+    await writeFile(path.join(directory, 'before'), rendered[0]![key]);
+    await writeFile(path.join(directory, 'after'), rendered[1]![key]);
+    return (await managedGit(project, directory, ['--git-dir=' + project.gitDirectory, 'diff', '--no-index', '--no-ext-diff', '--no-textconv',
+      '--numstat', '--minimal', '--', 'before', 'after'], undefined, [0, 1])).toString('utf8').split('\t', 2).join('\t');
+  };
+  return await numstat('withEndings') !== await numstat('withoutEndings');
+}
+
+// Applies the patch to copies of the affected originals in a private area, with no line ending conversion, and checks each
+// result against the original it would replace. Nothing in the original is touched here.
+async function applyInPrivateArea(project: ProjectCopy, preview: ChangePreview, before: ReadonlyMap<string, FileImage | undefined>):
+Promise<{ after: Map<string, FileImage>; restoredByteOrderMarks: string[] }> {
+  const area = await mkdtemp(path.join(project.gitDirectory, 'verified-worktree-'));
+  const identity = await lstat(area);
+  try {
+    const worktree = path.join(area, 'after');
+    await mkdir(worktree);
+    for (const [relative, original] of before) {
+      if (!original) continue;
+      const target = path.join(worktree, ...relative.split('/'));
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, original.bytes, { flag: 'wx' });
+    }
+    await managedGit(project, worktree, ['-c', 'core.autocrlf=false', '--git-dir=' + project.gitDirectory, '--work-tree=' + worktree,
+      'apply', '--binary', '--whitespace=nowarn', '-'], Buffer.from(preview.patch, 'utf8'), [0]);
+    const after = new Map<string, FileImage>();
+    const restoredByteOrderMarks: string[] = [];
+    const problems: string[] = [];
+    for (const file of preview.files) {
+      if (file.status === 'D') continue;
+      const target = path.join(worktree, ...file.path.split('/'));
+      const stat = await lstat(target);
+      const original = before.get(file.path);
+      if (!original) {
+        after.set(file.path, { bytes: await readFile(target), mode: stat.mode });
+        continue;
+      }
+      const checked = checkIntegratedText(original.bytes, await readFile(target));
+      if (checked.bomRestored) {
+        restoredByteOrderMarks.push(file.path);
+        await writeFile(target, checked.content);
+      }
+      const problem = checked.problem ?? (checked.lineByLine && await lineEndingOnlyChanges(project, area, original.bytes, checked.content)
+        ? 'line endings changed on lines that were not edited' : undefined);
+      if (problem) problems.push(file.path + ': ' + problem);
+      after.set(file.path, { bytes: checked.content, mode: integratedMode(original.mode, extractFilePatch(preview, file.path)) });
+    }
+    if (problems.length) {
+      throw new BridgeError('LINE_ENDINGS_CHANGED', 'Integration refused and the original was not changed: ' + problems.join('; ') +
+        '. Restore the line endings and BOM of these files in the copy, for example by resuming the task, and preview again, ' +
+        'or apply the reviewed patch yourself without line ending conversion.');
+    }
+    return { after, restoredByteOrderMarks };
+  } finally {
+    try { await removeVerifiedWorktree(project, area, identity); }
+    catch { await writeFenceMarker(project); throw new BridgeError('GIT_CLEANUP_UNVERIFIED', 'Could not remove the integration area; copy quarantined'); }
+  }
+}
+
+// Each file is replaced atomically once it still holds its pre-image. A deleted file is only moved aside in its folder while
+// files are written, so undoing the deletion puts back the same file with its own permissions. If a write fails, every file
+// already written that still holds what was written gets its pre-image back before the error is reported.
+async function writeIntegration(project: ProjectCopy, files: ChangePreview['files'], before: ReadonlyMap<string, FileImage | undefined>,
+  after: ReadonlyMap<string, FileImage>): Promise<string[]> {
+  const root = await realpath(project.sourceDirectory);
+  const written: ChangePreview['files'] = [];
+  const movedAside = new Map<string, string>();
+  const relativeToSource = (file: string) => path.relative(project.sourceDirectory, file).split(path.sep).join('/');
+  try {
+    for (const file of files) {
+      const target = await sourcePath(project, file.path);
+      const original = before.get(file.path);
+      const current = await readIfPresent(target);
+      if (original ? !current?.equals(original.bytes) : current !== undefined) {
+        throw new BridgeError('SOURCE_CHANGED', 'Source changed during integration: ' + file.path);
+      }
+      if (file.status === 'D') {
+        const aside = path.join(path.dirname(target), '.' + randomUUID() + '.deleted');
+        await rename(target, aside);
+        movedAside.set(file.path, aside);
+      } else {
+        await mkdir(path.dirname(target), { recursive: true });
+        await replaceInsideRoot(root, target, after.get(file.path)!.bytes, after.get(file.path)!.mode);
+      }
+      written.push(file);
+    }
+  } catch (error) {
+    if (!written.length && error instanceof BridgeError) throw error;
+    const unrestored: string[] = [];
+    for (const file of written.reverse()) {
+      const aside = movedAside.get(file.path);
+      try {
+        const target = await sourcePath(project, file.path);
+        if (aside) {
+          // link refuses a path that exists, so a file created there meanwhile is never replaced; the moved-aside file then stays.
+          if (!await link(aside, target).then(() => true, () => false)) { unrestored.push(file.path + ' (kept as ' + relativeToSource(aside) + ')'); continue; }
+          await unlink(aside).catch(() => { unrestored.push(relativeToSource(aside) + ' (a second name of ' + file.path + ')'); });
+          continue;
+        }
+        if (!(await readIfPresent(target))?.equals(after.get(file.path)!.bytes)) { unrestored.push(file.path); continue; }
+        const original = before.get(file.path);
+        if (original) await replaceInsideRoot(root, target, original.bytes, original.mode);
+        else await unlink(target);
+      } catch { unrestored.push(aside ? file.path + ' (kept as ' + relativeToSource(aside) + ')' : file.path); }
+    }
+    const cause = error instanceof BridgeError ? error.code : (error as NodeJS.ErrnoException).code ?? 'write error';
+    throw new BridgeError('INTEGRATION_FAILED', 'Integration stopped before it finished (' + cause + '); ' + (unrestored.length
+      ? 'these files could not get their previous bytes back: ' + unrestored.join(', ')
+      : 'the files already written got their previous bytes back, so the original is as it was'));
+  }
+  // Every file is written, so the integration is complete; a moved-aside file that cannot be removed is reported, not undone.
+  const leftovers: string[] = [];
+  for (const aside of movedAside.values()) await unlink(aside).catch(() => { leftovers.push(relativeToSource(aside)); });
+  return leftovers;
+}
+
+// The original changes only after the whole patch was applied and checked elsewhere. A crash of this process while files
+// are being written is not recovered here.
+export async function integrateProjectCopy(project: ProjectCopy, expectedSha256: string, limits: ProjectLimits = DEFAULT_PROJECT_LIMITS):
+Promise<ChangePreview & { restoredByteOrderMarks?: string[]; leftoverFiles?: string[] }> {
   const preview = await previewProjectCopy(project, limits);
   if (!preview.files.length) throw new BridgeError('NO_CHANGES', 'The isolated copy has no changes');
   if (preview.sha256 !== expectedSha256) throw new BridgeError('REVIEW_CHANGED', 'The copy changed after review; preview it again');
+  const before = new Map<string, FileImage | undefined>();
   for (const file of preview.files) {
-    const source = await checkedPath(project.sourceDirectory, file.path, false);
+    const source = await sourcePath(project, file.path);
     const expected = project.baseline.get(file.path);
     if (expected) {
-      const current = await sha256File(source).catch(() => undefined);
-      if (current !== expected) throw new BridgeError('SOURCE_CHANGED', 'Source changed since copy: ' + file.path);
+      const bytes = await readFile(source).catch(() => undefined);
+      if (!bytes || createHash('sha256').update(bytes).digest('hex') !== expected) throw new BridgeError('SOURCE_CHANGED', 'Source changed since copy: ' + file.path);
+      before.set(file.path, { bytes, mode: (await lstat(source)).mode });
     } else {
       try { await lstat(source); throw new BridgeError('SOURCE_CHANGED', 'Source already has: ' + file.path); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      before.set(file.path, undefined);
     }
   }
-  const patch = Buffer.from(preview.patch, 'utf8');
-  const sourceScope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.sourceDirectory];
-  await managedGit(project, project.sourceDirectory, [...sourceScope, 'apply', '--check', '--binary', '--whitespace=nowarn', '-'], patch, [0]);
-  await managedGit(project, project.sourceDirectory, [...sourceScope, 'apply', '--binary', '--whitespace=nowarn', '-'], patch, [0]);
-  return preview;
+  const { after, restoredByteOrderMarks } = await applyInPrivateArea(project, preview, before);
+  const leftoverFiles = await writeIntegration(project, preview.files, before, after);
+  return { ...preview, ...(restoredByteOrderMarks.length ? { restoredByteOrderMarks } : {}), ...(leftoverFiles.length ? { leftoverFiles } : {}) };
 }

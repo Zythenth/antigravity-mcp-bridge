@@ -176,7 +176,7 @@ export const successOutputSchemas = {
   antigravity_verify: verification,
   antigravity_test: task,
   antigravity_record_test: testEvidenceSchema,
-  antigravity_integrate: z.object(previewShape).strict(),
+  antigravity_integrate: z.object({ ...previewShape, restoredByteOrderMarks: z.array(z.string()).optional(), leftoverFiles: z.array(z.string()).optional() }).strict(),
   antigravity_discard: task,
   antigravity_cleanup: z.object({ discardedTaskIds: z.array(id) }).strict(),
   antigravity_status: task,

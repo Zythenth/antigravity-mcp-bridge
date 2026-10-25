@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { copyFileSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
 import { CliAdapter, DELEGATION_GUIDANCE, taskPrompt, type Discovery, type Model } from '../src/cli-adapter.js';
-import { loadConfig } from '../src/config.js';
+import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
 import { collectArtifacts } from '../src/artifacts.js';
-import { clearLineEndingConversions, createProjectCopy, discardProjectCopy, previewProjectCopy, readLineEndingConversions, writeLineEndingConversions, type ProjectCopy } from '../src/isolation.js';
+import { clearLineEndingConversions, createProjectCopy, discardProjectCopy, forkProjectCopy, integrateProjectCopy, previewProjectCopy, readLineEndingConversions, writeLineEndingConversions, type ProjectCopy } from '../src/isolation.js';
 import { verifyCriteria } from '../src/verification.js';
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreCrlfLineEndings, type LineEndingStyle } from '../src/line-endings.js';
 import { StateStore } from '../src/state-store.js';
@@ -88,11 +88,11 @@ test('normalizeEditedLineEndings restores the original line ending style', async
     await file(dir, alreadyCrlf, 'a\r\nb\r\n');
     await file(dir, alreadyLf, 'a\nb\n');
 
-    // Styles as planLineEndings reports them before a run; mixed, new and binary originals have none.
+    // Styles as planLineEndings reports them before a run; new and binary originals have none.
     const originalMap: Record<string, LineEndingStyle | undefined> = {
       [origCrlfEditedLf]: 'crlf',
       [origLfEditedCrlf]: 'lf',
-      [origMixedEditedMixed]: undefined,
+      [origMixedEditedMixed]: 'mixed',
       [newFileLf]: undefined,
       [origBinaryEditedMixed]: undefined,
       [alreadyCrlf]: 'crlf',
@@ -116,12 +116,12 @@ test('normalizeEditedLineEndings restores the original line ending style', async
     assert.deepEqual(modified, [
       origCrlfEditedLf,
       origLfEditedCrlf,
-      origMixedEditedMixed,
       origBinaryEditedMixed,
     ]);
     assert.equal((await file(dir, origCrlfEditedLf)).toString('utf8'), 'a\r\nb\r\n');
     assert.equal((await file(dir, origLfEditedCrlf)).toString('utf8'), 'a\nb\n');
-    assert.equal((await file(dir, origMixedEditedMixed)).toString('utf8'), 'a\r\nb\r\nc\r\n');
+    // A mixed original keeps every line's own ending instead of taking the majority one.
+    assert.equal((await file(dir, origMixedEditedMixed)).toString('utf8'), 'a\r\nb\nc\r\n');
     assert.equal((await file(dir, newFileLf)).toString('utf8'), 'a\nb\n');
     assert.equal((await file(dir, origBinaryEditedMixed)).toString('utf8'), 'a\r\nb\r\nc\r\n');
     assert.equal((await file(dir, alreadyCrlf)).toString('utf8'), 'a\r\nb\r\n');
@@ -148,12 +148,12 @@ async function fixtureRepository(root: string, attributes?: string): Promise<str
   return repo;
 }
 
-function mockProcess() {
+function mockProcess(pid?: number) {
   const child = new EventEmitter() as any;
   child.stdin = new PassThrough();
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
-  child.pid = undefined;
+  child.pid = pid;
   child.kill = () => child.emit('close', 0);
   setImmediate(() => {
     child.stdout.write(JSON.stringify({ event: 'init', conversation_id: 'line-endings-session' }) + '\n');
@@ -166,9 +166,11 @@ function mockProcess() {
 
 class CopyAdapter extends CliAdapter {
   onSpawn?: (cwd: string) => void;
+  // The PID of a process that already ended lets the bridge verify the cleanup and run its post-run steps.
+  pid?: number;
   override spawnTask(_options: RunOptions, _model: string | undefined, cwd: string) {
     this.onSpawn?.(cwd);
-    return mockProcess();
+    return mockProcess(this.pid);
   }
   override async discover(): Promise<Discovery> {
     return { installed: true, path: 'mock-agy', authenticated: true, capabilities: { structuredOutput: true, streaming: true, sandbox: true,
@@ -404,6 +406,226 @@ test('a directory swapped for a link during normalization is never written throu
   } finally {
     await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
+});
+
+const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+
+// A repository holding exactly these bytes, with an isolated copy of it.
+async function withCopy(files: Record<string, string | Buffer>, attributes: string | undefined, body: (repo: string, copy: ProjectCopy) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'line-endings-integrate-'));
+  const repo = path.join(root, 'repo');
+  await mkdir(repo);
+  execFileSync('git', ['init', '--quiet', repo]);
+  if (attributes !== undefined) await writeFile(path.join(repo, '.gitattributes'), attributes);
+  for (const [name, content] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(repo, name)), { recursive: true });
+    await writeFile(path.join(repo, name), content);
+  }
+  const copy = await createProjectCopy(repo);
+  try {
+    await body(repo, copy);
+  } finally {
+    await discardProjectCopy(copy);
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+}
+
+function projectOf(tasks: TaskManager, taskId: string): ProjectCopy {
+  return (tasks as unknown as { tasks: Map<string, { project: ProjectCopy }> }).tasks.get(taskId)!.project;
+}
+
+for (const attributes of ['* text=auto\n', '* text eol=crlf\n', '* text eol=lf\n']) {
+  test(`integration leaves LF and CRLF originals in their own style (${attributes.trim()})`, async () => {
+    await withCopy({ 'lf.txt': 'one\ntwo\nthree\n', 'crlf.txt': 'one\r\ntwo\r\nthree\r\n' }, attributes, async (repo, copy) => {
+      await writeFile(path.join(copy.copyDirectory, 'lf.txt'), 'one\nTWO\nthree\n');
+      await writeFile(path.join(copy.copyDirectory, 'crlf.txt'), 'one\r\nTWO\r\nthree\r\n');
+      const preview = await previewProjectCopy(copy);
+      assert.equal(preview.summary.insertions, 2);
+      assert.equal(preview.summary.deletions, 2);
+      await integrateProjectCopy(copy, preview.sha256);
+      assert.equal(await readFile(path.join(repo, 'lf.txt'), 'utf8'), 'one\nTWO\nthree\n');
+      assert.equal(await readFile(path.join(repo, 'crlf.txt'), 'utf8'), 'one\r\nTWO\r\nthree\r\n');
+      assert.equal(await readFile(path.join(repo, '.gitattributes'), 'utf8'), attributes);
+    });
+  });
+}
+
+test('a fork of the copy also integrates without converting line endings (* text=auto)', async () => {
+  await withCopy({ 'lf.txt': 'one\ntwo\n', 'crlf.txt': 'one\r\ntwo\r\n' }, '* text=auto\n', async (repo, copy) => {
+    const fork = await forkProjectCopy(copy, DEFAULT_PROJECT_LIMITS);
+    try {
+      await writeFile(path.join(fork.copyDirectory, 'lf.txt'), 'one\nTWO\n');
+      await writeFile(path.join(fork.copyDirectory, 'crlf.txt'), 'one\r\nTWO\r\n');
+      const preview = await previewProjectCopy(fork);
+      assert.equal(preview.summary.insertions, 2);
+      await integrateProjectCopy(fork, preview.sha256);
+      assert.equal(await readFile(path.join(repo, 'lf.txt'), 'utf8'), 'one\nTWO\n');
+      assert.equal(await readFile(path.join(repo, 'crlf.txt'), 'utf8'), 'one\r\nTWO\r\n');
+    } finally {
+      await discardProjectCopy(fork);
+    }
+  });
+});
+
+for (const [fixture, attributes] of [['no attributes', undefined], ['* text=auto', '* text=auto\n']] as const) {
+  test(`a mixed original with one edited line integrates as a one-line change (${fixture})`, async () => {
+    await withTaskManager(attributes, async (repo, adapter, tasks) => {
+      // The majority is CRLF, so normalizing the file would also rewrite the untouched "c" line.
+      await writeFile(path.join(repo, 'majority.txt'), 'a\r\nb\nc\nd\r\ne\r\n');
+      adapter.pid = spawnSync(process.execPath, ['-e', '']).pid;
+      adapter.onSpawn = cwd => {
+        const target = path.join(cwd, 'majority.txt');
+        writeFileSync(target, readFileSync(target, 'utf8').replace('b\n', 'B\n'));
+      };
+      const task = await tasks.run({ prompt: 'edit one line', workingDirectory: repo });
+      await tasks.wait(task.taskId);
+      assert.equal(tasks.status(task.taskId).status, 'completed');
+      const preview = await tasks.preview(task.taskId);
+      assert.equal((tasks.readEvents(task.taskId).events.find(event => event.type === 'process.cleanup')?.data as { verified?: boolean })?.verified, true);
+      assert.deepEqual(preview.files, [{ status: 'M', path: 'majority.txt' }]);
+      assert.equal(preview.summary.insertions, 1);
+      assert.equal(preview.summary.deletions, 1);
+      await integrateProjectCopy(projectOf(tasks, task.taskId), preview.sha256);
+      assert.deepEqual(await readFile(path.join(repo, 'majority.txt')), Buffer.from('a\r\nB\nc\nd\r\ne\r\n'));
+    });
+  });
+}
+
+test('a BOM the CLI drops comes back in the copy and stays in the original', async () => {
+  await withTaskManager('* text=auto\n', async (repo, adapter, tasks) => {
+    await writeFile(path.join(repo, 'bom.txt'), Buffer.concat([BOM, Buffer.from('one\r\ntwo\r\n')]));
+    adapter.pid = spawnSync(process.execPath, ['-e', '']).pid;
+    let seen: Buffer | undefined;
+    adapter.onSpawn = cwd => {
+      const target = path.join(cwd, 'bom.txt');
+      seen = readFileSync(target);
+      writeFileSync(target, 'one\nTWO\n');
+    };
+    const task = await tasks.run({ prompt: 'edit one line', workingDirectory: repo });
+    await tasks.wait(task.taskId);
+    assert.equal(tasks.status(task.taskId).status, 'completed');
+    // The LF conversion of the earlier step keeps the BOM.
+    assert.deepEqual(seen, Buffer.concat([BOM, Buffer.from('one\ntwo\n')]));
+    assert.deepEqual(tasks.readEvents(task.taskId).events.find(event => event.type === 'patch.bom-restored')?.data, { paths: ['bom.txt'] });
+    const preview = await tasks.preview(task.taskId);
+    assert.equal(preview.summary.insertions, 1);
+    assert.equal(preview.summary.deletions, 1);
+    await integrateProjectCopy(projectOf(tasks, task.taskId), preview.sha256);
+    assert.deepEqual(await readFile(path.join(repo, 'bom.txt')), Buffer.concat([BOM, Buffer.from('one\r\nTWO\r\n')]));
+  });
+});
+
+test('integration gives back a BOM the patch drops and reports it', async () => {
+  await withCopy({ 'bom.txt': Buffer.concat([BOM, Buffer.from('one\ntwo\n')]) }, undefined, async (repo, copy) => {
+    await writeFile(path.join(copy.copyDirectory, 'bom.txt'), 'one\nTWO\n');
+    const preview = await previewProjectCopy(copy);
+    const integrated = await integrateProjectCopy(copy, preview.sha256);
+    assert.deepEqual(integrated.restoredByteOrderMarks, ['bom.txt']);
+    assert.deepEqual(await readFile(path.join(repo, 'bom.txt')), Buffer.concat([BOM, Buffer.from('one\nTWO\n')]));
+  });
+});
+
+const REFUSED: [string, Buffer, Buffer, string][] = [
+  ['an edited line of an LF original gets CRLF', Buffer.from('one\ntwo\nthree\n'), Buffer.from('one\nTWO\r\nthree\n'), 'line endings changed from LF'],
+  ['an edited line of a CRLF original gets LF', Buffer.from('one\r\ntwo\r\n'), Buffer.from('one\r\nTWO\n'), 'line endings changed from CRLF'],
+  ['an LF original gets isolated CRs as endings', Buffer.from('one\ntwo\n'), Buffer.from('one\rTWO\r'), 'line endings changed from LF'],
+  ['a CRLF original gets an isolated CR', Buffer.from('one\r\ntwo\r\n'), Buffer.from('one\rTWO\r\n'), 'line endings changed from CRLF'],
+  ['an untouched line of a mixed original changes its ending', Buffer.from('a\r\nb\nc\r\nd\n'), Buffer.from('a\r\nB\nc\r\nd\r\n'), 'lines that were not edited'],
+  ['an untouched line of a mixed original gets an isolated CR', Buffer.from('a\r\nb\nc\nd\r\n'), Buffer.from('a\r\nB\nc\rd\r\n'), 'lines that were not edited'],
+  ['an untouched isolated CR becomes LF', Buffer.from('a\rb\nc\n'), Buffer.from('a\nB\nc\n'), 'lines that were not edited'],
+  ['a text original stops being text', Buffer.from('one\ntwo\n'), Buffer.from('one\r\ntwo\r\n\0'), 'no longer UTF-8 text'],
+  ['a BOM is added', Buffer.from('one\ntwo\n'), Buffer.concat([BOM, Buffer.from('one\ntwo\n')]), 'BOM added'],
+  ['the BOM is dropped and the rest is no longer text', Buffer.concat([BOM, Buffer.from('one\n')]), Buffer.from('one\0\n'), 'no longer UTF-8 text'],
+  ['the BOM is dropped from an original that is not text', Buffer.concat([BOM, Buffer.from('one\0\n')]), Buffer.from('ONE\n'), 'BOM removed from a file that is not UTF-8 text'],
+];
+
+for (const [name, before, after, problem] of REFUSED) {
+  test(`integration is refused and writes nothing when ${name}`, async () => {
+    const untouched = Buffer.from('keep\n');
+    await withCopy({ 'a-fine.txt': untouched, 'b-changed.txt': before }, '* text=auto\n', async (repo, copy) => {
+      await writeFile(path.join(copy.copyDirectory, 'a-fine.txt'), 'keep\nadded\n');
+      await writeFile(path.join(copy.copyDirectory, 'b-changed.txt'), after);
+      const preview = await previewProjectCopy(copy);
+      await assert.rejects(integrateProjectCopy(copy, preview.sha256), (error: BridgeError) => {
+        assert.equal(error.code, 'LINE_ENDINGS_CHANGED');
+        assert.ok(error.message.includes('b-changed.txt: ') && error.message.includes(problem), error.message);
+        assert.ok(!error.message.includes('a-fine.txt'), error.message);
+        return true;
+      });
+      assert.deepEqual(await readFile(path.join(repo, 'a-fine.txt')), untouched);
+      assert.deepEqual(await readFile(path.join(repo, 'b-changed.txt')), before);
+    });
+  });
+}
+
+test('integration adds a file under directories that do not exist yet', async () => {
+  await withCopy({ 'kept.txt': 'one\n' }, undefined, async (repo, copy) => {
+    await mkdir(path.join(copy.copyDirectory, 'new', 'deeper'), { recursive: true });
+    await writeFile(path.join(copy.copyDirectory, 'new', 'deeper', 'added.txt'), 'added\r\n');
+    const preview = await previewProjectCopy(copy);
+    assert.deepEqual(preview.files, [{ status: 'A', path: 'new/deeper/added.txt' }]);
+    await integrateProjectCopy(copy, preview.sha256);
+    assert.equal(await readFile(path.join(repo, 'new', 'deeper', 'added.txt'), 'utf8'), 'added\r\n');
+    assert.equal(await readFile(path.join(repo, 'kept.txt'), 'utf8'), 'one\n');
+  });
+});
+
+test('integration keeps the permissions of a modified original and only applies the mode changes of the patch', async (t) => {
+  if (process.platform === 'win32') return t.skip('POSIX permissions');
+  await withCopy({ 'private.txt': 'one\n', 'tool.sh': 'echo one\n', 'run.sh': 'echo run\n' }, undefined, async (repo, copy) => {
+    // Changed in the original after the copy was made, so the patch says nothing about them.
+    await chmod(path.join(repo, 'private.txt'), 0o600);
+    await chmod(path.join(repo, 'tool.sh'), 0o750);
+    await chmod(path.join(repo, 'run.sh'), 0o640);
+    await writeFile(path.join(copy.copyDirectory, 'private.txt'), 'ONE\n');
+    await writeFile(path.join(copy.copyDirectory, 'tool.sh'), 'echo ONE\n');
+    await writeFile(path.join(copy.copyDirectory, 'run.sh'), 'echo RUN\n');
+    await chmod(path.join(copy.copyDirectory, 'run.sh'), 0o755);
+    const preview = await previewProjectCopy(copy);
+    await integrateProjectCopy(copy, preview.sha256);
+    assert.equal((await lstat(path.join(repo, 'private.txt'))).mode & 0o777, 0o600);
+    assert.equal((await lstat(path.join(repo, 'tool.sh'))).mode & 0o777, 0o750);
+    assert.equal((await lstat(path.join(repo, 'run.sh'))).mode & 0o777, 0o750);
+    assert.equal(await readFile(path.join(repo, 'private.txt'), 'utf8'), 'ONE\n');
+  });
+});
+
+test('a write that fails halfway gives the files already written their previous bytes back', async (t) => {
+  if (process.platform !== 'win32' && process.getuid?.() === 0) return t.skip('root ignores permissions');
+  await withCopy({ 'a/first.txt': 'one\n', 'a/gone.txt': 'gone\n', 'b/second.txt': 'two\n' }, undefined, async (repo, copy) => {
+    await writeFile(path.join(copy.copyDirectory, 'a', 'first.txt'), 'ONE\n');
+    await rm(path.join(copy.copyDirectory, 'a', 'gone.txt'));
+    await writeFile(path.join(copy.copyDirectory, 'b', 'second.txt'), 'TWO\n');
+    const preview = await previewProjectCopy(copy);
+    // Undoing the deletion must bring back the same file, and with it its own permissions, not a new one with the folder's.
+    const deleted = (await lstat(path.join(repo, 'a', 'gone.txt'), { bigint: true })).ino;
+    // Windows refuses to replace a read-only file; elsewhere a read-only directory refuses the temporary file.
+    const blocked = process.platform === 'win32' ? path.join(repo, 'b', 'second.txt') : path.join(repo, 'b');
+    await chmod(blocked, process.platform === 'win32' ? 0o444 : 0o555);
+    try {
+      await assert.rejects(integrateProjectCopy(copy, preview.sha256), (error: BridgeError) => {
+        assert.equal(error.code, 'INTEGRATION_FAILED');
+        assert.ok(error.message.includes('got their previous bytes back'), error.message);
+        return true;
+      });
+    } finally {
+      await chmod(blocked, process.platform === 'win32' ? 0o666 : 0o755);
+    }
+    assert.equal(await readFile(path.join(repo, 'a', 'first.txt'), 'utf8'), 'one\n');
+    assert.equal(await readFile(path.join(repo, 'a', 'gone.txt'), 'utf8'), 'gone\n');
+    assert.equal((await lstat(path.join(repo, 'a', 'gone.txt'), { bigint: true })).ino, deleted);
+    assert.equal(await readFile(path.join(repo, 'b', 'second.txt'), 'utf8'), 'two\n');
+    assert.deepEqual((await readdir(path.join(repo, 'a'))).sort(), ['first.txt', 'gone.txt']);
+  });
+});
+
+test('a deletion leaves nothing behind once the integration succeeds', async () => {
+  await withCopy({ 'gone.txt': 'gone\n', 'kept.txt': 'kept\n' }, undefined, async (repo, copy) => {
+    await rm(path.join(copy.copyDirectory, 'gone.txt'));
+    const preview = await previewProjectCopy(copy);
+    await integrateProjectCopy(copy, preview.sha256);
+    assert.deepEqual((await readdir(repo)).filter(name => name !== '.git').sort(), ['kept.txt']);
+  });
 });
 
 test('task prompt includes delegation guidance', () => {
