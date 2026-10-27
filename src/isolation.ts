@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { git, type HostGitOptions } from './host-git.js';
+import { isUtf8 } from 'node:buffer';
 import { createReadStream } from 'node:fs';
 import { link, lstat, mkdir, mkdtemp, open, readdir, readFile, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { stageProvidedSkills, verifyProvidedSkills, type ProvidedSkill, type StagedSkill } from './skills.js';
 import { BridgeError } from './types.js';
-import { checkIntegratedText, renderLines, replaceInsideRoot, type LfConversion } from './line-endings.js';
+import { checkIntegratedText, decodeUtf16, renderLines, replaceInsideRoot, type LfConversion } from './line-endings.js';
 import { stageExecutionPolicy, verifyExecutionPolicy, discardExecutionPolicy, EXECUTION_POLICY_PATHS, type StagedExecutionPolicy } from './execution-policy.js';
 import type { ResolvedAgentPolicy, McpCatalogEntry } from './agent-policy.js';
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
@@ -46,6 +47,7 @@ export interface ChangePreview {
   sha256: string;
   sourceDirectory: string;
   copyDirectory: string;
+  encodingWarnings?: string[];
 }
 
 export const FENCE_MARKER_NAME = 'CLEANUP_UNVERIFIED';
@@ -512,12 +514,47 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
   }
 }
 
-// The baseline, the patch and its application work on the bytes of each file: '* -text' in info/attributes outranks the
-// project's .gitattributes, so no line ending is converted on the way in or out (core.autocrlf stays off without system
-// and global configuration).
+// The baseline, the patch and its application work on the bytes of each file: info/attributes outranks the project's
+// .gitattributes, so no line ending, encoding or $Id$ keyword is converted on the way in or out (core.autocrlf stays off
+// without system and global configuration). Git may refuse a working-tree-encoding set to false, hence the unspecified state.
 async function treatFilesAsBytes(gitDirectory: string): Promise<void> {
   await mkdir(path.join(gitDirectory, 'info'), { recursive: true });
-  await writeFile(path.join(gitDirectory, 'info', 'attributes'), '* -text\n', { flag: 'wx', mode: 0o600 });
+  await writeFile(path.join(gitDirectory, 'info', 'attributes'), '* -text !working-tree-encoding -ident\n', { flag: 'wx', mode: 0o600 });
+}
+
+// A changed file goes into the patch as text or as binary the way Git diffs it: as text when its diff attribute is set, as
+// binary when it is unset (as with binary), and otherwise as binary only with a NUL byte in its first 8000 bytes. A patch
+// that is not UTF-8 cannot be previewed, so text files that are not UTF-8 are refused before a CLI run, which would
+// otherwise be lost once it edited one of them.
+export async function assertTextIsUtf8(project: ProjectCopy, files: readonly string[]): Promise<void> {
+  const nulByFile = new Map<string, boolean>();
+  for (const relative of files) {
+    const bytes = await readFile(await checkedPath(project.copyDirectory, relative, true));
+    if (!isUtf8(bytes)) nulByFile.set(relative, bytes.subarray(0, 8000).includes(0));
+  }
+  if (!nulByFile.size) return;
+  const scope = ['--git-dir=' + project.gitDirectory, '--work-tree=' + project.copyDirectory];
+  const output = (await copyGit(project, [...scope, 'check-attr', '-z', '--stdin', 'diff'],
+    Buffer.from([...nulByFile.keys()].join('\0') + '\0'))).toString('utf8').split('\0');
+  const refused: string[] = [];
+  for (let index = 0; index + 2 < output.length; index += 3) {
+    const relative = output[index]!, value = output[index + 2]!, nul = nulByFile.get(relative)!;
+    let text = value === 'set' || !nul;
+    // check-attr prints a diff driver literally named "set" or "unset" like the set and unset states, and with such a
+    // driver Git goes by the NUL byte; where the two readings disagree, Git's own diff of the file decides. The ./ prefix
+    // keeps a file named "-" from being read as standard input.
+    if (value === 'set' ? nul : value === 'unset' && !nul) {
+      const numstat = await copyGit(project, [...scope, 'diff', '--no-index', '--no-ext-diff', '--no-textconv', '--numstat', '-z', '--',
+        '/dev/null', './' + relative], undefined, [0, 1]);
+      text = !numstat.toString('utf8').startsWith('-\t');
+    }
+    if (text) refused.push(relative);
+  }
+  if (!refused.length) return;
+  const listed = refused.slice(0, 20).join(', ') + (refused.length > 20 ? ' and ' + (refused.length - 20) + ' more' : '');
+  throw new BridgeError('UNSUPPORTED_TEXT_ENCODING', 'The CLI was not started: these text files are not UTF-8, so a change to ' +
+    'any of them could not be previewed: ' + listed + '. Mark them as binary in .gitattributes (for example "' + refused[0] +
+    ' binary"), leave them out with includePaths, or convert them to UTF-8, then start the task again.');
 }
 
 function ensurePatchUtf8RoundTrip(bytes: Buffer): string {
@@ -884,6 +921,14 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
       if (!stat) throw new BridgeError('GIT_OPERATION_FAILED', 'Missing diff statistics for: ' + file.path);
       return { ...file, ...stat };
     });
+    // A new UTF-16 file, such as output redirected by Windows PowerShell 5.1, has NUL bytes and reaches the patch as binary.
+    const encodingWarnings: string[] = [];
+    for (const file of fileSummaries) {
+      if (file.status !== 'A' || !file.binary) continue;
+      const utf16 = decodeUtf16(await readFile(path.join(worktree, ...file.path.split('/'))));
+      if (utf16) encodingWarnings.push(file.path + ': new ' + utf16.encoding + ' text file, carried as binary in the patch; ' +
+        'convert it to UTF-8 unless it must stay UTF-16');
+    }
     const summary = { filesChanged: files.length, added: files.filter(file => file.status === 'A').length,
       modified: files.filter(file => file.status === 'M').length, deleted: files.filter(file => file.status === 'D').length,
       insertions: fileSummaries.reduce((total, file) => total + (file.insertions ?? 0), 0),
@@ -898,7 +943,7 @@ export async function previewProjectCopy(project: ProjectCopy, limits: ProjectLi
       throw new BridgeError('CONTEXT_CHANGED', 'Copy changed while preparing its patch');
     }
     return { files, fileSummaries, summary, patch, sha256,
-      sourceDirectory: project.sourceDirectory, copyDirectory: project.copyDirectory };
+      sourceDirectory: project.sourceDirectory, copyDirectory: project.copyDirectory, ...(encodingWarnings.length ? { encodingWarnings } : {}) };
   } catch (error) {
     try { await snapshotGit(['read-tree', checked.baselineCommit]); }
     catch { await writeFenceMarker(project); throw new BridgeError('GIT_CLEANUP_UNVERIFIED', 'Could not restore private index after patch preparation failed'); }
@@ -1098,10 +1143,10 @@ function integratedMode(original: number, filePatch: string): number {
 }
 
 // A line that changed only its ending counts as changed when its ending is part of the line and as unchanged when it is not.
-async function lineEndingOnlyChanges(project: ProjectCopy, area: string, before: Buffer, after: Buffer): Promise<boolean> {
+async function lineEndingOnlyChanges(project: ProjectCopy, area: string, before: string, after: string): Promise<boolean> {
   const directory = path.join(area, 'lines');
   await mkdir(directory, { recursive: true });
-  const rendered = [renderLines(before.toString('utf8')), renderLines(after.toString('utf8'))];
+  const rendered = [renderLines(before), renderLines(after)];
   const numstat = async (key: 'withEndings' | 'withoutEndings') => {
     await writeFile(path.join(directory, 'before'), rendered[0]![key]);
     await writeFile(path.join(directory, 'after'), rendered[1]![key]);
@@ -1145,7 +1190,7 @@ Promise<{ after: Map<string, FileImage>; restoredByteOrderMarks: string[] }> {
         restoredByteOrderMarks.push(file.path);
         await writeFile(target, checked.content);
       }
-      const problem = checked.problem ?? (checked.lineByLine && await lineEndingOnlyChanges(project, area, original.bytes, checked.content)
+      const problem = checked.problem ?? (checked.lines && await lineEndingOnlyChanges(project, area, ...checked.lines)
         ? 'line endings changed on lines that were not edited' : undefined);
       if (problem) problems.push(file.path + ': ' + problem);
       after.set(file.path, { bytes: checked.content, mode: integratedMode(original.mode, extractFilePatch(preview, file.path)) });

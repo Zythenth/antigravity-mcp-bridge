@@ -30374,6 +30374,7 @@ async function git(cwd, args, input2, allowedCodes = [0], options) {
 }
 
 // dist/src/isolation.js
+import { isUtf8 } from "node:buffer";
 import { createReadStream as createReadStream2 } from "node:fs";
 import { link, lstat as lstat5, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir3, readFile as readFile3, realpath as realpath4, rename as rename2, rm as rm2, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
 import os4 from "node:os";
@@ -31509,6 +31510,36 @@ function isAcceptedText(buffer) {
 function hasBom(buffer) {
   return buffer.subarray(0, BOM.length).equals(BOM);
 }
+var LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+function decodeUtf16(buffer) {
+  if (buffer.length % 2 !== 0)
+    return void 0;
+  let encoding;
+  if (buffer[0] === 255 && buffer[1] === 254 && !(buffer[2] === 0 && buffer[3] === 0))
+    encoding = "UTF-16LE";
+  else if (buffer[0] === 254 && buffer[1] === 255)
+    encoding = "UTF-16BE";
+  else
+    return void 0;
+  const text = (encoding === "UTF-16BE" ? Buffer.from(buffer).swap16() : buffer).toString("utf16le");
+  return LONE_SURROGATE.test(text) ? void 0 : { encoding, text };
+}
+function textEncoding(buffer) {
+  if (isUtf8Text(buffer))
+    return "UTF-8";
+  const utf16 = decodeUtf16(buffer);
+  if (utf16)
+    return utf16.encoding;
+  return buffer.includes(0) ? void 0 : "bytes";
+}
+function decodeText(buffer, encoding) {
+  if (encoding === "bytes")
+    return buffer.toString("latin1");
+  if (encoding === "UTF-8")
+    return isUtf8Text(buffer) ? buffer.toString("utf8") : void 0;
+  const utf16 = decodeUtf16(buffer);
+  return utf16?.encoding === encoding ? utf16.text : void 0;
+}
 function textStyle(text) {
   if (/\r(?!\n)/.test(text))
     return void 0;
@@ -31705,23 +31736,24 @@ function checkIntegratedText(before, after) {
   let bomRestored = false;
   if (hasBom(before) && !hasBom(after)) {
     if (!isUtf8Text(before))
-      return { content, bomRestored, lineByLine: false, problem: "BOM removed from a file that is not UTF-8 text" };
+      return { content, bomRestored, problem: "BOM removed from a file that is not UTF-8 text" };
     content = Buffer.concat([BOM, after]);
     bomRestored = true;
   } else if (!hasBom(before) && hasBom(after)) {
-    return { content, bomRestored, lineByLine: false, problem: "BOM added" };
+    return { content, bomRestored, problem: "BOM added" };
   }
-  if (!isUtf8Text(before))
-    return { content, bomRestored, lineByLine: false };
-  if (!isUtf8Text(content))
-    return { content, bomRestored, lineByLine: false, problem: "no longer UTF-8 text, so its line endings cannot be checked" };
-  const beforeText = before.toString("utf8");
+  const encoding = textEncoding(before);
+  if (!encoding)
+    return { content, bomRestored };
+  const beforeText = decodeText(before, encoding);
+  const text = decodeText(content, encoding);
+  if (text === void 0)
+    return { content, bomRestored, problem: "no longer " + encoding + " text, so its line endings cannot be checked" };
   const style = textStyle(beforeText);
-  const text = content.toString("utf8");
   if (style === "crlf" && /(?<!\r)\n|\r(?!\n)/.test(text) || style === "lf" && text.includes("\r")) {
-    return { content, bomRestored, lineByLine: false, problem: "line endings changed from " + style.toUpperCase() };
+    return { content, bomRestored, problem: "line endings changed from " + style.toUpperCase() };
   }
-  return { content, bomRestored, lineByLine: style === "mixed" || /\r(?!\n)/.test(beforeText) };
+  return { content, bomRestored, ...style === "mixed" || /\r(?!\n)/.test(beforeText) ? { lines: [beforeText, text] } : {} };
 }
 function renderLines(text) {
   const lines = text.match(/[^\r\n]*(?:\r\n|\n|\r)|[^\r\n]+$/g) ?? [];
@@ -33590,7 +33622,45 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
 }
 async function treatFilesAsBytes(gitDirectory) {
   await mkdir3(path10.join(gitDirectory, "info"), { recursive: true });
-  await writeFile4(path10.join(gitDirectory, "info", "attributes"), "* -text\n", { flag: "wx", mode: 384 });
+  await writeFile4(path10.join(gitDirectory, "info", "attributes"), "* -text !working-tree-encoding -ident\n", { flag: "wx", mode: 384 });
+}
+async function assertTextIsUtf8(project, files) {
+  const nulByFile = /* @__PURE__ */ new Map();
+  for (const relative2 of files) {
+    const bytes = await readFile3(await checkedPath(project.copyDirectory, relative2, true));
+    if (!isUtf8(bytes))
+      nulByFile.set(relative2, bytes.subarray(0, 8e3).includes(0));
+  }
+  if (!nulByFile.size)
+    return;
+  const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + project.copyDirectory];
+  const output2 = (await copyGit(project, [...scope, "check-attr", "-z", "--stdin", "diff"], Buffer.from([...nulByFile.keys()].join("\0") + "\0"))).toString("utf8").split("\0");
+  const refused = [];
+  for (let index = 0; index + 2 < output2.length; index += 3) {
+    const relative2 = output2[index], value = output2[index + 2], nul = nulByFile.get(relative2);
+    let text = value === "set" || !nul;
+    if (value === "set" ? nul : value === "unset" && !nul) {
+      const numstat = await copyGit(project, [
+        ...scope,
+        "diff",
+        "--no-index",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--numstat",
+        "-z",
+        "--",
+        "/dev/null",
+        "./" + relative2
+      ], void 0, [0, 1]);
+      text = !numstat.toString("utf8").startsWith("-	");
+    }
+    if (text)
+      refused.push(relative2);
+  }
+  if (!refused.length)
+    return;
+  const listed = refused.slice(0, 20).join(", ") + (refused.length > 20 ? " and " + (refused.length - 20) + " more" : "");
+  throw new BridgeError("UNSUPPORTED_TEXT_ENCODING", "The CLI was not started: these text files are not UTF-8, so a change to any of them could not be previewed: " + listed + '. Mark them as binary in .gitattributes (for example "' + refused[0] + ' binary"), leave them out with includePaths, or convert them to UTF-8, then start the task again.');
 }
 function ensurePatchUtf8RoundTrip(bytes) {
   const patchText = bytes.toString("utf8");
@@ -33914,6 +33984,14 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
         throw new BridgeError("GIT_OPERATION_FAILED", "Missing diff statistics for: " + file3.path);
       return { ...file3, ...stat4 };
     });
+    const encodingWarnings = [];
+    for (const file3 of fileSummaries) {
+      if (file3.status !== "A" || !file3.binary)
+        continue;
+      const utf16 = decodeUtf16(await readFile3(path10.join(worktree, ...file3.path.split("/"))));
+      if (utf16)
+        encodingWarnings.push(file3.path + ": new " + utf16.encoding + " text file, carried as binary in the patch; convert it to UTF-8 unless it must stay UTF-16");
+    }
     const summary = {
       filesChanged: files.length,
       added: files.filter((file3) => file3.status === "A").length,
@@ -33943,7 +34021,8 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
       patch,
       sha256,
       sourceDirectory: project.sourceDirectory,
-      copyDirectory: project.copyDirectory
+      copyDirectory: project.copyDirectory,
+      ...encodingWarnings.length ? { encodingWarnings } : {}
     };
   } catch (error62) {
     try {
@@ -34141,7 +34220,7 @@ function integratedMode(original, filePatch) {
 async function lineEndingOnlyChanges(project, area, before, after) {
   const directory = path10.join(area, "lines");
   await mkdir3(directory, { recursive: true });
-  const rendered = [renderLines(before.toString("utf8")), renderLines(after.toString("utf8"))];
+  const rendered = [renderLines(before), renderLines(after)];
   const numstat = async (key) => {
     await writeFile4(path10.join(directory, "before"), rendered[0][key]);
     await writeFile4(path10.join(directory, "after"), rendered[1][key]);
@@ -34201,7 +34280,7 @@ async function applyInPrivateArea(project, preview, before) {
         restoredByteOrderMarks.push(file3.path);
         await writeFile4(target, checked.content);
       }
-      const problem = checked.problem ?? (checked.lineByLine && await lineEndingOnlyChanges(project, area, original.bytes, checked.content) ? "line endings changed on lines that were not edited" : void 0);
+      const problem = checked.problem ?? (checked.lines && await lineEndingOnlyChanges(project, area, ...checked.lines) ? "line endings changed on lines that were not edited" : void 0);
       if (problem)
         problems.push(file3.path + ": " + problem);
       after.set(file3.path, { bytes: checked.content, mode: integratedMode(original.mode, extractFilePatch(preview, file3.path)) });
@@ -45246,7 +45325,8 @@ var previewShape = {
   patch: external_exports.string(),
   sha256: hash2,
   sourceDirectory: external_exports.string(),
-  copyDirectory: external_exports.string()
+  copyDirectory: external_exports.string(),
+  encodingWarnings: external_exports.array(external_exports.string()).optional()
 };
 var chunkShape = {
   text: external_exports.string(),
@@ -54207,7 +54287,9 @@ ${redacted}`;
     const project = task2.project;
     if (await readLineEndingConversions(project))
       throw new BridgeError("LINE_ENDINGS_UNRESTORED", "A previous run left files converted to LF; confirm its processes ended before starting another");
-    const { styles, boms, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
+    const editable = await editableCopyFiles(project, this.config);
+    await assertTextIsUtf8(project, editable);
+    const { styles, boms, conversions } = await planLineEndings(project.copyDirectory, editable);
     task2.record.processCleanup = void 0;
     this.persist(task2.record.taskId);
     try {

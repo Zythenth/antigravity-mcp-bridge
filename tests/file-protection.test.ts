@@ -2330,7 +2330,7 @@ test('regression: BOM/NUL-padded Unicode secret signatures are blocked before Gi
       assert.equal(headTree.includes('source.txt'), false);
       assert.equal(headTree.includes('window-crossing-utf16le.txt'), false);
 
-      // Verify safe Unicode source was copied byte-for-byte and Git canonical content is converted UTF-8
+      // Verify safe Unicode source was copied byte-for-byte and the private baseline keeps its bytes, not a UTF-8 conversion
       assert.ok(copy.includedFiles.includes('safe-unicode.txt'));
       const copiedSafeBytes = await readFile(path.join(copy.copyDirectory, 'safe-unicode.txt'));
       assert.deepEqual(copiedSafeBytes, safeUnicodeBuf);
@@ -2338,10 +2338,8 @@ test('regression: BOM/NUL-padded Unicode secret signatures are blocked before Gi
         copy.baseline.get('safe-unicode.txt'),
         createHash('sha256').update(safeUnicodeBuf).digest('hex'),
       );
-      const canonicalGitBlob = (
-        await copyGit(copy, ['--git-dir=' + copy.gitDirectory, 'show', 'HEAD:safe-unicode.txt'])
-      ).toString('utf8');
-      assert.equal(canonicalGitBlob, safeUnicodeText);
+      const baselineBlob = await copyGit(copy, ['--git-dir=' + copy.gitDirectory, 'show', 'HEAD:safe-unicode.txt']);
+      assert.deepEqual(baselineBlob, safeUnicodeBuf);
 
       // Verify safe source, public certificate, and harmless excepted env remain intact byte-for-byte
       assert.deepEqual(await readFile(path.join(copy.copyDirectory, 'src', 'unicode-auth.ts')), safeSourceBuf);

@@ -9,6 +9,7 @@ import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
 import { CliAdapter, DELEGATION_GUIDANCE, taskPrompt, type Discovery, type Model } from '../src/cli-adapter.js';
 import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
+import { successOutputSchemas } from '../src/output-schemas.js';
 import { collectArtifacts } from '../src/artifacts.js';
 import { clearLineEndingConversions, createProjectCopy, discardProjectCopy, forkProjectCopy, integrateProjectCopy, previewProjectCopy, readLineEndingConversions, writeLineEndingConversions, type ProjectCopy } from '../src/isolation.js';
 import { verifyCriteria } from '../src/verification.js';
@@ -525,7 +526,106 @@ test('integration gives back a BOM the patch drops and reports it', async () => 
   });
 });
 
-const REFUSED: [string, Buffer, Buffer, string][] = [
+// "café" and "one" in Windows-1252: 0xE9 is not valid UTF-8 and there is no NUL byte, so Git diffs the file as text.
+function cp1252(endings: string[]): Buffer {
+  return Buffer.concat([Buffer.from([0x63, 0x61, 0x66, 0xe9]), Buffer.from(endings[0]! + 'one' + endings[1]!, 'latin1')]);
+}
+
+// UTF-16 with its BOM, as Windows PowerShell 5.1 writes redirected output.
+function utf16(text: string, order: 'le' | 'be' = 'le'): Buffer {
+  const bytes = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  return order === 'le' ? bytes : bytes.swap16();
+}
+
+test('a write run is refused before the CLI starts when an included text file is not UTF-8', async () => {
+  // A set diff attribute makes Git diff even NUL bytes as text; "diff=unset" and "diff=set" name drivers, which check-attr
+  // prints like -diff and diff, and Git diffs by the NUL byte. A file named "-" must not be read as standard input.
+  await withTaskManager('marked.txt binary\nunset.txt -diff\nforced.txt diff\nnamed.txt diff=unset\n- diff=set\n', async (repo, adapter, tasks) => {
+    for (const name of ['legacy.txt', 'marked.txt', 'unset.txt', 'named.txt']) await writeFile(path.join(repo, name), cp1252(['\r\n', '\r\n']));
+    for (const name of ['wide.txt', 'forced.txt', '-']) await writeFile(path.join(repo, name), utf16('one\r\n'));
+    let started = 0;
+    adapter.onSpawn = () => { started++; };
+    const refused = await tasks.run({ prompt: 'edit', workingDirectory: repo });
+    await tasks.wait(refused.taskId);
+    const error = tasks.status(refused.taskId).error!;
+    assert.equal(error.code, 'UNSUPPORTED_TEXT_ENCODING');
+    assert.ok(error.message.includes(': forced.txt, legacy.txt, named.txt.') && error.message.includes('binary'), error.message);
+    assert.ok(!['marked.txt', 'unset.txt', 'wide.txt'].some(name => error.message.includes(name)), error.message);
+    assert.equal(started, 0);
+    assert.equal(tasks.readEvents(refused.taskId).events.some(event => event.type === 'process.started'), false);
+
+    // A read-only run leaves no patch to preview, so the file does not stop it.
+    const readOnly = await tasks.run({ prompt: 'read', workingDirectory: repo, mode: 'read-only' });
+    await tasks.wait(readOnly.taskId);
+    assert.equal(tasks.status(readOnly.taskId).status, 'completed');
+
+    await writeFile(path.join(repo, '.gitattributes'), 'marked.txt binary\nunset.txt -diff\nlegacy.txt binary\nnamed.txt binary\n');
+    const accepted = await tasks.run({ prompt: 'edit', workingDirectory: repo });
+    await tasks.wait(accepted.taskId);
+    assert.equal(tasks.status(accepted.taskId).status, 'completed');
+  });
+});
+
+test('a new UTF-16 file is flagged in the preview instead of passing as a silent binary', async () => {
+  await withTaskManager(undefined, async (repo, adapter, tasks) => {
+    adapter.onSpawn = cwd => {
+      writeFileSync(path.join(cwd, 'out.txt'), utf16('result\r\n'));
+      writeFileSync(path.join(cwd, 'out-be.txt'), utf16('result\r\n', 'be'));
+      // FF FE 00 00 opens UTF-32LE, not UTF-16.
+      writeFileSync(path.join(cwd, 'data.bin'), Buffer.from([0xff, 0xfe, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]));
+      writeFileSync(path.join(cwd, 'lf.txt'), utf16('changed\n'));
+    };
+    const task = await tasks.run({ prompt: 'write output', workingDirectory: repo });
+    await tasks.wait(task.taskId);
+    assert.equal(tasks.status(task.taskId).status, 'completed');
+    const preview = await tasks.preview(task.taskId);
+    assert.deepEqual(preview.fileSummaries.filter(file => file.binary).map(file => file.status + ' ' + file.path), ['A data.bin', 'M lf.txt', 'A out-be.txt', 'A out.txt']);
+    const warnings = preview.encodingWarnings ?? [];
+    assert.equal(warnings.length, 2, JSON.stringify(warnings));
+    assert.ok(warnings[0]!.startsWith('out-be.txt: new UTF-16BE text file'), JSON.stringify(warnings));
+    assert.ok(warnings[1]!.startsWith('out.txt: new UTF-16LE text file'), JSON.stringify(warnings));
+    assert.deepEqual(successOutputSchemas.antigravity_preview.parse(preview).encodingWarnings, preview.encodingWarnings);
+  });
+});
+
+for (const [name, attributes, before, after] of [
+  ['working-tree-encoding', '*.txt working-tree-encoding=UTF-16\n', utf16('one\r\ntwo\r\n'), utf16('one\r\nTWO\r\n')],
+  // With ident, Git would read the expanded keyword as $Id$ and the patch would no longer match the original.
+  ['ident', '*.txt ident\n', Buffer.from('top\n$Id: 0123456789abcdef $\none\n'), Buffer.from('top\n$Id: 0123456789abcdef $\nONE\n')],
+] as const) {
+  test(`integration writes the reviewed bytes whatever ${name} in .gitattributes says`, async () => {
+    await withCopy({ 'a.txt': before, 'b.txt': 'kept\n' }, attributes, async (repo, copy) => {
+      await writeFile(path.join(copy.copyDirectory, 'a.txt'), after);
+      const preview = await previewProjectCopy(copy);
+      assert.deepEqual(preview.files, [{ status: 'M', path: 'a.txt' }]);
+      await integrateProjectCopy(copy, preview.sha256);
+      assert.deepEqual(await readFile(path.join(repo, 'a.txt')), after);
+      assert.equal(await readFile(path.join(repo, 'b.txt'), 'utf8'), 'kept\n');
+      assert.equal(await readFile(path.join(repo, '.gitattributes'), 'utf8'), attributes);
+    });
+  });
+}
+
+test('originals that are not UTF-8 integrate when their line endings stay', async () => {
+  const files = { 'crlf.txt': cp1252(['\r\n', '\r\n']), 'mixed.txt': cp1252(['\r\n', '\n']), 'wide.txt': utf16('one\r\ntwo\r\n') };
+  await withCopy(files, 'crlf.txt binary\nmixed.txt binary\n', async (repo, copy) => {
+    const edited = { 'crlf.txt': Buffer.from('CAFE\r\none\r\n'), 'mixed.txt': cp1252(['\r\n', '!\n']), 'wide.txt': utf16('one\r\nTWO\r\n') };
+    for (const [name, content] of Object.entries(edited)) await writeFile(path.join(copy.copyDirectory, name), content);
+    const preview = await previewProjectCopy(copy);
+    assert.equal(preview.summary.binaryFiles, 3);
+    await integrateProjectCopy(copy, preview.sha256);
+    for (const [name, content] of Object.entries(edited)) assert.deepEqual(await readFile(path.join(repo, name)), content, name);
+  });
+});
+
+const NOT_UTF8 = '* text=auto\nb-changed.txt binary\n';
+
+const REFUSED: [string, Buffer, Buffer, string, string?][] = [
+  ['a CRLF original that is not UTF-8 gets LF', cp1252(['\r\n', '\r\n']), cp1252(['\r\n', '\n']), 'line endings changed from CRLF', NOT_UTF8],
+  ['an untouched line of a mixed original that is not UTF-8 changes its ending', Buffer.concat([cp1252(['\r\n', '\n']), Buffer.from('two\r\n')]),
+    Buffer.concat([cp1252(['\r\n', '\r\n']), Buffer.from('TWO\r\n')]), 'lines that were not edited', NOT_UTF8],
+  ['a UTF-16 CRLF original gets LF', utf16('one\r\ntwo\r\n'), utf16('one\r\nTWO\n'), 'line endings changed from CRLF'],
+  ['a UTF-16LE original becomes UTF-16BE', utf16('one\r\n'), utf16('one\r\n', 'be'), 'no longer UTF-16LE text'],
   ['an edited line of an LF original gets CRLF', Buffer.from('one\ntwo\nthree\n'), Buffer.from('one\nTWO\r\nthree\n'), 'line endings changed from LF'],
   ['an edited line of a CRLF original gets LF', Buffer.from('one\r\ntwo\r\n'), Buffer.from('one\r\nTWO\n'), 'line endings changed from CRLF'],
   ['an LF original gets isolated CRs as endings', Buffer.from('one\ntwo\n'), Buffer.from('one\rTWO\r'), 'line endings changed from LF'],
@@ -539,10 +639,10 @@ const REFUSED: [string, Buffer, Buffer, string][] = [
   ['the BOM is dropped from an original that is not text', Buffer.concat([BOM, Buffer.from('one\0\n')]), Buffer.from('ONE\n'), 'BOM removed from a file that is not UTF-8 text'],
 ];
 
-for (const [name, before, after, problem] of REFUSED) {
+for (const [name, before, after, problem, attributes] of REFUSED) {
   test(`integration is refused and writes nothing when ${name}`, async () => {
     const untouched = Buffer.from('keep\n');
-    await withCopy({ 'a-fine.txt': untouched, 'b-changed.txt': before }, '* text=auto\n', async (repo, copy) => {
+    await withCopy({ 'a-fine.txt': untouched, 'b-changed.txt': before }, attributes ?? '* text=auto\n', async (repo, copy) => {
       await writeFile(path.join(copy.copyDirectory, 'a-fine.txt'), 'keep\nadded\n');
       await writeFile(path.join(copy.copyDirectory, 'b-changed.txt'), after);
       const preview = await previewProjectCopy(copy);
