@@ -24,7 +24,7 @@ import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craf
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
 import type { Config, ApprovalMode } from './config.js';
 import { EventStore } from './event-store.js';
-import { createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
+import { assertTextIsUtf8, createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
@@ -2066,7 +2066,9 @@ export class TaskManager {
   private async spawnWithLfCopy(task: InternalTask, options: RunOptions, convert: boolean): Promise<{ child: CliProcess; styles: Map<string, LineEndingStyle>; boms: Set<string> }> {
     const project = task.project!;
     if (await readLineEndingConversions(project)) throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'A previous run left files converted to LF; confirm its processes ended before starting another');
-    const { styles, boms, conversions } = await planLineEndings(project.copyDirectory, await editableCopyFiles(project, this.config));
+    const editable = await editableCopyFiles(project, this.config);
+    await assertTextIsUtf8(project, editable);
+    const { styles, boms, conversions } = await planLineEndings(project.copyDirectory, editable);
     // The cleanup on record must describe this launch, never an earlier one; it is persisted before any file changes.
     task.record.processCleanup = undefined;
     this.persist(task.record.taskId);

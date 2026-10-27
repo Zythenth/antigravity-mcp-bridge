@@ -82,7 +82,7 @@ const fileSummary = file.extend({ insertions: count.nullable(), deletions: count
 const previewShape = {
   files: z.array(file), fileSummaries: z.array(fileSummary),
   summary: z.object({ filesChanged: count, added: count, modified: count, deleted: count, insertions: count, deletions: count, binaryFiles: count }).strict(),
-  patch: z.string(), sha256: hash, sourceDirectory: z.string(), copyDirectory: z.string(),
+  patch: z.string(), sha256: hash, sourceDirectory: z.string(), copyDirectory: z.string(), encodingWarnings: z.array(z.string()).optional(),
 };
 const chunkShape = {
   text: z.string(), offset: count, length: count, totalLength: count, nextOffset: count,

@@ -44,6 +44,38 @@ function hasBom(buffer: Buffer): boolean {
   return buffer.subarray(0, BOM.length).equals(BOM);
 }
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+// UTF-16 text is recognized by the BOM that gives its byte order (FF FE 00 00 opens UTF-32LE instead); an odd length or a
+// lone surrogate means the bytes are something else.
+export function decodeUtf16(buffer: Buffer): { encoding: 'UTF-16LE' | 'UTF-16BE'; text: string } | undefined {
+  if (buffer.length % 2 !== 0) return undefined;
+  let encoding: 'UTF-16LE' | 'UTF-16BE';
+  if (buffer[0] === 0xff && buffer[1] === 0xfe && !(buffer[2] === 0 && buffer[3] === 0)) encoding = 'UTF-16LE';
+  else if (buffer[0] === 0xfe && buffer[1] === 0xff) encoding = 'UTF-16BE';
+  else return undefined;
+  const text = (encoding === 'UTF-16BE' ? Buffer.from(buffer).swap16() : buffer).toString('utf16le');
+  return LONE_SURROGATE.test(text) ? undefined : { encoding, text };
+}
+
+type TextEncoding = 'UTF-8' | 'UTF-16LE' | 'UTF-16BE' | 'bytes';
+
+// How an original is read to check its line endings: as UTF-8, as UTF-16 with a BOM, or, for other text without NUL bytes,
+// byte by byte, which keeps CR and LF exact in the encodings that extend ASCII. Anything else is binary and has no lines.
+function textEncoding(buffer: Buffer): TextEncoding | undefined {
+  if (isUtf8Text(buffer)) return 'UTF-8';
+  const utf16 = decodeUtf16(buffer);
+  if (utf16) return utf16.encoding;
+  return buffer.includes(0) ? undefined : 'bytes';
+}
+
+function decodeText(buffer: Buffer, encoding: TextEncoding): string | undefined {
+  if (encoding === 'bytes') return buffer.toString('latin1');
+  if (encoding === 'UTF-8') return isUtf8Text(buffer) ? buffer.toString('utf8') : undefined;
+  const utf16 = decodeUtf16(buffer);
+  return utf16?.encoding === encoding ? utf16.text : undefined;
+}
+
 // An isolated CR makes the line structure ambiguous, so such text has no style. Only text with one kind of line ending
 // converts to the other kind and back to the same bytes.
 function textStyle(text: string): LineEndingStyle | undefined {
@@ -248,31 +280,32 @@ export async function restoreByteOrderMarks(root: string, relativePaths: readonl
   return restored;
 }
 
-export interface IntegratedText { content: Buffer; bomRestored: boolean; problem?: string; lineByLine: boolean }
+export interface IntegratedText { content: Buffer; bomRestored: boolean; problem?: string; lines?: [before: string, after: string] }
 
-// What integrating a changed file may not alter in the original: its BOM and its line endings. A BOM the change dropped comes
-// back when the original is UTF-8 text. A pure original must keep only its own ending, an isolated CR counting as one; for a
-// mixed one, or one with isolated CRs, lineByLine asks the caller to prove that no line changed only its ending. A UTF-8 text
-// original must stay UTF-8 text, or none of this could be checked; line endings of other originals are not inspected.
+// What integrating a changed file may not alter in the original: its UTF-8 BOM and its line endings. A UTF-8 BOM the change
+// dropped comes back when the original is UTF-8 text. A pure original must keep only its own ending, an isolated CR counting
+// as one; for a mixed one, or one with isolated CRs, lines asks the caller to prove that no line changed only its ending. A
+// text original must stay readable the same way, or none of this could be checked; binary originals are not inspected.
 export function checkIntegratedText(before: Buffer, after: Buffer): IntegratedText {
   let content = after;
   let bomRestored = false;
   if (hasBom(before) && !hasBom(after)) {
-    if (!isUtf8Text(before)) return { content, bomRestored, lineByLine: false, problem: 'BOM removed from a file that is not UTF-8 text' };
+    if (!isUtf8Text(before)) return { content, bomRestored, problem: 'BOM removed from a file that is not UTF-8 text' };
     content = Buffer.concat([BOM, after]);
     bomRestored = true;
   } else if (!hasBom(before) && hasBom(after)) {
-    return { content, bomRestored, lineByLine: false, problem: 'BOM added' };
+    return { content, bomRestored, problem: 'BOM added' };
   }
-  if (!isUtf8Text(before)) return { content, bomRestored, lineByLine: false };
-  if (!isUtf8Text(content)) return { content, bomRestored, lineByLine: false, problem: 'no longer UTF-8 text, so its line endings cannot be checked' };
-  const beforeText = before.toString('utf8');
+  const encoding = textEncoding(before);
+  if (!encoding) return { content, bomRestored };
+  const beforeText = decodeText(before, encoding)!;
+  const text = decodeText(content, encoding);
+  if (text === undefined) return { content, bomRestored, problem: 'no longer ' + encoding + ' text, so its line endings cannot be checked' };
   const style = textStyle(beforeText);
-  const text = content.toString('utf8');
   if ((style === 'crlf' && /(?<!\r)\n|\r(?!\n)/.test(text)) || (style === 'lf' && text.includes('\r'))) {
-    return { content, bomRestored, lineByLine: false, problem: 'line endings changed from ' + style.toUpperCase() };
+    return { content, bomRestored, problem: 'line endings changed from ' + style.toUpperCase() };
   }
-  return { content, bomRestored, lineByLine: style === 'mixed' || /\r(?!\n)/.test(beforeText) };
+  return { content, bomRestored, ...(style === 'mixed' || /\r(?!\n)/.test(beforeText) ? { lines: [beforeText, text] as [string, string] } : {}) };
 }
 
 // One JSON line per line of text: with its ending spelled out, or with only its content and whether it had an ending at all.
