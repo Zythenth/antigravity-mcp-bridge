@@ -1,6 +1,8 @@
 import type { BridgeEvent } from './types.js';
 import { logTaskEvent } from './logger.js';
 
+export const MAX_EVENT_PAYLOAD_CHARS = 16000;
+
 export class EventStore {
   private readonly events: BridgeEvent[] = [];
   private readonly cursors = new Map<string, number>();
@@ -11,7 +13,7 @@ export class EventStore {
     this.cursors.set(taskId, sequence);
     const bounded = (value: unknown) => {
       const serialized = JSON.stringify(value);
-      return serialized && serialized.length > 16000 ? { truncated: true, preview: serialized.slice(0, 16000) } : value;
+      return serialized && serialized.length > MAX_EVENT_PAYLOAD_CHARS ? { truncated: true, preview: serialized.slice(0, MAX_EVENT_PAYLOAD_CHARS) } : value;
     };
     const event: BridgeEvent = { taskId, sequence, timestamp: new Date().toISOString(), type, data: bounded(data) };
     if (raw !== undefined) event.raw = bounded(raw);
