@@ -10,7 +10,7 @@ import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from '.
 import { validateProjectRoot, listProjectFiles } from './isolation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { readExecutionPolicyReceipt } from './execution-policy.js';
+import { readExecutionPolicyReceipt, readReceiptEditsSync, type ReceiptEdit } from './execution-policy.js';
 import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolicy } from './agent-policy.js';
 import { integrationPreauthorized, type IntegrationApproval } from './integration-policy.js';
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -23,7 +23,7 @@ import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } f
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
 import type { Config, ApprovalMode } from './config.js';
-import { EventStore } from './event-store.js';
+import { EventStore, MAX_EVENT_PAYLOAD_CHARS } from './event-store.js';
 import { assertTextIsUtf8, createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
@@ -53,7 +53,7 @@ const RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5_000_000 };
 
 interface PendingResponse { text: string; redaction: RedactionState; suppressing: boolean; dropped: string; untilDone: boolean; held: string[]; overflow: boolean }
 
-interface InternalTask { publicResponses?: Map<number, string>; pendingResponses?: Map<number, PendingResponse>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
+interface InternalTask { publicResponses?: Map<number, string>; pendingResponses?: Map<number, PendingResponse>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; editReceipts?: { offset: number; pending: Map<string, ReceiptEdit[]>; ambiguous: Set<string> }; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 function restoredEvents(stored: readonly BridgeEvent[]): BridgeEvent[] {
@@ -1377,7 +1377,10 @@ export class TaskManager {
           maxCopyFiles: this.config.maxCopyFiles, maxCopyBytes: this.config.maxCopyBytes });
         task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: new Set() };
       }
-      if (task.project.executionPolicy) policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset;
+      if (task.project.executionPolicy) {
+        policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset;
+        task.editReceipts = { offset: policyReceiptOffset, pending: new Map(), ambiguous: new Set() };
+      } else task.editReceipts = undefined;
       if (task.options.craft) await verifyCraftSelection(task.options.craft);
       const spawnedAt = Date.now();
       let child: CliProcess;
@@ -1608,6 +1611,7 @@ export class TaskManager {
     if (task.record.agentPolicy) options.agentPolicy = this.checkAgentPolicySnapshot(task.record.agentPolicy);
     await verifyManagedCopy(task.project);
     const receiptOffset = task.project.executionPolicy ? (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset : 0;
+    task.editReceipts = task.project.executionPolicy ? { offset: receiptOffset, pending: new Map(), ambiguous: new Set() } : undefined;
     task.record.result = undefined;
     task.record.usage = undefined;
     if (options.craft) await verifyCraftSelection(options.craft);
@@ -1838,9 +1842,69 @@ export class TaskManager {
         step.text_delta = '';
       }
       let type = 'step.update';
-      if (step.step_type === 'tool') type = step.state === 'DONE' ? 'tool.completed' : 'tool.started';
-      else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') type = 'response.chunk';
-      this.events.append(record.taskId, type, step, raw);
+      let eventData: Record<string, unknown> = step;
+      if (step.step_type === 'tool') {
+        type = step.state === 'DONE' ? 'tool.completed' : step.state === 'ERROR' ? 'tool.failed' : 'tool.started';
+        const toolInfo = step.tool_info && typeof step.tool_info === 'object' ? step.tool_info as Record<string, unknown> : undefined;
+        const toolError = toolInfo?.error && typeof toolInfo.error === 'object' ? toolInfo.error as Record<string, unknown> : undefined;
+        const rawErrorMsg = typeof toolError?.message === 'string' ? toolError.message : undefined;
+        let matchedEdit: ReceiptEdit | undefined;
+        if (step.tool_name === 'edit_file' && (step.state === 'DONE' || (step.state === 'ERROR' && !/denied by pre-tool hook/i.test(rawErrorMsg ?? '')))) {
+          if (task.project?.executionPolicy && task.editReceipts) {
+            try {
+              const { nextOffset, edits } = readReceiptEditsSync(task.project.executionPolicy, task.editReceipts.offset, record.sessionId);
+              task.editReceipts.offset = nextOffset;
+              for (const edit of edits) {
+                if (task.editReceipts.ambiguous.has(edit.pathSha256)) continue;
+                const list = task.editReceipts.pending.get(edit.pathSha256);
+                if (list) list.push(edit);
+                else task.editReceipts.pending.set(edit.pathSha256, [edit]);
+              }
+              const params = toolInfo?.parameters && typeof toolInfo.parameters === 'object' ? toolInfo.parameters as Record<string, unknown> : undefined;
+              const pathSha256 = createHash('sha256').update(String(params?.Path), 'utf8').digest('hex');
+              if (!task.editReceipts.ambiguous.has(pathSha256)) {
+                const pending = task.editReceipts.pending.get(pathSha256);
+                if (pending && pending.length > 1) {
+                  task.editReceipts.ambiguous.add(pathSha256);
+                  task.editReceipts.pending.delete(pathSha256);
+                } else matchedEdit = pending?.shift();
+              }
+            } catch {
+              task.editReceipts = undefined;
+            }
+          }
+        }
+        if (step.state === 'ERROR') {
+          const failure = {
+            ...(typeof toolError?.type === 'string' && toolError.type.length <= 64 ? { type: toolError.type } : {}),
+            message: rawErrorMsg !== undefined ? redactDiagnostic(rawErrorMsg).slice(0, 500) : 'Tool reported an error without details',
+          };
+          const editSearch = step.tool_name === 'edit_file' && /target (content|text) (was )?not found/i.test(failure.message)
+            ? matchedEdit
+              ? {
+                  mismatch: matchedEdit.mismatch === 'none' ? 'unknown' : matchedEdit.mismatch,
+                  target: { sha256: matchedEdit.targetSha256, bytes: matchedEdit.targetBytes, lines: matchedEdit.targetLines },
+                }
+              : { mismatch: 'unknown' }
+            : undefined;
+          eventData = { ...step, failure, ...(editSearch ? { editSearch } : {}) };
+          if (JSON.stringify(eventData).length > MAX_EVENT_PAYLOAD_CHARS) {
+            const { conversation_id, step_index, state, step_type, tool_name, duration_seconds } = step;
+            eventData = {
+              ...(conversation_id !== undefined ? { conversation_id } : {}),
+              ...(step_index !== undefined ? { step_index } : {}),
+              ...(state !== undefined ? { state } : {}),
+              ...(step_type !== undefined ? { step_type } : {}),
+              ...(tool_name !== undefined ? { tool_name } : {}),
+              ...(duration_seconds !== undefined ? { duration_seconds } : {}),
+              failure,
+              ...(editSearch ? { editSearch } : {}),
+              truncated: true,
+            };
+          }
+        }
+      } else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') type = 'response.chunk';
+      this.events.append(record.taskId, type, eventData, raw);
       if (step.usage !== undefined) record.usage = step.usage;
       if (record.status === 'running') record.status = 'streaming';
     } else if (sourceType === 'result' && raw.result && typeof raw.result === 'object') {

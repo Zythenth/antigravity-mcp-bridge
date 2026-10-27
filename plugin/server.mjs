@@ -31768,6 +31768,7 @@ import * as crypto2 from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as path8 from "node:path";
+import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as os3 from "node:os";
 var EXECUTION_POLICY_PATHS = [
@@ -32311,12 +32312,66 @@ async function hookMain() {
     decision = "deny";
     reason = `Tool ${toolName} not permitted`;
   }
+  let edit;
+  if (toolName === "edit_file" && decision === "allow" && typeof args?.Target === "string") {
+    const target = args.Target;
+    const rawPath = String(args.Path);
+    let mismatch = "unknown";
+    try {
+      const handle = await fsp2.open(path25.resolve(rawPath), "r");
+      try {
+        const st = await handle.stat();
+        if (st.isFile() && target.length > 0) {
+          const maxBytes = 16 * 1024 * 1024;
+          const buf = Buffer.alloc(maxBytes + 1);
+          let length = 0;
+          while (length < buf.length) {
+            const { bytesRead } = await handle.read(buf, length, buf.length - length, length);
+            if (bytesRead === 0)
+              break;
+            length += bytesRead;
+          }
+          if (length <= maxBytes) {
+            const content = buf.subarray(0, length).toString("utf8");
+            const lf = (s) => s.replace(/\r\n|\r/g, "\n");
+            const ws = (s) => s.replace(/[ \t]+/g, " ").replace(/ (?=\r|\n|$)/g, "");
+            const uni = (s) => s.normalize("NFKC").replace(/[\u200b\u200c\u200d\u2060\ufeff]/g, "");
+            if (content.includes(target))
+              mismatch = "none";
+            else if (lf(content).includes(lf(target)))
+              mismatch = "line-endings";
+            else {
+              const wsTarget = ws(target);
+              if (wsTarget.length > 0 && ws(content).includes(wsTarget))
+                mismatch = "whitespace";
+              else {
+                const uniTarget = uni(target);
+                if (uniTarget.length > 0 && uni(content).includes(uniTarget))
+                  mismatch = "unicode";
+              }
+            }
+          }
+        }
+      } finally {
+        await handle.close();
+      }
+    } catch {
+    }
+    edit = {
+      pathSha256: crypto3.createHash("sha256").update(rawPath, "utf8").digest("hex"),
+      targetSha256: crypto3.createHash("sha256").update(target, "utf8").digest("hex"),
+      targetBytes: Buffer.byteLength(target, "utf8"),
+      targetLines: target.split(/\r\n|\r|\n/).length,
+      mismatch
+    };
+  }
   const receiptEntry = JSON.stringify({
     executionId: manifest.executionId,
     policySha256: manifest.policy.sha256,
     conversationId,
     toolName: typeof toolName === "string" ? toolName : "unknown",
-    decision
+    decision,
+    ...edit ? { edit } : {}
   }) + "\n";
   const entryBytes = Buffer.byteLength(receiptEntry, "utf8");
   let receiptOk = false;
@@ -32796,24 +32851,7 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
   let deniedCount = 0;
   let guardedFinish = false;
   for (const line of lines) {
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      throw new BridgeError("INVALID_RECEIPT", "Malformed JSON line in receipt");
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.keys(parsed).sort().join(",") !== "conversationId,decision,executionId,policySha256,toolName" || parsed.conversationId !== null && (typeof parsed.conversationId !== "string" || parsed.conversationId.length > 128) || typeof parsed.toolName !== "string" || parsed.toolName.length > 128) {
-      throw new BridgeError("INVALID_RECEIPT", "Invalid receipt line structure");
-    }
-    if (parsed.executionId !== staged.executionId) {
-      throw new BridgeError("INVALID_RECEIPT", `executionId mismatch in receipt line: expected ${staged.executionId}, got ${String(parsed.executionId)}`);
-    }
-    if (parsed.policySha256 !== staged.policy.sha256) {
-      throw new BridgeError("INVALID_RECEIPT", `policySha256 mismatch in receipt line: expected ${staged.policy.sha256}, got ${String(parsed.policySha256)}`);
-    }
-    if (parsed.decision !== "allow" && parsed.decision !== "deny") {
-      throw new BridgeError("INVALID_RECEIPT", `Invalid decision value in receipt line: ${String(parsed.decision)}`);
-    }
+    const parsed = validateExecutionPolicyReceiptLine(line, staged);
     if (conversationId !== void 0 && parsed.conversationId !== conversationId) {
       continue;
     }
@@ -32833,6 +32871,97 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
     decisionCount,
     deniedCount
   };
+}
+var EDIT_MISMATCHES = /* @__PURE__ */ new Set(["none", "line-endings", "whitespace", "unicode", "unknown"]);
+function validateExecutionPolicyReceiptLine(line, staged) {
+  let parsed;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    throw new BridgeError("INVALID_RECEIPT", "Malformed JSON line in receipt");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new BridgeError("INVALID_RECEIPT", "Invalid receipt line structure");
+  }
+  const keys2 = Object.keys(parsed).sort().join(",");
+  const hasEdit = keys2 === "conversationId,decision,edit,executionId,policySha256,toolName";
+  if (!hasEdit && keys2 !== "conversationId,decision,executionId,policySha256,toolName" || parsed.conversationId !== null && (typeof parsed.conversationId !== "string" || parsed.conversationId.length > 128) || typeof parsed.toolName !== "string" || parsed.toolName.length > 128) {
+    throw new BridgeError("INVALID_RECEIPT", "Invalid receipt line structure");
+  }
+  if (parsed.executionId !== staged.executionId) {
+    throw new BridgeError("INVALID_RECEIPT", `executionId mismatch in receipt line: expected ${staged.executionId}, got ${String(parsed.executionId)}`);
+  }
+  if (parsed.policySha256 !== staged.policy.sha256) {
+    throw new BridgeError("INVALID_RECEIPT", `policySha256 mismatch in receipt line: expected ${staged.policy.sha256}, got ${String(parsed.policySha256)}`);
+  }
+  if (parsed.decision !== "allow" && parsed.decision !== "deny") {
+    throw new BridgeError("INVALID_RECEIPT", `Invalid decision value in receipt line: ${String(parsed.decision)}`);
+  }
+  if (hasEdit) {
+    const edit = parsed.edit;
+    if (parsed.toolName !== "edit_file" || parsed.decision !== "allow" || !edit || typeof edit !== "object" || Array.isArray(edit) || Object.keys(edit).sort().join(",") !== "mismatch,pathSha256,targetBytes,targetLines,targetSha256" || typeof edit.pathSha256 !== "string" || !/^[a-f0-9]{64}$/.test(edit.pathSha256) || typeof edit.targetSha256 !== "string" || !/^[a-f0-9]{64}$/.test(edit.targetSha256) || !Number.isSafeInteger(edit.targetBytes) || edit.targetBytes < 0 || !Number.isSafeInteger(edit.targetLines) || edit.targetLines < 0 || !EDIT_MISMATCHES.has(edit.mismatch)) {
+      throw new BridgeError("INVALID_RECEIPT", "Invalid receipt edit telemetry");
+    }
+  }
+  return parsed;
+}
+function readReceiptEditsSync(staged, offset, conversationId) {
+  const parsedStaged = stagedExecutionPolicySchema.safeParse(staged);
+  if (!parsedStaged.success) {
+    throw new BridgeError("INVALID_RECEIPT", `Invalid staged execution policy metadata: ${parsedStaged.error.message}`);
+  }
+  let fd;
+  try {
+    fd = openSync(staged.receiptPath, "r");
+  } catch {
+    throw new BridgeError("INVALID_RECEIPT", "Receipt file is missing or unreadable");
+  }
+  try {
+    const stat4 = fstatSync(fd, { bigint: true });
+    if (!stat4.isFile() || stat4.nlink !== 1n || stat4.dev.toString() !== staged.receiptIdentity.dev || stat4.ino.toString() !== staged.receiptIdentity.ino || stat4.size > 1048576n) {
+      throw new BridgeError("INVALID_RECEIPT", "Private receipt file identity or size check failed");
+    }
+    const size = Number(stat4.size);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > size) {
+      throw new BridgeError("INVALID_RECEIPT", `Invalid receipt offset: ${offset}`);
+    }
+    if (offset > 0) {
+      const prev = Buffer.alloc(1);
+      if (readSync(fd, prev, 0, 1, offset - 1) !== 1 || prev[0] !== 10) {
+        throw new BridgeError("INVALID_RECEIPT", `Offset ${offset} is not at a line boundary`);
+      }
+    }
+    if (offset === size)
+      return { nextOffset: offset, edits: [] };
+    const buffer = Buffer.alloc(size - offset);
+    let length = 0;
+    while (length < buffer.length) {
+      const bytesRead = readSync(fd, buffer, length, buffer.length - length, offset + length);
+      if (!bytesRead)
+        break;
+      length += bytesRead;
+    }
+    const windowBuffer = buffer.subarray(0, length);
+    const lastNewline = windowBuffer.lastIndexOf(10);
+    if (lastNewline < 0)
+      return { nextOffset: offset, edits: [] };
+    const consumed = windowBuffer.subarray(0, lastNewline + 1);
+    const lines = consumed.toString("utf8").split("\n").slice(0, -1);
+    const edits = [];
+    for (const line of lines) {
+      const parsed = validateExecutionPolicyReceiptLine(line, staged);
+      if ((conversationId === void 0 || parsed.conversationId === conversationId) && parsed.edit) {
+        edits.push({ ...parsed.edit });
+      }
+    }
+    return { nextOffset: offset + lastNewline + 1, edits };
+  } catch (error62) {
+    if (error62 instanceof BridgeError && error62.code === "INVALID_RECEIPT")
+      throw error62;
+    throw new BridgeError("INVALID_RECEIPT", error62 instanceof Error ? error62.message : String(error62));
+  } finally {
+    closeSync(fd);
+  }
 }
 async function discardExecutionPolicy(staged, stateDirectory) {
   stagedExecutionPolicySchema.parse(staged);
@@ -46307,7 +46436,7 @@ var snapshotSchema = external_exports.object({
     providedSkills: stagedSkillsSchema.optional(),
     blockedFiles: external_exports.array(blockedMetadataSchema).optional()
   }).optional(),
-  events: external_exports.array(external_exports.object({ taskId: external_exports.string().uuid(), sequence: external_exports.number().int().positive(), timestamp: external_exports.string(), type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional() })),
+  events: external_exports.array(external_exports.object({ taskId: external_exports.string().uuid(), sequence: external_exports.number().int().positive(), timestamp: external_exports.string(), type: external_exports.string(), data: external_exports.unknown(), raw: external_exports.unknown().optional(), rawIsData: external_exports.literal(true).optional(), rawEnvelope: external_exports.string().min(1).max(64).optional() }).refine((event) => [event.raw !== void 0, event.rawIsData !== void 0, event.rawEnvelope !== void 0].filter(Boolean).length <= 1 && event.rawEnvelope !== "event")),
   cursor: external_exports.number().int().nonnegative(),
   // Written by versions that redact before persisting; older state is sanitized when restored.
   redacted: external_exports.literal(true).optional()
@@ -46340,6 +46469,24 @@ function removeCachedFile(file3) {
       rmSync2(file3, { force: true });
   } catch {
   }
+}
+function compactEvent(event) {
+  if (event.raw === void 0)
+    return { ...event };
+  const { raw, ...rest } = event;
+  const serializedRaw = JSON.stringify(raw);
+  if (serializedRaw === JSON.stringify(event.data))
+    return { ...rest, rawIsData: true };
+  const name = raw && typeof raw === "object" && !Array.isArray(raw) && typeof raw.event === "string" ? raw.event : void 0;
+  if (name && name !== "event" && name.length <= 64 && serializedRaw === JSON.stringify({ event: name, [name]: event.data })) {
+    return { ...rest, rawEnvelope: name };
+  }
+  return { ...event };
+}
+function expandEvent(event) {
+  const { rawIsData, rawEnvelope, raw, ...rest } = event;
+  const rebuiltRaw = rawIsData ? structuredClone(event.data) : rawEnvelope !== void 0 ? { event: rawEnvelope, [rawEnvelope]: structuredClone(event.data) } : raw;
+  return rebuiltRaw === void 0 ? rest : { ...rest, raw: rebuiltRaw };
 }
 var StateStore = class {
   directory;
@@ -46450,7 +46597,7 @@ var StateStore = class {
   }
   writeSnapshot(target, task2) {
     const temporary = target + "." + randomUUID7() + ".tmp";
-    const snapshot = { ...task2, version: 1, redacted: true, project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
+    const snapshot = { ...task2, version: 1, redacted: true, events: task2.events.map(compactEvent), project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     delete snapshot.fingerprint;
     try {
       writeFileSync3(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
@@ -46512,6 +46659,7 @@ var StateStore = class {
       }
       return {
         ...data,
+        events: data.events.map(expandEvent),
         fingerprint,
         record: data.record,
         options: data.options,
@@ -48144,6 +48292,7 @@ function logTaskEvent(taskId, type, data) {
 }
 
 // dist/src/event-store.js
+var MAX_EVENT_PAYLOAD_CHARS = 16e3;
 var EventStore = class {
   capacity;
   onAppend;
@@ -48158,7 +48307,7 @@ var EventStore = class {
     this.cursors.set(taskId, sequence);
     const bounded = (value) => {
       const serialized = JSON.stringify(value);
-      return serialized && serialized.length > 16e3 ? { truncated: true, preview: serialized.slice(0, 16e3) } : value;
+      return serialized && serialized.length > MAX_EVENT_PAYLOAD_CHARS ? { truncated: true, preview: serialized.slice(0, MAX_EVENT_PAYLOAD_CHARS) } : value;
     };
     const event = { taskId, sequence, timestamp: (/* @__PURE__ */ new Date()).toISOString(), type, data: bounded(data) };
     if (raw !== void 0)
@@ -53462,8 +53611,11 @@ var TaskManager = class {
         });
         task2.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: /* @__PURE__ */ new Set() };
       }
-      if (task2.project.executionPolicy)
+      if (task2.project.executionPolicy) {
         policyReceiptOffset = (await readExecutionPolicyReceipt(task2.project.executionPolicy, this.config.stateDirectory)).nextOffset;
+        task2.editReceipts = { offset: policyReceiptOffset, pending: /* @__PURE__ */ new Map(), ambiguous: /* @__PURE__ */ new Set() };
+      } else
+        task2.editReceipts = void 0;
       if (task2.options.craft)
         await verifyCraftSelection(task2.options.craft);
       const spawnedAt = Date.now();
@@ -53754,6 +53906,7 @@ ${redacted}`;
       options.agentPolicy = this.checkAgentPolicySnapshot(task2.record.agentPolicy);
     await verifyManagedCopy(task2.project);
     const receiptOffset = task2.project.executionPolicy ? (await readExecutionPolicyReceipt(task2.project.executionPolicy, this.config.stateDirectory)).nextOffset : 0;
+    task2.editReceipts = task2.project.executionPolicy ? { offset: receiptOffset, pending: /* @__PURE__ */ new Map(), ambiguous: /* @__PURE__ */ new Set() } : void 0;
     task2.record.result = void 0;
     task2.record.usage = void 0;
     if (options.craft)
@@ -54039,11 +54192,70 @@ ${redacted}`;
         step.text_delta = "";
       }
       let type = "step.update";
-      if (step.step_type === "tool")
-        type = step.state === "DONE" ? "tool.completed" : "tool.started";
-      else if (step.step_type === "agent_response" && typeof step.text_delta === "string")
+      let eventData = step;
+      if (step.step_type === "tool") {
+        type = step.state === "DONE" ? "tool.completed" : step.state === "ERROR" ? "tool.failed" : "tool.started";
+        const toolInfo = step.tool_info && typeof step.tool_info === "object" ? step.tool_info : void 0;
+        const toolError = toolInfo?.error && typeof toolInfo.error === "object" ? toolInfo.error : void 0;
+        const rawErrorMsg = typeof toolError?.message === "string" ? toolError.message : void 0;
+        let matchedEdit;
+        if (step.tool_name === "edit_file" && (step.state === "DONE" || step.state === "ERROR" && !/denied by pre-tool hook/i.test(rawErrorMsg ?? ""))) {
+          if (task2.project?.executionPolicy && task2.editReceipts) {
+            try {
+              const { nextOffset, edits } = readReceiptEditsSync(task2.project.executionPolicy, task2.editReceipts.offset, record2.sessionId);
+              task2.editReceipts.offset = nextOffset;
+              for (const edit of edits) {
+                if (task2.editReceipts.ambiguous.has(edit.pathSha256))
+                  continue;
+                const list = task2.editReceipts.pending.get(edit.pathSha256);
+                if (list)
+                  list.push(edit);
+                else
+                  task2.editReceipts.pending.set(edit.pathSha256, [edit]);
+              }
+              const params = toolInfo?.parameters && typeof toolInfo.parameters === "object" ? toolInfo.parameters : void 0;
+              const pathSha256 = createHash24("sha256").update(String(params?.Path), "utf8").digest("hex");
+              if (!task2.editReceipts.ambiguous.has(pathSha256)) {
+                const pending = task2.editReceipts.pending.get(pathSha256);
+                if (pending && pending.length > 1) {
+                  task2.editReceipts.ambiguous.add(pathSha256);
+                  task2.editReceipts.pending.delete(pathSha256);
+                } else
+                  matchedEdit = pending?.shift();
+              }
+            } catch {
+              task2.editReceipts = void 0;
+            }
+          }
+        }
+        if (step.state === "ERROR") {
+          const failure3 = {
+            ...typeof toolError?.type === "string" && toolError.type.length <= 64 ? { type: toolError.type } : {},
+            message: rawErrorMsg !== void 0 ? redactDiagnostic(rawErrorMsg).slice(0, 500) : "Tool reported an error without details"
+          };
+          const editSearch = step.tool_name === "edit_file" && /target (content|text) (was )?not found/i.test(failure3.message) ? matchedEdit ? {
+            mismatch: matchedEdit.mismatch === "none" ? "unknown" : matchedEdit.mismatch,
+            target: { sha256: matchedEdit.targetSha256, bytes: matchedEdit.targetBytes, lines: matchedEdit.targetLines }
+          } : { mismatch: "unknown" } : void 0;
+          eventData = { ...step, failure: failure3, ...editSearch ? { editSearch } : {} };
+          if (JSON.stringify(eventData).length > MAX_EVENT_PAYLOAD_CHARS) {
+            const { conversation_id, step_index, state, step_type, tool_name, duration_seconds } = step;
+            eventData = {
+              ...conversation_id !== void 0 ? { conversation_id } : {},
+              ...step_index !== void 0 ? { step_index } : {},
+              ...state !== void 0 ? { state } : {},
+              ...step_type !== void 0 ? { step_type } : {},
+              ...tool_name !== void 0 ? { tool_name } : {},
+              ...duration_seconds !== void 0 ? { duration_seconds } : {},
+              failure: failure3,
+              ...editSearch ? { editSearch } : {},
+              truncated: true
+            };
+          }
+        }
+      } else if (step.step_type === "agent_response" && typeof step.text_delta === "string")
         type = "response.chunk";
-      this.events.append(record2.taskId, type, step, raw);
+      this.events.append(record2.taskId, type, eventData, raw);
       if (step.usage !== void 0)
         record2.usage = step.usage;
       if (record2.status === "running")

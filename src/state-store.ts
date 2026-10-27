@@ -76,7 +76,7 @@ const snapshotSchema = z.object({
     baseline: z.array(z.tuple([z.string(), z.string().regex(/^[a-f0-9]{64}$/)])), includedFiles: z.array(z.string()), providedSkills: stagedSkillsSchema.optional(),
     blockedFiles: z.array(blockedMetadataSchema).optional(),
   }).optional(),
-  events: z.array(z.object({ taskId: z.string().uuid(), sequence: z.number().int().positive(), timestamp: z.string(), type: z.string(), data: z.unknown(), raw: z.unknown().optional() })),
+  events: z.array(z.object({ taskId: z.string().uuid(), sequence: z.number().int().positive(), timestamp: z.string(), type: z.string(), data: z.unknown(), raw: z.unknown().optional(), rawIsData: z.literal(true).optional(), rawEnvelope: z.string().min(1).max(64).optional() }).refine(event => [event.raw !== undefined, event.rawIsData !== undefined, event.rawEnvelope !== undefined].filter(Boolean).length <= 1 && event.rawEnvelope !== 'event')),
   cursor: z.number().int().nonnegative(),
   // Written by versions that redact before persisting; older state is sanitized when restored.
   redacted: z.literal(true).optional(),
@@ -115,6 +115,24 @@ export function replaceStateFile(temporary: string, target: string): void {
 // The sanitized cache never blocks loading or removal: only regular files are removed, and failures are ignored.
 function removeCachedFile(file: string): void {
   try { if (lstatSync(file).isFile()) rmSync(file, { force: true }); } catch { /* nothing to remove */ }
+}
+
+function compactEvent(event: BridgeEvent): Record<string, unknown> {
+  if (event.raw === undefined) return { ...event };
+  const { raw, ...rest } = event;
+  const serializedRaw = JSON.stringify(raw);
+  if (serializedRaw === JSON.stringify(event.data)) return { ...rest, rawIsData: true };
+  const name = raw && typeof raw === 'object' && !Array.isArray(raw) && typeof (raw as { event?: unknown }).event === 'string' ? (raw as { event: string }).event : undefined;
+  if (name && name !== 'event' && name.length <= 64 && serializedRaw === JSON.stringify({ event: name, [name]: event.data })) {
+    return { ...rest, rawEnvelope: name };
+  }
+  return { ...event };
+}
+
+function expandEvent(event: z.infer<typeof snapshotSchema>['events'][number]): BridgeEvent {
+  const { rawIsData, rawEnvelope, raw, ...rest } = event;
+  const rebuiltRaw = rawIsData ? structuredClone(event.data) : rawEnvelope !== undefined ? { event: rawEnvelope, [rawEnvelope]: structuredClone(event.data) } : raw;
+  return rebuiltRaw === undefined ? rest : { ...rest, raw: rebuiltRaw };
 }
 
 export class StateStore {
@@ -215,7 +233,7 @@ export class StateStore {
 
   private writeSnapshot(target: string, task: StoredTask): void {
     const temporary = target + '.' + randomUUID() + '.tmp';
-    const snapshot: Record<string, unknown> = { ...task, version: 1, redacted: true, project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
+    const snapshot: Record<string, unknown> = { ...task, version: 1, redacted: true, events: task.events.map(compactEvent), project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
     delete snapshot.fingerprint;
     try {
       writeFileSync(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600, flush: true });
@@ -268,7 +286,7 @@ export class StateStore {
         }
         if (data.project.sourceDirectory !== data.record.workingDirectory) throw new BridgeError('INVALID_STATE', 'Persisted source differs from task');
       }
-      return { ...data, fingerprint, record: data.record as unknown as TaskRecord, options: data.options as RunOptions,
+      return { ...data, events: data.events.map(expandEvent), fingerprint, record: data.record as unknown as TaskRecord, options: data.options as RunOptions,
         project: data.project && { ...data.project, baseline: new Map(data.project.baseline) } };
     }).sort((a, b) => a.record.createdAt.localeCompare(b.record.createdAt));
   }

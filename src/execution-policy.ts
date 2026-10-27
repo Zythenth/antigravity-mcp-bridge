@@ -2,6 +2,7 @@ import * as crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
+import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
 import { z } from 'zod';
@@ -31,6 +32,16 @@ export interface StagedExecutionPolicy {
   receiptIdentity: { dev: string; ino: string };
   files: Array<{ path: string; sha256: string; bytes: number }>;
   requiredNativePermissions: string[];
+}
+
+export type EditMismatch = 'none' | 'line-endings' | 'whitespace' | 'unicode' | 'unknown';
+
+export interface ReceiptEdit {
+  pathSha256: string;
+  targetSha256: string;
+  targetBytes: number;
+  targetLines: number;
+  mismatch: EditMismatch;
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -639,12 +650,61 @@ async function hookMain() {
   }
 
   // 7. Append to receipt
+  let edit: { pathSha256: string; targetSha256: string; targetBytes: number; targetLines: number; mismatch: string } | undefined;
+  if (toolName === 'edit_file' && decision === 'allow' && typeof args?.Target === 'string') {
+    const target = args.Target as string;
+    const rawPath = String(args.Path);
+    let mismatch = 'unknown';
+    try {
+      const handle = await fsp.open(path.resolve(rawPath), 'r');
+      try {
+        const st = await handle.stat();
+        if (st.isFile() && target.length > 0) {
+          const maxBytes = 16 * 1024 * 1024;
+          const buf = Buffer.alloc(maxBytes + 1);
+          let length = 0;
+          while (length < buf.length) {
+            const { bytesRead } = await handle.read(buf, length, buf.length - length, length);
+            if (bytesRead === 0) break;
+            length += bytesRead;
+          }
+          if (length <= maxBytes) {
+            const content = buf.subarray(0, length).toString('utf8');
+            const lf = (s: string) => s.replace(/\r\n|\r/g, '\n');
+            const ws = (s: string) => s.replace(/[ \t]+/g, ' ').replace(/ (?=\r|\n|$)/g, '');
+            const uni = (s: string) => s.normalize('NFKC').replace(/[\u200b\u200c\u200d\u2060\ufeff]/g, '');
+            if (content.includes(target)) mismatch = 'none';
+            else if (lf(content).includes(lf(target))) mismatch = 'line-endings';
+            else {
+              const wsTarget = ws(target);
+              if (wsTarget.length > 0 && ws(content).includes(wsTarget)) mismatch = 'whitespace';
+              else {
+                const uniTarget = uni(target);
+                if (uniTarget.length > 0 && uni(content).includes(uniTarget)) mismatch = 'unicode';
+              }
+            }
+          }
+        }
+      } finally {
+        await handle.close();
+      }
+    } catch {}
+    edit = {
+      pathSha256: crypto.createHash('sha256').update(rawPath, 'utf8').digest('hex'),
+      targetSha256: crypto.createHash('sha256').update(target, 'utf8').digest('hex'),
+      targetBytes: Buffer.byteLength(target, 'utf8'),
+      targetLines: target.split(/\r\n|\r|\n/).length,
+      mismatch,
+    };
+  }
+
   const receiptEntry = JSON.stringify({
     executionId: manifest.executionId,
     policySha256: manifest.policy.sha256,
     conversationId,
     toolName: typeof toolName === 'string' ? toolName : 'unknown',
     decision,
+    ...(edit ? { edit } : {}),
   }) + '\n';
   const entryBytes = Buffer.byteLength(receiptEntry, 'utf8');
 
@@ -1224,24 +1284,7 @@ export async function readExecutionPolicyReceipt(
   let guardedFinish = false;
 
   for (const line of lines) {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      throw new BridgeError('INVALID_RECEIPT', 'Malformed JSON line in receipt');
-    }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.keys(parsed).sort().join(',') !== 'conversationId,decision,executionId,policySha256,toolName' || (parsed.conversationId !== null && (typeof parsed.conversationId !== 'string' || parsed.conversationId.length > 128)) || typeof parsed.toolName !== 'string' || parsed.toolName.length > 128) {
-      throw new BridgeError('INVALID_RECEIPT', 'Invalid receipt line structure');
-    }
-    if (parsed.executionId !== staged.executionId) {
-      throw new BridgeError('INVALID_RECEIPT', `executionId mismatch in receipt line: expected ${staged.executionId}, got ${String(parsed.executionId)}`);
-    }
-    if (parsed.policySha256 !== staged.policy.sha256) {
-      throw new BridgeError('INVALID_RECEIPT', `policySha256 mismatch in receipt line: expected ${staged.policy.sha256}, got ${String(parsed.policySha256)}`);
-    }
-    if (parsed.decision !== 'allow' && parsed.decision !== 'deny') {
-      throw new BridgeError('INVALID_RECEIPT', `Invalid decision value in receipt line: ${String(parsed.decision)}`);
-    }
+    const parsed = validateExecutionPolicyReceiptLine(line, staged);
 
     if (conversationId !== undefined && parsed.conversationId !== conversationId) {
       continue;
@@ -1264,6 +1307,122 @@ export async function readExecutionPolicyReceipt(
     decisionCount,
     deniedCount,
   };
+}
+
+const EDIT_MISMATCHES = new Set<EditMismatch>(['none', 'line-endings', 'whitespace', 'unicode', 'unknown']);
+
+export function validateExecutionPolicyReceiptLine(
+  line: string,
+  staged: StagedExecutionPolicy
+): {
+  executionId: string;
+  policySha256: string;
+  conversationId: string | null;
+  toolName: string;
+  decision: 'allow' | 'deny';
+  edit?: ReceiptEdit;
+} {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    throw new BridgeError('INVALID_RECEIPT', 'Malformed JSON line in receipt');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new BridgeError('INVALID_RECEIPT', 'Invalid receipt line structure');
+  }
+  const keys = Object.keys(parsed).sort().join(',');
+  const hasEdit = keys === 'conversationId,decision,edit,executionId,policySha256,toolName';
+  if ((!hasEdit && keys !== 'conversationId,decision,executionId,policySha256,toolName') ||
+      (parsed.conversationId !== null && (typeof parsed.conversationId !== 'string' || parsed.conversationId.length > 128)) ||
+      typeof parsed.toolName !== 'string' || parsed.toolName.length > 128) {
+    throw new BridgeError('INVALID_RECEIPT', 'Invalid receipt line structure');
+  }
+  if (parsed.executionId !== staged.executionId) {
+    throw new BridgeError('INVALID_RECEIPT', `executionId mismatch in receipt line: expected ${staged.executionId}, got ${String(parsed.executionId)}`);
+  }
+  if (parsed.policySha256 !== staged.policy.sha256) {
+    throw new BridgeError('INVALID_RECEIPT', `policySha256 mismatch in receipt line: expected ${staged.policy.sha256}, got ${String(parsed.policySha256)}`);
+  }
+  if (parsed.decision !== 'allow' && parsed.decision !== 'deny') {
+    throw new BridgeError('INVALID_RECEIPT', `Invalid decision value in receipt line: ${String(parsed.decision)}`);
+  }
+  if (hasEdit) {
+    const edit = parsed.edit;
+    if (parsed.toolName !== 'edit_file' || parsed.decision !== 'allow' ||
+        !edit || typeof edit !== 'object' || Array.isArray(edit) ||
+        Object.keys(edit).sort().join(',') !== 'mismatch,pathSha256,targetBytes,targetLines,targetSha256' ||
+        typeof edit.pathSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(edit.pathSha256) ||
+        typeof edit.targetSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(edit.targetSha256) ||
+        !Number.isSafeInteger(edit.targetBytes) || edit.targetBytes < 0 ||
+        !Number.isSafeInteger(edit.targetLines) || edit.targetLines < 0 ||
+        !EDIT_MISMATCHES.has(edit.mismatch)) {
+      throw new BridgeError('INVALID_RECEIPT', 'Invalid receipt edit telemetry');
+    }
+  }
+  return parsed;
+}
+
+export function readReceiptEditsSync(
+  staged: StagedExecutionPolicy,
+  offset: number,
+  conversationId: string | undefined
+): { nextOffset: number; edits: ReceiptEdit[] } {
+  const parsedStaged = stagedExecutionPolicySchema.safeParse(staged);
+  if (!parsedStaged.success) {
+    throw new BridgeError('INVALID_RECEIPT', `Invalid staged execution policy metadata: ${parsedStaged.error.message}`);
+  }
+  let fd: number;
+  try {
+    fd = openSync(staged.receiptPath, 'r');
+  } catch {
+    throw new BridgeError('INVALID_RECEIPT', 'Receipt file is missing or unreadable');
+  }
+  try {
+    const stat = fstatSync(fd, { bigint: true });
+    if (!stat.isFile() || stat.nlink !== 1n ||
+        stat.dev.toString() !== staged.receiptIdentity.dev ||
+        stat.ino.toString() !== staged.receiptIdentity.ino ||
+        stat.size > 1048576n) {
+      throw new BridgeError('INVALID_RECEIPT', 'Private receipt file identity or size check failed');
+    }
+    const size = Number(stat.size);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > size) {
+      throw new BridgeError('INVALID_RECEIPT', `Invalid receipt offset: ${offset}`);
+    }
+    if (offset > 0) {
+      const prev = Buffer.alloc(1);
+      if (readSync(fd, prev, 0, 1, offset - 1) !== 1 || prev[0] !== 0x0A) {
+        throw new BridgeError('INVALID_RECEIPT', `Offset ${offset} is not at a line boundary`);
+      }
+    }
+    if (offset === size) return { nextOffset: offset, edits: [] };
+    const buffer = Buffer.alloc(size - offset);
+    let length = 0;
+    while (length < buffer.length) {
+      const bytesRead = readSync(fd, buffer, length, buffer.length - length, offset + length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    const windowBuffer = buffer.subarray(0, length);
+    const lastNewline = windowBuffer.lastIndexOf(0x0A);
+    if (lastNewline < 0) return { nextOffset: offset, edits: [] };
+    const consumed = windowBuffer.subarray(0, lastNewline + 1);
+    const lines = consumed.toString('utf8').split('\n').slice(0, -1);
+    const edits: ReceiptEdit[] = [];
+    for (const line of lines) {
+      const parsed = validateExecutionPolicyReceiptLine(line, staged);
+      if ((conversationId === undefined || parsed.conversationId === conversationId) && parsed.edit) {
+        edits.push({ ...parsed.edit });
+      }
+    }
+    return { nextOffset: offset + lastNewline + 1, edits };
+  } catch (error) {
+    if (error instanceof BridgeError && error.code === 'INVALID_RECEIPT') throw error;
+    throw new BridgeError('INVALID_RECEIPT', error instanceof Error ? error.message : String(error));
+  } finally {
+    closeSync(fd);
+  }
 }
 
 
