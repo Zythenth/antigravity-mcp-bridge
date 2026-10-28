@@ -146,6 +146,10 @@ function parseStringArray(value: string | undefined, envName: string): string[] 
   return items;
 }
 
+export function stateDirectoryFrom(env: NodeJS.ProcessEnv): string {
+  return env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge');
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const defaultModel = env.BRIDGE_DEFAULT_MODEL;
   if (defaultModel !== undefined && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
@@ -174,7 +178,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2000, 100000),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 50000, 1000000),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge'),
+    stateDirectory: stateDirectoryFrom(env),
     memoryMaxEntries,
     memoryMaxBytes,
     memoryMaxEntryBytes,

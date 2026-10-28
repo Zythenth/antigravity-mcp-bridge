@@ -22,6 +22,7 @@ import { nativeToolsSchema, mcpSelectionSchema } from './agent-policy.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { redactDiagnostic } from './subprocess.js';
+import { waitCommandInfo } from './wait-command.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -77,7 +78,7 @@ function redactingTransport(transport: Transport): Transport {
   return transport;
 }
 
-export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpServer {
+export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options: { waitCommand?: readonly string[] } = {}): McpServer {
   const approvalInstructions = tasks.approvalMode === 'auto'
     ? 'On Windows, global sandbox ceilings default to automatic authorization for validated proposals in automatic mode (BRIDGE_APPROVAL_MODE=auto), or require human form confirmation when configured with BRIDGE_APPROVAL_MODE=ask; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; under default automatic approval mode (BRIDGE_APPROVAL_MODE=auto), verified integration is authorized automatically without human forms. When configured with BRIDGE_APPROVAL_MODE=ask, human confirmation forms are always required even for previously preauthorized or remembered project roots. The original project changes only through verified integration.'
     : 'On Windows, human confirmation forms are always required to update global sandbox ceilings under BRIDGE_APPROVAL_MODE=ask; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or antigravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; human confirmation forms are always required under BRIDGE_APPROVAL_MODE=ask, even if projects were previously preauthorized in server configuration or remembered. The original project changes only through confirmed integration.';
@@ -103,6 +104,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
       toolProfile: tasks.toolProfile,
       approvalMode: tasks.approvalMode,
       windowsRuntime: await tasks.windowsRuntimeStatus(),
+      ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand) } : {}),
       bridgeLimitations: {
         interactiveReplies: { available: false, reason: 'The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures.' },
         preflightTokenCount: { available: false, exactTokens: null, reason: 'No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts.' },
@@ -274,13 +276,19 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
     outputSchema: outputSchemas.antigravity_run,
     title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
     inputSchema: runSchema, annotations: action,
-  }, async args => safe(async () => ({ task: clientTask(await tasks.run(args)) }))());
+  }, async args => safe(async () => {
+    const task = await tasks.run(args);
+    return { task: clientTask(task), ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task.taskId) } : {}) };
+  })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_resume')) server.registerTool('antigravity_resume', {
     outputSchema: outputSchemas.antigravity_resume,
     title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy.',
     inputSchema: { ...runSchema, sessionId: z.string().min(1).max(128) }, annotations: action,
-  }, async args => safe(async () => ({ task: clientTask(await tasks.run(args)) }))());
+  }, async args => safe(async () => {
+    const task = await tasks.run(args);
+    return { task: clientTask(task), ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task.taskId) } : {}) };
+  })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_context')) server.registerTool('antigravity_context', {
     outputSchema: outputSchemas.antigravity_context, title: 'Inspect role handoff context',
@@ -297,7 +305,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager): McpSer
       timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
     const source = tasks.status(sourceTaskId);
-    return { task: clientTask(await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory })) };
+    const task = await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory });
+    return { task: clientTask(task), ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task.taskId) } : {}) };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_compare')) server.registerTool('antigravity_compare', {

@@ -144,6 +144,37 @@ Prefira `antigravity_wait` com `taskId`, `after` e `timeoutSeconds` (1–60, pad
 
 A resposta inclui `ready`, `timedOut`, estado, uso de tokens e até 1.000 eventos. Continue com `nextCursor`; `truncated` informa eventos antigos perdidos. Timeout da espera e cancelamento da chamada MCP preservam a execução. Para parar a tarefa, use `antigravity_cancel`. Sem suporte a progresso, a resposta final continua disponível. A espera consulta também o estado persistido para observar tarefas de outro processo do bridge.
 
+### Comando de terminal `wait`
+
+Em hosts que executam comandos em segundo plano e notificam o término, você pode aguardar uma tarefa sem chamadas repetidas a `antigravity_wait`:
+
+```powershell
+antigravity-mcp-bridge wait [--state-directory <caminho-absoluto>] <taskId> [--after <n>] [--timeout <s>]
+```
+
+Com o plugin, o mesmo comando é `node plugin/server.mjs wait ...`, e o caminho exato do build em uso vem em `waitCommand.argv`. `antigravity_health` devolve `waitCommand` (`{ argv, sh }`) com o prefixo configurado para o diretório de estado do servidor (sem `taskId`), e `antigravity_run`, `antigravity_resume` e `antigravity_handoff` devolvem `waitCommand` já com o `taskId` ao final. Sem `--state-directory`, o comando usa `BRIDGE_STATE_DIRECTORY` ou `~/.antigravity-mcp-bridge`. `--after <n>` (inteiro `>= 0`, padrão `0`) ignora perguntas e bloqueios já consumidos com `sequence <= n`; `--timeout <s>` define o prazo em segundos (padrão `1800`, máximo `86400`), com sondagem a cada 500 ms.
+
+O comando lê apenas `<stateDirectory>/<taskId>.json` com `lstatSync` e `readFileSync`: não cria diretórios, não grava arquivos nem adquire locks, e encerrar ou matar o processo `wait` não cancela a tarefa. Perguntas e bloqueios só encerram a espera quando a tarefa publica mensagens estruturadas no estado (como em `deliveryMode: "messages"`). Ao terminar, imprime uma única linha JSON sem textos de prompt, mensagens ou erros:
+
+```json
+{"taskId":"<uuid>","outcome":"completed","exitCode":0,"status":"completed","reason":null,"after":0,"cursor":1}
+```
+
+Quando o registro possui `continuationTaskId`, o campo é incluído no JSON. Em `failed`, `reason` informa `error.code` apenas quando o código casa com `/^[A-Z][A-Z0-9_]{0,63}$/` (`null` nos demais desfechos normais). Para ler a pergunta ou o bloqueio após `question` ou `blocker`, chame `antigravity_wait` com `after: cursor - 1` e depois reinicie o comando com `--after <cursor>`. Os códigos de saída (`WAIT_EXIT_CODES`) são distintos por desfecho:
+
+| Código | `outcome` | Condição e `reason` |
+| --- | --- | --- |
+| `0` | `completed` | Tarefa concluída (`reason: null`) |
+| `1` | `error` | Argumentos inválidos (`INVALID_ARGUMENTS`), diretório relativo/inválido (`INVALID_STATE_DIRECTORY`) ou JSON inválido por 3 leituras seguidas (`INVALID_STATE`) |
+| `2` | `failed` | Tarefa falhou (`reason`: `error.code` válido ou `null`) |
+| `3` | `cancelled` | Tarefa cancelada (`reason: null`) |
+| `4` | `timeout` | Tarefa encerrada por timeout de execução (`reason: null`) |
+| `5` | `question` | Pergunta pública com `sequence > after` (`cursor` recebe essa `sequence`) |
+| `6` | `blocker` | Bloqueio público com `sequence > after` (`cursor` recebe essa `sequence`) |
+| `7` | `unknown-task` | Diretório de estado ou `<taskId>.json` ausente (`TASK_NOT_FOUND`) |
+| `8` | `wait-deadline` | Prazo `--timeout` atingido com a tarefa ainda ativa (`WAIT_DEADLINE`) |
+| `9` | `owner-stopped` | Processo `ownerPid` do snapshot não está mais ativo (`OWNER_STOPPED`) |
+
 ## Transferência entre papéis
 
 Use `antigravity_context` após uma tarefa concluída para inspecionar critérios, relatórios e `treeSha256`. Em seguida, chame `antigravity_handoff` com `sourceTaskId`, esse hash, `role`, `prompt` e, opcionalmente, `model` e `decisions`.
