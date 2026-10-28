@@ -4,13 +4,14 @@ import { loadConfig } from './config.js';
 import { createMcpServer } from './mcp-server.js';
 import { TaskManager } from './task-manager.js';
 import { portableNodeStatus, preparePortableNodeRuntime } from './portable-node.js';
+import { runWaitCommand, waitCommandArgv } from './wait-command.js';
 
 const command = process.argv.slice(2);
 
 async function runtimeCommand(): Promise<boolean> {
   if (command.length === 0) return false;
   if (command.length !== 1 || (command[0] !== '--prepare-windows-runtime' && command[0] !== '--windows-runtime-status')) {
-    throw new Error('Expected exactly one startup command: --prepare-windows-runtime or --windows-runtime-status');
+    throw new Error('Expected exactly one startup command: --prepare-windows-runtime, --windows-runtime-status, or wait <taskId>');
   }
   const config = loadConfig();
   if (command[0] === '--windows-runtime-status') {
@@ -28,13 +29,15 @@ async function runtimeCommand(): Promise<boolean> {
   }
 }
 
-if (!await runtimeCommand()) {
+if (command[0] === 'wait') {
+  process.exitCode = await runWaitCommand(command.slice(1), process.env, line => process.stdout.write(line + '\n'));
+} else if (!await runtimeCommand()) {
   const config = loadConfig();
   const adapter = new CliAdapter(config);
   await adapter.discover();
   const tasks = new TaskManager(adapter, config);
   await tasks.cleanup();
-  const server = createMcpServer(adapter, tasks);
+  const server = createMcpServer(adapter, tasks, { waitCommand: waitCommandArgv(config.stateDirectory) });
   await server.connect(new StdioServerTransport());
   const cleanupTimer = setInterval(() => {
     void tasks.cleanup().catch(error => process.stderr.write(`Copy cleanup failed: ${String(error)}\n`));

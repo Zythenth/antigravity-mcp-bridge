@@ -76,7 +76,9 @@ export const taskRecordSchema = z.object({
   processCleanup: z.object({ verified: z.boolean(), spawnedAt: timestamp, checkedAt: timestamp, remaining: count }).strict().optional(),
   craft: z.object({ revision: z.string(), manifestSha256: hash, permanent: z.array(z.string()), catalog: z.array(z.string()) }).strict().optional(),
 }).strict();
+const waitCommandSchema = z.object({ argv: z.array(z.string().min(1)).min(5).max(6), sh: z.string().min(1) }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
+const startedTask = z.object({ task: taskRecordSchema, waitCommand: waitCommandSchema.optional() }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
 const fileSummary = file.extend({ insertions: count.nullable(), deletions: count.nullable(), binary: z.boolean() });
 const previewShape = {
@@ -126,6 +128,7 @@ export const successOutputSchemas = {
     }).strict().optional(),
     windowsRuntime: z.object({ requestedMode: z.enum(['system', 'portable']), supported: z.boolean(), ready: z.boolean(), buildId: z.string(),
       nodeVersion: z.string(), libuvVersion: z.string(), sha256: hash.nullable(), error: z.object({ code: z.string(), message: z.string() }).strict().optional() }).strict().optional(),
+    waitCommand: waitCommandSchema.optional(),
   }).strict(),
   antigravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
   antigravity_get_agent_policy: z.object({ allowedTools: nativeToolsSchema, mcpServers: z.array(z.object({ id: z.string(), description: z.string().nullable(), nativeServerName: z.string(), tools: z.array(mcpCatalogToolSchema) }).strict()).max(20) }).strict(),
@@ -148,9 +151,9 @@ export const successOutputSchemas = {
     bySession: z.array(z.object({ sessionId: z.string(), taskCount: count, counters: usageCountersSchema, observedCumulative: usageCountersSchema.nullable() }).strict()),
   }).strict(),
   antigravity_list_project_files: z.object({ files: z.array(z.string()) }).strict(),
-  antigravity_run: task,
-  antigravity_resume: task,
-  antigravity_handoff: task,
+  antigravity_run: startedTask,
+  antigravity_resume: startedTask,
+  antigravity_handoff: startedTask,
   antigravity_context: z.object({ taskId: id, treeSha256: hash, role: roleSchema, report: report.nullable(), handoff: handoffSchema.nullable(),
     acceptanceCriteria: z.array(criterionSchema), includedFiles: z.array(z.string()) }).strict(),
   antigravity_compare: z.object({ comparisonId: id, taskIds: z.array(id), models: comparisonSchema.shape.models,

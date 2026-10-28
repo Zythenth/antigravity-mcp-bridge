@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,10 +40,20 @@ async function check(command, args, label) {
     assert.equal(health.isError, undefined, JSON.stringify(health.structuredContent));
     assert.equal(health.structuredContent.installed, false);
     assert.equal(typeof health.structuredContent.error, 'string');
+    const argv = health.structuredContent.waitCommand.argv;
+    assert.deepEqual(argv.slice(2), ['wait', '--state-directory', path.join(directory, 'state-' + label)]);
+    if (label === 'tarball') assert.equal(argv[1], path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs'));
+    const waitResult = spawnSync(argv[0], [...argv.slice(1), randomUUID()], {
+      cwd: directory,
+      encoding: 'utf8',
+      env: { AGY_PATH: path.join(directory, 'missing-agy') },
+    });
+    assert.equal(waitResult.status, 7, waitResult.stderr);
+    assert.equal(JSON.parse(waitResult.stdout.trim()).outcome, 'unknown-task');
     const auto = await client.callTool({ name: 'antigravity_set_model', arguments: { model: null } });
     assert.equal(auto.isError, undefined, JSON.stringify(auto.structuredContent));
     assert.equal(auto.structuredContent.model, null);
-    console.log(`${label}: MCP startup, version, ${tools.tools.length} contracts, health and Auto passed`);
+    console.log(`${label}: MCP startup, version, ${tools.tools.length} contracts, health, waitCommand and Auto passed`);
   } catch (error) {
     throw new Error(`${label}: ${String(error)}; stderr: ${diagnostics}`, { cause: error });
   } finally { await client.close(); }
