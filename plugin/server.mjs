@@ -30632,19 +30632,83 @@ function resolveAgentPolicy(selection, ceilingTools, catalog, mode, namespace) {
 }
 
 // dist/src/integration-policy.js
-import { realpathSync as realpathSync2, statSync } from "node:fs";
+import { opendirSync, realpathSync as realpathSync2, statSync } from "node:fs";
 import path5 from "node:path";
+function mapFsError(error62) {
+  const code = error62.code;
+  if (code === "ENOENT" || code === "ENOTDIR")
+    return "not-found";
+  if (code === "EACCES" || code === "EPERM")
+    return "access-denied";
+  return "unresolvable";
+}
+function canonicalizeRoot(entry) {
+  if (typeof entry !== "string")
+    return { reason: "not-a-string" };
+  if (!path5.isAbsolute(entry))
+    return { reason: "not-absolute" };
+  let canonical;
+  try {
+    canonical = realpathSync2.native(entry);
+  } catch (error62) {
+    return { reason: mapFsError(error62), error: error62 };
+  }
+  let isDirectory;
+  try {
+    isDirectory = statSync(canonical).isDirectory();
+  } catch (error62) {
+    return { reason: mapFsError(error62), error: error62 };
+  }
+  if (!isDirectory)
+    return { reason: "not-a-directory" };
+  if (canonical === path5.parse(canonical).root)
+    return { reason: "volume-root" };
+  try {
+    opendirSync(canonical).closeSync();
+  } catch (error62) {
+    return { reason: mapFsError(error62), error: error62 };
+  }
+  return { root: process.platform === "win32" ? canonical.toLowerCase() : canonical };
+}
 function preauthorizedIntegrationRoots(value) {
   const roots = JSON.parse(value ?? "[]");
   if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path5.isAbsolute(root))) {
     throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
   }
   return [...new Set(roots.map((root) => {
-    const canonical = realpathSync2.native(root);
-    if (!statSync(canonical).isDirectory() || canonical === path5.parse(canonical).root)
-      throw new Error("Preauthorization requires a project directory, not a volume root");
-    return process.platform === "win32" ? canonical.toLowerCase() : canonical;
+    const result = canonicalizeRoot(root);
+    if ("root" in result)
+      return result.root;
+    throw result.error ?? new Error("Preauthorization requires a project directory, not a volume root");
   }))];
+}
+function readPreauthorizedIntegrationRoots(value) {
+  const variable = "BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS";
+  if (value === void 0)
+    return { roots: [], issues: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { roots: [], issues: [{ variable, reason: "invalid-json" }] };
+  }
+  if (!Array.isArray(parsed)) {
+    return { roots: [], issues: [{ variable, reason: "not-a-list" }] };
+  }
+  if (parsed.length > 20) {
+    return { roots: [], issues: [{ variable, reason: "too-many-entries" }] };
+  }
+  const roots = [];
+  const issues = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const result = canonicalizeRoot(parsed[i]);
+    if ("root" in result) {
+      roots.push(result.root);
+    } else {
+      issues.push({ variable, index: i, reason: result.reason });
+    }
+  }
+  return { roots: [...new Set(roots)], issues };
 }
 function integrationPreauthorized(workingDirectory, roots) {
   const canonical = process.platform === "win32" ? workingDirectory.toLowerCase() : workingDirectory;
@@ -30916,12 +30980,14 @@ function loadConfig(env = process.env) {
   const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
   if (memoryMaxEntryBytes > memoryMaxBytes)
     throw new Error("BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES");
+  const preauthorized = readPreauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS);
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
     ...env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, "BRIDGE_ANTI_AI_CRAFT_DIRECTORY") } : {},
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
-    preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
+    preauthorizedIntegrationRoots: preauthorized.roots,
+    configurationIssues: preauthorized.issues,
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? "[]")),
     enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== void 0 || env.BRIDGE_MCP_CATALOG !== void 0,
     allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
@@ -30950,6 +31016,12 @@ function loadConfig(env = process.env) {
     secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
     allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS"), "BRIDGE_ALLOWED_ENV_VARS")
   };
+}
+function configurationWarning(issues) {
+  if (issues.length === 0)
+    return void 0;
+  const formatted = issues.map((issue2) => `${issue2.variable}${issue2.index !== void 0 ? `[${issue2.index}]` : ""} ${issue2.reason}`).join(", ");
+  return `Ignored invalid configuration entries (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
 }
 
 // dist/src/skills.js
@@ -45498,6 +45570,7 @@ var successOutputSchemas = {
   antigravity_health: external_exports.object({
     toolProfile: toolProfileSchema.optional(),
     approvalMode: external_exports.enum(["auto", "ask"]).optional(),
+    configurationIssues: external_exports.array(external_exports.object({ variable: external_exports.string(), index: count.optional(), reason: external_exports.enum(["invalid-json", "not-a-list", "too-many-entries", "not-a-string", "not-absolute", "not-found", "access-denied", "not-a-directory", "volume-root", "unresolvable"]) }).strict()).optional(),
     installed: external_exports.boolean(),
     path: external_exports.string(),
     version: external_exports.string().optional(),
@@ -46438,6 +46511,7 @@ function createMcpServer(adapter, tasks, options = {}) {
         ...await adapter.health(),
         toolProfile: tasks.toolProfile,
         approvalMode: tasks.approvalMode,
+        configurationIssues: tasks.configurationIssues,
         windowsRuntime: await tasks.windowsRuntimeStatus(),
         ...options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand) } : {},
         bridgeLimitations: {
@@ -52261,6 +52335,9 @@ var TaskManager = class {
   get approvalMode() {
     return this.config.approvalMode;
   }
+  get configurationIssues() {
+    return this.config.configurationIssues;
+  }
   integrationRoots() {
     return [.../* @__PURE__ */ new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.loadIntegrationRoots()])];
   }
@@ -54779,6 +54856,9 @@ if (command[0] === "wait") {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, (line) => process.stdout.write(line + "\n"));
 } else if (!await runtimeCommand()) {
   const config2 = loadConfig();
+  const warning = configurationWarning(config2.configurationIssues);
+  if (warning)
+    process.stderr.write(warning + "\n");
   const adapter = new CliAdapter(config2);
   await adapter.discover();
   const tasks = new TaskManager(adapter, config2);

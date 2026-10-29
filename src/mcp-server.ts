@@ -103,6 +103,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
       ...await adapter.health(),
       toolProfile: tasks.toolProfile,
       approvalMode: tasks.approvalMode,
+      configurationIssues: tasks.configurationIssues,
       windowsRuntime: await tasks.windowsRuntimeStatus(),
       ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand) } : {}),
       bridgeLimitations: {

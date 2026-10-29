@@ -1,6 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CliAdapter } from './cli-adapter.js';
-import { loadConfig } from './config.js';
+import { loadConfig, configurationWarning } from './config.js';
 import { createMcpServer } from './mcp-server.js';
 import { TaskManager } from './task-manager.js';
 import { portableNodeStatus, preparePortableNodeRuntime } from './portable-node.js';
@@ -33,6 +33,8 @@ if (command[0] === 'wait') {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, line => process.stdout.write(line + '\n'));
 } else if (!await runtimeCommand()) {
   const config = loadConfig();
+  const warning = configurationWarning(config.configurationIssues);
+  if (warning) process.stderr.write(warning + '\n');
   const adapter = new CliAdapter(config);
   await adapter.discover();
   const tasks = new TaskManager(adapter, config);

@@ -591,6 +591,7 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | Variável | Padrão | Uso |
 | --- | --- | --- |
 | `BRIDGE_APPROVAL_MODE` | `auto` | Modo de aprovação: `auto` (padrão se unset; dispensa formulários para integração e política de sandbox validadas) ou `ask` (estrito; exige sempre confirmação humana via formulário MCP, mesmo para raízes lembradas ou configuradas) |
+| `BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS` | `[]` | Array JSON de até 20 pastas absolutas de projeto; entrada inválida é ignorada sem conceder nada, com aviso único no stderr e `configurationIssues` em `antigravity_health`, que traz variável, posição e motivo, sem o caminho |
 | `BRIDGE_CUSTOM_ROLES` | `[]` | Até 20 papéis em JSON com nome, base e instruções |
 | `BRIDGE_TOOL_PROFILE` | `full` | Catálogo: `full`, `query`, `review` ou `implementation` |
 | `BRIDGE_TEST_EXECUTOR` | `windows-lpac` no Windows; `agy` nos demais sistemas | Executor de `antigravity_test`; `agy` força o caminho legado no Windows |
