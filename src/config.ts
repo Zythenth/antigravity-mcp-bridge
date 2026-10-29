@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { nativeToolsSchema, nativeToolSchema, mcpCatalogSchema, type NativeTool, type McpCatalogEntry } from './agent-policy.js';
-import { preauthorizedIntegrationRoots } from './integration-policy.js';
+import { readPreauthorizedIntegrationRoots } from './integration-policy.js';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
 import { customRolesSchema, type RoleDefinition } from './roles.js';
@@ -15,6 +15,8 @@ import {
 export type { SecretExceptionsPolicy } from './hardening-policy.js';
 export type TestExecutor = 'agy' | 'windows-lpac';
 export type ApprovalMode = 'auto' | 'ask';
+export type ConfigurationIssueReason = 'invalid-json' | 'not-a-list' | 'too-many-entries' | 'not-a-string' | 'not-absolute' | 'not-found' | 'access-denied' | 'not-a-directory' | 'volume-root' | 'unresolvable';
+export interface ConfigurationIssue { variable: string; index?: number; reason: ConfigurationIssueReason }
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
   if (value === undefined) return fallback;
@@ -44,6 +46,7 @@ export interface Config extends ProjectLimits {
   antiAiCraftDirectory?: string;
   toolProfile: ToolProfile;
   preauthorizedIntegrationRoots: string[];
+  configurationIssues: ConfigurationIssue[];
   customRoles: RoleDefinition[];
   allowedAgyTools: NativeTool[];
   enforceAgentPolicy: boolean;
@@ -159,12 +162,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const memoryMaxBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_BYTES, 1024 * 1024, 64 * 1024 * 1024);
   const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
   if (memoryMaxEntryBytes > memoryMaxBytes) throw new Error('BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES');
+  const preauthorized = readPreauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS);
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
     ...(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY') } : {}),
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
-    preauthorizedIntegrationRoots: preauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS),
+    preauthorizedIntegrationRoots: preauthorized.roots,
+    configurationIssues: preauthorized.issues,
     customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),
     enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== undefined || env.BRIDGE_MCP_CATALOG !== undefined,
     allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
@@ -193,4 +198,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
     allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, 'BRIDGE_ALLOWED_ENV_VARS'), 'BRIDGE_ALLOWED_ENV_VARS'),
   };
+}
+
+export function configurationWarning(issues: readonly ConfigurationIssue[]): string | undefined {
+  if (issues.length === 0) return undefined;
+  const formatted = issues.map(issue => `${issue.variable}${issue.index !== undefined ? `[${issue.index}]` : ''} ${issue.reason}`).join(', ');
+  return `Ignored invalid configuration entries (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
 }
