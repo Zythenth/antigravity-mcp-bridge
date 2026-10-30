@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { lstat, open } from 'node:fs/promises';
 import path from 'node:path';
 import { BridgeError } from './types.js';
-import type { ProjectLimits } from './config.js';
+import { assertSecretExclusionsUsable, type ProjectLimits } from './config.js';
 import { checkedPath, validRelative } from './isolation.js';
 import { normalizeSecretExceptionsPolicy, validateRelativeGlobPattern as validateGlobPattern, type SecretExceptionsPolicy } from './hardening-policy.js';
 
@@ -334,6 +334,7 @@ export async function preflightProjectFiles(
   limits: ProjectLimits,
   checkedPathFn: typeof checkedPath = checkedPath
 ): Promise<SecretPreflightResult> {
+  assertSecretExclusionsUsable(limits);
   if (candidates.length > limits.maxCopyFiles) {
     throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy has ${candidates.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
   }

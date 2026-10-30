@@ -31081,23 +31081,126 @@ function readCustomRoles(value) {
   const { valid, issues } = validateUniqueEntries(list.items, variable, customRoleElementSchema, (role) => role.name);
   return { customRoles: valid, issues };
 }
-function parseStringArray(value, envName) {
+function readAllowedAgyTools(value) {
+  const variable = "BRIDGE_ALLOWED_AGY_TOOLS";
+  if (value === void 0) {
+    return {
+      allowedAgyTools: [...nativeToolSchema.options],
+      enforceAgentPolicy: false,
+      issues: []
+    };
+  }
+  const list = parseJsonList(value, variable, 5);
+  if (list.issues.length > 0) {
+    return {
+      allowedAgyTools: [],
+      enforceAgentPolicy: true,
+      issues: list.issues
+    };
+  }
+  const valid = [];
+  const seen = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    const parsed = nativeToolSchema.safeParse(item);
+    if (!parsed.success) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    if (seen.has(parsed.data)) {
+      issues.push({ variable, index: i, reason: "duplicate" });
+    } else {
+      seen.add(parsed.data);
+      valid.push(parsed.data);
+    }
+  }
+  return {
+    allowedAgyTools: valid,
+    enforceAgentPolicy: true,
+    issues
+  };
+}
+function readSecretExclusionsConfig(value) {
+  const variable = "BRIDGE_SECRET_EXCLUSIONS";
   if (value === void 0)
-    return [];
-  let parsed;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    throw new Error(envName + " must be a JSON array of strings");
+    return { secretExclusions: [], issues: [] };
+  const list = parseJsonList(value, variable);
+  if (list.issues.length > 0) {
+    return { secretExclusions: [], secretExclusionsInvalid: true, issues: list.issues };
   }
-  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string" || !item.trim() || item.includes("\0"))) {
-    throw new Error(envName + " must be a JSON array of non-empty strings");
+  const issues = [];
+  const items = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    if (typeof item !== "string") {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || trimmed.includes("\0")) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    let validated;
+    try {
+      validated = validateRelativeGlobPattern(trimmed, variable);
+      if (validateRelativeGlobPattern(validated, variable) !== validated) {
+        issues.push({ variable, index: i, reason: "invalid-pattern" });
+        continue;
+      }
+    } catch {
+      issues.push({ variable, index: i, reason: "invalid-pattern" });
+      continue;
+    }
+    items.push(validated);
   }
-  const items = [...new Set(parsed.map((item) => item.trim()))];
-  if (envName === "BRIDGE_SECRET_EXCLUSIONS" && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
-    throw new Error(envName + " must contain relative glob patterns without traversal");
+  if (issues.length > 0) {
+    return { secretExclusions: [], secretExclusionsInvalid: true, issues };
   }
-  return items;
+  return { secretExclusions: [...new Set(items)], issues: [] };
+}
+function assertSecretExclusionsUsable(limits) {
+  if (limits.secretExclusionsInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "BRIDGE_SECRET_EXCLUSIONS is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function assertForbiddenDirectoriesUsable(config2) {
+  if (config2.forbiddenDirectoriesInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "FORBIDDEN_DIRECTORIES is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function isFullWindowsRoot(entry) {
+  if (/^[A-Za-z]:[\\/]/.test(entry))
+    return true;
+  if (/^(?:\\\\|\/\/)(?![\\/]|[?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/].*)?$/.test(entry))
+    return true;
+  return false;
+}
+function readForbiddenDirectories(value) {
+  const variable = "FORBIDDEN_DIRECTORIES";
+  if (!value)
+    return { forbiddenDirectories: [], issues: [] };
+  const entries = value.split(path6.delimiter).filter(Boolean);
+  const issues = [];
+  const valid = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.includes("\0")) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    const isAbsolute4 = process.platform === "win32" ? isFullWindowsRoot(entry) : path6.isAbsolute(entry);
+    if (!isAbsolute4) {
+      issues.push({ variable, index: i, reason: "not-absolute" });
+      continue;
+    }
+    valid.push(path6.resolve(entry));
+  }
+  if (issues.length > 0) {
+    return { forbiddenDirectories: valid, forbiddenDirectoriesInvalid: true, issues };
+  }
+  return { forbiddenDirectories: valid, issues: [] };
 }
 function stateDirectoryFrom(env) {
   return env.BRIDGE_STATE_DIRECTORY || path6.join(os2.homedir(), ".antigravity-mcp-bridge");
@@ -31117,12 +31220,18 @@ function loadConfig(env = process.env) {
   const secretExceptions = readSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS);
   const mcpCatalog = readMcpCatalog(env.BRIDGE_MCP_CATALOG);
   const customRoles = readCustomRoles(env.BRIDGE_CUSTOM_ROLES);
+  const allowedAgyTools = readAllowedAgyTools(env.BRIDGE_ALLOWED_AGY_TOOLS);
+  const secretExclusions = readSecretExclusionsConfig(env.BRIDGE_SECRET_EXCLUSIONS);
+  const forbiddenDirs = readForbiddenDirectories(env.FORBIDDEN_DIRECTORIES);
   const configurationIssues = [
     ...preauthorized.issues,
     ...allowedEnv.issues,
     ...secretExceptions.issues,
     ...mcpCatalog.issues,
-    ...customRoles.issues
+    ...customRoles.issues,
+    ...allowedAgyTools.issues,
+    ...secretExclusions.issues,
+    ...forbiddenDirs.issues
   ];
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
@@ -31132,8 +31241,8 @@ function loadConfig(env = process.env) {
     preauthorizedIntegrationRoots: preauthorized.roots,
     configurationIssues,
     customRoles: customRoles.customRoles,
-    enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== void 0 || env.BRIDGE_MCP_CATALOG !== void 0,
-    allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
+    enforceAgentPolicy: allowedAgyTools.enforceAgentPolicy || env.BRIDGE_MCP_CATALOG !== void 0,
+    allowedAgyTools: allowedAgyTools.allowedAgyTools,
     mcpCatalog: mcpCatalog.mcpCatalog,
     agyPath: env.AGY_PATH || "agy",
     defaultModel,
@@ -31151,11 +31260,13 @@ function loadConfig(env = process.env) {
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || "").split(path6.delimiter).filter(Boolean).map((p) => path6.resolve(p)),
+    forbiddenDirectories: forbiddenDirs.forbiddenDirectories,
+    ...forbiddenDirs.forbiddenDirectoriesInvalid ? { forbiddenDirectoriesInvalid: true } : {},
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
-    secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, "BRIDGE_SECRET_EXCLUSIONS"),
+    secretExclusions: secretExclusions.secretExclusions,
+    ...secretExclusions.secretExclusionsInvalid ? { secretExclusionsInvalid: true } : {},
     secretExceptions: secretExceptions.secretExceptions,
     allowedEnvVars: allowedEnv.allowedEnvVars
   };
@@ -31164,7 +31275,7 @@ function configurationWarning(issues) {
   if (issues.length === 0)
     return void 0;
   const formatted = issues.map((issue2) => `${issue2.variable}${issue2.index !== void 0 ? `[${issue2.index}]` : ""} ${issue2.reason}`).join(", ");
-  return `Ignored invalid configuration entries (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
+  return `Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
 }
 
 // dist/src/skills.js
@@ -33430,6 +33541,7 @@ function detectSecretContent(normalizedRelative, content, scanState = {}) {
   return false;
 }
 async function preflightProjectFiles(directory, candidates, limits, checkedPathFn = checkedPath) {
+  assertSecretExclusionsUsable(limits);
   if (candidates.length > limits.maxCopyFiles) {
     throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy has ${candidates.length} files; limit is ${limits.maxCopyFiles}. Narrow includePaths.`);
   }
@@ -34018,6 +34130,7 @@ function ensurePatchUtf8RoundTrip(bytes) {
 }
 var initializingProjects = /* @__PURE__ */ new WeakSet();
 async function inspectPrivateBaseline(project, limits, auxPaths) {
+  assertSecretExclusionsUsable(limits);
   const exclusions = (limits.secretExclusions ?? []).filter(Boolean);
   const exceptionsPolicy = normalizeSecretExceptionsPolicy(limits.secretExceptions, "secretExceptions");
   const namePatterns = exceptionsPolicy.namePatterns;
@@ -47555,6 +47668,7 @@ var GroupManager = class {
   }
   async create(groupId, input2) {
     groupId = groupId.toLowerCase();
+    assertForbiddenDirectoriesUsable(this.config);
     const definition = groupDefinitionSchema.parse(input2);
     definition.workingDirectory = await validateWorkingDirectory(definition.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(definition.workingDirectory, this.config.windowsNodeCacheDirectory);
@@ -52436,6 +52550,10 @@ var TaskManager = class {
   runInGroup(options, admission) {
     return this.run({ ...options, role: admission.owner, groupAdmission: groupAdmissionSchema.parse(admission) });
   }
+  forbiddenDirectories() {
+    assertForbiddenDirectoriesUsable(this.config);
+    return this.config.forbiddenDirectories;
+  }
   nativeRecovery;
   nativeRecoveryError;
   constructor(adapter, config2) {
@@ -52550,7 +52668,7 @@ var TaskManager = class {
     const previous = this.state.loadSandboxPolicy();
     if (previous.sha256 !== expectedSha256)
       throw new BridgeError("SANDBOX_POLICY_CHANGED", "Reload the current sandbox policy before proposing an update");
-    const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
     const proposed = { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
     if (this.config.approvalMode === "ask") {
       if (!confirm)
@@ -52563,7 +52681,7 @@ var TaskManager = class {
       const current = this.state.loadSandboxPolicy();
       if (current.sha256 !== previous.sha256)
         throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox policy changed while confirmation was pending");
-      const rechecked = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      const rechecked = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
       if (sandboxPolicyDigest(rechecked) !== proposed.sha256) {
         throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox policy proposal changed while confirmation was pending");
       }
@@ -52605,13 +52723,13 @@ var TaskManager = class {
     });
   }
   async memoryProject(workingDirectory) {
-    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    const directory = await validateWorkingDirectory(workingDirectory, this.forbiddenDirectories());
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
     await validateProjectRoot(directory);
     return directory;
   }
   async listProjectFiles(workingDirectory) {
-    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    const directory = await validateWorkingDirectory(workingDirectory, this.forbiddenDirectories());
     await validateStateSeparation(directory, this.config.stateDirectory);
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
     await validateProjectRoot(directory);
@@ -52695,7 +52813,8 @@ var TaskManager = class {
       options.outputSchema = validateOutputSchema(options.outputSchema);
     if (options.artifactPaths !== void 0)
       options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
-    const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
+    assertSecretExclusionsUsable(this.config);
+    const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.forbiddenDirectories());
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.groupAdmission) {
       await validateStateSeparation(workingDirectory, this.config.stateDirectory);
@@ -53340,7 +53459,7 @@ var TaskManager = class {
       throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
     }
     const policy = this.state.loadSandboxPolicy();
-    const selection = await resolveSandboxSelection(policy.policy, sandbox, source.workingDirectory, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const selection = await resolveSandboxSelection(policy.policy, sandbox, source.workingDirectory, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
     const nativeTest = {
       ...command2,
       expectedSha256,
@@ -54313,7 +54432,7 @@ ${redacted}`;
       if (current.sha256 !== request.policySha256) {
         throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox policy changed while this Windows test was queued");
       }
-      const selected = await resolveSandboxSelection(current.policy, request.sandbox, task2.record.workingDirectory, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      const selected = await resolveSandboxSelection(current.policy, request.sandbox, task2.record.workingDirectory, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
       if (JSON.stringify(selected) !== JSON.stringify(request.sandbox)) {
         throw new BridgeError("SANDBOX_POLICY_CHANGED", "Sandbox selection changed while this Windows test was queued");
       }
@@ -54344,7 +54463,7 @@ ${redacted}`;
         maxFiles: this.config.maxCopyFiles,
         mode: task2.record.mode,
         stateDirectory: this.config.stateDirectory,
-        protectedPaths: [task2.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.config.forbiddenDirectories],
+        protectedPaths: [task2.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.forbiddenDirectories()],
         windowsNodeRuntime: this.config.windowsNodeRuntime,
         portableNodeCacheDirectory: this.config.windowsNodeCacheDirectory,
         sandbox: request.sandbox,

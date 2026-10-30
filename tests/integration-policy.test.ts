@@ -21,6 +21,7 @@ import { CliAdapter } from '../src/cli-adapter.js';
 import { TaskManager } from '../src/task-manager.js';
 import { createMcpServer } from '../src/mcp-server.js';
 import { BridgeError } from '../src/types.js';
+import { resolveAgentPolicy } from '../src/agent-policy.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
@@ -572,14 +573,14 @@ test('loadConfig tolerates invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS and co
   assert.ok(singleWarning);
   assert.equal(singleWarning?.includes('\n'), false);
   assert.equal(singleWarning?.includes('{'), false);
-  assert.equal(singleWarning, 'Ignored invalid configuration entries (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in antigravity_health.');
+  assert.equal(singleWarning, 'Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in antigravity_health.');
 
   const sampleIssues = [
     { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', index: 0, reason: 'not-found' as const },
     { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', reason: 'invalid-json' as const },
   ];
   const warning = configurationWarning(sampleIssues);
-  assert.equal(warning, 'Ignored invalid configuration entries (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS[0] not-found, BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in antigravity_health.');
+  assert.equal(warning, 'Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS[0] not-found, BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in antigravity_health.');
   assert.equal(warning?.includes('\n'), false);
 });
 
@@ -749,7 +750,7 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
     const expectedWarning3 = configurationWarning(healthAll.configurationIssues)!;
     assert.ok(expectedWarning3);
     await waitFor(() => stderrData3.includes(expectedWarning3), () => stderrData3);
-    const warningLines = stderrData3.trim().split(/\r?\n/).filter(line => line.startsWith('Ignored invalid configuration entries'));
+    const warningLines = stderrData3.trim().split(/\r?\n/).filter(line => line.startsWith('Invalid configuration entries were ignored or made the affected feature unavailable'));
     assert.equal(warningLines.length, 1);
     assert.equal(warningLines[0], expectedWarning3);
 
@@ -759,6 +760,97 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
     if (client) await client.close().catch(() => {});
     if (client2) await client2.close().catch(() => {});
     if (client3) await client3.close().catch(() => {});
+    rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('server startup handles unreadable BRIDGE_ALLOWED_AGY_TOOLS, invalid BRIDGE_SECRET_EXCLUSIONS, and relative FORBIDDEN_DIRECTORIES', async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-server-startup-invalid-'));
+  const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));
+  const nonexistentAgy = path.join(tmpDir, 'nonexistent-agy');
+  const stateDir = path.join(tmpDir, 'state');
+  mkdirSync(stateDir, { recursive: true });
+
+  const sensitiveToolsMarker = 'SENSITIVE_TOOLS_BAD_JSON_112233{';
+  const sensitiveExclusionsMarker = '\\privado_sensitive_secret_445566';
+  const sensitiveForbiddenMarker = 'relative_forbidden_dir_778899';
+
+  let client: Client | undefined;
+  try {
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [entryPath],
+      env: {
+        ...process.env as Record<string, string>,
+        BRIDGE_ANTI_AI_CRAFT: 'off',
+        AGY_PATH: nonexistentAgy,
+        BRIDGE_STATE_DIRECTORY: stateDir,
+        BRIDGE_ALLOWED_AGY_TOOLS: sensitiveToolsMarker,
+        BRIDGE_SECRET_EXCLUSIONS: JSON.stringify([sensitiveExclusionsMarker]),
+        FORBIDDEN_DIRECTORIES: sensitiveForbiddenMarker,
+      },
+      stderr: 'pipe',
+    });
+    let stderrData = '';
+    transport.stderr?.on('data', (chunk: Buffer | string) => {
+      stderrData += chunk.toString();
+    });
+
+    client = new Client({ name: 'test-startup-coverage', version: '1.0.0' }, { capabilities: {} });
+    await client.connect(transport);
+
+    const health = (await client.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    assert.deepEqual(health.configurationIssues, [
+      { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', reason: 'invalid-json' },
+      { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' },
+      { variable: 'FORBIDDEN_DIRECTORIES', index: 0, reason: 'not-absolute' },
+    ]);
+
+    const expectedWarning = configurationWarning(health.configurationIssues)!;
+    assert.ok(expectedWarning);
+    await waitFor(() => stderrData.includes(expectedWarning), () => stderrData);
+    const warningLines = stderrData.trim().split(/\r?\n/).filter(line => line.startsWith('Invalid configuration entries were ignored or made the affected feature unavailable'));
+    assert.equal(warningLines.length, 1);
+    assert.equal(warningLines[0], expectedWarning);
+
+    for (const marker of [sensitiveToolsMarker, sensitiveExclusionsMarker, sensitiveForbiddenMarker]) {
+      assert.equal(stderrData.includes(marker), false, `stderr must not leak ${marker}`);
+      assert.equal(JSON.stringify(health).includes(marker), false, `health must not leak ${marker}`);
+    }
+
+    const agentPolicyResult = (await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} })).structuredContent as any;
+    assert.deepEqual(agentPolicyResult.allowedTools, []);
+    for (const marker of [sensitiveToolsMarker, sensitiveExclusionsMarker, sensitiveForbiddenMarker]) {
+      assert.equal(JSON.stringify(agentPolicyResult).includes(marker), false);
+    }
+    const effectivePolicy = resolveAgentPolicy({}, agentPolicyResult.allowedTools, [], 'write', '28c48913-763e-4ced-aee4-3fe6f0dd25eb');
+    assert.deepEqual(effectivePolicy.nativeTools, ['finish']);
+
+    const listFilesResult = await client.callTool({
+      name: 'antigravity_list_project_files',
+      arguments: { workingDirectory: tmpDir },
+    }) as any;
+    assert.equal(listFilesResult.isError, true);
+    const listFilesContent = listFilesResult.structuredContent as any;
+    assert.equal(listFilesContent.error.code, 'INVALID_CONFIGURATION');
+
+    const runResult = await client.callTool({
+      name: 'antigravity_run',
+      arguments: { prompt: 'do work', workingDirectory: tmpDir },
+    }) as any;
+    assert.equal(runResult.isError, true);
+    const runContent = runResult.structuredContent as any;
+    assert.equal(runContent.error.code, 'INVALID_CONFIGURATION');
+
+    for (const marker of [sensitiveToolsMarker, sensitiveExclusionsMarker, sensitiveForbiddenMarker]) {
+      assert.equal(JSON.stringify(listFilesResult).includes(marker), false);
+      assert.equal(JSON.stringify(runResult).includes(marker), false);
+    }
+
+    await client.close();
+    client = undefined;
+  } finally {
+    if (client) await client.close().catch(() => {});
     rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
