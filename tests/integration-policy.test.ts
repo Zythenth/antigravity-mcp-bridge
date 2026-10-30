@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import fs, { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import { realpath } from 'node:fs/promises';
@@ -12,10 +13,14 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { preauthorizedIntegrationRoots, readPreauthorizedIntegrationRoots, integrationPreauthorized } from '../src/integration-policy.js';
 import { StateStore } from '../src/state-store.js';
-import { loadConfig, configurationWarning } from '../src/config.js';
+import {
+  loadConfig,
+  configurationWarning,
+} from '../src/config.js';
 import { CliAdapter } from '../src/cli-adapter.js';
 import { TaskManager } from '../src/task-manager.js';
 import { createMcpServer } from '../src/mcp-server.js';
+import { BridgeError } from '../src/types.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
@@ -632,6 +637,7 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
 
   let client: Client | undefined;
   let client2: Client | undefined;
+  let client3: Client | undefined;
   try {
     const transport = new StdioClientTransport({
       command: process.execPath,
@@ -699,9 +705,472 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
 
     await client2.close();
     client2 = undefined;
+
+    const state3Dir = path.join(tmpDir, 'state3');
+    mkdirSync(state3Dir, { recursive: true });
+    const canonicalValidRoot = process.platform === 'win32' ? validRoot.toLowerCase() : validRoot;
+    writeFileSync(path.join(state3Dir, 'integration-approvals.json'), JSON.stringify({ version: 1, roots: ['relative-path', canonicalValidRoot] }));
+
+    const transport3 = new StdioClientTransport({
+      command: process.execPath,
+      args: [entryPath],
+      env: {
+        ...process.env as Record<string, string>,
+        BRIDGE_ANTI_AI_CRAFT: 'off',
+        AGY_PATH: nonexistentAgy,
+        BRIDGE_STATE_DIRECTORY: state3Dir,
+        BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS: JSON.stringify([nonexistentRoot, validRoot]),
+        BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS', 'MY_VALID_ENV']),
+        BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/invalid/abs', 'valid/*.doc'] }),
+        BRIDGE_MCP_CATALOG: JSON.stringify([{ id: 'bad-entry', badField: true }]),
+        BRIDGE_CUSTOM_ROLES: JSON.stringify([{ name: 'reviewer', baseRole: 'reviewer', instruction: 'Forbidden builtin' }]),
+      },
+      stderr: 'pipe',
+    });
+    let stderrData3 = '';
+    transport3.stderr?.on('data', (chunk: Buffer | string) => {
+      stderrData3 += chunk.toString();
+    });
+
+    client3 = new Client({ name: 'test-client-all-invalid', version: '1.0.0' }, { capabilities: {} });
+    await client3.connect(transport3);
+
+    const healthAll = (await client3.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    assert.deepEqual(healthAll.configurationIssues, [
+      { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', index: 0, reason: 'not-found' },
+      { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 0, reason: 'forbidden-name' },
+      { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 0, reason: 'invalid-pattern' },
+      { variable: 'BRIDGE_MCP_CATALOG', index: 0, reason: 'invalid-entry' },
+      { variable: 'BRIDGE_CUSTOM_ROLES', index: 0, reason: 'invalid-entry' },
+      { variable: 'integration-approvals.json', index: 0, reason: 'invalid-entry' },
+    ]);
+    assert.equal(healthAll.integrationApproval.preauthorizedProjectCount, 1);
+
+    const expectedWarning3 = configurationWarning(healthAll.configurationIssues)!;
+    assert.ok(expectedWarning3);
+    await waitFor(() => stderrData3.includes(expectedWarning3), () => stderrData3);
+    const warningLines = stderrData3.trim().split(/\r?\n/).filter(line => line.startsWith('Ignored invalid configuration entries'));
+    assert.equal(warningLines.length, 1);
+    assert.equal(warningLines[0], expectedWarning3);
+
+    await client3.close();
+    client3 = undefined;
   } finally {
     if (client) await client.close().catch(() => {});
     if (client2) await client2.close().catch(() => {});
+    if (client3) await client3.close().catch(() => {});
     rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('BRIDGE_ALLOWED_ENV_VARS tolerates invalid values and keeps valid names', () => {
+  const jsonCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: '{' });
+  assert.deepEqual(jsonCfg.allowedEnvVars, []);
+  assert.deepEqual(jsonCfg.configurationIssues, [{ variable: 'BRIDGE_ALLOWED_ENV_VARS', reason: 'invalid-json' }]);
+
+  const listCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: '{"a": 1}' });
+  assert.deepEqual(listCfg.allowedEnvVars, []);
+  assert.deepEqual(listCfg.configurationIssues, [{ variable: 'BRIDGE_ALLOWED_ENV_VARS', reason: 'not-a-list' }]);
+
+  const mixedCfg = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_ALLOWED_ENV_VARS: JSON.stringify([
+      123,
+      '',
+      'BAD-ENV-NAME!',
+      'NUL\0VAR',
+      'NODE_OPTIONS',
+      'NODE_PATH',
+      'LD_PRELOAD',
+      'DYLD_LIBRARY_PATH',
+      '  VALID_CUSTOM_VAR  ',
+      'VALID_CUSTOM_VAR',
+      'ANOTHER_VALID_VAR',
+    ]),
+  });
+  assert.deepEqual(mixedCfg.allowedEnvVars, ['VALID_CUSTOM_VAR', 'ANOTHER_VALID_VAR']);
+  assert.deepEqual(mixedCfg.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 0, reason: 'not-a-string' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 1, reason: 'invalid-name' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 2, reason: 'invalid-name' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 3, reason: 'invalid-name' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 4, reason: 'forbidden-name' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 5, reason: 'forbidden-name' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 6, reason: 'forbidden-name' },
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 7, reason: 'forbidden-name' },
+  ]);
+  assert.equal(mixedCfg.allowedEnvVars.includes('NODE_OPTIONS'), false);
+  assert.equal(mixedCfg.allowedEnvVars.includes('BAD-ENV-NAME!'), false);
+});
+
+test('BRIDGE_SECRET_EXCEPTIONS tolerates invalid values and keeps valid patterns', () => {
+  const jsonCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '{' });
+  assert.deepEqual(jsonCfg.secretExceptions, { version: 2, namePatterns: [] });
+  assert.deepEqual(jsonCfg.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-json' }]);
+
+  const emptyListCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '[]' });
+  assert.deepEqual(emptyListCfg.secretExceptions, { version: 2, namePatterns: [] });
+  assert.deepEqual(emptyListCfg.configurationIssues, []);
+
+  const legacyCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '["old/pattern"]' });
+  assert.deepEqual(legacyCfg.secretExceptions, { version: 2, namePatterns: [] });
+  assert.deepEqual(legacyCfg.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'legacy-format' }]);
+
+  for (const notObj of ['null', '123', '"a string"', 'false']) {
+    const cfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: notObj });
+    assert.deepEqual(cfg.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfg.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'not-an-object' }]);
+  }
+
+  const formatCases = [
+    { version: 2, namePatterns: [], extra: true },
+    { namePatterns: [] },
+    { version: 2 },
+    { version: 1, namePatterns: [] },
+    { version: 3, namePatterns: [] },
+    { version: 2, namePatterns: 'not-a-list' },
+  ];
+  for (const badFormat of formatCases) {
+    const cfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(badFormat) });
+    assert.deepEqual(cfg.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfg.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-format' }]);
+  }
+
+  const mixedCfg = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({
+      version: 2,
+      namePatterns: [
+        123,
+        '',
+        '   ',
+        'nul\0char',
+        '/absolute/path',
+        'C:/drive/path',
+        'sub/../traversal',
+        ' ./valid\\pattern ',
+        'valid/pattern',
+        'another/*.pattern',
+      ],
+    }),
+  });
+  assert.deepEqual(mixedCfg.secretExceptions, { version: 2, namePatterns: ['valid/pattern', 'another/*.pattern'] });
+  assert.deepEqual(mixedCfg.configurationIssues, [
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 0, reason: 'not-a-string' },
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 1, reason: 'invalid-pattern' },
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 2, reason: 'invalid-pattern' },
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 3, reason: 'invalid-pattern' },
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 4, reason: 'invalid-pattern' },
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 5, reason: 'invalid-pattern' },
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 6, reason: 'invalid-pattern' },
+  ]);
+  assert.equal(mixedCfg.secretExceptions.namePatterns.includes('/absolute/path'), false);
+  assert.equal(mixedCfg.secretExceptions.namePatterns.includes('sub/../traversal'), false);
+});
+
+test('BRIDGE_MCP_CATALOG tolerates invalid values, duplicate ids, and large payloads', () => {
+  const jsonCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MCP_CATALOG: '{' });
+  assert.deepEqual(jsonCfg.mcpCatalog, []);
+  assert.deepEqual(jsonCfg.configurationIssues, [{ variable: 'BRIDGE_MCP_CATALOG', reason: 'invalid-json' }]);
+  assert.equal(jsonCfg.enforceAgentPolicy, true);
+
+  const listCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MCP_CATALOG: '{"server": 1}' });
+  assert.deepEqual(listCfg.mcpCatalog, []);
+  assert.deepEqual(listCfg.configurationIssues, [{ variable: 'BRIDGE_MCP_CATALOG', reason: 'not-a-list' }]);
+
+  const tooMany = Array(21).fill({ id: 'srv', serverUrl: 'https://example.com/mcp', tools: [{ name: 't', readOnly: true }] });
+  const countCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MCP_CATALOG: JSON.stringify(tooMany) });
+  assert.deepEqual(countCfg.mcpCatalog, []);
+  assert.deepEqual(countCfg.configurationIssues, [{ variable: 'BRIDGE_MCP_CATALOG', reason: 'too-many-entries' }]);
+
+  const valid1 = { id: 'srv-a', serverUrl: 'https://example.com/a', tools: [{ name: 'query', readOnly: true }] };
+  const valid2 = { id: 'srv-b', serverUrl: 'https://example.com/b', tools: [{ name: 'query', readOnly: true }] };
+  const validDup = { id: 'srv-a', serverUrl: 'https://example.com/dup', tools: [{ name: 'query', readOnly: true }] };
+  const invalid = { id: 'bad-entry', command: 'relative-not-abs', tools: [{ name: 'query', readOnly: true }] };
+
+  const mixedCfg = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_MCP_CATALOG: JSON.stringify([valid1, invalid, valid2, validDup]),
+  });
+  assert.deepEqual(mixedCfg.mcpCatalog, [valid2]);
+  assert.deepEqual(mixedCfg.configurationIssues, [
+    { variable: 'BRIDGE_MCP_CATALOG', index: 0, reason: 'duplicate' },
+    { variable: 'BRIDGE_MCP_CATALOG', index: 1, reason: 'invalid-entry' },
+    { variable: 'BRIDGE_MCP_CATALOG', index: 3, reason: 'duplicate' },
+  ]);
+
+  const largeEnv = Object.fromEntries(Array.from({ length: 100 }, (_, i) => ['KEY_' + i, 'x'.repeat(15000)]));
+  const largeEntry = {
+    id: 'large-server',
+    command: path.resolve('fixtures/server'),
+    env: largeEnv,
+    tools: [{ name: 'echo', readOnly: true }],
+  };
+  assert.ok(Buffer.byteLength(JSON.stringify([largeEntry]), 'utf8') > 1024 * 1024);
+  const largeCfg = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_MCP_CATALOG: JSON.stringify([largeEntry]),
+  });
+  assert.deepEqual(largeCfg.mcpCatalog, []);
+  assert.deepEqual(largeCfg.configurationIssues, [{ variable: 'BRIDGE_MCP_CATALOG', reason: 'too-large' }]);
+});
+
+test('BRIDGE_CUSTOM_ROLES tolerates invalid values, built-in names, and duplicates', () => {
+  const jsonCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: '{' });
+  assert.deepEqual(jsonCfg.customRoles, []);
+  assert.deepEqual(jsonCfg.configurationIssues, [{ variable: 'BRIDGE_CUSTOM_ROLES', reason: 'invalid-json' }]);
+
+  const listCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: '"string-role"' });
+  assert.deepEqual(listCfg.customRoles, []);
+  assert.deepEqual(listCfg.configurationIssues, [{ variable: 'BRIDGE_CUSTOM_ROLES', reason: 'not-a-list' }]);
+
+  const validRole = { name: 'role-valid', baseRole: 'reviewer', instruction: 'Audit the files.' };
+  const countCfg = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_CUSTOM_ROLES: JSON.stringify(Array(21).fill(validRole)),
+  });
+  assert.deepEqual(countCfg.customRoles, []);
+  assert.deepEqual(countCfg.configurationIssues, [{ variable: 'BRIDGE_CUSTOM_ROLES', reason: 'too-many-entries' }]);
+
+  const roleBuiltin = { name: 'reviewer', baseRole: 'reviewer', instruction: 'Check citations.' };
+  const roleEmpty = { name: 'role-empty', baseRole: 'reviewer', instruction: '   ' };
+  const roleBadBase = { name: 'role-bad-base', baseRole: 'invalid-base', instruction: 'Check.' };
+  const roleDup1 = { name: 'role-dup', baseRole: 'implementer', instruction: 'Implement things.' };
+  const roleDup2 = { name: 'role-dup', baseRole: 'implementer', instruction: 'Implement other things.' };
+  const roleOk = { name: 'role-ok', baseRole: 'implementer', instruction: 'Valid instructions.' };
+
+  const mixedCfg = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_CUSTOM_ROLES: JSON.stringify([roleBuiltin, roleDup1, roleEmpty, roleBadBase, roleOk, roleDup2]),
+  });
+  assert.deepEqual(mixedCfg.customRoles, [roleOk]);
+  assert.deepEqual(mixedCfg.configurationIssues, [
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 0, reason: 'invalid-entry' },
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 1, reason: 'duplicate' },
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 2, reason: 'invalid-entry' },
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 3, reason: 'invalid-entry' },
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 5, reason: 'duplicate' },
+  ]);
+  assert.equal(mixedCfg.customRoles.some(r => r.name === 'reviewer'), false);
+  assert.equal(mixedCfg.customRoles.some(r => r.name === 'role-dup'), false);
+});
+
+test('StateStore readIntegrationRoots tolerates invalid files, unsafe files, and maintains valid roots', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-tolerant-approvals-'));
+  try {
+    const state = new StateStore(directory);
+    const file = path.join(directory, 'integration-approvals.json');
+    const validCanonical = process.platform === 'win32' ? directory.toLowerCase() : directory;
+
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [] });
+
+    mkdirSync(file);
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [{ variable: 'integration-approvals.json', reason: 'unsafe-file' }] });
+    rmSync(file, { recursive: true });
+
+    writeFileSync(file, 'x'.repeat(128 * 1024 + 1));
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [{ variable: 'integration-approvals.json', reason: 'unsafe-file' }] });
+    unlinkSync(file);
+
+    const outside = path.join(directory, 'outside.json');
+    writeFileSync(outside, JSON.stringify({ version: 1, roots: [validCanonical] }));
+    linkSync(outside, file);
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [{ variable: 'integration-approvals.json', reason: 'unsafe-file' }] });
+    unlinkSync(file);
+    unlinkSync(outside);
+
+    writeFileSync(file, '{');
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [{ variable: 'integration-approvals.json', reason: 'invalid-json' }] });
+
+    for (const badFormat of ['null', '123', '[]', { version: 2, roots: [] }, { version: 1, roots: [], extra: true }, { version: 1, roots: 'bad' }]) {
+      writeFileSync(file, typeof badFormat === 'string' ? badFormat : JSON.stringify(badFormat));
+      assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [{ variable: 'integration-approvals.json', reason: 'invalid-format' }] });
+    }
+
+    writeFileSync(file, JSON.stringify({ version: 1, roots: Array(21).fill(validCanonical) }));
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [], issues: [{ variable: 'integration-approvals.json', reason: 'too-many-entries' }] });
+
+    writeFileSync(file, JSON.stringify({
+      version: 1,
+      roots: [
+        'relative/path',
+        path.parse(validCanonical).root,
+        validCanonical + path.sep + '..',
+        validCanonical,
+      ],
+    }));
+    assert.deepEqual(state.readIntegrationRoots(), {
+      roots: [validCanonical],
+      issues: [
+        { variable: 'integration-approvals.json', index: 0, reason: 'invalid-entry' },
+        { variable: 'integration-approvals.json', index: 1, reason: 'invalid-entry' },
+        { variable: 'integration-approvals.json', index: 2, reason: 'invalid-entry' },
+      ],
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('StateStore readIntegrationRoots tolerates filesystem faults and maps access-denied and unresolvable', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-tolerant-faults-'));
+  const otherDir = mkdtempSync(path.join(os.tmpdir(), 'agy-other-valid-'));
+  const originalLstatSync = fs.lstatSync;
+  const originalReadFileSync = fs.readFileSync;
+  try {
+    const state = new StateStore(directory);
+    const file = path.join(directory, 'integration-approvals.json');
+    const validCanonical = process.platform === 'win32' ? directory.toLowerCase() : directory;
+    const initialContent = JSON.stringify({ version: 1, roots: [validCanonical] });
+    writeFileSync(file, initialContent, 'utf8');
+
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [validCanonical], issues: [] });
+
+    let activeFault: { method: 'lstatSync' | 'readFileSync'; code: string; message: string } | null = null;
+
+    fs.lstatSync = ((...args: Parameters<typeof originalLstatSync>) => {
+      if (activeFault?.method === 'lstatSync' && args[0] === file) {
+        throw Object.assign(new Error(activeFault.message), { code: activeFault.code });
+      }
+      return Reflect.apply(originalLstatSync, fs, args);
+    }) as unknown as typeof originalLstatSync;
+
+    fs.readFileSync = ((...args: Parameters<typeof originalReadFileSync>) => {
+      if (activeFault?.method === 'readFileSync' && args[0] === file) {
+        throw Object.assign(new Error(activeFault.message), { code: activeFault.code });
+      }
+      return Reflect.apply(originalReadFileSync, fs, args);
+    }) as unknown as typeof originalReadFileSync;
+
+    syncBuiltinESMExports();
+
+    const cases: Array<{
+      method: 'lstatSync' | 'readFileSync';
+      code: string;
+      expectedReason: 'access-denied' | 'unresolvable';
+    }> = [
+      { method: 'lstatSync', code: 'EACCES', expectedReason: 'access-denied' },
+      { method: 'lstatSync', code: 'EPERM', expectedReason: 'access-denied' },
+      { method: 'lstatSync', code: 'EIO', expectedReason: 'unresolvable' },
+      { method: 'readFileSync', code: 'EACCES', expectedReason: 'access-denied' },
+      { method: 'readFileSync', code: 'EIO', expectedReason: 'unresolvable' },
+    ];
+
+    for (const { method, code, expectedReason } of cases) {
+      activeFault = { method, code, message: `SEGREDO-IO: simulated ${method} ${code} failure for ${directory}` };
+
+      const result = state.readIntegrationRoots();
+      assert.deepEqual(result.roots, []);
+      assert.deepEqual(result.issues, [{ variable: 'integration-approvals.json', reason: expectedReason }]);
+
+      const issuesJson = JSON.stringify(result.issues);
+      assert.equal(issuesJson.includes(directory), false);
+      assert.equal(issuesJson.includes('SEGREDO-IO'), false);
+
+      const config = loadConfig({
+        BRIDGE_ANTI_AI_CRAFT: 'off',
+        BRIDGE_STATE_DIRECTORY: directory,
+      });
+      const adapter = new CliAdapter(config, [mockPath]);
+      const tasks = new TaskManager(adapter, config);
+
+      assert.equal(tasks.preauthorizedProjectCount, 0);
+      assert.deepEqual(tasks.configurationIssues, [{ variable: 'integration-approvals.json', reason: expectedReason }]);
+
+      const tasksIssuesJson = JSON.stringify(tasks.configurationIssues);
+      assert.equal(tasksIssuesJson.includes(directory), false);
+      assert.equal(tasksIssuesJson.includes('SEGREDO-IO'), false);
+
+      assert.throws(
+        () => state.rememberIntegrationRoot(otherDir),
+        (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_STATE'
+      );
+    }
+
+    activeFault = null;
+    fs.lstatSync = originalLstatSync;
+    fs.readFileSync = originalReadFileSync;
+    syncBuiltinESMExports();
+
+    assert.equal(readFileSync(file, 'utf8'), initialContent);
+    assert.deepEqual(state.readIntegrationRoots(), { roots: [validCanonical], issues: [] });
+  } finally {
+    fs.lstatSync = originalLstatSync;
+    fs.readFileSync = originalReadFileSync;
+    syncBuiltinESMExports();
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(otherDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('configurationWarning and configurationIssues never leak sensitive values', () => {
+  const SENSITIVE = 'MARKER_LEAK_CHECK_987654321';
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-leak-check-'));
+  try {
+    const file = path.join(directory, 'integration-approvals.json');
+    writeFileSync(file, JSON.stringify({ version: 1, roots: ['relative/' + SENSITIVE] }));
+
+    const config = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_STATE_DIRECTORY: directory,
+      BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS_' + SENSITIVE]),
+      BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/abs/' + SENSITIVE] }),
+      BRIDGE_MCP_CATALOG: JSON.stringify([{ id: 'bad-entry', command: 'rel/' + SENSITIVE, tools: [{ name: 't', readOnly: true }] }]),
+      BRIDGE_CUSTOM_ROLES: JSON.stringify([{ name: 'reviewer', baseRole: 'reviewer', instruction: 'LEAK_' + SENSITIVE }]),
+    });
+
+    const adapter = new CliAdapter(config, [mockPath]);
+    const tasks = new TaskManager(adapter, config);
+    const issues = tasks.configurationIssues;
+    const issuesJson = JSON.stringify(issues);
+    assert.equal(issuesJson.includes(SENSITIVE), false, 'Issues JSON must not leak sensitive marker');
+    for (const issue of issues) {
+      assert.equal(issue.variable.includes(SENSITIVE), false);
+      assert.equal(issue.reason.includes(SENSITIVE), false);
+    }
+
+    const warning = configurationWarning(issues)!;
+    assert.ok(warning);
+    assert.equal(warning.includes(SENSITIVE), false, 'Warning text must not leak sensitive marker');
+    assert.equal(JSON.stringify(warning).includes(SENSITIVE), false, 'Warning JSON must not leak sensitive marker');
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('rememberIntegrationRoot refuses to overwrite invalid integration-approvals.json and preserves bytes', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-refuse-overwrite-'));
+  try {
+    const state = new StateStore(directory);
+    const file = path.join(directory, 'integration-approvals.json');
+    const invalidContent = '{"version": 999, "roots": ["invalid"], "customSentinel": "KEEP_ME_BYTE_FOR_BYTE"}';
+    writeFileSync(file, invalidContent, 'utf8');
+
+    assert.throws(() => state.rememberIntegrationRoot(directory), { code: 'INVALID_STATE' });
+    assert.equal(readFileSync(file, 'utf8'), invalidContent);
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('antigravity_health continues to respond when integration-approvals.json is invalid and lists the problem', () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-health-invalid-file-'));
+  try {
+    const file = path.join(directory, 'integration-approvals.json');
+    writeFileSync(file, '{"invalidJson": true');
+
+    const config = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_STATE_DIRECTORY: directory,
+    });
+    const adapter = new CliAdapter(config, [mockPath]);
+    const tasks = new TaskManager(adapter, config);
+
+    assert.equal(tasks.preauthorizedProjectCount, 0);
+    assert.deepEqual(tasks.configurationIssues, [
+      { variable: 'integration-approvals.json', reason: 'invalid-json' },
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

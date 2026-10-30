@@ -1,21 +1,50 @@
 import path from 'node:path';
-import { nativeToolsSchema, nativeToolSchema, mcpCatalogSchema, type NativeTool, type McpCatalogEntry } from './agent-policy.js';
+import {
+  nativeToolsSchema,
+  nativeToolSchema,
+  mcpCatalogEntrySchema,
+  type NativeTool,
+  type McpCatalogEntry,
+} from './agent-policy.js';
 import { readPreauthorizedIntegrationRoots } from './integration-policy.js';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
-import { customRolesSchema, type RoleDefinition } from './roles.js';
+import {
+  customRoleElementSchema,
+  type RoleDefinition,
+} from './roles.js';
 import type { WindowsNodeRuntime } from './portable-node.js';
 
 import {
   type SecretExceptionsPolicy,
-  normalizeSecretExceptionsPolicy,
-  validateAllowedEnvVars,
+  isForbiddenAllowedEnvVar,
+  validateRelativeGlobPattern,
 } from './hardening-policy.js';
 
 export type { SecretExceptionsPolicy } from './hardening-policy.js';
 export type TestExecutor = 'agy' | 'windows-lpac';
 export type ApprovalMode = 'auto' | 'ask';
-export type ConfigurationIssueReason = 'invalid-json' | 'not-a-list' | 'too-many-entries' | 'not-a-string' | 'not-absolute' | 'not-found' | 'access-denied' | 'not-a-directory' | 'volume-root' | 'unresolvable';
+export type ConfigurationIssueReason =
+  | 'invalid-json'
+  | 'not-a-list'
+  | 'too-many-entries'
+  | 'not-a-string'
+  | 'not-absolute'
+  | 'not-found'
+  | 'access-denied'
+  | 'not-a-directory'
+  | 'volume-root'
+  | 'unresolvable'
+  | 'not-an-object'
+  | 'legacy-format'
+  | 'invalid-format'
+  | 'invalid-name'
+  | 'forbidden-name'
+  | 'invalid-pattern'
+  | 'invalid-entry'
+  | 'duplicate'
+  | 'too-large'
+  | 'unsafe-file';
 export interface ConfigurationIssue { variable: string; index?: number; reason: ConfigurationIssueReason }
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
@@ -120,15 +149,169 @@ function windowsNodeCacheDirectory(value: string | undefined): string {
   return resolved;
 }
 
-function parseSecretExceptionsConfig(value: string | undefined): SecretExceptionsPolicy {
-  if (value === undefined) return { version: 2, namePatterns: [] };
+function parseJsonList(
+  value: string | undefined,
+  variable: string,
+  maxEntries?: number
+): { items: unknown[]; issues: ConfigurationIssue[] } {
+  if (value === undefined) return { items: [], issues: [] };
   let parsed: unknown;
   try {
     parsed = JSON.parse(value);
   } catch {
-    throw new Error('BRIDGE_SECRET_EXCEPTIONS must be a valid JSON object: {"version":2,"namePatterns":[...]}');
+    return { items: [], issues: [{ variable, reason: 'invalid-json' }] };
   }
-  return normalizeSecretExceptionsPolicy(parsed, 'BRIDGE_SECRET_EXCEPTIONS');
+  if (!Array.isArray(parsed)) {
+    return { items: [], issues: [{ variable, reason: 'not-a-list' }] };
+  }
+  if (maxEntries !== undefined && parsed.length > maxEntries) {
+    return { items: [], issues: [{ variable, reason: 'too-many-entries' }] };
+  }
+  return { items: parsed, issues: [] };
+}
+
+interface SafeParser<T> {
+  safeParse(data: unknown): { success: true; data: T } | { success: false };
+}
+
+function validateUniqueEntries<T>(
+  items: unknown[],
+  variable: string,
+  schema: SafeParser<T>,
+  getKey: (item: T) => string
+): { valid: T[]; issues: ConfigurationIssue[] } {
+  const candidateEntries: Array<{ index: number; entry: T }> = [];
+  const issues: ConfigurationIssue[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const result = schema.safeParse(items[i]);
+    if (!result.success) {
+      issues.push({ variable, index: i, reason: 'invalid-entry' });
+    } else {
+      candidateEntries.push({ index: i, entry: result.data });
+    }
+  }
+  const keyCounts = new Map<string, number>();
+  for (const item of candidateEntries) {
+    const key = getKey(item.entry);
+    keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+  }
+  const valid: T[] = [];
+  for (const item of candidateEntries) {
+    const key = getKey(item.entry);
+    if (keyCounts.get(key)! > 1) {
+      issues.push({ variable, index: item.index, reason: 'duplicate' });
+    } else {
+      valid.push(item.entry);
+    }
+  }
+  issues.sort((a, b) => (a.index ?? -1) - (b.index ?? -1));
+  return { valid, issues };
+}
+
+function readSecretExceptionsConfig(value: string | undefined): { secretExceptions: SecretExceptionsPolicy; issues: ConfigurationIssue[] } {
+  const variable = 'BRIDGE_SECRET_EXCEPTIONS';
+  const emptyPolicy: SecretExceptionsPolicy = { version: 2, namePatterns: [] };
+  if (value === undefined) return { secretExceptions: emptyPolicy, issues: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: 'invalid-json' }] };
+  }
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) return { secretExceptions: emptyPolicy, issues: [] };
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: 'legacy-format' }] };
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: 'not-an-object' }] };
+  }
+  const obj = parsed as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  if (
+    keys.length !== 2 ||
+    !Object.hasOwn(obj, 'version') ||
+    !Object.hasOwn(obj, 'namePatterns') ||
+    obj.version !== 2 ||
+    !Array.isArray(obj.namePatterns)
+  ) {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: 'invalid-format' }] };
+  }
+  const validatedPatterns: string[] = [];
+  const seenPatterns = new Set<string>();
+  const issues: ConfigurationIssue[] = [];
+  for (let i = 0; i < obj.namePatterns.length; i++) {
+    const item = obj.namePatterns[i];
+    if (typeof item !== 'string') {
+      issues.push({ variable, index: i, reason: 'not-a-string' });
+      continue;
+    }
+    let validated: string;
+    try {
+      validated = validateRelativeGlobPattern(item, 'BRIDGE_SECRET_EXCEPTIONS.namePatterns');
+    } catch {
+      issues.push({ variable, index: i, reason: 'invalid-pattern' });
+      continue;
+    }
+    if (!seenPatterns.has(validated)) {
+      seenPatterns.add(validated);
+      validatedPatterns.push(validated);
+    }
+  }
+  return { secretExceptions: { version: 2, namePatterns: validatedPatterns }, issues };
+}
+
+function readAllowedEnvVars(value: string | undefined): { allowedEnvVars: string[]; issues: ConfigurationIssue[] } {
+  const variable = 'BRIDGE_ALLOWED_ENV_VARS';
+  const list = parseJsonList(value, variable);
+  if (list.issues.length > 0) return { allowedEnvVars: [], issues: list.issues };
+  const allowedEnvVars: string[] = [];
+  const seen = new Set<string>();
+  const issues: ConfigurationIssue[] = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    if (typeof item !== 'string') {
+      issues.push({ variable, index: i, reason: 'not-a-string' });
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || trimmed.includes('\0') || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+      issues.push({ variable, index: i, reason: 'invalid-name' });
+      continue;
+    }
+    if (isForbiddenAllowedEnvVar(trimmed)) {
+      issues.push({ variable, index: i, reason: 'forbidden-name' });
+      continue;
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      allowedEnvVars.push(trimmed);
+    }
+  }
+  return { allowedEnvVars, issues };
+}
+
+function readMcpCatalog(value: string | undefined): { mcpCatalog: McpCatalogEntry[]; issues: ConfigurationIssue[] } {
+  const variable = 'BRIDGE_MCP_CATALOG';
+  const list = parseJsonList(value, variable, 20);
+  if (list.issues.length > 0) return { mcpCatalog: [], issues: list.issues };
+  const { valid, issues } = validateUniqueEntries(list.items, variable, mcpCatalogEntrySchema, entry => entry.id);
+  let validRemaining = valid;
+  if (validRemaining.length > 0) {
+    const serialized = JSON.stringify(validRemaining);
+    if (Buffer.byteLength(serialized, 'utf8') > 1024 * 1024) {
+      validRemaining = [];
+      issues.push({ variable, reason: 'too-large' });
+    }
+  }
+  return { mcpCatalog: validRemaining, issues };
+}
+
+function readCustomRoles(value: string | undefined): { customRoles: RoleDefinition[]; issues: ConfigurationIssue[] } {
+  const variable = 'BRIDGE_CUSTOM_ROLES';
+  const list = parseJsonList(value, variable, 20);
+  if (list.issues.length > 0) return { customRoles: [], issues: list.issues };
+  const { valid, issues } = validateUniqueEntries(list.items, variable, customRoleElementSchema, role => role.name);
+  return { customRoles: valid, issues };
 }
 
 function parseStringArray(value: string | undefined, envName: string): string[] {
@@ -139,9 +322,6 @@ function parseStringArray(value: string | undefined, envName: string): string[] 
     throw new Error(envName + ' must be a JSON array of non-empty strings');
   }
   const items = [...new Set((parsed as string[]).map(item => item.trim()))];
-  if (envName === 'BRIDGE_ALLOWED_ENV_VARS' && items.some(item => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
-    throw new Error(envName + ' must contain exact environment variable names');
-  }
   if (envName === 'BRIDGE_SECRET_EXCLUSIONS' &&
       items.some(item => item.startsWith('/') || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some(part => part === '..'))) {
     throw new Error(envName + ' must contain relative glob patterns without traversal');
@@ -163,17 +343,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
   if (memoryMaxEntryBytes > memoryMaxBytes) throw new Error('BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES');
   const preauthorized = readPreauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS);
+  const allowedEnv = readAllowedEnvVars(env.BRIDGE_ALLOWED_ENV_VARS);
+  const secretExceptions = readSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS);
+  const mcpCatalog = readMcpCatalog(env.BRIDGE_MCP_CATALOG);
+  const customRoles = readCustomRoles(env.BRIDGE_CUSTOM_ROLES);
+  const configurationIssues: ConfigurationIssue[] = [
+    ...preauthorized.issues,
+    ...allowedEnv.issues,
+    ...secretExceptions.issues,
+    ...mcpCatalog.issues,
+    ...customRoles.issues,
+  ];
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
     ...(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY') } : {}),
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     preauthorizedIntegrationRoots: preauthorized.roots,
-    configurationIssues: preauthorized.issues,
-    customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? '[]')),
+    configurationIssues,
+    customRoles: customRoles.customRoles,
     enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== undefined || env.BRIDGE_MCP_CATALOG !== undefined,
     allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
-    mcpCatalog: mcpCatalogSchema.parse(JSON.parse(env.BRIDGE_MCP_CATALOG ?? '[]')),
+    mcpCatalog: mcpCatalog.mcpCatalog,
     agyPath: env.AGY_PATH || 'agy',
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
@@ -195,8 +386,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
     secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, 'BRIDGE_SECRET_EXCLUSIONS'),
-    secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
-    allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, 'BRIDGE_ALLOWED_ENV_VARS'), 'BRIDGE_ALLOWED_ENV_VARS'),
+    secretExceptions: secretExceptions.secretExceptions,
+    allowedEnvVars: allowedEnv.allowedEnvVars,
   };
 }
 

@@ -30935,16 +30935,151 @@ function windowsNodeCacheDirectory(value) {
     throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
   return resolved;
 }
-function parseSecretExceptionsConfig(value) {
+function parseJsonList(value, variable, maxEntries) {
   if (value === void 0)
-    return { version: 2, namePatterns: [] };
+    return { items: [], issues: [] };
   let parsed;
   try {
     parsed = JSON.parse(value);
   } catch {
-    throw new Error('BRIDGE_SECRET_EXCEPTIONS must be a valid JSON object: {"version":2,"namePatterns":[...]}');
+    return { items: [], issues: [{ variable, reason: "invalid-json" }] };
   }
-  return normalizeSecretExceptionsPolicy(parsed, "BRIDGE_SECRET_EXCEPTIONS");
+  if (!Array.isArray(parsed)) {
+    return { items: [], issues: [{ variable, reason: "not-a-list" }] };
+  }
+  if (maxEntries !== void 0 && parsed.length > maxEntries) {
+    return { items: [], issues: [{ variable, reason: "too-many-entries" }] };
+  }
+  return { items: parsed, issues: [] };
+}
+function validateUniqueEntries(items, variable, schema, getKey) {
+  const candidateEntries = [];
+  const issues = [];
+  for (let i = 0; i < items.length; i++) {
+    const result = schema.safeParse(items[i]);
+    if (!result.success) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+    } else {
+      candidateEntries.push({ index: i, entry: result.data });
+    }
+  }
+  const keyCounts = /* @__PURE__ */ new Map();
+  for (const item of candidateEntries) {
+    const key = getKey(item.entry);
+    keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+  }
+  const valid = [];
+  for (const item of candidateEntries) {
+    const key = getKey(item.entry);
+    if (keyCounts.get(key) > 1) {
+      issues.push({ variable, index: item.index, reason: "duplicate" });
+    } else {
+      valid.push(item.entry);
+    }
+  }
+  issues.sort((a, b) => (a.index ?? -1) - (b.index ?? -1));
+  return { valid, issues };
+}
+function readSecretExceptionsConfig(value) {
+  const variable = "BRIDGE_SECRET_EXCEPTIONS";
+  const emptyPolicy = { version: 2, namePatterns: [] };
+  if (value === void 0)
+    return { secretExceptions: emptyPolicy, issues: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "invalid-json" }] };
+  }
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0)
+      return { secretExceptions: emptyPolicy, issues: [] };
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "legacy-format" }] };
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "not-an-object" }] };
+  }
+  const obj = parsed;
+  const keys2 = Object.keys(obj);
+  if (keys2.length !== 2 || !Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns") || obj.version !== 2 || !Array.isArray(obj.namePatterns)) {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "invalid-format" }] };
+  }
+  const validatedPatterns = [];
+  const seenPatterns = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (let i = 0; i < obj.namePatterns.length; i++) {
+    const item = obj.namePatterns[i];
+    if (typeof item !== "string") {
+      issues.push({ variable, index: i, reason: "not-a-string" });
+      continue;
+    }
+    let validated;
+    try {
+      validated = validateRelativeGlobPattern(item, "BRIDGE_SECRET_EXCEPTIONS.namePatterns");
+    } catch {
+      issues.push({ variable, index: i, reason: "invalid-pattern" });
+      continue;
+    }
+    if (!seenPatterns.has(validated)) {
+      seenPatterns.add(validated);
+      validatedPatterns.push(validated);
+    }
+  }
+  return { secretExceptions: { version: 2, namePatterns: validatedPatterns }, issues };
+}
+function readAllowedEnvVars(value) {
+  const variable = "BRIDGE_ALLOWED_ENV_VARS";
+  const list = parseJsonList(value, variable);
+  if (list.issues.length > 0)
+    return { allowedEnvVars: [], issues: list.issues };
+  const allowedEnvVars = [];
+  const seen = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    if (typeof item !== "string") {
+      issues.push({ variable, index: i, reason: "not-a-string" });
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || trimmed.includes("\0") || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+      issues.push({ variable, index: i, reason: "invalid-name" });
+      continue;
+    }
+    if (isForbiddenAllowedEnvVar(trimmed)) {
+      issues.push({ variable, index: i, reason: "forbidden-name" });
+      continue;
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      allowedEnvVars.push(trimmed);
+    }
+  }
+  return { allowedEnvVars, issues };
+}
+function readMcpCatalog(value) {
+  const variable = "BRIDGE_MCP_CATALOG";
+  const list = parseJsonList(value, variable, 20);
+  if (list.issues.length > 0)
+    return { mcpCatalog: [], issues: list.issues };
+  const { valid, issues } = validateUniqueEntries(list.items, variable, mcpCatalogEntrySchema, (entry) => entry.id);
+  let validRemaining = valid;
+  if (validRemaining.length > 0) {
+    const serialized = JSON.stringify(validRemaining);
+    if (Buffer.byteLength(serialized, "utf8") > 1024 * 1024) {
+      validRemaining = [];
+      issues.push({ variable, reason: "too-large" });
+    }
+  }
+  return { mcpCatalog: validRemaining, issues };
+}
+function readCustomRoles(value) {
+  const variable = "BRIDGE_CUSTOM_ROLES";
+  const list = parseJsonList(value, variable, 20);
+  if (list.issues.length > 0)
+    return { customRoles: [], issues: list.issues };
+  const { valid, issues } = validateUniqueEntries(list.items, variable, customRoleElementSchema, (role) => role.name);
+  return { customRoles: valid, issues };
 }
 function parseStringArray(value, envName) {
   if (value === void 0)
@@ -30959,9 +31094,6 @@ function parseStringArray(value, envName) {
     throw new Error(envName + " must be a JSON array of non-empty strings");
   }
   const items = [...new Set(parsed.map((item) => item.trim()))];
-  if (envName === "BRIDGE_ALLOWED_ENV_VARS" && items.some((item) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) {
-    throw new Error(envName + " must contain exact environment variable names");
-  }
   if (envName === "BRIDGE_SECRET_EXCLUSIONS" && items.some((item) => item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === ".."))) {
     throw new Error(envName + " must contain relative glob patterns without traversal");
   }
@@ -30981,17 +31113,28 @@ function loadConfig(env = process.env) {
   if (memoryMaxEntryBytes > memoryMaxBytes)
     throw new Error("BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES");
   const preauthorized = readPreauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS);
+  const allowedEnv = readAllowedEnvVars(env.BRIDGE_ALLOWED_ENV_VARS);
+  const secretExceptions = readSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS);
+  const mcpCatalog = readMcpCatalog(env.BRIDGE_MCP_CATALOG);
+  const customRoles = readCustomRoles(env.BRIDGE_CUSTOM_ROLES);
+  const configurationIssues = [
+    ...preauthorized.issues,
+    ...allowedEnv.issues,
+    ...secretExceptions.issues,
+    ...mcpCatalog.issues,
+    ...customRoles.issues
+  ];
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
     ...env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, "BRIDGE_ANTI_AI_CRAFT_DIRECTORY") } : {},
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
     preauthorizedIntegrationRoots: preauthorized.roots,
-    configurationIssues: preauthorized.issues,
-    customRoles: customRolesSchema.parse(JSON.parse(env.BRIDGE_CUSTOM_ROLES ?? "[]")),
+    configurationIssues,
+    customRoles: customRoles.customRoles,
     enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== void 0 || env.BRIDGE_MCP_CATALOG !== void 0,
     allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
-    mcpCatalog: mcpCatalogSchema.parse(JSON.parse(env.BRIDGE_MCP_CATALOG ?? "[]")),
+    mcpCatalog: mcpCatalog.mcpCatalog,
     agyPath: env.AGY_PATH || "agy",
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
@@ -31013,8 +31156,8 @@ function loadConfig(env = process.env) {
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
     secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, "BRIDGE_SECRET_EXCLUSIONS"),
-    secretExceptions: parseSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS),
-    allowedEnvVars: validateAllowedEnvVars(parseStringArray(env.BRIDGE_ALLOWED_ENV_VARS, "BRIDGE_ALLOWED_ENV_VARS"), "BRIDGE_ALLOWED_ENV_VARS")
+    secretExceptions: secretExceptions.secretExceptions,
+    allowedEnvVars: allowedEnv.allowedEnvVars
   };
 }
 function configurationWarning(issues) {
@@ -35569,7 +35712,8 @@ var roleDefinitionSchema = external_exports.object({
     });
   }
 });
-var customRolesSchema = external_exports.array(roleDefinitionSchema.refine((role) => !builtinRoleSchema.safeParse(role.name).success && Boolean(role.instruction.trim()), "Custom roles cannot replace built-in names and require instructions")).max(20).refine((roles) => new Set(roles.map((role) => role.name)).size === roles.length, "Custom role names must be unique");
+var customRoleElementSchema = roleDefinitionSchema.refine((role) => !builtinRoleSchema.safeParse(role.name).success && Boolean(role.instruction.trim()), "Custom roles cannot replace built-in names and require instructions");
+var customRolesSchema = external_exports.array(customRoleElementSchema).max(20).refine((roles) => new Set(roles.map((role) => role.name)).size === roles.length, "Custom role names must be unique");
 var builtinDefinitions = [
   { name: "implementer", baseRole: "implementer", instruction: "", description: "Implement requested changes in the isolated copy." },
   { name: "planner", baseRole: "planner", instruction: "", description: "Plan requested work in read-only mode with a structured report." },
@@ -45570,7 +45714,7 @@ var successOutputSchemas = {
   antigravity_health: external_exports.object({
     toolProfile: toolProfileSchema.optional(),
     approvalMode: external_exports.enum(["auto", "ask"]).optional(),
-    configurationIssues: external_exports.array(external_exports.object({ variable: external_exports.string(), index: count.optional(), reason: external_exports.enum(["invalid-json", "not-a-list", "too-many-entries", "not-a-string", "not-absolute", "not-found", "access-denied", "not-a-directory", "volume-root", "unresolvable"]) }).strict()).optional(),
+    configurationIssues: external_exports.array(external_exports.object({ variable: external_exports.string(), index: count.optional(), reason: external_exports.enum(["invalid-json", "not-a-list", "too-many-entries", "not-a-string", "not-absolute", "not-found", "access-denied", "not-a-directory", "volume-root", "unresolvable", "not-an-object", "legacy-format", "invalid-format", "invalid-name", "forbidden-name", "invalid-pattern", "invalid-entry", "duplicate", "too-large", "unsafe-file"]) }).strict()).optional(),
     installed: external_exports.boolean(),
     path: external_exports.string(),
     version: external_exports.string().optional(),
@@ -45805,7 +45949,8 @@ var uuid3 = /^[a-f0-9-]{36}$/;
 var SANITIZED_CACHE_VERSION = 1;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
-var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path16.isAbsolute(root) && path16.resolve(root) === root && root !== path16.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()))).max(20) }).strict();
+var integrationApprovalRootSchema = external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path16.isAbsolute(root) && path16.resolve(root) === root && root !== path16.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()));
+var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(integrationApprovalRootSchema).max(20) }).strict();
 var blockedMetadataSchema = external_exports.object({
   path: external_exports.string(),
   reason: external_exports.enum(["SECRET_FILE", "SECRET_CONTENT", "SECRET_EXCLUSION", "UNSAFE_PATH"])
@@ -45957,18 +46102,63 @@ var StateStore = class {
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
     return path16.join(this.directory, taskId + ".json");
   }
-  loadIntegrationRoots() {
+  readIntegrationRoots() {
+    const variable = "integration-approvals.json";
     const file3 = path16.join(this.directory, "integration-approvals.json");
+    let stat4;
     try {
-      const stat4 = lstatSync3(file3);
-      if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.nlink !== 1 || stat4.size > 128 * 1024)
-        throw new Error("Unsafe integration approvals");
-      return integrationApprovalsSchema.parse(JSON.parse(readFileSync2(file3, "utf8"))).roots;
+      stat4 = lstatSync3(file3);
     } catch (error62) {
       if (error62.code === "ENOENT")
-        return [];
+        return { roots: [], issues: [] };
+      return { roots: [], issues: [{ variable, reason: mapFsError(error62) }] };
+    }
+    if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.nlink !== 1 || stat4.size > 128 * 1024) {
+      return { roots: [], issues: [{ variable, reason: "unsafe-file" }] };
+    }
+    let content;
+    try {
+      content = readFileSync2(file3, "utf8");
+    } catch (error62) {
+      if (error62.code === "ENOENT")
+        return { roots: [], issues: [] };
+      return { roots: [], issues: [{ variable, reason: mapFsError(error62) }] };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      return { roots: [], issues: [{ variable, reason: "invalid-json" }] };
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { roots: [], issues: [{ variable, reason: "invalid-format" }] };
+    }
+    const obj = parsed;
+    const keys2 = Object.keys(obj);
+    if (keys2.length !== 2 || !Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "roots") || obj.version !== 1 || !Array.isArray(obj.roots)) {
+      return { roots: [], issues: [{ variable, reason: "invalid-format" }] };
+    }
+    if (obj.roots.length > 20) {
+      return { roots: [], issues: [{ variable, reason: "too-many-entries" }] };
+    }
+    const roots = [];
+    const issues = [];
+    for (let i = 0; i < obj.roots.length; i++) {
+      const result = integrationApprovalRootSchema.safeParse(obj.roots[i]);
+      if (!result.success) {
+        issues.push({ variable, index: i, reason: "invalid-entry" });
+      } else {
+        roots.push(result.data);
+      }
+    }
+    return { roots, issues };
+  }
+  loadIntegrationRoots() {
+    const result = this.readIntegrationRoots();
+    if (result.issues.length > 0) {
       throw new BridgeError("INVALID_STATE", "Invalid persisted integration approvals");
     }
+    return result.roots;
   }
   rememberIntegrationRoot(directory) {
     const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0];
@@ -52336,10 +52526,10 @@ var TaskManager = class {
     return this.config.approvalMode;
   }
   get configurationIssues() {
-    return this.config.configurationIssues;
+    return [...this.config.configurationIssues, ...this.state.readIntegrationRoots().issues];
   }
   integrationRoots() {
-    return [.../* @__PURE__ */ new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.loadIntegrationRoots()])];
+    return [.../* @__PURE__ */ new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.readIntegrationRoots().roots])];
   }
   get preauthorizedProjectCount() {
     return this.integrationRoots().length;
@@ -54856,12 +55046,12 @@ if (command[0] === "wait") {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, (line) => process.stdout.write(line + "\n"));
 } else if (!await runtimeCommand()) {
   const config2 = loadConfig();
-  const warning = configurationWarning(config2.configurationIssues);
-  if (warning)
-    process.stderr.write(warning + "\n");
   const adapter = new CliAdapter(config2);
   await adapter.discover();
   const tasks = new TaskManager(adapter, config2);
+  const warning = configurationWarning(tasks.configurationIssues);
+  if (warning)
+    process.stderr.write(warning + "\n");
   await tasks.cleanup();
   const server = createMcpServer(adapter, tasks, { waitCommand: waitCommandArgv(config2.stateDirectory) });
   await server.connect(new StdioServerTransport());

@@ -8,7 +8,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
+import { DEFAULT_PROJECT_LIMITS, loadConfig, configurationWarning } from '../src/config.js';
 import { normalizeSecretExceptionsPolicy } from '../src/hardening-policy.js';
 import {
   checkedPath,
@@ -564,10 +564,14 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
   );
 
   // Invalid absolute path pattern
-  assert.throws(
-    () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/root/secret'] }) }),
-    /must contain relative glob patterns without traversal/
-  );
+  const invalidAbsConfig = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['/root/secret'] }),
+  });
+  assert.deepEqual(invalidAbsConfig.secretExceptions, { version: 2, namePatterns: [] });
+  assert.deepEqual(invalidAbsConfig.configurationIssues, [
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 0, reason: 'invalid-pattern' },
+  ]);
 });
 
 test('policy: glob pattern validation fails explicitly on invalid input', () => {
@@ -1273,16 +1277,15 @@ test('v2 secret exceptions: legacy non-empty arrays fail with migration guidance
   try {
     const sensitivePatternName = 'sensitive-token-file-xyz.local';
 
-    // 1. In environment config: non-empty legacy array fails with migration message without echoing pattern
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify([sensitivePatternName]) }),
-      (err: unknown) => {
-        assert.ok(err instanceof Error);
-        assert.match(err.message, /uses legacy array format\. Migrate to strict version 2 object format/);
-        assert.ok(!err.message.includes(sensitivePatternName), 'Diagnostic must never echo values from legacy array');
-        return true;
-      }
-    );
+    // 1. In environment config: non-empty legacy array is ignored with legacy-format issue without echoing pattern
+    const legacyCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify([sensitivePatternName]) });
+    assert.deepEqual(legacyCfg.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(legacyCfg.configurationIssues, [
+      { variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'legacy-format' },
+    ]);
+    const legacyWarning = configurationWarning(legacyCfg.configurationIssues)!;
+    assert.ok(legacyWarning);
+    assert.ok(!legacyWarning.includes(sensitivePatternName), 'Diagnostic must never echo values from legacy array');
 
     // 2. Direct runtime API: non-empty legacy array in limits fails with migration message without echoing pattern
     await assert.rejects(
@@ -1327,40 +1330,36 @@ test('v2 secret exceptions: strict validation rejects unsupported versions, extr
   const dir = await createRepo();
   try {
     // Unsupported versions (v1, v3)
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 1, namePatterns: ['.env.local'] }) }),
-      /unsupported version.*Only version 2 is supported/
-    );
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 3, namePatterns: ['.env.local'] }) }),
-      /unsupported version.*Only version 2 is supported/
-    );
+    const cfgV1 = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 1, namePatterns: ['.env.local'] }) });
+    assert.deepEqual(cfgV1.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgV1.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-format' }]);
+
+    const cfgV3 = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 3, namePatterns: ['.env.local'] }) });
+    assert.deepEqual(cfgV3.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgV3.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-format' }]);
 
     // Extra fields
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.local'], extraField: true }) }),
-      /contains unexpected fields\. Only version and namePatterns are allowed/
-    );
+    const cfgExtra = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2, namePatterns: ['.env.local'], extraField: true }) });
+    assert.deepEqual(cfgExtra.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgExtra.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-format' }]);
 
     // Missing fields
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2 }) }),
-      /must contain version and namePatterns fields/
-    );
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ namePatterns: ['.env.local'] }) }),
-      /must contain version and namePatterns fields/
-    );
+    const cfgMissingPatterns = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ version: 2 }) });
+    assert.deepEqual(cfgMissingPatterns.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgMissingPatterns.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-format' }]);
+
+    const cfgMissingVersion = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: JSON.stringify({ namePatterns: ['.env.local'] }) });
+    assert.deepEqual(cfgMissingVersion.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgMissingVersion.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-format' }]);
 
     // Malformed / null
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: 'null' }),
-      /must be a strict JSON object/
-    );
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '123' }),
-      /must be a strict JSON object/
-    );
+    const cfgNull = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: 'null' });
+    assert.deepEqual(cfgNull.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgNull.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'not-an-object' }]);
+
+    const cfgNum = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: '123' });
+    assert.deepEqual(cfgNum.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(cfgNum.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'not-an-object' }]);
 
     // A variable retains extra fields for runtime validation without a type escape.
     const extraPolicy = { version: 2 as const, namePatterns: ['.env.local'], unexpectedKey: 'bad' };
@@ -1386,7 +1385,9 @@ test('v2 secret exceptions: strict validation rejects unsupported versions, extr
 
 test('v2 policy rejects blank configuration and hides invalid version values', () => {
   for (const input of ['', ' \t\n', '{']) {
-    assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: input }), /valid JSON object/);
+    const blankCfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCEPTIONS: input });
+    assert.deepEqual(blankCfg.secretExceptions, { version: 2, namePatterns: [] });
+    assert.deepEqual(blankCfg.configurationIssues, [{ variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'invalid-json' }]);
   }
   const hidden = 'BRIDGE_SYNTHETIC_VERSION_SHOULD_NOT_ECHO';
   assert.throws(() => normalizeSecretExceptionsPolicy({ version: hidden, namePatterns: [] }), (error: unknown) => {
