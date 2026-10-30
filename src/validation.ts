@@ -26,7 +26,8 @@ export async function validateWorkingDirectory(input: string, forbidden: string[
   }
 }
 
-export async function validateRuntimeCacheSeparation(workingDirectory: string, cacheDirectory: string): Promise<void> {
+export async function validateRuntimeCacheSeparation(workingDirectory: string, cacheDirectory?: string): Promise<void> {
+  if (!cacheDirectory) return;
   let existing = path.resolve(cacheDirectory);
   const missing: string[] = [];
   try {

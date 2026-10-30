@@ -35,7 +35,8 @@ export interface ResolvedPortableNodeRuntime {
 }
 
 export interface PortableNodePreparationOptions {
-  cacheDirectory: string;
+  cacheDirectory?: string;
+  cacheDirectoryInvalid?: boolean;
   descriptor?: PortableNodeDescriptor;
   fetch?: typeof globalThis.fetch;
 }
@@ -628,9 +629,13 @@ async function acquirePreparationLock(root: string, descriptor: AvailablePortabl
 }
 
 export async function preparePortableNodeRuntime(options: PortableNodePreparationOptions): Promise<ResolvedPortableNodeRuntime> {
+  const cacheDirectory = options.cacheDirectory;
+  if (options.cacheDirectoryInvalid || !cacheDirectory) {
+    fail('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+  }
   if (process.platform !== 'win32' || process.arch !== 'x64') fail('WINDOWS_RUNTIME_UNSUPPORTED', 'Portable Node preparation is only available on Windows x64');
   const descriptor = requireDescriptor(options.descriptor ?? portableNodeDescriptor);
-  const root = absoluteCacheDirectory(options.cacheDirectory);
+  const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root, true);
   try { return await resolvePortableNodeRuntime(root, descriptor); }
   catch (error) {
@@ -670,10 +675,13 @@ export async function preparePortableNodeRuntime(options: PortableNodePreparatio
   }
 }
 
-export async function portableNodeStatus(requestedMode: WindowsNodeRuntime, cacheDirectory: string,
-  descriptor: PortableNodeDescriptor = portableNodeDescriptor): Promise<PortableNodeStatus> {
+export async function portableNodeStatus(requestedMode: WindowsNodeRuntime, cacheDirectory: string | undefined,
+  descriptor: PortableNodeDescriptor = portableNodeDescriptor, options?: { cacheDirectoryInvalid?: boolean }): Promise<PortableNodeStatus> {
   const base = { requestedMode, supported: process.platform === 'win32' && process.arch === 'x64', ready: false, buildId: descriptor.buildId,
     nodeVersion: descriptor.nodeVersion, libuvVersion: descriptor.libuvVersion, sha256: descriptor.available ? descriptor.assets.node.sha256 : null };
+  if (options?.cacheDirectoryInvalid || !cacheDirectory) {
+    return { ...base, error: { code: 'INVALID_CONFIGURATION', message: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.' } };
+  }
   if (!base.supported) return { ...base, error: { code: 'WINDOWS_RUNTIME_UNSUPPORTED', message: 'Portable Node is only supported on Windows x64' } };
   try {
     const runtime = await resolvePortableNodeRuntime(cacheDirectory, descriptor);

@@ -15,12 +15,12 @@ async function runtimeCommand(): Promise<boolean> {
   }
   const config = loadConfig();
   if (command[0] === '--windows-runtime-status') {
-    process.stdout.write(JSON.stringify(await portableNodeStatus(config.windowsNodeRuntime, config.windowsNodeCacheDirectory)) + '\n');
+    process.stdout.write(JSON.stringify(await portableNodeStatus(config.windowsNodeRuntime, config.windowsNodeCacheDirectory, undefined, { cacheDirectoryInvalid: config.windowsNodeCacheDirectoryInvalid })) + '\n');
     return true;
   }
   try {
-    await preparePortableNodeRuntime({ cacheDirectory: config.windowsNodeCacheDirectory });
-    process.stdout.write(JSON.stringify(await portableNodeStatus(config.windowsNodeRuntime, config.windowsNodeCacheDirectory)) + '\n');
+    await preparePortableNodeRuntime({ cacheDirectory: config.windowsNodeCacheDirectory, cacheDirectoryInvalid: config.windowsNodeCacheDirectoryInvalid });
+    process.stdout.write(JSON.stringify(await portableNodeStatus(config.windowsNodeRuntime, config.windowsNodeCacheDirectory, undefined, { cacheDirectoryInvalid: config.windowsNodeCacheDirectoryInvalid })) + '\n');
     return true;
   } catch (error) {
     process.stderr.write((error instanceof Error ? error.message : String(error)) + '\n');

@@ -92,7 +92,11 @@ async function rejectsCode(operation: Promise<unknown>, code: string): Promise<v
 
 test('startup rejects non-local cache configuration before resolving it', { skip: process.platform !== 'win32' }, () => {
   for (const value of ['relative-cache', '..\\cache', '\\\\server\\share\\cache', '\\\\?\\C:\\cache', 'C:\\cache:stream', 'C:\\']) {
-    assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: value }), /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY/u);
+    const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: value });
+    assert.equal(config.windowsNodeCacheDirectory, undefined);
+    assert.equal(config.windowsNodeCacheDirectoryInvalid, true);
+    assert.equal(config.configurationIssues.length, 1);
+    assert.equal(config.configurationIssues[0]?.variable, 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY');
   }
   assert.equal(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(process.cwd(), '.cache') }).windowsNodeCacheDirectory,
     path.resolve(process.cwd(), '.cache'));
