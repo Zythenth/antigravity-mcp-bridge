@@ -74,9 +74,18 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
 
 test('custom roles inherit read-only contracts and freeze instructions across configuration changes', async () => {
   const role = { name: 'security-review', baseRole: 'reviewer', instruction: 'Inspect the requested access-control boundary.', description: 'Review requested access controls.' };
-  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: 'not-json' }));
-  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([{ ...role, name: 'reviewer' }]) }));
-  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([role, role]) }));
+  const cfgNotJson = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: 'not-json' });
+  assert.deepEqual(cfgNotJson.customRoles, []);
+  assert.deepEqual(cfgNotJson.configurationIssues, [{ variable: 'BRIDGE_CUSTOM_ROLES', reason: 'invalid-json' }]);
+  const cfgBuiltin = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([{ ...role, name: 'reviewer' }]) });
+  assert.deepEqual(cfgBuiltin.customRoles, []);
+  assert.deepEqual(cfgBuiltin.configurationIssues, [{ variable: 'BRIDGE_CUSTOM_ROLES', index: 0, reason: 'invalid-entry' }]);
+  const cfgDuplicate = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_CUSTOM_ROLES: JSON.stringify([role, role]) });
+  assert.deepEqual(cfgDuplicate.customRoles, []);
+  assert.deepEqual(cfgDuplicate.configurationIssues, [
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 0, reason: 'duplicate' },
+    { variable: 'BRIDGE_CUSTOM_ROLES', index: 1, reason: 'duplicate' },
+  ]);
   const f = await fixture('full', false, { BRIDGE_CUSTOM_ROLES: JSON.stringify([role]) });
   let other: Client | undefined;
   try {

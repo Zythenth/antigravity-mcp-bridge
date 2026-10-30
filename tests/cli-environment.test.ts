@@ -5,7 +5,7 @@ import {
   cliEnvironment,
   WINDOWS_PATHEXT_FALLBACK,
 } from '../src/cli-environment.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, configurationWarning } from '../src/config.js';
 import { BridgeError } from '../src/types.js';
 
 test('preserves required system, home, temp, locale, proxy, cert, and keyring variables', () => {
@@ -492,15 +492,11 @@ test('strictly forbids runtime injection opt-ins in allowedEnvVars across all pl
     );
 
     // 3. Environment configuration via loadConfig
-    assert.throws(
-      () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: JSON.stringify([candidate.trim()]) }),
-      (err: unknown) => {
-        assert.ok(err instanceof Error);
-        assert.match(err.message, /cannot include runtime injection variable/);
-        return true;
-      },
-      `Expected loadConfig to reject ${candidate}`
-    );
+    const cfg = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: JSON.stringify([candidate.trim()]) });
+    assert.deepEqual(cfg.allowedEnvVars, []);
+    assert.deepEqual(cfg.configurationIssues, [
+      { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 0, reason: 'forbidden-name' },
+    ]);
   }
 });
 
@@ -536,15 +532,15 @@ test('injection rejection error message names the variable but never exposes its
   );
 
   // Rejection in loadConfig
-  assert.throws(
-    () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS']) }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.ok(err.message.includes('NODE_OPTIONS'), 'Error must name the forbidden variable');
-      assert.ok(!err.message.includes(dangerousSecretValue), 'Error must never expose the variable value');
-      return true;
-    }
-  );
+  const forbiddenConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_ENV_VARS: JSON.stringify(['NODE_OPTIONS']) });
+  assert.deepEqual(forbiddenConfig.allowedEnvVars, []);
+  assert.deepEqual(forbiddenConfig.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 0, reason: 'forbidden-name' },
+  ]);
+  const warn = configurationWarning(forbiddenConfig.configurationIssues)!;
+  assert.ok(warn);
+  assert.ok(!warn.includes('NODE_OPTIONS'));
+  assert.ok(!warn.includes(dangerousSecretValue));
 });
 
 test('preserves official authentication environment and certificate roots including NODE_EXTRA_CA_CERTS', () => {

@@ -33,11 +33,11 @@ if (command[0] === 'wait') {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, line => process.stdout.write(line + '\n'));
 } else if (!await runtimeCommand()) {
   const config = loadConfig();
-  const warning = configurationWarning(config.configurationIssues);
-  if (warning) process.stderr.write(warning + '\n');
   const adapter = new CliAdapter(config);
   await adapter.discover();
   const tasks = new TaskManager(adapter, config);
+  const warning = configurationWarning(tasks.configurationIssues);
+  if (warning) process.stderr.write(warning + '\n');
   await tasks.cleanup();
   const server = createMcpServer(adapter, tasks, { waitCommand: waitCommandArgv(config.stateDirectory) });
   await server.connect(new StdioServerTransport());

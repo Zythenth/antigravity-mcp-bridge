@@ -146,8 +146,10 @@ export const roleDefinitionSchema = z.object({
 
 export type RoleDefinition = z.infer<typeof roleDefinitionSchema>;
 
-export const customRolesSchema = z.array(roleDefinitionSchema.refine(role => !builtinRoleSchema.safeParse(role.name).success && Boolean(role.instruction.trim()),
-  'Custom roles cannot replace built-in names and require instructions')).max(20)
+export const customRoleElementSchema = roleDefinitionSchema.refine(role => !builtinRoleSchema.safeParse(role.name).success && Boolean(role.instruction.trim()),
+  'Custom roles cannot replace built-in names and require instructions');
+
+export const customRolesSchema = z.array(customRoleElementSchema).max(20)
   .refine(roles => new Set(roles.map(role => role.name)).size === roles.length, 'Custom role names must be unique');
 
 const builtinDefinitions: RoleDefinition[] = [

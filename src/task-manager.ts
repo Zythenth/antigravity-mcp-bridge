@@ -184,8 +184,8 @@ export class TaskManager {
 
   get toolProfile() { return this.config.toolProfile; }
   get approvalMode(): ApprovalMode { return this.config.approvalMode; }
-  get configurationIssues() { return this.config.configurationIssues; }
-  private integrationRoots() { return [...new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.loadIntegrationRoots()])]; }
+  get configurationIssues() { return [...this.config.configurationIssues, ...this.state.readIntegrationRoots().issues]; }
+  private integrationRoots() { return [...new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.readIntegrationRoots().roots])]; }
   get preauthorizedProjectCount() { return this.integrationRoots().length; }
   integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.integrationRoots()); }
   roles() { return listRoles(this.config.customRoles); }

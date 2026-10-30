@@ -4,7 +4,7 @@ import type { ConfigurationIssue, ConfigurationIssueReason } from './config.js';
 
 export interface IntegrationApproval { confirmed: boolean; rememberProject?: boolean }
 
-function mapFsError(error: unknown): ConfigurationIssueReason {
+export function mapFsError(error: unknown): ConfigurationIssueReason {
   const code = (error as NodeJS.ErrnoException).code;
   if (code === 'ENOENT' || code === 'ENOTDIR') return 'not-found';
   if (code === 'EACCES' || code === 'EPERM') return 'access-denied';
