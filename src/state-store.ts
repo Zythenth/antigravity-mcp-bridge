@@ -17,15 +17,17 @@ import type { BridgeEvent } from './types.js';
 import { usageCountersSchema } from './usage.js';
 import { roleDefinitionSchema, effortSchema } from './roles.js';
 import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
-import { preauthorizedIntegrationRoots } from './integration-policy.js';
+import { preauthorizedIntegrationRoots, mapFsError } from './integration-policy.js';
+import type { ConfigurationIssue } from './config.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
 const SANITIZED_CACHE_VERSION = 1;
 const maxSandboxPolicyFileBytes = 2 * 20 * 1000 * 6 + 4096;
 const modelSelectionSchema = z.object({ version: z.literal(1), model: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
-const integrationApprovalsSchema = z.object({ version: z.literal(1), roots: z.array(z.string().min(1).max(1000).refine(root =>
+const integrationApprovalRootSchema = z.string().min(1).max(1000).refine(root =>
   !root.includes('\0') && path.isAbsolute(root) && path.resolve(root) === root && root !== path.parse(root).root &&
-  (process.platform !== 'win32' || root === root.toLowerCase()))).max(20) }).strict();
+  (process.platform !== 'win32' || root === root.toLowerCase()));
+const integrationApprovalsSchema = z.object({ version: z.literal(1), roots: z.array(integrationApprovalRootSchema).max(20) }).strict();
 const blockedMetadataSchema = z.object({
   path: z.string(),
   reason: z.enum(['SECRET_FILE', 'SECRET_CONTENT', 'SECRET_EXCLUSION', 'UNSAFE_PATH']),
@@ -147,16 +149,68 @@ export class StateStore {
     return path.join(this.directory, taskId + '.json');
   }
 
-  loadIntegrationRoots(): string[] {
+  readIntegrationRoots(): { roots: string[]; issues: ConfigurationIssue[] } {
+    const variable = 'integration-approvals.json';
     const file = path.join(this.directory, 'integration-approvals.json');
+    let stat;
     try {
-      const stat = lstatSync(file);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 128 * 1024) throw new Error('Unsafe integration approvals');
-      return integrationApprovalsSchema.parse(JSON.parse(readFileSync(file, 'utf8'))).roots;
+      stat = lstatSync(file);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { roots: [], issues: [] };
+      return { roots: [], issues: [{ variable, reason: mapFsError(error) }] };
+    }
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 128 * 1024) {
+      return { roots: [], issues: [{ variable, reason: 'unsafe-file' }] };
+    }
+    let content: string;
+    try {
+      content = readFileSync(file, 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { roots: [], issues: [] };
+      return { roots: [], issues: [{ variable, reason: mapFsError(error) }] };
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      return { roots: [], issues: [{ variable, reason: 'invalid-json' }] };
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return { roots: [], issues: [{ variable, reason: 'invalid-format' }] };
+    }
+    const obj = parsed as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (
+      keys.length !== 2 ||
+      !Object.hasOwn(obj, 'version') ||
+      !Object.hasOwn(obj, 'roots') ||
+      obj.version !== 1 ||
+      !Array.isArray(obj.roots)
+    ) {
+      return { roots: [], issues: [{ variable, reason: 'invalid-format' }] };
+    }
+    if (obj.roots.length > 20) {
+      return { roots: [], issues: [{ variable, reason: 'too-many-entries' }] };
+    }
+    const roots: string[] = [];
+    const issues: ConfigurationIssue[] = [];
+    for (let i = 0; i < obj.roots.length; i++) {
+      const result = integrationApprovalRootSchema.safeParse(obj.roots[i]);
+      if (!result.success) {
+        issues.push({ variable, index: i, reason: 'invalid-entry' });
+      } else {
+        roots.push(result.data);
+      }
+    }
+    return { roots, issues };
+  }
+
+  loadIntegrationRoots(): string[] {
+    const result = this.readIntegrationRoots();
+    if (result.issues.length > 0) {
       throw new BridgeError('INVALID_STATE', 'Invalid persisted integration approvals');
     }
+    return result.roots;
   }
 
   rememberIntegrationRoot(directory: string): void {

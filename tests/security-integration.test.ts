@@ -185,10 +185,13 @@ test('Custom exclusion and exception in TaskManager and MCP agree with copy elig
   await writeFile(path.join(repoDir, 'fixtures', '.env.local'),
     '-----BEGIN PRIVATE KEY-----\n' + syntheticKeyBody + '\n-----END PRIVATE KEY-----\n');
   const namePatterns = ['.env.local', 'confidential/allowed.txt', '.env'];
-  assert.throws(() => setup([fixturePath], {
+  const legacySetup = setup([fixturePath], {
     BRIDGE_SECRET_EXCEPTIONS: JSON.stringify(namePatterns),
-  }), (error: unknown) => error instanceof Error
-    && /legacy array.*Migrate.*version 2/.test(error.message));
+  });
+  assert.deepEqual(legacySetup.config.secretExceptions, { version: 2, namePatterns: [] });
+  assert.deepEqual(legacySetup.tasks.configurationIssues, [
+    { variable: 'BRIDGE_SECRET_EXCEPTIONS', reason: 'legacy-format' },
+  ]);
 
   const { adapter, tasks } = setup([fixturePath], {
     BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['confidential/**', '.env']),

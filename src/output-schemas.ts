@@ -111,7 +111,7 @@ export const successOutputSchemas = {
   antigravity_health: z.object({
     toolProfile: toolProfileSchema.optional(),
     approvalMode: z.enum(['auto', 'ask']).optional(),
-    configurationIssues: z.array(z.object({ variable: z.string(), index: count.optional(), reason: z.enum(['invalid-json', 'not-a-list', 'too-many-entries', 'not-a-string', 'not-absolute', 'not-found', 'access-denied', 'not-a-directory', 'volume-root', 'unresolvable']) }).strict()).optional(),
+    configurationIssues: z.array(z.object({ variable: z.string(), index: count.optional(), reason: z.enum(['invalid-json', 'not-a-list', 'too-many-entries', 'not-a-string', 'not-absolute', 'not-found', 'access-denied', 'not-a-directory', 'volume-root', 'unresolvable', 'not-an-object', 'legacy-format', 'invalid-format', 'invalid-name', 'forbidden-name', 'invalid-pattern', 'invalid-entry', 'duplicate', 'too-large', 'unsafe-file']) }).strict()).optional(),
     installed: z.boolean(), path: z.string(), version: z.string().optional(), authenticated: z.boolean().nullable(),
     capabilities: z.object({
       structuredOutput: z.boolean(), streaming: z.boolean(), sandbox: z.boolean(), readOnlyMode: z.boolean(),
