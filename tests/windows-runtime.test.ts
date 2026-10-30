@@ -266,6 +266,10 @@ test('Windows runtime stages pinned source with hardlink, enforces single-link r
   const descriptor = portableNodeDescriptor;
   const config = loadConfig();
   const configuredCache = config.windowsNodeCacheDirectory;
+  if (!configuredCache) {
+    t.skip('Portable Node cache directory is not configured; skipping integration test');
+    return;
+  }
   let trustedRuntime: Awaited<ReturnType<typeof resolvePortableNodeRuntime>>;
   try {
     trustedRuntime = await resolvePortableNodeRuntime(configuredCache, descriptor);

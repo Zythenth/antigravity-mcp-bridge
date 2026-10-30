@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs, { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -22,6 +23,10 @@ import { TaskManager } from '../src/task-manager.js';
 import { createMcpServer } from '../src/mcp-server.js';
 import { BridgeError } from '../src/types.js';
 import { resolveAgentPolicy } from '../src/agent-policy.js';
+import { prepareCraft } from '../src/craft.js';
+import { portableNodeStatus, preparePortableNodeRuntime } from '../src/portable-node.js';
+import { validateRuntimeCacheSeparation } from '../src/validation.js';
+import { executeWindowsTest } from '../src/windows-executor.js';
 
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
@@ -1264,5 +1269,702 @@ test('antigravity_health continues to respond when integration-approvals.json is
     ]);
   } finally {
     rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('loadConfig tolerates invalid BRIDGE_ANTI_AI_CRAFT_DIRECTORY, BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY, and AGY_PATH', () => {
+  // BRIDGE_ANTI_AI_CRAFT_DIRECTORY
+  const craftRelative = loadConfig({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: 'relative/craft' });
+  assert.equal(craftRelative.antiAiCraftDirectory, undefined);
+  assert.equal(craftRelative.antiAiCraftDirectoryInvalid, true);
+  assert.deepEqual(craftRelative.configurationIssues, [
+    { variable: 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY', reason: 'not-absolute' },
+  ]);
+  assert.equal(JSON.stringify(craftRelative.configurationIssues).includes('relative/craft'), false);
+
+  const craftNul = loadConfig({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: '/craft\0path' });
+  assert.equal(craftNul.antiAiCraftDirectory, undefined);
+  assert.equal(craftNul.antiAiCraftDirectoryInvalid, true);
+  assert.deepEqual(craftNul.configurationIssues, [
+    { variable: 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY', reason: 'invalid-entry' },
+  ]);
+  assert.equal(JSON.stringify(craftNul.configurationIssues).includes('\0'), false);
+
+  // BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY
+  const cacheRelative = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: 'relative/cache' });
+  assert.equal(cacheRelative.windowsNodeCacheDirectory, undefined);
+  assert.equal(cacheRelative.windowsNodeCacheDirectoryInvalid, true);
+  assert.deepEqual(cacheRelative.configurationIssues, [
+    { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'not-absolute' },
+  ]);
+  assert.equal(JSON.stringify(cacheRelative.configurationIssues).includes('relative/cache'), false);
+
+  const nulCacheVal = process.platform === 'win32' ? 'C:\\cache\0' : '/cache\0';
+  const cacheNul = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: nulCacheVal });
+  assert.equal(cacheNul.windowsNodeCacheDirectory, undefined);
+  assert.equal(cacheNul.windowsNodeCacheDirectoryInvalid, true);
+  assert.deepEqual(cacheNul.configurationIssues, [
+    { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'invalid-entry' },
+  ]);
+  assert.equal(JSON.stringify(cacheNul.configurationIssues).includes('\0'), false);
+
+  if (process.platform === 'win32') {
+    const cacheUnc = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: '\\\\server\\share\\cache' });
+    assert.equal(cacheUnc.windowsNodeCacheDirectory, undefined);
+    assert.equal(cacheUnc.windowsNodeCacheDirectoryInvalid, true);
+    assert.deepEqual(cacheUnc.configurationIssues, [
+      { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'invalid-entry' },
+    ]);
+    assert.equal(JSON.stringify(cacheUnc.configurationIssues).includes('share'), false);
+
+    const cacheDevice = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: '\\\\?\\C:\\cache' });
+    assert.equal(cacheDevice.windowsNodeCacheDirectory, undefined);
+    assert.equal(cacheDevice.windowsNodeCacheDirectoryInvalid, true);
+    assert.deepEqual(cacheDevice.configurationIssues, [
+      { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'invalid-entry' },
+    ]);
+    assert.equal(JSON.stringify(cacheDevice.configurationIssues).includes('cache'), false);
+
+    const cacheDotDot = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: 'C:\\cache\\..\\other' });
+    assert.equal(cacheDotDot.windowsNodeCacheDirectory, undefined);
+    assert.equal(cacheDotDot.windowsNodeCacheDirectoryInvalid, true);
+    assert.deepEqual(cacheDotDot.configurationIssues, [
+      { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'invalid-entry' },
+    ]);
+    assert.equal(JSON.stringify(cacheDotDot.configurationIssues).includes('other'), false);
+
+    const cacheExtraColon = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: 'C:\\cache:stream' });
+    assert.equal(cacheExtraColon.windowsNodeCacheDirectory, undefined);
+    assert.equal(cacheExtraColon.windowsNodeCacheDirectoryInvalid, true);
+    assert.deepEqual(cacheExtraColon.configurationIssues, [
+      { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'invalid-entry' },
+    ]);
+    assert.equal(JSON.stringify(cacheExtraColon.configurationIssues).includes('stream'), false);
+
+    const cacheVolumeRoot = loadConfig({ BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: 'C:\\' });
+    assert.equal(cacheVolumeRoot.windowsNodeCacheDirectory, undefined);
+    assert.equal(cacheVolumeRoot.windowsNodeCacheDirectoryInvalid, true);
+    assert.deepEqual(cacheVolumeRoot.configurationIssues, [
+      { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'volume-root' },
+    ]);
+    assert.equal(JSON.stringify(cacheVolumeRoot.configurationIssues).includes('C:'), false);
+  }
+
+  // AGY_PATH
+  const agyRelativeSlash = loadConfig({ AGY_PATH: 'bin/agy' });
+  assert.equal(agyRelativeSlash.agyPath, '');
+  assert.equal(agyRelativeSlash.agyPathInvalid, true);
+  assert.deepEqual(agyRelativeSlash.configurationIssues, [
+    { variable: 'AGY_PATH', reason: 'not-absolute' },
+  ]);
+  assert.equal(JSON.stringify(agyRelativeSlash.configurationIssues).includes('bin/agy'), false);
+
+  if (process.platform === 'win32') {
+    const agyRelativeBackslash = loadConfig({ AGY_PATH: '.\\agy' });
+    assert.equal(agyRelativeBackslash.agyPath, '');
+    assert.equal(agyRelativeBackslash.agyPathInvalid, true);
+    assert.deepEqual(agyRelativeBackslash.configurationIssues, [
+      { variable: 'AGY_PATH', reason: 'not-absolute' },
+    ]);
+    assert.equal(JSON.stringify(agyRelativeBackslash.configurationIssues).includes('.\\agy'), false);
+
+    const agyDriveRelative = loadConfig({ AGY_PATH: 'C:agy.exe' });
+    assert.equal(agyDriveRelative.agyPath, '');
+    assert.equal(agyDriveRelative.agyPathInvalid, true);
+    assert.deepEqual(agyDriveRelative.configurationIssues, [
+      { variable: 'AGY_PATH', reason: 'not-absolute' },
+    ]);
+    assert.equal(JSON.stringify(agyDriveRelative.configurationIssues).includes('C:agy.exe'), false);
+    assert.equal(JSON.stringify(agyDriveRelative.configurationIssues).includes('agy.exe'), false);
+
+    const craftExtended = loadConfig({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: '\\\\?\\C:\\craft' });
+    assert.equal(craftExtended.antiAiCraftDirectory, path.resolve('\\\\?\\C:\\craft'));
+    assert.equal(craftExtended.antiAiCraftDirectoryInvalid, undefined);
+    assert.equal(craftExtended.configurationIssues.some(i => i.variable === 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY'), false);
+
+    const craftVolume = loadConfig({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: '\\\\?\\Volume{26a21bda-a627-11d7-9931-806e6f6e6963}\\craft' });
+    assert.equal(craftVolume.antiAiCraftDirectory, path.resolve('\\\\?\\Volume{26a21bda-a627-11d7-9931-806e6f6e6963}\\craft'));
+    assert.equal(craftVolume.antiAiCraftDirectoryInvalid, undefined);
+    assert.equal(craftVolume.configurationIssues.some(i => i.variable === 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY'), false);
+
+    const agyExtendedDrive = loadConfig({ AGY_PATH: '\\\\?\\C:\\tools\\agy.exe' });
+    assert.equal(agyExtendedDrive.agyPath, '\\\\?\\C:\\tools\\agy.exe');
+    assert.equal(agyExtendedDrive.agyPathInvalid, undefined);
+    assert.equal(agyExtendedDrive.configurationIssues.some(i => i.variable === 'AGY_PATH'), false);
+
+    const agyExtendedUnc = loadConfig({ AGY_PATH: '\\\\?\\UNC\\server\\share\\agy.exe' });
+    assert.equal(agyExtendedUnc.agyPath, '\\\\?\\UNC\\server\\share\\agy.exe');
+    assert.equal(agyExtendedUnc.agyPathInvalid, undefined);
+    assert.equal(agyExtendedUnc.configurationIssues.some(i => i.variable === 'AGY_PATH'), false);
+
+    const agyVolume = loadConfig({ AGY_PATH: '\\\\?\\Volume{26a21bda-a627-11d7-9931-806e6f6e6963}\\tools\\agy.exe' });
+    assert.equal(agyVolume.agyPath, '\\\\?\\Volume{26a21bda-a627-11d7-9931-806e6f6e6963}\\tools\\agy.exe');
+    assert.equal(agyVolume.agyPathInvalid, undefined);
+    assert.equal(agyVolume.configurationIssues.some(i => i.variable === 'AGY_PATH'), false);
+
+    const agyVolumeMalformed = loadConfig({ AGY_PATH: '\\\\?\\Volume{not-a-guid}\\agy.exe' });
+    assert.equal(agyVolumeMalformed.agyPath, '');
+    assert.equal(agyVolumeMalformed.agyPathInvalid, true);
+    assert.deepEqual(agyVolumeMalformed.configurationIssues, [
+      { variable: 'AGY_PATH', reason: 'not-absolute' },
+    ]);
+    assert.equal(JSON.stringify(agyVolumeMalformed.configurationIssues).includes('agy.exe'), false);
+    assert.equal(JSON.stringify(agyVolumeMalformed.configurationIssues).includes('not-a-guid'), false);
+
+    const agyDevice = loadConfig({ AGY_PATH: '\\\\.\\C:\\agy.exe' });
+    assert.equal(agyDevice.agyPath, '');
+    assert.equal(agyDevice.agyPathInvalid, true);
+    assert.deepEqual(agyDevice.configurationIssues, [
+      { variable: 'AGY_PATH', reason: 'not-absolute' },
+    ]);
+    assert.equal(JSON.stringify(agyDevice.configurationIssues).includes('C:\\agy.exe'), false);
+    assert.equal(JSON.stringify(agyDevice.configurationIssues).includes('agy.exe'), false);
+
+    const agyRootRelative = loadConfig({ AGY_PATH: '\\tools\\agy.exe' });
+    assert.equal(agyRootRelative.agyPath, '');
+    assert.equal(agyRootRelative.agyPathInvalid, true);
+    assert.deepEqual(agyRootRelative.configurationIssues, [
+      { variable: 'AGY_PATH', reason: 'not-absolute' },
+    ]);
+    assert.equal(JSON.stringify(agyRootRelative.configurationIssues).includes('\\tools\\agy.exe'), false);
+    assert.equal(JSON.stringify(agyRootRelative.configurationIssues).includes('tools'), false);
+    assert.equal(JSON.stringify(agyRootRelative.configurationIssues).includes('agy.exe'), false);
+  }
+
+  const agyNul = loadConfig({ AGY_PATH: 'agy\0exe' });
+  assert.equal(agyNul.agyPath, '');
+  assert.equal(agyNul.agyPathInvalid, true);
+  assert.deepEqual(agyNul.configurationIssues, [
+    { variable: 'AGY_PATH', reason: 'invalid-entry' },
+  ]);
+  assert.equal(JSON.stringify(agyNul.configurationIssues).includes('\0'), false);
+
+  // Valid values remain accepted without issues
+  const agyBare = loadConfig({ AGY_PATH: 'agy' });
+  assert.equal(agyBare.agyPath, 'agy');
+  assert.equal(agyBare.agyPathInvalid, undefined);
+  assert.equal(agyBare.configurationIssues.some(i => i.variable === 'AGY_PATH'), false);
+
+  const agyExeBare = loadConfig({ AGY_PATH: 'agy.exe' });
+  assert.equal(agyExeBare.agyPath, 'agy.exe');
+  assert.equal(agyExeBare.agyPathInvalid, undefined);
+  assert.equal(agyExeBare.configurationIssues.some(i => i.variable === 'AGY_PATH'), false);
+
+  const agyAbsolute = loadConfig({ AGY_PATH: process.execPath });
+  assert.equal(agyAbsolute.agyPath, process.execPath);
+  assert.equal(agyAbsolute.agyPathInvalid, undefined);
+  assert.equal(agyAbsolute.configurationIssues.some(i => i.variable === 'AGY_PATH'), false);
+});
+
+test('operations refuse invalid path configurations with INVALID_CONFIGURATION and allow execution when unaffected', async () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-refusals-test-'));
+  const source = path.join(directory, 'source');
+  execFileSync('git', ['init', '--quiet', source]);
+  writeFileSync(path.join(source, 'source.txt'), 'content');
+
+  try {
+    // 1. Craft invalid: TaskManager.run refused with INVALID_CONFIGURATION before copy/task creation when craft is on
+    const configCraftInvalid = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'on',
+      BRIDGE_ANTI_AI_CRAFT_DIRECTORY: 'relative/craft/path',
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-craft'),
+    });
+    const adapterCraftInvalid = new CliAdapter(configCraftInvalid, [mockPath]);
+    const tasksCraftInvalid = new TaskManager(adapterCraftInvalid, configCraftInvalid);
+    await assert.rejects(
+      tasksCraftInvalid.run({ prompt: 'test', workingDirectory: source }),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        assert.match(err.message, /BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid/);
+        return true;
+      },
+    );
+
+    // prepareCraft throws directly and never falls back to bundled snapshot
+    await assert.rejects(
+      prepareCraft(configCraftInvalid),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        return true;
+      },
+    );
+
+    // Permitted when BRIDGE_ANTI_AI_CRAFT='off'
+    const configCraftOff = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_ANTI_AI_CRAFT_DIRECTORY: 'relative/craft/path',
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-craft-off'),
+    });
+    const adapterCraftOff = new CliAdapter(configCraftOff, [mockPath]);
+    const tasksCraftOff = new TaskManager(adapterCraftOff, configCraftOff);
+    await adapterCraftOff.discover();
+    const craftOffTask = await tasksCraftOff.run({
+      prompt: 'read:test',
+      workingDirectory: source,
+      mode: 'read-only',
+    });
+    assert.ok(craftOffTask.taskId);
+    await tasksCraftOff.shutdown();
+
+    // 2. AGY_PATH invalid: CliAdapter.discover returns installed:false, path: '', error with INVALID_CONFIGURATION without leaking value
+    const configAgyInvalid = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      AGY_PATH: 'bin/agy-secret-test',
+      BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-agy'),
+    });
+    const adapterAgyInvalid = new CliAdapter(configAgyInvalid);
+    const discovery = await adapterAgyInvalid.discover();
+    assert.equal(discovery.installed, false);
+    assert.equal(discovery.path, '');
+    assert.match(discovery.error ?? '', /INVALID_CONFIGURATION/);
+    assert.equal(discovery.error?.includes('bin/agy-secret-test'), false);
+
+    // spawnTask, listModels, and tasks.run refuse with INVALID_CONFIGURATION
+    assert.throws(
+      () => adapterAgyInvalid.spawnTask({ prompt: 'test', workingDirectory: source, mode: 'read-only' }, undefined, source),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_CONFIGURATION',
+    );
+    await assert.rejects(
+      adapterAgyInvalid.listModels(),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_CONFIGURATION',
+    );
+    const tasksAgyInvalid = new TaskManager(adapterAgyInvalid, configAgyInvalid);
+    await assert.rejects(
+      tasksAgyInvalid.run({ prompt: 'test', workingDirectory: source }),
+      (err: unknown) => err instanceof BridgeError && err.code === 'INVALID_CONFIGURATION',
+    );
+
+    // 3. Cache invalid: portableNodeStatus & preparePortableNodeRuntime report/throw INVALID_CONFIGURATION without touching default path
+    const statusInvalid = await portableNodeStatus('portable', undefined, undefined, { cacheDirectoryInvalid: true });
+    assert.equal(statusInvalid.ready, false);
+    assert.equal(statusInvalid.error?.code, 'INVALID_CONFIGURATION');
+    assert.match(statusInvalid.error?.message ?? '', /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid/);
+
+    await assert.rejects(
+      preparePortableNodeRuntime({ cacheDirectory: undefined, cacheDirectoryInvalid: true }),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        assert.match(err.message, /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid/);
+        return true;
+      },
+    );
+
+    // validateRuntimeCacheSeparation with undefined cache does not throw
+    await assert.doesNotReject(validateRuntimeCacheSeparation(source, undefined));
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('server startup tolerates invalid craft, node cache, and agy path without leaking values', async () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-server-startup-paths-'));
+  const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));
+  const stateDir = path.join(tmpDir, 'state');
+  mkdirSync(stateDir, { recursive: true });
+
+  const craftSecretMarker = 'relative_craft_secret_112233';
+  const cacheSecretMarker = 'relative_cache_secret_445566';
+  const agySecretMarker = 'bin/agy_secret_marker_778899';
+
+  let client: Client | undefined;
+  try {
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [entryPath],
+      env: {
+        ...process.env as Record<string, string>,
+        BRIDGE_STATE_DIRECTORY: stateDir,
+        BRIDGE_ANTI_AI_CRAFT_DIRECTORY: craftSecretMarker,
+        BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: cacheSecretMarker,
+        AGY_PATH: agySecretMarker,
+      },
+      stderr: 'pipe',
+    });
+    let stderrData = '';
+    transport.stderr?.on('data', (chunk: Buffer | string) => {
+      stderrData += chunk.toString();
+    });
+
+    client = new Client({ name: 'test-startup-tolerant-paths', version: '1.0.0' }, { capabilities: {} });
+    await client.connect(transport);
+
+    const health = (await client.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    assert.deepEqual(health.configurationIssues, [
+      { variable: 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY', reason: 'not-absolute' },
+      { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'not-absolute' },
+      { variable: 'AGY_PATH', reason: 'not-absolute' },
+    ]);
+
+    const expectedWarning = configurationWarning(health.configurationIssues)!;
+    assert.ok(expectedWarning);
+    await waitFor(() => stderrData.includes(expectedWarning), () => stderrData);
+    const warningLines = stderrData.trim().split(/\r?\n/).filter(line => line.startsWith('Invalid configuration entries were ignored or made the affected feature unavailable'));
+    assert.equal(warningLines.length, 1);
+    assert.equal(warningLines[0], expectedWarning);
+
+    assert.equal(health.installed, false);
+    assert.equal(health.path, '');
+    assert.match(health.error ?? '', /INVALID_CONFIGURATION/);
+
+    for (const marker of [craftSecretMarker, cacheSecretMarker, agySecretMarker]) {
+      assert.equal(stderrData.includes(marker), false, `stderr must not leak ${marker}`);
+      assert.equal(JSON.stringify(health).includes(marker), false, `health must not leak ${marker}`);
+    }
+  } finally {
+    if (client) await client.close();
+    rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('resumed and handoff tasks refuse invalid craft directory with INVALID_CONFIGURATION when craft is on', async () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-craft-resume-test-'));
+  const source = path.join(directory, 'source');
+  execFileSync('git', ['init', '--quiet', source]);
+  writeFileSync(path.join(source, 'source.txt'), 'content\n');
+  const stateDir = path.join(directory, 'state');
+
+  try {
+    // 1. Initial task completed with valid craft configuration
+    const configInitial = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'on',
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: stateDir,
+    });
+    const adapterInitial = new CliAdapter(configInitial, [mockPath]);
+    await adapterInitial.discover();
+    const tasksInitial = new TaskManager(adapterInitial, configInitial);
+    const initialTask = await tasksInitial.run({
+      prompt: 'read:initial',
+      workingDirectory: source,
+      mode: 'read-only',
+    });
+    await waitFor(() => tasksInitial.status(initialTask.taskId).status === 'completed', () => tasksInitial.status(initialTask.taskId));
+    const completed = tasksInitial.status(initialTask.taskId);
+    assert.equal(completed.status, 'completed');
+    const contextInfo = await tasksInitial.context(initialTask.taskId);
+    await tasksInitial.shutdown();
+
+    // 2. Recreate TaskManager with invalid BRIDGE_ANTI_AI_CRAFT_DIRECTORY and Craft on:
+    // Resume and handoff must refuse with INVALID_CONFIGURATION without leaking the invalid value.
+    const invalidCraftMarker = 'relative_invalid_craft_dir_marker';
+    const configCraftInvalid = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'on',
+      BRIDGE_ANTI_AI_CRAFT_DIRECTORY: invalidCraftMarker,
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: stateDir,
+    });
+    const adapterCraftInvalid = new CliAdapter(configCraftInvalid, [mockPath]);
+    const tasksCraftInvalid = new TaskManager(adapterCraftInvalid, configCraftInvalid);
+
+    await assert.rejects(
+      tasksCraftInvalid.run({
+        prompt: 'read:resumed',
+        workingDirectory: source,
+        sessionId: completed.sessionId,
+        mode: 'read-only',
+      }),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        assert.match(err.message, /BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid/);
+        assert.equal(err.message.includes(invalidCraftMarker), false);
+        return true;
+      },
+    );
+
+    await assert.rejects(
+      tasksCraftInvalid.run({
+        prompt: 'read:handoff',
+        workingDirectory: source,
+        contextTaskId: completed.taskId,
+        expectedContextSha256: contextInfo.treeSha256,
+        mode: 'read-only',
+      }),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        assert.match(err.message, /BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid/);
+        assert.equal(err.message.includes(invalidCraftMarker), false);
+        return true;
+      },
+    );
+    await tasksCraftInvalid.shutdown();
+
+    // 3. When BRIDGE_ANTI_AI_CRAFT='off', resume is not refused for this reason
+    const configCraftOff = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_ANTI_AI_CRAFT_DIRECTORY: invalidCraftMarker,
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: stateDir,
+    });
+    const adapterCraftOff = new CliAdapter(configCraftOff, [mockPath]);
+    await adapterCraftOff.discover();
+    const tasksCraftOff = new TaskManager(adapterCraftOff, configCraftOff);
+    const resumedOff = await tasksCraftOff.run({
+      prompt: 'read:resumed-off',
+      workingDirectory: source,
+      sessionId: completed.sessionId,
+      mode: 'read-only',
+    });
+    assert.ok(resumedOff.taskId);
+    await tasksCraftOff.shutdown();
+  } finally {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('Windows test repair refuses invalid craft directory with INVALID_CONFIGURATION when craft is on', async t => {
+  if (process.platform !== 'win32') return t.skip('Windows LPAC execution requires Windows');
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-craft-repair-test-'));
+  const source = path.join(directory, 'source');
+  execFileSync('git', ['init', '--quiet', source]);
+  writeFileSync(path.join(source, 'source.txt'), 'content\n');
+  const stateDir = path.join(directory, 'state');
+
+  let tasksInitial: TaskManager | undefined;
+  let tasksCraftInvalid: TaskManager | undefined;
+
+  try {
+    // 1. Initial write task completed with valid craft configuration and windows-lpac test executor
+    const configInitial = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'on',
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: stateDir,
+      BRIDGE_TEST_EXECUTOR: 'windows-lpac',
+    });
+    const adapterInitial = new CliAdapter(configInitial, [mockPath]);
+    await adapterInitial.discover();
+    tasksInitial = new TaskManager(adapterInitial, configInitial);
+    const initialTask = await tasksInitial.run({
+      prompt: 'write:initial',
+      workingDirectory: source,
+    });
+    await waitFor(() => tasksInitial!.status(initialTask.taskId).status === 'completed', () => tasksInitial!.status(initialTask.taskId));
+    const completed = tasksInitial.status(initialTask.taskId);
+    assert.equal(completed.status, 'completed');
+    const preview = await tasksInitial.preview(initialTask.taskId);
+    assert.ok(preview.sha256);
+    await tasksInitial.shutdown();
+    tasksInitial = undefined;
+
+    // 2. Recreate TaskManager with invalid BRIDGE_ANTI_AI_CRAFT_DIRECTORY and Craft on:
+    // startTests with windows-lpac must refuse with INVALID_CONFIGURATION before queuing, without leaking the invalid value.
+    const invalidCraftMarker = 'relative_invalid_craft_dir_marker';
+    const configCraftInvalid = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'on',
+      BRIDGE_ANTI_AI_CRAFT_DIRECTORY: invalidCraftMarker,
+      AGY_PATH: process.execPath,
+      BRIDGE_STATE_DIRECTORY: stateDir,
+      BRIDGE_TEST_EXECUTOR: 'windows-lpac',
+    });
+    const adapterCraftInvalid = new CliAdapter(configCraftInvalid, [mockPath]);
+    tasksCraftInvalid = new TaskManager(adapterCraftInvalid, configCraftInvalid);
+
+    const before = tasksCraftInvalid.list();
+    assert.equal(before.length, 1);
+    assert.equal(before[0]!.taskId, initialTask.taskId);
+
+    await assert.rejects(
+      tasksCraftInvalid.startTests(
+        initialTask.taskId,
+        preview.sha256,
+        { executable: process.execPath, args: ['-e', 'process.exit(0)'] },
+        1,
+        20,
+      ),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        assert.match(err.message, /BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid/);
+        assert.equal(err.message.includes(invalidCraftMarker), false);
+        return true;
+      },
+    );
+
+    const after = tasksCraftInvalid.list();
+    assert.equal(after.length, before.length);
+    assert.deepEqual(after.map(task => task.taskId), before.map(task => task.taskId));
+    await tasksCraftInvalid.shutdown();
+    tasksCraftInvalid = undefined;
+  } finally {
+    if (tasksCraftInvalid) await tasksCraftInvalid.shutdown();
+    if (tasksInitial) await tasksInitial.shutdown();
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('Windows executor rejects invalid node cache in portable mode before staging and permits system mode', async t => {
+  if (process.platform !== 'win32') return t.skip('Windows LPAC execution requires Windows');
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-copy-exec-test-'));
+  const copyDir = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const systemStateDir = path.join(tmpDir, 'system-state');
+  const directPortableStateDir = path.join(tmpDir, 'direct-portable-state');
+  const childStateDir = path.join(tmpDir, 'child-state');
+  const envStateDir = path.join(tmpDir, 'env-state');
+  try {
+    // 1. System mode permits execution with exitCode 0
+    const systemResult = await executeWindowsTest(
+      { executable: process.execPath, args: ['-e', 'process.exit(0)'] },
+      copyDir,
+      {
+        timeoutSeconds: 30,
+        maxRuntimeBytes: 256 * 1024 * 1024,
+        stateDirectory: systemStateDir,
+        windowsNodeRuntime: 'system',
+        portableNodeCacheDirectoryInvalid: true,
+      },
+    );
+    assert.equal(systemResult.exitCode, 0);
+
+    // 2. Direct portable mode with invalid cache rejects before staging without creating stateDirectory
+    assert.equal(existsSync(directPortableStateDir), false);
+    await assert.rejects(
+      executeWindowsTest(
+        { executable: process.execPath, args: ['-e', 'process.exit(0)'] },
+        copyDir,
+        {
+          timeoutSeconds: 30,
+          maxRuntimeBytes: 256 * 1024 * 1024,
+          stateDirectory: directPortableStateDir,
+          windowsNodeRuntime: 'portable',
+          portableNodeCacheDirectoryInvalid: true,
+        },
+      ),
+      (err: unknown) => {
+        assert.ok(err instanceof BridgeError);
+        assert.equal(err.code, 'INVALID_CONFIGURATION');
+        assert.match(err.message, /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid/);
+        return true;
+      },
+    );
+    assert.equal(existsSync(directPortableStateDir), false, 'direct portable mode must not create state directory on configuration failure');
+
+    // 3. Child process propagating invalid cache via environment without manual option injection
+    const cacheMarker = 'relative_cache_marker_exec_44';
+    const executorModuleUrl = pathToFileURL(fileURLToPath(new URL('../src/windows-executor.js', import.meta.url))).href;
+    const childScript = [
+      `import { executeWindowsTest } from ${JSON.stringify(executorModuleUrl)};`,
+      'try {',
+      '  await executeWindowsTest(',
+      `    { executable: process.execPath, args: ['-e', 'process.exit(0)'] },`,
+      `    ${JSON.stringify(copyDir)},`,
+      `    { timeoutSeconds: 30, maxRuntimeBytes: 256 * 1024 * 1024, stateDirectory: ${JSON.stringify(childStateDir)} },`,
+      '  );',
+      '  console.log(JSON.stringify({ success: true }));',
+      '} catch (err) {',
+      '  const error = err;',
+      '  console.log(JSON.stringify({ code: error?.code, message: error?.message }));',
+      '}',
+    ].join('\n');
+
+    assert.equal(existsSync(childStateDir), false);
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '-e', childScript],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env as Record<string, string>,
+          BRIDGE_WINDOWS_NODE_RUNTIME: 'portable',
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: cacheMarker,
+          BRIDGE_STATE_DIRECTORY: envStateDir,
+        },
+        windowsHide: true,
+      },
+    );
+    assert.equal(child.status, 0);
+    const childOutput = JSON.parse(child.stdout.trim());
+    assert.equal(childOutput.code, 'INVALID_CONFIGURATION');
+    assert.match(childOutput.message, /BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid/);
+    assert.equal(existsSync(childStateDir), false, 'child process state directory must not be created before validation');
+    assert.equal(child.stdout.includes(cacheMarker), false, 'child stdout must not leak cache marker');
+    assert.equal(child.stderr.includes(cacheMarker), false, 'child stderr must not leak cache marker');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    rmSync(copyDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+test('wait command tolerates invalid craft, node cache, and agy path without leaking values', () => {
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-wait-tolerance-test-'));
+  const stateDir = path.join(tmpDir, 'state');
+  mkdirSync(stateDir, { recursive: true });
+  const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));
+
+  const craftSecretMarker = 'relative_craft_secret_wait_11';
+  const cacheSecretMarker = 'relative_cache_secret_wait_22';
+  const agySecretMarker = 'bin/agy_secret_marker_wait_33';
+
+  try {
+    const taskId = randomUUID();
+    const state = new StateStore(stateDir);
+    state.save({
+      ownerPid: process.pid,
+      events: [],
+      cursor: 0,
+      record: {
+        taskId,
+        workingDirectory: tmpDir,
+        prompt: 'wait tolerance test',
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      },
+      options: {
+        workingDirectory: tmpDir,
+        prompt: 'wait tolerance test',
+      },
+    });
+
+    const envWithSecrets = {
+      ...process.env as Record<string, string>,
+      BRIDGE_ANTI_AI_CRAFT_DIRECTORY: craftSecretMarker,
+      BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: cacheSecretMarker,
+      AGY_PATH: agySecretMarker,
+    };
+
+    // 1. Wait on a known completed task
+    const knownResult = spawnSync(
+      process.execPath,
+      [entryPath, 'wait', '--state-directory', stateDir, taskId],
+      { encoding: 'utf8', env: envWithSecrets, windowsHide: true },
+    );
+    assert.equal(knownResult.status, 0);
+    assert.equal(knownResult.stderr, '');
+    const knownJson = JSON.parse(knownResult.stdout.trim());
+    assert.equal(knownJson.taskId, taskId);
+    assert.equal(knownJson.outcome, 'completed');
+    assert.equal(knownJson.exitCode, 0);
+
+    for (const marker of [craftSecretMarker, cacheSecretMarker, agySecretMarker]) {
+      assert.equal(knownResult.stdout.includes(marker), false, `wait stdout must not leak ${marker}`);
+      assert.equal(knownResult.stderr.includes(marker), false, `wait stderr must not leak ${marker}`);
+    }
+
+    // 2. Wait on an unknown task
+    const unknownId = randomUUID();
+    const unknownResult = spawnSync(
+      process.execPath,
+      [entryPath, 'wait', '--state-directory', stateDir, unknownId],
+      { encoding: 'utf8', env: envWithSecrets, windowsHide: true },
+    );
+    assert.equal(unknownResult.status, 7);
+    assert.equal(unknownResult.stderr, '');
+    const unknownJson = JSON.parse(unknownResult.stdout.trim());
+    assert.equal(unknownJson.taskId, unknownId);
+    assert.equal(unknownJson.outcome, 'unknown-task');
+    assert.equal(unknownJson.reason, 'TASK_NOT_FOUND');
+
+    for (const marker of [craftSecretMarker, cacheSecretMarker, agySecretMarker]) {
+      assert.equal(unknownResult.stdout.includes(marker), false, `wait stdout must not leak ${marker}`);
+      assert.equal(unknownResult.stderr.includes(marker), false, `wait stderr must not leak ${marker}`);
+    }
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

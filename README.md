@@ -597,8 +597,9 @@ Para testar com a conta real em um projeto descartável, execute `npm run build`
 | `BRIDGE_TOOL_PROFILE` | `full` | Catálogo: `full`, `query`, `review` ou `implementation` |
 | `BRIDGE_TEST_EXECUTOR` | `windows-lpac` no Windows; `agy` nos demais sistemas | Executor de `antigravity_test`; `agy` força o caminho legado no Windows |
 | `BRIDGE_WINDOWS_NODE_RUNTIME` | `system` | No Windows, usa `system` ou o runtime portátil previamente preparado; o plugin distribuído define `portable` |
-| `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` | `~/.antigravity-mcp-bridge/windows-runtimes` | Diretório confiável opcional, fora dos projetos, para compartilhar o cache portátil entre diretórios de estado; não é entrada MCP |
-| `AGY_PATH` | `agy` | Caminho do CLI oficial |
+| `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` | `~/.antigravity-mcp-bridge/windows-runtimes` | Diretório confiável opcional, fora dos projetos, para compartilhar o cache portátil entre diretórios de estado; não é entrada MCP. Valores inválidos (relativo, NUL, UNC, dispositivo, dois pontos, `.`/`..` ou raiz de volume) não usam o caminho padrão, são reportados em `configurationIssues` e tornam o runtime portátil indisponível com `INVALID_CONFIGURATION`, mantendo o modo `system` funcional |
+| `BRIDGE_ANTI_AI_CRAFT_DIRECTORY` | vazio | Diretório absoluto de snapshot verificado do Anti-AI Craft; caminhos relativos ou com NUL nunca são resolvidos contra o cwd nem caem para o snapshot embutido, são reportados em `configurationIssues` e recusam execuções com `INVALID_CONFIGURATION` quando `BRIDGE_ANTI_AI_CRAFT` estiver ativo |
+| `AGY_PATH` | `agy` | Caminho do CLI oficial; caminhos relativos com separador (ex.: `bin/agy`, `.\agy`), valores com prefixo de unidade sem raiz completa no Windows (ex.: `C:agy.exe`) ou com NUL nunca usam o PATH, são reportados em `configurationIssues`, fazem o health relatar `installed: false` com caminho neutro e recusam execuções com `INVALID_CONFIGURATION`; nomes simples sem separador e caminhos absolutos (inclusive de comprimento estendido no Windows) funcionam normalmente |
 | `MAX_CONCURRENT_TASKS` | `1` | Processos simultâneos |
 | `MAX_QUEUED_TASKS` | `20` | Tarefas aguardando |
 | `MAX_RETAINED_TASKS` | `100` | Tarefas persistidas retidas |

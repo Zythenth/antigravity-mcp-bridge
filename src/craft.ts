@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { verifyCraftSnapshot, type VerifiedCraftSnapshot } from './craft-snapshot.js';
 import type { ProvidedSkill } from './skills.js';
 import { BridgeError } from './types.js';
+import { assertAntiAiCraftDirectoryUsable } from './config.js';
 
 export const PERMANENT_SKILLS = ['anti-ai-code', 'anti-ai-security'];
 export const MAX_CATALOG_BYTES = 8 * 1024;
@@ -100,8 +101,9 @@ function boundedCatalog(entries: CraftSelection['catalog']): CraftSelection['cat
   throw new BridgeError('CRAFT_SNAPSHOT_INVALID', 'Skill catalog does not fit its prompt budget');
 }
 
-export async function prepareCraft(config: { antiAiCraft: boolean; antiAiCraftDirectory?: string; stateDirectory: string }): Promise<PreparedCraft | undefined> {
+export async function prepareCraft(config: { antiAiCraft: boolean; antiAiCraftDirectory?: string; antiAiCraftDirectoryInvalid?: boolean; stateDirectory: string }): Promise<PreparedCraft | undefined> {
   if (!config.antiAiCraft) return undefined;
+  assertAntiAiCraftDirectoryUsable(config);
   const source = config.antiAiCraftDirectory ?? bundledSnapshot();
   if (!source) throw new BridgeError('CRAFT_SNAPSHOT_MISSING', 'The bundled Anti-AI Craft snapshot is missing; reinstall this bridge version');
   const snapshot = await cachedSnapshot(await verifyCraftSnapshot(source), config.stateDirectory);
