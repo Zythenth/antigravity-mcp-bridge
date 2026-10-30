@@ -36,6 +36,9 @@ import {
   matchProjectRelativeGlob,
   preflightProjectFiles,
 } from '../src/secret-preflight.js';
+import { validateWorkingDirectory } from '../src/validation.js';
+import { TaskManager } from '../src/task-manager.js';
+import { CliAdapter } from '../src/cli-adapter.js';
 
 if (process.platform === 'win32') {
   const dir = fileURLToPath(new URL('../../tests/.git-runtime/bin', import.meta.url));
@@ -555,13 +558,23 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
   assert.deepEqual(valid.secretExceptions, { version: 2, namePatterns: ['.env.template'] });
 
   // Invalid JSON format
-  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: 'not-json' }), /must be a JSON array of strings/);
+  const invalidJsonExcl = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: 'not-json' });
+  assert.deepEqual(invalidJsonExcl.secretExclusions, []);
+  assert.equal(invalidJsonExcl.secretExclusionsInvalid, true);
+  assert.deepEqual(invalidJsonExcl.configurationIssues, [
+    { variable: 'BRIDGE_SECRET_EXCLUSIONS', reason: 'invalid-json' },
+  ]);
 
   // Invalid traversal pattern
-  assert.throws(
-    () => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['../outside']) }),
-    /must contain relative glob patterns without traversal/
-  );
+  const traversalExcl = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['../outside']),
+  });
+  assert.deepEqual(traversalExcl.secretExclusions, []);
+  assert.equal(traversalExcl.secretExclusionsInvalid, true);
+  assert.deepEqual(traversalExcl.configurationIssues, [
+    { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' },
+  ]);
 
   // Invalid absolute path pattern
   const invalidAbsConfig = loadConfig({
@@ -572,6 +585,321 @@ test('config validation: BRIDGE_SECRET_EXCLUSIONS and BRIDGE_SECRET_EXCEPTIONS v
   assert.deepEqual(invalidAbsConfig.configurationIssues, [
     { variable: 'BRIDGE_SECRET_EXCEPTIONS', index: 0, reason: 'invalid-pattern' },
   ]);
+});
+
+test('BRIDGE_SECRET_EXCLUSIONS: failure modes report issues, mark exclusions unusable, and refuse operations', async () => {
+  const dir = await createRepo();
+  try {
+    const cases: Array<{
+      name: string;
+      raw: string;
+      expectedIssue: { variable: string; index?: number; reason: string };
+    }> = [
+      { name: 'invalid-json', raw: 'not-valid-json', expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', reason: 'invalid-json' } },
+      { name: 'not-a-list', raw: '{"pattern":"*.env"}', expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', reason: 'not-a-list' } },
+      { name: 'non-string', raw: JSON.stringify([123]), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-entry' } },
+      { name: 'empty-string', raw: JSON.stringify(['   ']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-entry' } },
+      { name: 'nul-character', raw: JSON.stringify(['secret\0key']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-entry' } },
+      { name: 'absolute-path', raw: JSON.stringify(['/root/secrets']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'drive-letter', raw: JSON.stringify(['C:secrets']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'traversal', raw: JSON.stringify(['foo/../bar']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'leading-backslash', raw: JSON.stringify(['\\privado']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'unc-share', raw: JSON.stringify(['\\\\servidor\\share']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'dot-slash-only', raw: JSON.stringify(['./']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'unstable-absolute-slash', raw: JSON.stringify(['./ /privado']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+      { name: 'unstable-leading-space', raw: JSON.stringify(['./ secrets/**']), expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' } },
+    ];
+
+    for (const c of cases) {
+      const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: c.raw });
+      assert.deepEqual(config.secretExclusions, [], `${c.name} must result in empty secretExclusions`);
+      assert.equal(config.secretExclusionsInvalid, true, `${c.name} must mark secretExclusionsInvalid`);
+      assert.deepEqual(config.configurationIssues, [c.expectedIssue], `${c.name} issue mismatch`);
+
+      // preflightProjectFiles refuses with INVALID_CONFIGURATION before copying
+      await assert.rejects(
+        preflightProjectFiles(dir, ['source.txt'], config),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError, `${c.name} must throw BridgeError`);
+          assert.equal(err.code, 'INVALID_CONFIGURATION');
+          assert.ok(err.message.includes('BRIDGE_SECRET_EXCLUSIONS'));
+          assert.ok(err.message.includes('antigravity_health'));
+          assert.equal(err.message.includes(c.raw), false, 'Error message must never echo configured value');
+          return true;
+        }
+      );
+
+      // createProjectCopy refuses before creating copy
+      await assert.rejects(
+        createProjectCopy(dir, undefined, undefined, config),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError, `${c.name} copy creation must throw BridgeError`);
+          assert.equal(err.code, 'INVALID_CONFIGURATION');
+          return true;
+        }
+      );
+    }
+
+    // Mixed invalid patterns with valid entries: invalid entries make entire list unusable
+    const mixedExclusionCases: Array<{
+      name: string;
+      raw: string;
+      expectedIssue: { variable: string; index: number; reason: string };
+    }> = [
+      {
+        name: 'mixed-leading-backslash',
+        raw: JSON.stringify(['*.env', '\\privado', 'secrets/**']),
+        expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 1, reason: 'invalid-pattern' },
+      },
+      {
+        name: 'mixed-unc-share',
+        raw: JSON.stringify(['*.env', '\\\\servidor\\share']),
+        expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 1, reason: 'invalid-pattern' },
+      },
+      {
+        name: 'mixed-dot-slash-only',
+        raw: JSON.stringify(['secrets/**', './']),
+        expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 1, reason: 'invalid-pattern' },
+      },
+      {
+        name: 'mixed-unstable-absolute-slash',
+        raw: JSON.stringify(['*.env', './ /privado', 'secrets/**']),
+        expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 1, reason: 'invalid-pattern' },
+      },
+      {
+        name: 'mixed-unstable-leading-space',
+        raw: JSON.stringify(['*.env', './ secrets/**', 'secrets/**']),
+        expectedIssue: { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 1, reason: 'invalid-pattern' },
+      },
+    ];
+
+    for (const c of mixedExclusionCases) {
+      const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_SECRET_EXCLUSIONS: c.raw });
+      assert.deepEqual(config.secretExclusions, [], `${c.name} must result in empty secretExclusions`);
+      assert.equal(config.secretExclusionsInvalid, true, `${c.name} must mark secretExclusionsInvalid`);
+      assert.deepEqual(config.configurationIssues, [c.expectedIssue], `${c.name} issue mismatch`);
+
+      await assert.rejects(
+        preflightProjectFiles(dir, ['source.txt'], config),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError, `${c.name} preflight must throw BridgeError`);
+          assert.equal(err.code, 'INVALID_CONFIGURATION');
+          assert.ok(err.message.includes('BRIDGE_SECRET_EXCLUSIONS'));
+          assert.ok(err.message.includes('antigravity_health'));
+          assert.equal(err.message.includes(c.raw), false, 'Error message must never echo configured value');
+          return true;
+        }
+      );
+    }
+
+    // Valid exclusions behave unchanged (trim + dedupe)
+    const validConfig = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['  *.env  ', 'secrets/**', '*.env']),
+    });
+    assert.deepEqual(validConfig.secretExclusions, ['*.env', 'secrets/**']);
+    assert.equal(validConfig.secretExclusionsInvalid, undefined);
+    assert.deepEqual(validConfig.configurationIssues, []);
+    const preflight = await preflightProjectFiles(dir, ['source.txt'], validConfig);
+    assert.equal(preflight.eligible.length, 1);
+
+    // Valid exclusions with ./ prefix and whitespace remain accepted and normalized
+    const validNormalizedConfig = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['./secrets/**', '  *.env  ']),
+    });
+    assert.deepEqual(validNormalizedConfig.secretExclusions, ['secrets/**', '*.env']);
+    assert.equal(validNormalizedConfig.secretExclusionsInvalid, undefined);
+    assert.deepEqual(validNormalizedConfig.configurationIssues, []);
+    const preflightNormalized = await preflightProjectFiles(dir, ['source.txt'], validNormalizedConfig);
+    assert.equal(preflightNormalized.eligible.length, 1);
+
+    // Diagnostics and warnings never contain raw value
+    const sensitivePattern = 'SENSITIVE_SECRET_PATTERN_998877';
+    const sensitiveConfig = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_SECRET_EXCLUSIONS: JSON.stringify(['/abs/' + sensitivePattern]),
+    });
+    const issuesJson = JSON.stringify(sensitiveConfig.configurationIssues);
+    assert.equal(issuesJson.includes(sensitivePattern), false);
+    const warn = configurationWarning(sensitiveConfig.configurationIssues)!;
+    assert.ok(warn);
+    assert.equal(warn.includes(sensitivePattern), false);
+
+    // Invalid exclusions refuse tasks at TaskManager level without creating tasks
+    const exclStateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-excl-state-'));
+    const exclConfig = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      BRIDGE_SECRET_EXCLUSIONS: 'not-json',
+      BRIDGE_STATE_DIRECTORY: exclStateDir,
+    });
+    const exclAdapter = new CliAdapter(exclConfig);
+    const exclTasks = new TaskManager(exclAdapter, exclConfig);
+    try {
+      await assert.rejects(
+        exclTasks.run({ prompt: 'test', workingDirectory: dir }),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'INVALID_CONFIGURATION');
+          assert.ok(err.message.includes('BRIDGE_SECRET_EXCLUSIONS'));
+          assert.ok(err.message.includes('antigravity_health'));
+          return true;
+        }
+      );
+      assert.equal(exclTasks.list().length, 0);
+    } finally {
+      await exclTasks.shutdown();
+      await rm(exclStateDir, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('FORBIDDEN_DIRECTORIES: relative or NUL entries report issues, mark unusable, and refuse operations', async () => {
+  const dir = await createRepo();
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-state-dir-'));
+  const validForbidden = await mkdtemp(path.join(os.tmpdir(), 'agy-forbidden-'));
+  try {
+    // 1. Relative entry is never resolved against cwd
+    const relativeRaw = 'relative-non-absolute-dir';
+    const relConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', FORBIDDEN_DIRECTORIES: relativeRaw });
+    assert.deepEqual(relConfig.forbiddenDirectories, []);
+    assert.equal(relConfig.forbiddenDirectoriesInvalid, true);
+    assert.deepEqual(relConfig.configurationIssues, [
+      { variable: 'FORBIDDEN_DIRECTORIES', index: 0, reason: 'not-absolute' },
+    ]);
+    if (process.platform === 'win32') {
+      const rootRelConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', FORBIDDEN_DIRECTORIES: '\\root-relative-dir' });
+      assert.deepEqual(rootRelConfig.forbiddenDirectories, []);
+      assert.equal(rootRelConfig.forbiddenDirectoriesInvalid, true);
+      assert.deepEqual(rootRelConfig.configurationIssues, [
+        { variable: 'FORBIDDEN_DIRECTORIES', index: 0, reason: 'not-absolute' },
+      ]);
+
+      const winIncompleteRoots = ['//privado', '\\\\\\\\privado', '//servidor'];
+      for (const badRoot of winIncompleteRoots) {
+        const badConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', FORBIDDEN_DIRECTORIES: badRoot });
+        assert.deepEqual(badConfig.forbiddenDirectories, [], `${badRoot} must not resolve against cwd`);
+        assert.equal(badConfig.forbiddenDirectoriesInvalid, true, `${badRoot} must mark forbiddenDirectoriesInvalid`);
+        assert.deepEqual(badConfig.configurationIssues, [
+          { variable: 'FORBIDDEN_DIRECTORIES', index: 0, reason: 'not-absolute' },
+        ]);
+
+        const mixedBad = loadConfig({
+          BRIDGE_ANTI_AI_CRAFT: 'off',
+          FORBIDDEN_DIRECTORIES: `${validForbidden};${badRoot}`,
+        });
+        assert.deepEqual(mixedBad.forbiddenDirectories, [path.resolve(validForbidden)]);
+        assert.equal(mixedBad.forbiddenDirectoriesInvalid, true);
+        assert.deepEqual(mixedBad.configurationIssues, [
+          { variable: 'FORBIDDEN_DIRECTORIES', index: 1, reason: 'not-absolute' },
+        ]);
+      }
+    }
+
+    // 2. NUL entry is never resolved
+    const nulRaw = `${validForbidden}\0bad`;
+    const nulConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', FORBIDDEN_DIRECTORIES: nulRaw });
+    assert.deepEqual(nulConfig.forbiddenDirectories, []);
+    assert.equal(nulConfig.forbiddenDirectoriesInvalid, true);
+    assert.deepEqual(nulConfig.configurationIssues, [
+      { variable: 'FORBIDDEN_DIRECTORIES', index: 0, reason: 'invalid-entry' },
+    ]);
+
+    // 3. Mixed valid and relative: valid entries stay in forbiddenDirectories and keep being forbidden
+    const mixedConfig = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      FORBIDDEN_DIRECTORIES: `${validForbidden}${path.delimiter}relative-bad`,
+      BRIDGE_STATE_DIRECTORY: stateDir,
+    });
+    assert.deepEqual(mixedConfig.forbiddenDirectories, [path.resolve(validForbidden)]);
+    assert.equal(mixedConfig.forbiddenDirectoriesInvalid, true);
+    assert.deepEqual(mixedConfig.configurationIssues, [
+      { variable: 'FORBIDDEN_DIRECTORIES', index: 1, reason: 'not-absolute' },
+    ]);
+
+    // TaskManager and GroupManager refuse while unusable
+    const adapter = new CliAdapter(mixedConfig);
+    const tasks = new TaskManager(adapter, mixedConfig);
+    try {
+      await assert.rejects(
+        tasks.run({ prompt: 'test', workingDirectory: dir }),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'INVALID_CONFIGURATION');
+          assert.ok(err.message.includes('FORBIDDEN_DIRECTORIES'));
+          assert.ok(err.message.includes('antigravity_health'));
+          assert.equal(err.message.includes('relative-bad'), false, 'Error message must not echo relative entry');
+          return true;
+        }
+      );
+      await assert.rejects(
+        tasks.setSandboxPolicy({ readRoots: [], writeRoots: [], network: false, childProcesses: true, maxOutputChars: 4000 }, tasks.getSandboxPolicy().sha256),
+        { code: 'INVALID_CONFIGURATION' }
+      );
+      await assert.rejects(
+        tasks.listProjectFiles(dir),
+        { code: 'INVALID_CONFIGURATION' }
+      );
+      await assert.rejects(
+        tasks.groups.create('a1b2c3d4-e5f6-4a1b-8c2d-3e4f5a6b7c8d', {
+          workingDirectory: dir,
+          title: 'Test Group',
+          jobs: [{ key: 'step-a', owner: 'implementer', dependsOn: [], task: { prompt: 'do work' } }],
+        }),
+        { code: 'INVALID_CONFIGURATION' }
+      );
+    } finally {
+      await tasks.shutdown();
+    }
+
+    // 4. Valid configuration only: workingDirectory inside forbidden directory is rejected as forbidden
+    const cleanConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', FORBIDDEN_DIRECTORIES: validForbidden });
+    assert.deepEqual(cleanConfig.configurationIssues, []);
+    assert.equal(cleanConfig.forbiddenDirectoriesInvalid, undefined);
+    await assert.rejects(
+      validateWorkingDirectory(validForbidden, cleanConfig.forbiddenDirectories),
+      { code: 'INVALID_WORKING_DIRECTORY' }
+    );
+    const validatedDir = await validateWorkingDirectory(dir, cleanConfig.forbiddenDirectories);
+    assert.equal(validatedDir, await realpath(dir));
+
+    // 5. Diagnostics and error messages never leak configured values
+    const sensitive = 'SENSITIVE_FORBIDDEN_DIR_998877';
+    const leakStateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-leak-state-'));
+    const leakConfig = loadConfig({
+      BRIDGE_ANTI_AI_CRAFT: 'off',
+      FORBIDDEN_DIRECTORIES: 'relative/' + sensitive,
+      BRIDGE_STATE_DIRECTORY: leakStateDir,
+    });
+    const leakIssues = JSON.stringify(leakConfig.configurationIssues);
+    assert.equal(leakIssues.includes(sensitive), false);
+    const leakWarn = configurationWarning(leakConfig.configurationIssues)!;
+    assert.equal(leakWarn.includes(sensitive), false);
+    const leakAdapter = new CliAdapter(leakConfig);
+    const leakTasks = new TaskManager(leakAdapter, leakConfig);
+    try {
+      await assert.rejects(
+        leakTasks.run({ prompt: 'test', workingDirectory: dir }),
+        (err: unknown) => {
+          assert.ok(err instanceof BridgeError);
+          assert.equal(err.code, 'INVALID_CONFIGURATION');
+          assert.ok(err.message.includes('FORBIDDEN_DIRECTORIES'));
+          assert.ok(err.message.includes('antigravity_health'));
+          assert.equal(err.message.includes(sensitive), false, 'Error message must not echo sensitive entry');
+          return true;
+        }
+      );
+    } finally {
+      await leakTasks.shutdown();
+      await rm(leakStateDir, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(stateDir, { recursive: true, force: true });
+    await rm(validForbidden, { recursive: true, force: true });
+  }
 });
 
 test('policy: glob pattern validation fails explicitly on invalid input', () => {

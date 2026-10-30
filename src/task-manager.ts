@@ -22,7 +22,7 @@ import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES }
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
-import type { Config, ApprovalMode } from './config.js';
+import { assertForbiddenDirectoriesUsable, assertSecretExclusionsUsable, type Config, type ApprovalMode } from './config.js';
 import { EventStore, MAX_EVENT_PAYLOAD_CHARS } from './event-store.js';
 import { assertTextIsUtf8, createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
@@ -99,6 +99,10 @@ export class TaskManager {
   private groupManager?: GroupManager;
   get groups(): GroupManager { return this.groupManager ??= new GroupManager(this, this.config); }
   runInGroup(options: RunOptions, admission: GroupAdmission) { return this.run({ ...options, role: admission.owner, groupAdmission: groupAdmissionSchema.parse(admission) }); }
+  private forbiddenDirectories(): string[] {
+    assertForbiddenDirectoriesUsable(this.config);
+    return this.config.forbiddenDirectories;
+  }
   private readonly nativeRecovery: Promise<void>;
   private nativeRecoveryError: unknown;
 
@@ -197,7 +201,7 @@ export class TaskManager {
     confirm?: (previous: SandboxPolicySnapshot, proposed: SandboxPolicySnapshot) => Promise<boolean>): Promise<SandboxPolicySnapshot> {
     const previous = this.state.loadSandboxPolicy();
     if (previous.sha256 !== expectedSha256) throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Reload the current sandbox policy before proposing an update');
-    const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
     const proposed: SandboxPolicySnapshot = { version: 1, policy, sha256: sandboxPolicyDigest(policy) };
     if (this.config.approvalMode === 'ask') {
       if (!confirm) throw new BridgeError('APPROVAL_REQUIRED', 'Sandbox policy updates require confirmation through the MCP client');
@@ -207,7 +211,7 @@ export class TaskManager {
     try {
       const current = this.state.loadSandboxPolicy();
       if (current.sha256 !== previous.sha256) throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox policy changed while confirmation was pending');
-      const rechecked = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+      const rechecked = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
       if (sandboxPolicyDigest(rechecked) !== proposed.sha256) {
         throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox policy proposal changed while confirmation was pending');
       }
@@ -247,14 +251,14 @@ export class TaskManager {
   }
 
   private async memoryProject(workingDirectory: string): Promise<string> {
-    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    const directory = await validateWorkingDirectory(workingDirectory, this.forbiddenDirectories());
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
     await validateProjectRoot(directory);
     return directory;
   }
 
   async listProjectFiles(workingDirectory: string): Promise<string[]> {
-    const directory = await validateWorkingDirectory(workingDirectory, this.config.forbiddenDirectories);
+    const directory = await validateWorkingDirectory(workingDirectory, this.forbiddenDirectories());
     await validateStateSeparation(directory, this.config.stateDirectory);
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
     await validateProjectRoot(directory);
@@ -323,7 +327,8 @@ export class TaskManager {
     if (options.acceptanceCriteria !== undefined) criteriaSchema.parse(options.acceptanceCriteria);
     if (options.outputSchema !== undefined) options.outputSchema = validateOutputSchema(options.outputSchema);
     if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
-    const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.config.forbiddenDirectories);
+    assertSecretExclusionsUsable(this.config);
+    const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.forbiddenDirectories());
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.groupAdmission) {
       await validateStateSeparation(workingDirectory, this.config.stateDirectory);
@@ -816,7 +821,7 @@ export class TaskManager {
       throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
     }
     const policy = this.state.loadSandboxPolicy();
-    const selection = await resolveSandboxSelection(policy.policy, sandbox, source.workingDirectory, this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+    const selection = await resolveSandboxSelection(policy.policy, sandbox, source.workingDirectory, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
     const nativeTest: WindowsNativeTestRequest = { ...command, expectedSha256,
       maxAttempts: retries + 1, backend: 'windows-lpac', sandbox: selection, policySha256: policy.sha256 };
     const releaseRegistry = this.state.acquire('registry');
@@ -1561,7 +1566,7 @@ export class TaskManager {
         throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox policy changed while this Windows test was queued');
       }
       const selected = await resolveSandboxSelection(current.policy, request.sandbox, task.record.workingDirectory,
-        this.config.stateDirectory, this.config.forbiddenDirectories, this.config, this.config.windowsNodeCacheDirectory);
+        this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
       if (JSON.stringify(selected) !== JSON.stringify(request.sandbox)) {
         throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Sandbox selection changed while this Windows test was queued');
       }
@@ -1586,7 +1591,7 @@ export class TaskManager {
       return await executeWindowsTest({ executable: request.executable, args: request.args }, task.project.copyDirectory, {
         timeoutSeconds, maxRuntimeBytes: this.config.maxCopyBytes, maxFiles: this.config.maxCopyFiles,
         mode: task.record.mode, stateDirectory: this.config.stateDirectory,
-        protectedPaths: [task.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.config.forbiddenDirectories],
+        protectedPaths: [task.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.forbiddenDirectories()],
         windowsNodeRuntime: this.config.windowsNodeRuntime, portableNodeCacheDirectory: this.config.windowsNodeCacheDirectory,
         sandbox: request.sandbox, signal: controller.signal,
         onProcess: child => {

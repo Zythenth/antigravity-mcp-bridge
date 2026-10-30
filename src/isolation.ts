@@ -10,7 +10,7 @@ import { BridgeError } from './types.js';
 import { checkIntegratedText, decodeUtf16, renderLines, replaceInsideRoot, type LfConversion } from './line-endings.js';
 import { stageExecutionPolicy, verifyExecutionPolicy, discardExecutionPolicy, EXECUTION_POLICY_PATHS, type StagedExecutionPolicy } from './execution-policy.js';
 import type { ResolvedAgentPolicy, McpCatalogEntry } from './agent-policy.js';
-import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from './config.js';
+import { DEFAULT_PROJECT_LIMITS, assertSecretExclusionsUsable, type ProjectLimits } from './config.js';
 import {
   detectSecretContent,
   isKnownCredentialFile,
@@ -583,6 +583,7 @@ async function inspectPrivateBaseline(
   limits: ProjectLimits,
   auxPaths: ReadonlySet<string>
 ): Promise<InspectedBaseline> {
+  assertSecretExclusionsUsable(limits);
   const exclusions = (limits.secretExclusions ?? []).filter(Boolean);
   const exceptionsPolicy = normalizeSecretExceptionsPolicy(limits.secretExceptions, 'secretExceptions');
   const namePatterns = exceptionsPolicy.namePatterns;

@@ -16,7 +16,12 @@ const catalog = [{ id: 'fixture', nativeServerName: 'bridge-policy-probe', comma
 test('trusted configuration bounds native tools and private MCP transports; caller cannot supply transport', () => {
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: '["view_file"]', BRIDGE_MCP_CATALOG: JSON.stringify(catalog) });
   assert.deepEqual(config.allowedAgyTools, ['view_file']);
-  assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: '["run_command"]' }));
+  const badToolConfig = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: '["run_command"]' });
+  assert.deepEqual(badToolConfig.allowedAgyTools, []);
+  assert.equal(badToolConfig.enforceAgentPolicy, true);
+  assert.deepEqual(badToolConfig.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', index: 0, reason: 'invalid-entry' },
+  ]);
   assert.throws(() => resolveAgentPolicy({ allowedTools: ['write_to_file'] }, config.allowedAgyTools, config.mcpCatalog, 'write', namespace), { code: 'POLICY_NOT_ALLOWED' });
   assert.throws(() => resolveAgentPolicy({ mcpServers: [{ serverId: 'fixture', command: process.execPath }] } as never, config.allowedAgyTools, config.mcpCatalog, 'write', namespace), { code: 'POLICY_NOT_ALLOWED' });
 });
@@ -53,4 +58,73 @@ test('catalog discovery returns IDs and ceilings without credentials or transpor
     assert.equal(result.mcpServers[0]!.nativeServerName, 'bridge-policy-probe');
     assert.equal(JSON.stringify(result).includes('synthetic-secret'), false); assert.equal(JSON.stringify(result).includes('private-service'), false);
   } finally { await tasks.shutdown(); assert.equal(path.dirname(directory), path.resolve(os.tmpdir())); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('BRIDGE_ALLOWED_AGY_TOOLS tolerates invalid values and falls to most restrictive ceiling', () => {
+  // Bad JSON -> [] and policy resolves to only finish; issue invalid-json without index
+  const badJson = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: 'not-json' });
+  assert.deepEqual(badJson.allowedAgyTools, []);
+  assert.equal(badJson.enforceAgentPolicy, true);
+  assert.deepEqual(badJson.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', reason: 'invalid-json' },
+  ]);
+  const resolvedBadJson = resolveAgentPolicy({}, badJson.allowedAgyTools, [], 'write', namespace);
+  assert.deepEqual(resolvedBadJson.nativeTools, ['finish']);
+  assert.throws(() => resolveAgentPolicy({ allowedTools: ['view_file'] }, badJson.allowedAgyTools, [], 'write', namespace), { code: 'POLICY_NOT_ALLOWED' });
+
+  // Not a list -> [] and issue not-a-list without index
+  const notList = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_ALLOWED_AGY_TOOLS: '{"tool":"view_file"}' });
+  assert.deepEqual(notList.allowedAgyTools, []);
+  assert.equal(notList.enforceAgentPolicy, true);
+  assert.deepEqual(notList.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', reason: 'not-a-list' },
+  ]);
+
+  // More than 5 entries -> [] and issue too-many-entries without index
+  const tooMany = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_ALLOWED_AGY_TOOLS: JSON.stringify(['view_file', 'write_to_file', 'replace_file_content', 'multi_replace_file_content', 'finish', 'extra']),
+  });
+  assert.deepEqual(tooMany.allowedAgyTools, []);
+  assert.equal(tooMany.enforceAgentPolicy, true);
+  assert.deepEqual(tooMany.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', reason: 'too-many-entries' },
+  ]);
+
+  // Non-string or unknown tool name ignored on its own, valid kept
+  const mixed = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_ALLOWED_AGY_TOOLS: JSON.stringify(['view_file', 'unknown_tool', 123, 'write_to_file']),
+  });
+  assert.deepEqual(mixed.allowedAgyTools, ['view_file', 'write_to_file']);
+  assert.equal(mixed.enforceAgentPolicy, true);
+  assert.deepEqual(mixed.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', index: 1, reason: 'invalid-entry' },
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', index: 2, reason: 'invalid-entry' },
+  ]);
+
+  // Repeated tool kept once and reported with index of later repetition
+  const duplicates = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_ALLOWED_AGY_TOOLS: JSON.stringify(['view_file', 'write_to_file', 'view_file']),
+  });
+  assert.deepEqual(duplicates.allowedAgyTools, ['view_file', 'write_to_file']);
+  assert.deepEqual(duplicates.configurationIssues, [
+    { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', index: 2, reason: 'duplicate' },
+  ]);
+
+  // Undefined variable keeps broad default and enforceAgentPolicy false
+  const undef = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off' });
+  assert.deepEqual(undef.allowedAgyTools, [...nativeToolSchema.options]);
+  assert.equal(undef.enforceAgentPolicy, false);
+  assert.deepEqual(undef.configurationIssues, []);
+
+  // Diagnostics never contain raw value
+  const sensitiveToolName = 'SENSITIVE_TOOL_NAME_XYZ';
+  const sensitiveConfig = loadConfig({
+    BRIDGE_ANTI_AI_CRAFT: 'off',
+    BRIDGE_ALLOWED_AGY_TOOLS: JSON.stringify([sensitiveToolName]),
+  });
+  const issuesStr = JSON.stringify(sensitiveConfig.configurationIssues);
+  assert.equal(issuesStr.includes(sensitiveToolName), false);
 });

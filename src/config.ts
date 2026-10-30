@@ -1,11 +1,11 @@
 import path from 'node:path';
 import {
-  nativeToolsSchema,
   nativeToolSchema,
   mcpCatalogEntrySchema,
   type NativeTool,
   type McpCatalogEntry,
 } from './agent-policy.js';
+import { BridgeError } from './types.js';
 import { readPreauthorizedIntegrationRoots } from './integration-policy.js';
 import os from 'node:os';
 import { toolProfileSchema, type ToolProfile } from './tool-profiles.js';
@@ -60,6 +60,7 @@ export interface ProjectLimits {
   maxChangedFiles: number;
   secretExclusions?: readonly string[];
   secretExceptions?: SecretExceptionsPolicy | readonly string[];
+  secretExclusionsInvalid?: boolean;
 }
 export const DEFAULT_PROJECT_LIMITS: ProjectLimits = {
   maxCopyFiles: 10000,
@@ -94,6 +95,7 @@ export interface Config extends ProjectLimits {
   memoryMaxBytes: number;
   memoryMaxEntryBytes: number;
   forbiddenDirectories: string[];
+  forbiddenDirectoriesInvalid?: boolean;
   testExecutor: TestExecutor;
   windowsNodeRuntime: WindowsNodeRuntime;
   windowsNodeCacheDirectory: string;
@@ -314,19 +316,141 @@ function readCustomRoles(value: string | undefined): { customRoles: RoleDefiniti
   return { customRoles: valid, issues };
 }
 
-function parseStringArray(value: string | undefined, envName: string): string[] {
-  if (value === undefined) return [];
-  let parsed: unknown;
-  try { parsed = JSON.parse(value); } catch { throw new Error(envName + ' must be a JSON array of strings'); }
-  if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string' || !item.trim() || item.includes('\0'))) {
-    throw new Error(envName + ' must be a JSON array of non-empty strings');
+function readAllowedAgyTools(value: string | undefined): {
+  allowedAgyTools: NativeTool[];
+  enforceAgentPolicy: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'BRIDGE_ALLOWED_AGY_TOOLS';
+  if (value === undefined) {
+    return {
+      allowedAgyTools: [...nativeToolSchema.options],
+      enforceAgentPolicy: false,
+      issues: [],
+    };
   }
-  const items = [...new Set((parsed as string[]).map(item => item.trim()))];
-  if (envName === 'BRIDGE_SECRET_EXCLUSIONS' &&
-      items.some(item => item.startsWith('/') || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some(part => part === '..'))) {
-    throw new Error(envName + ' must contain relative glob patterns without traversal');
+  const list = parseJsonList(value, variable, 5);
+  if (list.issues.length > 0) {
+    return {
+      allowedAgyTools: [],
+      enforceAgentPolicy: true,
+      issues: list.issues,
+    };
   }
-  return items;
+  const valid: NativeTool[] = [];
+  const seen = new Set<string>();
+  const issues: ConfigurationIssue[] = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    const parsed = nativeToolSchema.safeParse(item);
+    if (!parsed.success) {
+      issues.push({ variable, index: i, reason: 'invalid-entry' });
+      continue;
+    }
+    if (seen.has(parsed.data)) {
+      issues.push({ variable, index: i, reason: 'duplicate' });
+    } else {
+      seen.add(parsed.data);
+      valid.push(parsed.data);
+    }
+  }
+  return {
+    allowedAgyTools: valid,
+    enforceAgentPolicy: true,
+    issues,
+  };
+}
+
+function readSecretExclusionsConfig(value: string | undefined): {
+  secretExclusions: string[];
+  secretExclusionsInvalid?: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'BRIDGE_SECRET_EXCLUSIONS';
+  if (value === undefined) return { secretExclusions: [], issues: [] };
+  const list = parseJsonList(value, variable);
+  if (list.issues.length > 0) {
+    return { secretExclusions: [], secretExclusionsInvalid: true, issues: list.issues };
+  }
+  const issues: ConfigurationIssue[] = [];
+  const items: string[] = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    if (typeof item !== 'string') {
+      issues.push({ variable, index: i, reason: 'invalid-entry' });
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || trimmed.includes('\0')) {
+      issues.push({ variable, index: i, reason: 'invalid-entry' });
+      continue;
+    }
+    let validated: string;
+    try {
+      validated = validateRelativeGlobPattern(trimmed, variable);
+      if (validateRelativeGlobPattern(validated, variable) !== validated) {
+        issues.push({ variable, index: i, reason: 'invalid-pattern' });
+        continue;
+      }
+    } catch {
+      issues.push({ variable, index: i, reason: 'invalid-pattern' });
+      continue;
+    }
+    items.push(validated);
+  }
+  if (issues.length > 0) {
+    return { secretExclusions: [], secretExclusionsInvalid: true, issues };
+  }
+  return { secretExclusions: [...new Set(items)], issues: [] };
+}
+
+export function assertSecretExclusionsUsable(limits: ProjectLimits): void {
+  if (limits.secretExclusionsInvalid) {
+    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_SECRET_EXCLUSIONS is invalid. See configurationIssues in antigravity_health.');
+  }
+}
+
+export function assertForbiddenDirectoriesUsable(config: Pick<Config, 'forbiddenDirectoriesInvalid'>): void {
+  if (config.forbiddenDirectoriesInvalid) {
+    throw new BridgeError('INVALID_CONFIGURATION', 'FORBIDDEN_DIRECTORIES is invalid. See configurationIssues in antigravity_health.');
+  }
+}
+
+function isFullWindowsRoot(entry: string): boolean {
+  if (/^[A-Za-z]:[\\/]/.test(entry)) return true;
+  if (/^(?:\\\\|\/\/)(?![\\/]|[?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/].*)?$/.test(entry)) return true;
+  return false;
+}
+
+function readForbiddenDirectories(value: string | undefined): {
+  forbiddenDirectories: string[];
+  forbiddenDirectoriesInvalid?: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'FORBIDDEN_DIRECTORIES';
+  if (!value) return { forbiddenDirectories: [], issues: [] };
+  const entries = value.split(path.delimiter).filter(Boolean);
+  const issues: ConfigurationIssue[] = [];
+  const valid: string[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
+    if (entry.includes('\0')) {
+      issues.push({ variable, index: i, reason: 'invalid-entry' });
+      continue;
+    }
+    const isAbsolute = process.platform === 'win32'
+      ? isFullWindowsRoot(entry)
+      : path.isAbsolute(entry);
+    if (!isAbsolute) {
+      issues.push({ variable, index: i, reason: 'not-absolute' });
+      continue;
+    }
+    valid.push(path.resolve(entry));
+  }
+  if (issues.length > 0) {
+    return { forbiddenDirectories: valid, forbiddenDirectoriesInvalid: true, issues };
+  }
+  return { forbiddenDirectories: valid, issues: [] };
 }
 
 export function stateDirectoryFrom(env: NodeJS.ProcessEnv): string {
@@ -347,12 +471,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const secretExceptions = readSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS);
   const mcpCatalog = readMcpCatalog(env.BRIDGE_MCP_CATALOG);
   const customRoles = readCustomRoles(env.BRIDGE_CUSTOM_ROLES);
+  const allowedAgyTools = readAllowedAgyTools(env.BRIDGE_ALLOWED_AGY_TOOLS);
+  const secretExclusions = readSecretExclusionsConfig(env.BRIDGE_SECRET_EXCLUSIONS);
+  const forbiddenDirs = readForbiddenDirectories(env.FORBIDDEN_DIRECTORIES);
   const configurationIssues: ConfigurationIssue[] = [
     ...preauthorized.issues,
     ...allowedEnv.issues,
     ...secretExceptions.issues,
     ...mcpCatalog.issues,
     ...customRoles.issues,
+    ...allowedAgyTools.issues,
+    ...secretExclusions.issues,
+    ...forbiddenDirs.issues,
   ];
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
@@ -362,8 +492,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     preauthorizedIntegrationRoots: preauthorized.roots,
     configurationIssues,
     customRoles: customRoles.customRoles,
-    enforceAgentPolicy: env.BRIDGE_ALLOWED_AGY_TOOLS !== undefined || env.BRIDGE_MCP_CATALOG !== undefined,
-    allowedAgyTools: nativeToolsSchema.parse(JSON.parse(env.BRIDGE_ALLOWED_AGY_TOOLS ?? JSON.stringify(nativeToolSchema.options))),
+    enforceAgentPolicy: allowedAgyTools.enforceAgentPolicy || env.BRIDGE_MCP_CATALOG !== undefined,
+    allowedAgyTools: allowedAgyTools.allowedAgyTools,
     mcpCatalog: mcpCatalog.mcpCatalog,
     agyPath: env.AGY_PATH || 'agy',
     defaultModel,
@@ -381,11 +511,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1000000),
     maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
     maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1000000),
-    forbiddenDirectories: (env.FORBIDDEN_DIRECTORIES || '').split(path.delimiter).filter(Boolean).map(p => path.resolve(p)),
+    forbiddenDirectories: forbiddenDirs.forbiddenDirectories,
+    ...(forbiddenDirs.forbiddenDirectoriesInvalid ? { forbiddenDirectoriesInvalid: true } : {}),
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
     windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
-    secretExclusions: parseStringArray(env.BRIDGE_SECRET_EXCLUSIONS, 'BRIDGE_SECRET_EXCLUSIONS'),
+    secretExclusions: secretExclusions.secretExclusions,
+    ...(secretExclusions.secretExclusionsInvalid ? { secretExclusionsInvalid: true } : {}),
     secretExceptions: secretExceptions.secretExceptions,
     allowedEnvVars: allowedEnv.allowedEnvVars,
   };
@@ -394,5 +526,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 export function configurationWarning(issues: readonly ConfigurationIssue[]): string | undefined {
   if (issues.length === 0) return undefined;
   const formatted = issues.map(issue => `${issue.variable}${issue.index !== undefined ? `[${issue.index}]` : ''} ${issue.reason}`).join(', ');
-  return `Ignored invalid configuration entries (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
+  return `Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
 }

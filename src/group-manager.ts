@@ -2,7 +2,7 @@ import { buildWorkflowContext, workflowCheckpointSha256, type WorkflowInput } fr
 import { observeGroupBudget, requireGroupBudget } from './group-budget.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { Config } from './config.js';
+import { assertForbiddenDirectoriesUsable, type Config } from './config.js';
 import type { TaskManager } from './task-manager.js';
 import { BridgeError, type TaskRecord, type RunOptions } from './types.js';
 import { validateWorkingDirectory, validatePrompt, validateRuntimeCacheSeparation, validateStateSeparation } from './validation.js';
@@ -169,6 +169,7 @@ export class GroupManager {
 
   async create(groupId: string, input: GroupDefinition) {
     groupId = groupId.toLowerCase();
+    assertForbiddenDirectoriesUsable(this.config);
     const definition = groupDefinitionSchema.parse(input);
     definition.workingDirectory = await validateWorkingDirectory(definition.workingDirectory, this.config.forbiddenDirectories);
     await validateRuntimeCacheSeparation(definition.workingDirectory, this.config.windowsNodeCacheDirectory);
