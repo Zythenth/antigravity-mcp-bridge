@@ -25,9 +25,15 @@ const executionSchema = z.object({
 
 const recoverySchema = z.object({ recovered: z.number().int().nonnegative(), active: z.number().int().nonnegative(),
   error: z.string().optional(), output: z.string(), truncated: z.boolean() }).strict();
-const libraryRuntime = (() => {
+interface LibraryRuntime {
+  mode: WindowsNodeRuntime;
+  portableNodeCacheDirectory?: string;
+  portableNodeCacheDirectoryInvalid?: boolean;
+}
+
+const libraryRuntime: LibraryRuntime = (() => {
   const config = loadConfig();
-  return { mode: config.windowsNodeRuntime, portableNodeCacheDirectory: config.windowsNodeCacheDirectory };
+  return { mode: config.windowsNodeRuntime, portableNodeCacheDirectory: config.windowsNodeCacheDirectory, portableNodeCacheDirectoryInvalid: config.windowsNodeCacheDirectoryInvalid };
 })();
 
 export type WindowsExecution = z.infer<typeof executionSchema> & { portableNode?: PortableNodeIdentity };
@@ -42,6 +48,7 @@ export interface WindowsExecutionOptions {
   protectedPaths?: string[];
   windowsNodeRuntime?: WindowsNodeRuntime;
   portableNodeCacheDirectory?: string;
+  portableNodeCacheDirectoryInvalid?: boolean;
   includeGit?: boolean;
   signal?: AbortSignal;
   onProcess?: (child: ChildProcessWithoutNullStreams) => void;
@@ -390,8 +397,14 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
   const runtimeSelection = {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory,
+    portableNodeCacheDirectoryInvalid: options.portableNodeCacheDirectoryInvalid ?? libraryRuntime.portableNodeCacheDirectoryInvalid,
     includeGit,
   };
+  if ((runtimeSelection.mode ?? 'system') === 'portable') {
+    if (runtimeSelection.portableNodeCacheDirectoryInvalid || !runtimeSelection.portableNodeCacheDirectory) {
+      throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    }
+  }
   const stateDirectory = path.resolve(options.stateDirectory ?? path.join(os.homedir(), '.antigravity-mcp-bridge'));
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
   await runRecoveryWithController(stateDirectory, options);
@@ -406,7 +419,7 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
     scratchStat = await lstat(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles },
       runtimeSelection);
-    const grants = await grantPaths(selection, [...(options.protectedPaths ?? []), stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
+    const grants = await grantPaths(selection, [...(options.protectedPaths ?? []), stateDirectory, ...(runtimeSelection.portableNodeCacheDirectory ? [runtimeSelection.portableNodeCacheDirectory] : [])], maxFiles);
     const nonce = randomUUID(), systemRoot = process.env.SystemRoot || 'C:\\Windows';
     const environment: Record<string, string> = {
       SystemRoot: systemRoot,

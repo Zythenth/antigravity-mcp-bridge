@@ -6,7 +6,7 @@ import { lstatSync, mkdirSync, realpathSync, unlinkSync, writeFileSync } from 'n
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { BridgeError, type RunOptions } from './types.js';
-import type { Config } from './config.js';
+import { assertAgyPathUsable, type Config } from './config.js';
 import { roleContract, resolveRole } from './roles.js';
 import { validatePrompt } from './validation.js';
 import { terminateSubprocess, processError, redactDiagnostic, registerOwnedProcessGroup } from './subprocess.js';
@@ -108,6 +108,9 @@ export class CliAdapter {
 
   private probe(args: string[], timeoutMs = 10000): Promise<ProbeResult> {
     return new Promise((resolve, reject) => {
+      if (this.config.agyPathInvalid) {
+        return reject(new BridgeError('INVALID_CONFIGURATION', 'AGY_PATH is invalid. See configurationIssues in antigravity_health.'));
+      }
       let child: ChildProcess;
       try {
         child = spawn(this.config.agyPath, [...this.prefixArgs, ...args], {
@@ -157,6 +160,16 @@ export class CliAdapter {
   }
 
   async discover(): Promise<Discovery> {
+    if (this.config.agyPathInvalid) {
+      this.installed = false;
+      this.version = undefined;
+      this.help = '';
+      return {
+        installed: false, path: '', authenticated: null,
+        capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
+        error: 'INVALID_CONFIGURATION: AGY_PATH is invalid. See configurationIssues in antigravity_health.',
+      };
+    }
     try {
       const [version, help] = await Promise.all([this.probe(['--version']), this.probe(['--help'])]);
       if (version.timedOut || help.timedOut) {
@@ -226,6 +239,7 @@ export class CliAdapter {
   }
 
   async listModels(): Promise<Model[]> {
+    assertAgyPathUsable(this.config);
     let result: ProbeResult;
     try { result = await this.probe(['models'], 20000); }
     catch (error) {
@@ -245,6 +259,7 @@ export class CliAdapter {
   }
 
   spawnTask(options: RunOptions, model: string | undefined, cwd: string): CliProcess {
+    assertAgyPathUsable(this.config);
     if (!this.installed) throw new BridgeError('AGY_NOT_FOUND', 'agy executable not found');
     if (!this.help.includes('stream-json')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise stream-json');
     if (!this.help.includes('--sandbox')) throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', 'Installed agy does not advertise --sandbox');

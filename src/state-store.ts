@@ -426,6 +426,8 @@ export class StateStore {
         writeFileSync(file, JSON.stringify({ pid: process.pid, token }), { flag: 'wx', mode: 0o600, flush: true });
         created = true;
       } catch (error) {
+        // On Windows, exclusive creation of a delete-pending lock file yields EPERM instead of EEXIST.
+        if (process.platform === 'win32' && (error as NodeJS.ErrnoException).code === 'EPERM') continue;
         if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       }
       if (created) {
