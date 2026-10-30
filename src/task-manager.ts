@@ -22,7 +22,7 @@ import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES }
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
-import { assertForbiddenDirectoriesUsable, assertSecretExclusionsUsable, type Config, type ApprovalMode } from './config.js';
+import { assertForbiddenDirectoriesUsable, assertSecretExclusionsUsable, assertAgyPathUsable, assertWindowsNodeCacheDirectoryUsable, assertAntiAiCraftDirectoryUsable, type Config, type ApprovalMode } from './config.js';
 import { EventStore, MAX_EVENT_PAYLOAD_CHARS } from './event-store.js';
 import { assertTextIsUtf8, createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
@@ -195,7 +195,7 @@ export class TaskManager {
   roles() { return listRoles(this.config.customRoles); }
 
   getSandboxPolicy(): SandboxPolicySnapshot { return this.state.loadSandboxPolicy(); }
-  windowsRuntimeStatus(): Promise<PortableNodeStatus> { return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory); }
+  windowsRuntimeStatus(): Promise<PortableNodeStatus> { return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory, undefined, { cacheDirectoryInvalid: this.config.windowsNodeCacheDirectoryInvalid }); }
 
   async setSandboxPolicy(value: unknown, expectedSha256: string,
     confirm?: (previous: SandboxPolicySnapshot, proposed: SandboxPolicySnapshot) => Promise<boolean>): Promise<SandboxPolicySnapshot> {
@@ -328,6 +328,7 @@ export class TaskManager {
     if (options.outputSchema !== undefined) options.outputSchema = validateOutputSchema(options.outputSchema);
     if (options.artifactPaths !== undefined) options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
     assertSecretExclusionsUsable(this.config);
+    assertAgyPathUsable(this.config);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.forbiddenDirectories());
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.groupAdmission) {
@@ -376,6 +377,7 @@ export class TaskManager {
       if (previous && options.includePaths !== undefined) throw new BridgeError('INVALID_INCLUDE_PATH', 'A resumed task reuses its original file selection');
       if (previous && options.acceptanceCriteria !== undefined) throw new BridgeError('INVALID_CRITERIA', 'A resumed task retains its original acceptance criteria');
       if ((previous || contextSource) && options.skills !== undefined) throw new BridgeError('INVALID_SKILLS', 'Resume and handoff retain supplied skills; new bundles require a new task');
+      if (this.config.antiAiCraft) assertAntiAiCraftDirectoryUsable(this.config);
       // Resumes and handoffs keep the snapshot they started with; only new sessions resolve the installed one.
       if (previous || contextSource) options.craft = (previous ?? contextSource)!.options.craft;
       else if (!options.sessionId) {
@@ -817,6 +819,7 @@ export class TaskManager {
   }
 
   private async queueWindowsTest(sourceTaskId: string, source: TaskRecord, expectedSha256: string, command: TestCommand, retries: number, timeoutSeconds: number, sandbox: unknown): Promise<TaskRecord> {
+    if (this.config.antiAiCraft) assertAntiAiCraftDirectoryUsable(this.config);
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
       throw new BridgeError('INVALID_TIMEOUT', 'timeoutSeconds must be between 1 and 86400');
     }
@@ -1585,14 +1588,18 @@ export class TaskManager {
 
   private async executeWindowsCommand(task: InternalTask, request: WindowsNativeTestRequest, timeoutSeconds: number) {
     if (!task.project) throw new BridgeError('TASK_NOT_READY', 'Windows tests require an isolated project copy');
+    if (this.config.windowsNodeRuntime === 'portable') {
+      assertWindowsNodeCacheDirectoryUsable(this.config);
+    }
     const controller = new AbortController();
     task.nativeAbort = controller;
     try {
       return await executeWindowsTest({ executable: request.executable, args: request.args }, task.project.copyDirectory, {
         timeoutSeconds, maxRuntimeBytes: this.config.maxCopyBytes, maxFiles: this.config.maxCopyFiles,
         mode: task.record.mode, stateDirectory: this.config.stateDirectory,
-        protectedPaths: [task.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.forbiddenDirectories()],
+        protectedPaths: [task.record.workingDirectory, this.config.stateDirectory, ...(this.config.windowsNodeCacheDirectory ? [this.config.windowsNodeCacheDirectory] : []), ...this.forbiddenDirectories()],
         windowsNodeRuntime: this.config.windowsNodeRuntime, portableNodeCacheDirectory: this.config.windowsNodeCacheDirectory,
+        portableNodeCacheDirectoryInvalid: this.config.windowsNodeCacheDirectoryInvalid,
         sandbox: request.sandbox, signal: controller.signal,
         onProcess: child => {
           task.child = child;

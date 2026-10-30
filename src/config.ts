@@ -74,6 +74,7 @@ export interface Config extends ProjectLimits {
   approvalMode: ApprovalMode;
   antiAiCraft: boolean;
   antiAiCraftDirectory?: string;
+  antiAiCraftDirectoryInvalid?: boolean;
   toolProfile: ToolProfile;
   preauthorizedIntegrationRoots: string[];
   configurationIssues: ConfigurationIssue[];
@@ -82,6 +83,7 @@ export interface Config extends ProjectLimits {
   enforceAgentPolicy: boolean;
   mcpCatalog: McpCatalogEntry[];
   agyPath: string;
+  agyPathInvalid?: boolean;
   defaultModel?: string;
   maxConcurrentTasks: number;
   maxQueuedTasks: number;
@@ -98,15 +100,11 @@ export interface Config extends ProjectLimits {
   forbiddenDirectoriesInvalid?: boolean;
   testExecutor: TestExecutor;
   windowsNodeRuntime: WindowsNodeRuntime;
-  windowsNodeCacheDirectory: string;
+  windowsNodeCacheDirectory?: string;
+  windowsNodeCacheDirectoryInvalid?: boolean;
   secretExclusions: string[];
   secretExceptions: SecretExceptionsPolicy;
   allowedEnvVars: string[];
-}
-
-function absoluteDirectory(value: string, name: string): string {
-  if (!path.isAbsolute(value) || value.includes('\0')) throw new Error(name + ' must be an absolute path');
-  return path.resolve(value);
 }
 
 // Enabled unless explicitly turned off; an override directory is still verified against its manifest.
@@ -132,23 +130,6 @@ function windowsNodeRuntime(value: string | undefined): WindowsNodeRuntime {
   if (value === undefined) return 'system';
   if (value === 'system' || value === 'portable') return value;
   throw new Error('BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable');
-}
-
-function windowsNodeCacheDirectory(value: string | undefined): string {
-  const directory = value ?? path.join(os.homedir(), '.antigravity-mcp-bridge', 'windows-runtimes');
-  if (value !== undefined) {
-    if (process.platform === 'win32') {
-      if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(':') ||
-          value.slice(2).split(/[\\/]+/).filter(Boolean).some(part => part === '.' || part === '..')) {
-        throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path');
-      }
-    } else if (!path.isAbsolute(value)) {
-      throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute');
-    }
-  }
-  const resolved = path.resolve(directory);
-  if (resolved === path.parse(resolved).root) throw new Error('BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root');
-  return resolved;
 }
 
 function parseJsonList(
@@ -416,10 +397,121 @@ export function assertForbiddenDirectoriesUsable(config: Pick<Config, 'forbidden
   }
 }
 
-function isFullWindowsRoot(entry: string): boolean {
+export function assertAntiAiCraftDirectoryUsable(config: Pick<Config, 'antiAiCraftDirectoryInvalid'>): void {
+  if (config.antiAiCraftDirectoryInvalid) {
+    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+  }
+}
+
+export function assertWindowsNodeCacheDirectoryUsable(config: Pick<Config, 'windowsNodeCacheDirectoryInvalid'>): void {
+  if (config.windowsNodeCacheDirectoryInvalid) {
+    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+  }
+}
+
+export function assertAgyPathUsable(config: Pick<Config, 'agyPathInvalid'>): void {
+  if (config.agyPathInvalid) {
+    throw new BridgeError('INVALID_CONFIGURATION', 'AGY_PATH is invalid. See configurationIssues in antigravity_health.');
+  }
+}
+
+export function isFullWindowsRoot(entry: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(entry)) return true;
   if (/^(?:\\\\|\/\/)(?![\\/]|[?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/].*)?$/.test(entry)) return true;
   return false;
+}
+
+function isFullWindowsPath(entry: string): boolean {
+  if (isFullWindowsRoot(entry)) return true;
+  if (/^\\\\\?\\(?:[A-Za-z]:[\\/]|UNC[\\/][^\\/]+[\\/][^\\/]+(?:[\\/].*)?$)/i.test(entry)) return true;
+  if (/^\\\\\?\\Volume\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}[\\/]/i.test(entry)) return true;
+  return false;
+}
+
+function readAntiAiCraftDirectory(value: string | undefined): {
+  antiAiCraftDirectory?: string;
+  antiAiCraftDirectoryInvalid?: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY';
+  if (!value) return { issues: [] };
+  if (value.includes('\0')) {
+    return { antiAiCraftDirectoryInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+  }
+  const isAbsolute = process.platform === 'win32'
+    ? isFullWindowsPath(value)
+    : path.isAbsolute(value);
+  if (!isAbsolute) {
+    return { antiAiCraftDirectoryInvalid: true, issues: [{ variable, reason: 'not-absolute' }] };
+  }
+  return { antiAiCraftDirectory: path.resolve(value), issues: [] };
+}
+
+function readWindowsNodeCacheDirectory(value: string | undefined): {
+  windowsNodeCacheDirectory?: string;
+  windowsNodeCacheDirectoryInvalid?: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY';
+  if (value === undefined) {
+    const defaultDirectory = path.resolve(path.join(os.homedir(), '.antigravity-mcp-bridge', 'windows-runtimes'));
+    return { windowsNodeCacheDirectory: defaultDirectory, issues: [] };
+  }
+  if (value.includes('\0')) {
+    return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+  }
+  if (process.platform === 'win32') {
+    if (/^(?:\\\\|\/\/|\\\\\?\\)/.test(value)) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+    }
+    if (!/^[A-Za-z]:[\\/]/.test(value)) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'not-absolute' }] };
+    }
+    if (value.slice(2).includes(':')) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+    }
+    if (value.slice(2).split(/[\\/]+/).filter(Boolean).some(part => part === '.' || part === '..')) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+    }
+  } else {
+    if (!path.isAbsolute(value)) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'not-absolute' }] };
+    }
+    if (value.split(/[\\/]+/).filter(Boolean).some(part => part === '.' || part === '..')) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+    }
+  }
+  const resolved = path.resolve(value);
+  if (resolved === path.parse(resolved).root) {
+    return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: 'volume-root' }] };
+  }
+  return { windowsNodeCacheDirectory: resolved, issues: [] };
+}
+
+function readAgyPath(value: string | undefined): {
+  agyPath: string;
+  agyPathInvalid?: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'AGY_PATH';
+  if (!value) {
+    return { agyPath: 'agy', issues: [] };
+  }
+  if (value.includes('\0')) {
+    return { agyPath: '', agyPathInvalid: true, issues: [{ variable, reason: 'invalid-entry' }] };
+  }
+  const isPath = process.platform === 'win32'
+    ? value.includes('/') || value.includes('\\') || value.includes(':')
+    : value.includes('/') || value.includes('\\');
+  if (isPath) {
+    const isAbsolute = process.platform === 'win32'
+      ? isFullWindowsPath(value)
+      : path.isAbsolute(value);
+    if (!isAbsolute) {
+      return { agyPath: '', agyPathInvalid: true, issues: [{ variable, reason: 'not-absolute' }] };
+    }
+  }
+  return { agyPath: value, issues: [] };
 }
 
 function readForbiddenDirectories(value: string | undefined): {
@@ -474,6 +566,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const allowedAgyTools = readAllowedAgyTools(env.BRIDGE_ALLOWED_AGY_TOOLS);
   const secretExclusions = readSecretExclusionsConfig(env.BRIDGE_SECRET_EXCLUSIONS);
   const forbiddenDirs = readForbiddenDirectories(env.FORBIDDEN_DIRECTORIES);
+  const antiAiCraftDir = readAntiAiCraftDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY);
+  const windowsNodeCache = readWindowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY);
+  const agyPath = readAgyPath(env.AGY_PATH);
   const configurationIssues: ConfigurationIssue[] = [
     ...preauthorized.issues,
     ...allowedEnv.issues,
@@ -483,11 +578,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...allowedAgyTools.issues,
     ...secretExclusions.issues,
     ...forbiddenDirs.issues,
+    ...antiAiCraftDir.issues,
+    ...windowsNodeCache.issues,
+    ...agyPath.issues,
   ];
   return {
     approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
     antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
-    ...(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY') } : {}),
+    ...(antiAiCraftDir.antiAiCraftDirectory ? { antiAiCraftDirectory: antiAiCraftDir.antiAiCraftDirectory } : {}),
+    ...(antiAiCraftDir.antiAiCraftDirectoryInvalid ? { antiAiCraftDirectoryInvalid: true } : {}),
     toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? 'full'),
     preauthorizedIntegrationRoots: preauthorized.roots,
     configurationIssues,
@@ -495,7 +594,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     enforceAgentPolicy: allowedAgyTools.enforceAgentPolicy || env.BRIDGE_MCP_CATALOG !== undefined,
     allowedAgyTools: allowedAgyTools.allowedAgyTools,
     mcpCatalog: mcpCatalog.mcpCatalog,
-    agyPath: env.AGY_PATH || 'agy',
+    agyPath: agyPath.agyPath,
+    ...(agyPath.agyPathInvalid ? { agyPathInvalid: true } : {}),
     defaultModel,
     maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
     maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1000),
@@ -515,7 +615,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(forbiddenDirs.forbiddenDirectoriesInvalid ? { forbiddenDirectoriesInvalid: true } : {}),
     testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
     windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
-    windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
+    windowsNodeCacheDirectory: windowsNodeCache.windowsNodeCacheDirectory,
+    ...(windowsNodeCache.windowsNodeCacheDirectoryInvalid ? { windowsNodeCacheDirectoryInvalid: true } : {}),
     secretExclusions: secretExclusions.secretExclusions,
     ...(secretExclusions.secretExclusionsInvalid ? { secretExclusionsInvalid: true } : {}),
     secretExceptions: secretExceptions.secretExceptions,

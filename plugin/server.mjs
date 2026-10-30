@@ -38,9 +38,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/ajv/dist/compile/codegen/code.js
+// ../e71i2/node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/code.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/codegen/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.regexpCode = exports.getEsmExportName = exports.getProperty = exports.safeStringify = exports.stringify = exports.strConcat = exports.addCodeArg = exports.str = exports._ = exports.nil = exports._Code = exports.Name = exports.IDENTIFIER = exports._CodeOrName = void 0;
@@ -192,9 +192,9 @@ var require_code = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/scope.js
+// ../e71i2/node_modules/ajv/dist/compile/codegen/scope.js
 var require_scope = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/codegen/scope.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.ValueScope = exports.ValueScopeName = exports.Scope = exports.varKinds = exports.UsedValueState = void 0;
@@ -337,9 +337,9 @@ var require_scope = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/codegen/index.js
+// ../e71i2/node_modules/ajv/dist/compile/codegen/index.js
 var require_codegen = __commonJS({
-  "node_modules/ajv/dist/compile/codegen/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/codegen/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.or = exports.and = exports.not = exports.CodeGen = exports.operators = exports.varKinds = exports.ValueScopeName = exports.ValueScope = exports.Scope = exports.Name = exports.regexpCode = exports.stringify = exports.getProperty = exports.nil = exports.strConcat = exports.str = exports._ = void 0;
@@ -1057,9 +1057,9 @@ var require_codegen = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/util.js
+// ../e71i2/node_modules/ajv/dist/compile/util.js
 var require_util = __commonJS({
-  "node_modules/ajv/dist/compile/util.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/util.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.checkStrictMode = exports.getErrorPath = exports.Type = exports.useFunc = exports.setEvaluated = exports.evaluatedPropsToName = exports.mergeEvaluated = exports.eachItem = exports.unescapeJsonPointer = exports.escapeJsonPointer = exports.escapeFragment = exports.unescapeFragment = exports.schemaRefOrVal = exports.schemaHasRulesButRef = exports.schemaHasRules = exports.checkUnknownRules = exports.alwaysValidSchema = exports.toHash = void 0;
@@ -1224,9 +1224,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/names.js
+// ../e71i2/node_modules/ajv/dist/compile/names.js
 var require_names = __commonJS({
-  "node_modules/ajv/dist/compile/names.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/names.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -1263,9 +1263,9 @@ var require_names = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/errors.js
+// ../e71i2/node_modules/ajv/dist/compile/errors.js
 var require_errors = __commonJS({
-  "node_modules/ajv/dist/compile/errors.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/errors.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendErrors = exports.resetErrorsCount = exports.reportExtraError = exports.reportError = exports.keyword$DataError = exports.keywordError = void 0;
@@ -1385,9 +1385,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/boolSchema.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/boolSchema.js
 var require_boolSchema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/boolSchema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.boolOrEmptySchema = exports.topBoolOrEmptySchema = void 0;
@@ -1436,9 +1436,9 @@ var require_boolSchema = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/rules.js
+// ../e71i2/node_modules/ajv/dist/compile/rules.js
 var require_rules = __commonJS({
-  "node_modules/ajv/dist/compile/rules.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/rules.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getRules = exports.isJSONType = void 0;
@@ -1467,9 +1467,9 @@ var require_rules = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/applicability.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/applicability.js
 var require_applicability = __commonJS({
-  "node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/applicability.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.shouldUseRule = exports.shouldUseGroup = exports.schemaHasRulesForType = void 0;
@@ -1490,9 +1490,9 @@ var require_applicability = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/dataType.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/dataType.js
 var require_dataType = __commonJS({
-  "node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/dataType.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.reportTypeError = exports.checkDataTypes = exports.checkDataType = exports.coerceAndCheckDataType = exports.getJSONTypes = exports.getSchemaTypes = exports.DataType = void 0;
@@ -1674,9 +1674,9 @@ var require_dataType = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/defaults.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/defaults.js
 var require_defaults = __commonJS({
-  "node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/defaults.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.assignDefaults = void 0;
@@ -1711,9 +1711,9 @@ var require_defaults = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/code.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/code.js
 var require_code2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/code.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/code.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateUnion = exports.validateArray = exports.usePattern = exports.callValidateCode = exports.schemaProperties = exports.allSchemaProperties = exports.noPropertyInData = exports.propertyInData = exports.isOwnProperty = exports.hasPropFunc = exports.reportMissingProp = exports.checkMissingProp = exports.checkReportMissingProp = void 0;
@@ -1844,9 +1844,9 @@ var require_code2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/keyword.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/keyword.js
 var require_keyword = __commonJS({
-  "node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/keyword.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateKeywordUsage = exports.validSchemaType = exports.funcKeywordCode = exports.macroKeywordCode = void 0;
@@ -1962,9 +1962,9 @@ var require_keyword = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/subschema.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/subschema.js
 var require_subschema = __commonJS({
-  "node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/subschema.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.extendSubschemaMode = exports.extendSubschemaData = exports.getSubschema = void 0;
@@ -2045,9 +2045,9 @@ var require_subschema = __commonJS({
   }
 });
 
-// node_modules/fast-deep-equal/index.js
+// ../e71i2/node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "node_modules/fast-deep-equal/index.js"(exports, module) {
+  "../e71i2/node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
       if (a === b) return true;
@@ -2080,9 +2080,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// node_modules/json-schema-traverse/index.js
+// ../e71i2/node_modules/json-schema-traverse/index.js
 var require_json_schema_traverse = __commonJS({
-  "node_modules/json-schema-traverse/index.js"(exports, module) {
+  "../e71i2/node_modules/json-schema-traverse/index.js"(exports, module) {
     "use strict";
     var traverse = module.exports = function(schema, opts, cb) {
       if (typeof opts == "function") {
@@ -2168,9 +2168,9 @@ var require_json_schema_traverse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/resolve.js
+// ../e71i2/node_modules/ajv/dist/compile/resolve.js
 var require_resolve = __commonJS({
-  "node_modules/ajv/dist/compile/resolve.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/resolve.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getSchemaRefs = exports.resolveUrl = exports.normalizeId = exports._getFullPath = exports.getFullPath = exports.inlineRef = void 0;
@@ -2324,9 +2324,9 @@ var require_resolve = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/validate/index.js
+// ../e71i2/node_modules/ajv/dist/compile/validate/index.js
 var require_validate = __commonJS({
-  "node_modules/ajv/dist/compile/validate/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/validate/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.getData = exports.KeywordCxt = exports.validateFunctionCode = void 0;
@@ -2832,9 +2832,9 @@ var require_validate = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/validation_error.js
+// ../e71i2/node_modules/ajv/dist/runtime/validation_error.js
 var require_validation_error = __commonJS({
-  "node_modules/ajv/dist/runtime/validation_error.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/runtime/validation_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var ValidationError = class extends Error {
@@ -2848,9 +2848,9 @@ var require_validation_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/ref_error.js
+// ../e71i2/node_modules/ajv/dist/compile/ref_error.js
 var require_ref_error = __commonJS({
-  "node_modules/ajv/dist/compile/ref_error.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/ref_error.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var resolve_1 = require_resolve();
@@ -2865,9 +2865,9 @@ var require_ref_error = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/compile/index.js
+// ../e71i2/node_modules/ajv/dist/compile/index.js
 var require_compile = __commonJS({
-  "node_modules/ajv/dist/compile/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/compile/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.resolveSchema = exports.getCompilingSchema = exports.resolveRef = exports.compileSchema = exports.SchemaEnv = void 0;
@@ -3089,9 +3089,9 @@ var require_compile = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/data.json
+// ../e71i2/node_modules/ajv/dist/refs/data.json
 var require_data = __commonJS({
-  "node_modules/ajv/dist/refs/data.json"(exports, module) {
+  "../e71i2/node_modules/ajv/dist/refs/data.json"(exports, module) {
     module.exports = {
       $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
       description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -3108,9 +3108,9 @@ var require_data = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/utils.js
+// ../e71i2/node_modules/fast-uri/lib/utils.js
 var require_utils = __commonJS({
-  "node_modules/fast-uri/lib/utils.js"(exports, module) {
+  "../e71i2/node_modules/fast-uri/lib/utils.js"(exports, module) {
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
@@ -3610,9 +3610,9 @@ var require_utils = __commonJS({
   }
 });
 
-// node_modules/fast-uri/lib/schemes.js
+// ../e71i2/node_modules/fast-uri/lib/schemes.js
 var require_schemes = __commonJS({
-  "node_modules/fast-uri/lib/schemes.js"(exports, module) {
+  "../e71i2/node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils();
     var URN_REG = /^([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-./:;=@]|%[\da-f]{2})+)$/iu;
@@ -3821,9 +3821,9 @@ var require_schemes = __commonJS({
   }
 });
 
-// node_modules/fast-uri/index.js
+// ../e71i2/node_modules/fast-uri/index.js
 var require_fast_uri = __commonJS({
-  "node_modules/fast-uri/index.js"(exports, module) {
+  "../e71i2/node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
@@ -4227,9 +4227,9 @@ var require_fast_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/uri.js
+// ../e71i2/node_modules/ajv/dist/runtime/uri.js
 var require_uri = __commonJS({
-  "node_modules/ajv/dist/runtime/uri.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/runtime/uri.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var uri = require_fast_uri();
@@ -4238,9 +4238,9 @@ var require_uri = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/core.js
+// ../e71i2/node_modules/ajv/dist/core.js
 var require_core = __commonJS({
-  "node_modules/ajv/dist/core.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/core.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = void 0;
@@ -4849,9 +4849,9 @@ var require_core = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/id.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/core/id.js
 var require_id = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/core/id.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var def = {
@@ -4864,9 +4864,9 @@ var require_id = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/ref.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/core/ref.js
 var require_ref = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/core/ref.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.callRef = exports.getValidate = void 0;
@@ -4986,9 +4986,9 @@ var require_ref = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/core/index.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/core/index.js
 var require_core2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/core/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var id_1 = require_id();
@@ -5007,9 +5007,9 @@ var require_core2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitNumber.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/limitNumber.js
 var require_limitNumber = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/limitNumber.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5039,9 +5039,9 @@ var require_limitNumber = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/multipleOf.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/multipleOf.js
 var require_multipleOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/multipleOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5067,9 +5067,9 @@ var require_multipleOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/ucs2length.js
+// ../e71i2/node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function ucs2length(str) {
@@ -5093,9 +5093,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitLength.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/limitLength.js
 var require_limitLength = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/limitLength.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5125,9 +5125,9 @@ var require_limitLength = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/pattern.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/pattern.js
 var require_pattern = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/pattern.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5162,9 +5162,9 @@ var require_pattern = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitProperties.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/limitProperties.js
 var require_limitProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/limitProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5191,9 +5191,9 @@ var require_limitProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/required.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/required.js
 var require_required = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/required.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5273,9 +5273,9 @@ var require_required = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/limitItems.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/limitItems.js
 var require_limitItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/limitItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5302,9 +5302,9 @@ var require_limitItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/runtime/equal.js
+// ../e71i2/node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "node_modules/ajv/dist/runtime/equal.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/runtime/equal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -5313,9 +5313,9 @@ var require_equal = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js
 var require_uniqueItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/uniqueItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var dataType_1 = require_dataType();
@@ -5380,9 +5380,9 @@ var require_uniqueItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/const.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/const.js
 var require_const = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/const.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5409,9 +5409,9 @@ var require_const = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/enum.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/enum.js
 var require_enum = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/enum.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5458,9 +5458,9 @@ var require_enum = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/validation/index.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/validation/index.js
 var require_validation = __commonJS({
-  "node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/validation/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var limitNumber_1 = require_limitNumber();
@@ -5496,9 +5496,9 @@ var require_validation = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js
 var require_additionalItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/additionalItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateAdditionalItems = void 0;
@@ -5549,9 +5549,9 @@ var require_additionalItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/items.js
 var require_items = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/items.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateTuple = void 0;
@@ -5606,9 +5606,9 @@ var require_items = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js
 var require_prefixItems = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/prefixItems.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var items_1 = require_items();
@@ -5623,9 +5623,9 @@ var require_prefixItems = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/items2020.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/items2020.js
 var require_items2020 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/items2020.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5658,9 +5658,9 @@ var require_items2020 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/contains.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/contains.js
 var require_contains = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/contains.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5752,9 +5752,9 @@ var require_contains = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/dependencies.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/dependencies.js
 var require_dependencies = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/dependencies.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.validateSchemaDeps = exports.validatePropertyDeps = exports.error = void 0;
@@ -5846,9 +5846,9 @@ var require_dependencies = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js
 var require_propertyNames = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/propertyNames.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -5889,9 +5889,9 @@ var require_propertyNames = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js
 var require_additionalProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/additionalProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -5995,9 +5995,9 @@ var require_additionalProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/properties.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/properties.js
 var require_properties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/properties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var validate_1 = require_validate();
@@ -6053,9 +6053,9 @@ var require_properties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js
 var require_patternProperties = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/patternProperties.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -6127,9 +6127,9 @@ var require_patternProperties = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/not.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/not.js
 var require_not = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/not.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -6158,9 +6158,9 @@ var require_not = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/anyOf.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/anyOf.js
 var require_anyOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/anyOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var code_1 = require_code2();
@@ -6175,9 +6175,9 @@ var require_anyOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/oneOf.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/oneOf.js
 var require_oneOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/oneOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6233,9 +6233,9 @@ var require_oneOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/allOf.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/allOf.js
 var require_allOf = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/allOf.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -6260,9 +6260,9 @@ var require_allOf = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/if.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/if.js
 var require_if = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/if.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6329,9 +6329,9 @@ var require_if = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/thenElse.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/thenElse.js
 var require_thenElse = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/thenElse.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var util_1 = require_util();
@@ -6347,9 +6347,9 @@ var require_thenElse = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/applicator/index.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/applicator/index.js
 var require_applicator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/applicator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var additionalItems_1 = require_additionalItems();
@@ -6395,9 +6395,9 @@ var require_applicator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/format.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/format/format.js
 var require_format = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/format/format.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6485,9 +6485,9 @@ var require_format = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/format/index.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/format/index.js
 var require_format2 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/format/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var format_1 = require_format();
@@ -6496,9 +6496,9 @@ var require_format2 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/metadata.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/metadata.js
 var require_metadata = __commonJS({
-  "node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/metadata.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.contentVocabulary = exports.metadataVocabulary = void 0;
@@ -6519,9 +6519,9 @@ var require_metadata = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/draft7.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/draft7.js
 var require_draft7 = __commonJS({
-  "node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/draft7.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var core_1 = require_core2();
@@ -6541,9 +6541,9 @@ var require_draft7 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/types.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/discriminator/types.js
 var require_types = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/discriminator/types.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DiscrError = void 0;
@@ -6555,9 +6555,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/vocabularies/discriminator/index.js
+// ../e71i2/node_modules/ajv/dist/vocabularies/discriminator/index.js
 var require_discriminator = __commonJS({
-  "node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
+  "../e71i2/node_modules/ajv/dist/vocabularies/discriminator/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var codegen_1 = require_codegen();
@@ -6660,9 +6660,9 @@ var require_discriminator = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/refs/json-schema-draft-07.json
+// ../e71i2/node_modules/ajv/dist/refs/json-schema-draft-07.json
 var require_json_schema_draft_07 = __commonJS({
-  "node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
+  "../e71i2/node_modules/ajv/dist/refs/json-schema-draft-07.json"(exports, module) {
     module.exports = {
       $schema: "http://json-schema.org/draft-07/schema#",
       $id: "http://json-schema.org/draft-07/schema#",
@@ -6817,9 +6817,9 @@ var require_json_schema_draft_07 = __commonJS({
   }
 });
 
-// node_modules/ajv/dist/ajv.js
+// ../e71i2/node_modules/ajv/dist/ajv.js
 var require_ajv = __commonJS({
-  "node_modules/ajv/dist/ajv.js"(exports, module) {
+  "../e71i2/node_modules/ajv/dist/ajv.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.MissingRefError = exports.ValidationError = exports.CodeGen = exports.Name = exports.nil = exports.stringify = exports.str = exports._ = exports.KeywordCxt = exports.Ajv = void 0;
@@ -6887,9 +6887,9 @@ var require_ajv = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/formats.js
+// ../e71i2/node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "node_modules/ajv-formats/dist/formats.js"(exports) {
+  "../e71i2/node_modules/ajv-formats/dist/formats.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -7090,9 +7090,9 @@ var require_formats = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/limit.js
+// ../e71i2/node_modules/ajv-formats/dist/limit.js
 var require_limit = __commonJS({
-  "node_modules/ajv-formats/dist/limit.js"(exports) {
+  "../e71i2/node_modules/ajv-formats/dist/limit.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatLimitDefinition = void 0;
@@ -7162,9 +7162,9 @@ var require_limit = __commonJS({
   }
 });
 
-// node_modules/ajv-formats/dist/index.js
+// ../e71i2/node_modules/ajv-formats/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/ajv-formats/dist/index.js"(exports, module) {
+  "../e71i2/node_modules/ajv-formats/dist/index.js"(exports, module) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var formats_1 = require_formats();
@@ -7204,10 +7204,10 @@ var require_dist = __commonJS({
   }
 });
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 import process2 from "node:process";
 
-// node_modules/zod/v4/classic/external.js
+// ../e71i2/node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
   $brand: () => $brand,
@@ -7470,7 +7470,7 @@ __export(external_exports, {
   xor: () => xor
 });
 
-// node_modules/zod/v4/core/index.js
+// ../e71i2/node_modules/zod/v4/core/index.js
 var core_exports2 = {};
 __export(core_exports2, {
   $ZodAny: () => $ZodAny,
@@ -7787,7 +7787,7 @@ __export(core_exports2, {
   withParser: () => withParser
 });
 
-// node_modules/zod/v4/core/util.js
+// ../e71i2/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -8630,7 +8630,7 @@ function constantCatch(value) {
   return fn;
 }
 
-// node_modules/zod/v4/core/core.js
+// ../e71i2/node_modules/zod/v4/core/core.js
 var _a;
 var NEVER = /* @__PURE__ */ Object.freeze({
   status: "aborted"
@@ -8752,7 +8752,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// node_modules/zod/v4/core/errors.js
+// ../e71i2/node_modules/zod/v4/core/errors.js
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -8944,7 +8944,7 @@ function prettifyError(error62) {
   return lines.join("\n");
 }
 
-// node_modules/zod/v4/core/parse.js
+// ../e71i2/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
   return { callee: params?.callee ?? callee, Err: params?.Err };
 }
@@ -9104,7 +9104,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
 };
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync($ZodRealError);
 
-// node_modules/zod/v4/core/regexes.js
+// ../e71i2/node_modules/zod/v4/core/regexes.js
 var regexes_exports = {};
 __export(regexes_exports, {
   anyString: () => anyString,
@@ -9276,7 +9276,7 @@ var sha512_hex = /^[0-9a-fA-F]{128}$/;
 var sha512_base64 = /* @__PURE__ */ fixedBase64(86, "==");
 var sha512_base64url = /* @__PURE__ */ fixedBase64url(86);
 
-// node_modules/zod/v4/core/checks.js
+// ../e71i2/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -9752,7 +9752,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// node_modules/zod/v4/core/doc.js
+// ../e71i2/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = [], closed = {}) {
     this.content = [];
@@ -9793,14 +9793,14 @@ ${content.join("\n")}
   }
 };
 
-// node_modules/zod/v4/core/versions.js
+// ../e71i2/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 6,
   patch: 5
 };
 
-// node_modules/zod/v4/core/schemas.js
+// ../e71i2/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -12214,7 +12214,7 @@ function handleRefineResult(result, payload, input2, inst) {
   }
 }
 
-// node_modules/zod/v4/core/memoizer.js
+// ../e71i2/node_modules/zod/v4/core/memoizer.js
 var $ZodCyclicError = class extends Error {
   constructor() {
     super(`Cannot parse a reference cycle that closes through a transform`);
@@ -12491,7 +12491,7 @@ function isBackEdge(ctx, value) {
   return backEdges !== void 0 && isRef(value) && backEdges.has(value);
 }
 
-// node_modules/zod/v4/locales/index.js
+// ../e71i2/node_modules/zod/v4/locales/index.js
 var locales_exports = {};
 __export(locales_exports, {
   ar: () => ar_default,
@@ -12559,7 +12559,7 @@ __export(locales_exports, {
   zhTW: () => zh_TW_default
 });
 
-// node_modules/zod/v4/locales/ar.js
+// ../e71i2/node_modules/zod/v4/locales/ar.js
 var error = () => {
   const Sizable = {
     string: { unit: "\u062D\u0631\u0641", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" },
@@ -12671,7 +12671,7 @@ function ar_default() {
   };
 }
 
-// node_modules/zod/v4/locales/az.js
+// ../e71i2/node_modules/zod/v4/locales/az.js
 var error2 = () => {
   const Sizable = {
     string: { unit: "simvol", verb: "olmal\u0131d\u0131r" },
@@ -12782,7 +12782,7 @@ function az_default() {
   };
 }
 
-// node_modules/zod/v4/locales/be.js
+// ../e71i2/node_modules/zod/v4/locales/be.js
 function getBelarusianPlural(count2, one, few, many) {
   const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
@@ -12951,7 +12951,7 @@ function be_default() {
   };
 }
 
-// node_modules/zod/v4/locales/bg.js
+// ../e71i2/node_modules/zod/v4/locales/bg.js
 var error4 = () => {
   const Sizable = {
     string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" },
@@ -13077,7 +13077,7 @@ function bg_default() {
   };
 }
 
-// node_modules/zod/v4/locales/bn.js
+// ../e71i2/node_modules/zod/v4/locales/bn.js
 var error5 = () => {
   const Sizable = {
     string: { unit: "\u0985\u0995\u09CD\u09B7\u09B0", verb: "\u09A5\u09BE\u0995\u09A4\u09C7 \u09B9\u09AC\u09C7" },
@@ -13191,7 +13191,7 @@ function bn_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ca.js
+// ../e71i2/node_modules/zod/v4/locales/ca.js
 var error6 = () => {
   const Sizable = {
     string: { unit: "car\xE0cters", verb: "contenir" },
@@ -13305,7 +13305,7 @@ function ca_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ckb.js
+// ../e71i2/node_modules/zod/v4/locales/ckb.js
 var error7 = () => {
   const Sizable = {
     string: { unit: "\u067E\u06CC\u062A", verb: "\u0628\u06CE\u062A" },
@@ -13438,7 +13438,7 @@ function ckb_default() {
   };
 }
 
-// node_modules/zod/v4/locales/cs.js
+// ../e71i2/node_modules/zod/v4/locales/cs.js
 var error8 = () => {
   const Sizable = {
     string: { unit: "znak\u016F", verb: "m\xEDt" },
@@ -13555,7 +13555,7 @@ function cs_default() {
   };
 }
 
-// node_modules/zod/v4/locales/da.js
+// ../e71i2/node_modules/zod/v4/locales/da.js
 var error9 = () => {
   const Sizable = {
     string: { unit: "tegn", verb: "havde" },
@@ -13676,7 +13676,7 @@ function da_default() {
   };
 }
 
-// node_modules/zod/v4/locales/de.js
+// ../e71i2/node_modules/zod/v4/locales/de.js
 var error10 = () => {
   const Sizable = {
     string: { unit: "Zeichen", verb: "zu haben" },
@@ -13790,7 +13790,7 @@ function de_default() {
   };
 }
 
-// node_modules/zod/v4/locales/el.js
+// ../e71i2/node_modules/zod/v4/locales/el.js
 var error11 = () => {
   const Sizable = {
     string: { unit: "\u03C7\u03B1\u03C1\u03B1\u03BA\u03C4\u03AE\u03C1\u03B5\u03C2", verb: "\u03BD\u03B1 \u03AD\u03C7\u03B5\u03B9" },
@@ -13903,7 +13903,7 @@ function el_default() {
   };
 }
 
-// node_modules/zod/v4/locales/en.js
+// ../e71i2/node_modules/zod/v4/locales/en.js
 var error12 = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -14028,7 +14028,7 @@ function en_default() {
   };
 }
 
-// node_modules/zod/v4/locales/eo.js
+// ../e71i2/node_modules/zod/v4/locales/eo.js
 var error13 = () => {
   const Sizable = {
     string: { unit: "karaktrojn", verb: "havi" },
@@ -14143,7 +14143,7 @@ function eo_default() {
   };
 }
 
-// node_modules/zod/v4/locales/es.js
+// ../e71i2/node_modules/zod/v4/locales/es.js
 var error14 = () => {
   const Sizable = {
     string: { unit: "caracteres", verb: "tener" },
@@ -14280,7 +14280,7 @@ function es_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fa.js
+// ../e71i2/node_modules/zod/v4/locales/fa.js
 var error15 = () => {
   const Sizable = {
     string: { unit: "\u06A9\u0627\u0631\u0627\u06A9\u062A\u0631", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" },
@@ -14400,7 +14400,7 @@ function fa_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fi.js
+// ../e71i2/node_modules/zod/v4/locales/fi.js
 var error16 = () => {
   const Sizable = {
     string: { unit: "merkki\xE4", subject: "merkkijonon" },
@@ -14518,7 +14518,7 @@ function fi_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fr.js
+// ../e71i2/node_modules/zod/v4/locales/fr.js
 var error17 = () => {
   const Sizable = {
     string: { unit: "caract\xE8res", verb: "avoir" },
@@ -14648,7 +14648,7 @@ function fr_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fr-CA.js
+// ../e71i2/node_modules/zod/v4/locales/fr-CA.js
 var error18 = () => {
   const Sizable = {
     string: { unit: "caract\xE8res", verb: "avoir" },
@@ -14761,7 +14761,7 @@ function fr_CA_default() {
   };
 }
 
-// node_modules/zod/v4/locales/gu.js
+// ../e71i2/node_modules/zod/v4/locales/gu.js
 var error19 = () => {
   const Sizable = {
     string: { unit: "\u0A85\u0A95\u0ACD\u0AB7\u0AB0", verb: "\u0AB9\u0ACB\u0AB5\u0ABE \u0A9C\u0ACB\u0A88\u0A8F" },
@@ -14875,7 +14875,7 @@ function gu_default() {
   };
 }
 
-// node_modules/zod/v4/locales/he.js
+// ../e71i2/node_modules/zod/v4/locales/he.js
 var error20 = () => {
   const TypeNames = {
     string: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA", gender: "f" },
@@ -15077,7 +15077,7 @@ function he_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hi.js
+// ../e71i2/node_modules/zod/v4/locales/hi.js
 var error21 = () => {
   const Sizable = {
     string: { unit: "\u0905\u0915\u094D\u0937\u0930", verb: "\u0930\u0916\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F" },
@@ -15189,7 +15189,7 @@ function hi_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hr.js
+// ../e71i2/node_modules/zod/v4/locales/hr.js
 var error22 = () => {
   const Sizable = {
     string: { unit: "znakova", verb: "imati" },
@@ -15316,7 +15316,7 @@ function hr_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hu.js
+// ../e71i2/node_modules/zod/v4/locales/hu.js
 var error23 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "legyen" },
@@ -15430,7 +15430,7 @@ function hu_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hy.js
+// ../e71i2/node_modules/zod/v4/locales/hy.js
 function getArmenianPlural(count2, one, many) {
   return Math.abs(count2) === 1 ? one : many;
 }
@@ -15589,7 +15589,7 @@ function hy_default() {
   };
 }
 
-// node_modules/zod/v4/locales/id.js
+// ../e71i2/node_modules/zod/v4/locales/id.js
 var error25 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "memiliki" },
@@ -15701,7 +15701,7 @@ function id_default() {
   };
 }
 
-// node_modules/zod/v4/locales/is.js
+// ../e71i2/node_modules/zod/v4/locales/is.js
 var error26 = () => {
   const Sizable = {
     string: { unit: "stafi", verb: "a\xF0 hafa" },
@@ -15816,7 +15816,7 @@ function is_default() {
   };
 }
 
-// node_modules/zod/v4/locales/it.js
+// ../e71i2/node_modules/zod/v4/locales/it.js
 var error27 = () => {
   const Sizable = {
     string: { unit: "caratteri", verb: "avere" },
@@ -15930,7 +15930,7 @@ function it_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ja.js
+// ../e71i2/node_modules/zod/v4/locales/ja.js
 var error28 = () => {
   const Sizable = {
     string: { unit: "\u6587\u5B57", verb: "\u3067\u3042\u308B" },
@@ -16043,7 +16043,7 @@ function ja_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ka.js
+// ../e71i2/node_modules/zod/v4/locales/ka.js
 var error29 = () => {
   const Sizable = {
     string: { unit: "\u10E1\u10D8\u10DB\u10D1\u10DD\u10DA\u10DD", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" },
@@ -16161,7 +16161,7 @@ function ka_default() {
   };
 }
 
-// node_modules/zod/v4/locales/km.js
+// ../e71i2/node_modules/zod/v4/locales/km.js
 var error30 = () => {
   const Sizable = {
     string: { unit: "\u178F\u17BD\u17A2\u1780\u17D2\u179F\u179A", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" },
@@ -16277,12 +16277,12 @@ function km_default() {
   };
 }
 
-// node_modules/zod/v4/locales/kh.js
+// ../e71i2/node_modules/zod/v4/locales/kh.js
 function kh_default() {
   return km_default();
 }
 
-// node_modules/zod/v4/locales/kn.js
+// ../e71i2/node_modules/zod/v4/locales/kn.js
 var error31 = () => {
   const Sizable = {
     string: { unit: "\u0C85\u0C95\u0CCD\u0CB7\u0CB0\u0C97\u0CB3\u0CC1", verb: "\u0CB9\u0CCA\u0C82\u0CA6\u0CB2\u0CC1" },
@@ -16398,7 +16398,7 @@ function kn_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ko.js
+// ../e71i2/node_modules/zod/v4/locales/ko.js
 var error32 = () => {
   const Sizable = {
     string: { unit: "\uBB38\uC790", verb: "to have" },
@@ -16515,7 +16515,7 @@ function ko_default() {
   };
 }
 
-// node_modules/zod/v4/locales/lt.js
+// ../e71i2/node_modules/zod/v4/locales/lt.js
 var capitalizeFirstCharacter = (text) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
@@ -16723,7 +16723,7 @@ function lt_default() {
   };
 }
 
-// node_modules/zod/v4/locales/mk.js
+// ../e71i2/node_modules/zod/v4/locales/mk.js
 var error34 = () => {
   const Sizable = {
     string: { unit: "\u0437\u043D\u0430\u0446\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" },
@@ -16838,7 +16838,7 @@ function mk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ms.js
+// ../e71i2/node_modules/zod/v4/locales/ms.js
 var error35 = () => {
   const Sizable = {
     string: { unit: "aksara", verb: "mempunyai" },
@@ -16951,7 +16951,7 @@ function ms_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ne.js
+// ../e71i2/node_modules/zod/v4/locales/ne.js
 var error36 = () => {
   const Sizable = {
     string: { unit: "\u0905\u0915\u094D\u0937\u0930", verb: "\u0939\u0941\u0928\u0941\u092A\u0930\u094D\u091B" },
@@ -17063,7 +17063,7 @@ function ne_default() {
   };
 }
 
-// node_modules/zod/v4/locales/nl.js
+// ../e71i2/node_modules/zod/v4/locales/nl.js
 var error37 = () => {
   const Sizable = {
     string: { unit: "tekens", verb: "heeft" },
@@ -17179,7 +17179,7 @@ function nl_default() {
   };
 }
 
-// node_modules/zod/v4/locales/nn.js
+// ../e71i2/node_modules/zod/v4/locales/nn.js
 var error38 = () => {
   const Sizable = {
     string: { unit: "teikn", verb: "\xE5 ha" },
@@ -17293,7 +17293,7 @@ function nn_default() {
   };
 }
 
-// node_modules/zod/v4/locales/no.js
+// ../e71i2/node_modules/zod/v4/locales/no.js
 var error39 = () => {
   const Sizable = {
     string: { unit: "tegn", verb: "\xE5 ha" },
@@ -17407,7 +17407,7 @@ function no_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ota.js
+// ../e71i2/node_modules/zod/v4/locales/ota.js
 var error40 = () => {
   const Sizable = {
     string: { unit: "harf", verb: "olmal\u0131d\u0131r" },
@@ -17522,7 +17522,7 @@ function ota_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ps.js
+// ../e71i2/node_modules/zod/v4/locales/ps.js
 var error41 = () => {
   const Sizable = {
     string: { unit: "\u062A\u0648\u06A9\u064A", verb: "\u0648\u0644\u0631\u064A" },
@@ -17642,7 +17642,7 @@ function ps_default() {
   };
 }
 
-// node_modules/zod/v4/locales/pl.js
+// ../e71i2/node_modules/zod/v4/locales/pl.js
 var error42 = () => {
   const Sizable = {
     string: { unit: "znak\xF3w", verb: "mie\u0107" },
@@ -17757,7 +17757,7 @@ function pl_default() {
   };
 }
 
-// node_modules/zod/v4/locales/pt.js
+// ../e71i2/node_modules/zod/v4/locales/pt.js
 var error43 = () => {
   const Sizable = {
     string: { unit: "caracteres" },
@@ -17901,7 +17901,7 @@ function pt_default() {
   };
 }
 
-// node_modules/zod/v4/locales/pt-BR.js
+// ../e71i2/node_modules/zod/v4/locales/pt-BR.js
 var error44 = () => {
   const Sizable = {
     string: { unit: "caracteres" },
@@ -18046,7 +18046,7 @@ function pt_BR_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ro.js
+// ../e71i2/node_modules/zod/v4/locales/ro.js
 var error45 = () => {
   const Sizable = {
     string: { unit: "caractere", verb: "s\u0103 aib\u0103" },
@@ -18169,7 +18169,7 @@ function ro_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ru.js
+// ../e71i2/node_modules/zod/v4/locales/ru.js
 function getRussianPlural(count2, one, few, many) {
   const absCount = Math.abs(count2);
   const lastDigit = absCount % 10;
@@ -18338,7 +18338,7 @@ function ru_default() {
   };
 }
 
-// node_modules/zod/v4/locales/sk.js
+// ../e71i2/node_modules/zod/v4/locales/sk.js
 var error47 = () => {
   const Sizable = {
     string: { unit: "znakov", verb: "ma\u0165" },
@@ -18455,7 +18455,7 @@ function sk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/sl.js
+// ../e71i2/node_modules/zod/v4/locales/sl.js
 var error48 = () => {
   const Sizable = {
     string: { unit: "znakov", verb: "imeti" },
@@ -18570,7 +18570,7 @@ function sl_default() {
   };
 }
 
-// node_modules/zod/v4/locales/sv.js
+// ../e71i2/node_modules/zod/v4/locales/sv.js
 var error49 = () => {
   const Sizable = {
     string: { unit: "tecken", verb: "att ha" },
@@ -18686,7 +18686,7 @@ function sv_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ta.js
+// ../e71i2/node_modules/zod/v4/locales/ta.js
 var error50 = () => {
   const Sizable = {
     string: { unit: "\u0B8E\u0BB4\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0B95\u0BCD\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" },
@@ -18802,7 +18802,7 @@ function ta_default() {
   };
 }
 
-// node_modules/zod/v4/locales/tg.js
+// ../e71i2/node_modules/zod/v4/locales/tg.js
 var error51 = () => {
   const Sizable = {
     string: { unit: "\u0430\u043B\u043E\u043C\u0430\u0442", verb: "\u0434\u043E\u0448\u0442\u0430 \u0431\u043E\u0448\u0430\u0434" },
@@ -18919,7 +18919,7 @@ function tg_default() {
   };
 }
 
-// node_modules/zod/v4/locales/th.js
+// ../e71i2/node_modules/zod/v4/locales/th.js
 var error52 = () => {
   const Sizable = {
     string: { unit: "\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" },
@@ -19035,7 +19035,7 @@ function th_default() {
   };
 }
 
-// node_modules/zod/v4/locales/tk.js
+// ../e71i2/node_modules/zod/v4/locales/tk.js
 var error53 = () => {
   const Sizable = {
     string: { unit: "simwol", verb: "bolmaly" },
@@ -19143,7 +19143,7 @@ function tk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/tr.js
+// ../e71i2/node_modules/zod/v4/locales/tr.js
 var error54 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "olmal\u0131" },
@@ -19254,7 +19254,7 @@ function tr_default() {
   };
 }
 
-// node_modules/zod/v4/locales/uk.js
+// ../e71i2/node_modules/zod/v4/locales/uk.js
 var error55 = () => {
   const Sizable = {
     string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" },
@@ -19368,12 +19368,12 @@ function uk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ua.js
+// ../e71i2/node_modules/zod/v4/locales/ua.js
 function ua_default() {
   return uk_default();
 }
 
-// node_modules/zod/v4/locales/ur.js
+// ../e71i2/node_modules/zod/v4/locales/ur.js
 var error56 = () => {
   const Sizable = {
     string: { unit: "\u062D\u0631\u0648\u0641", verb: "\u06C1\u0648\u0646\u0627" },
@@ -19489,7 +19489,7 @@ function ur_default() {
   };
 }
 
-// node_modules/zod/v4/locales/uz.js
+// ../e71i2/node_modules/zod/v4/locales/uz.js
 var error57 = () => {
   const Sizable = {
     string: { unit: "belgi", verb: "bo\u2018lishi kerak" },
@@ -19603,7 +19603,7 @@ function uz_default() {
   };
 }
 
-// node_modules/zod/v4/locales/vi.js
+// ../e71i2/node_modules/zod/v4/locales/vi.js
 var error58 = () => {
   const Sizable = {
     string: { unit: "k\xFD t\u1EF1", verb: "c\xF3" },
@@ -19717,7 +19717,7 @@ function vi_default() {
   };
 }
 
-// node_modules/zod/v4/locales/zh-CN.js
+// ../e71i2/node_modules/zod/v4/locales/zh-CN.js
 var error59 = () => {
   const Sizable = {
     string: { unit: "\u5B57\u7B26", verb: "\u5305\u542B" },
@@ -19832,7 +19832,7 @@ function zh_CN_default() {
   };
 }
 
-// node_modules/zod/v4/locales/zh-TW.js
+// ../e71i2/node_modules/zod/v4/locales/zh-TW.js
 var error60 = () => {
   const Sizable = {
     string: { unit: "\u5B57\u5143", verb: "\u64C1\u6709" },
@@ -19945,7 +19945,7 @@ function zh_TW_default() {
   };
 }
 
-// node_modules/zod/v4/locales/yo.js
+// ../e71i2/node_modules/zod/v4/locales/yo.js
 var error61 = () => {
   const Sizable = {
     string: { unit: "\xE0mi", verb: "n\xED" },
@@ -20058,7 +20058,7 @@ function yo_default() {
   };
 }
 
-// node_modules/zod/v4/core/registries.js
+// ../e71i2/node_modules/zod/v4/core/registries.js
 var _a2;
 var $output = /* @__PURE__ */ Symbol("ZodOutput");
 var $input = /* @__PURE__ */ Symbol("ZodInput");
@@ -20108,7 +20108,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// node_modules/zod/v4/core/compile.js
+// ../e71i2/node_modules/zod/v4/core/compile.js
 var INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var FALLBACK_FLAG = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var ZodCompileAsyncError = class extends Error {
@@ -21710,7 +21710,7 @@ function generateTransformCheck(doc, ctx, schema, accessor) {
   return accessor;
 }
 
-// node_modules/zod/v4/core/api.js
+// ../e71i2/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -22769,7 +22769,7 @@ function _stringFormat(Class2, format, fnOrRegex, _params = {}) {
   return inst;
 }
 
-// node_modules/zod/v4/core/to-json-schema.js
+// ../e71i2/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
@@ -23299,7 +23299,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// node_modules/zod/v4/core/json-schema-processors.js
+// ../e71i2/node_modules/zod/v4/core/json-schema-processors.js
 var narrowMin = (agg, key, value) => {
   if (agg[key] === void 0 || value > agg[key])
     agg[key] = value;
@@ -24047,7 +24047,7 @@ function toJSONSchema(input2, params) {
   return finalize(ctx, input2);
 }
 
-// node_modules/zod/v4/core/json-schema-generator.js
+// ../e71i2/node_modules/zod/v4/core/json-schema-generator.js
 var JSONSchemaGenerator = class {
   /** @deprecated Access via ctx instead */
   get metadataRegistry() {
@@ -24125,10 +24125,10 @@ var JSONSchemaGenerator = class {
   }
 };
 
-// node_modules/zod/v4/core/json-schema.js
+// ../e71i2/node_modules/zod/v4/core/json-schema.js
 var json_schema_exports = {};
 
-// node_modules/zod/v4/classic/schemas.js
+// ../e71i2/node_modules/zod/v4/classic/schemas.js
 var schemas_exports2 = {};
 __export(schemas_exports2, {
   ZodAny: () => ZodAny,
@@ -24309,7 +24309,7 @@ __export(schemas_exports2, {
   xor: () => xor
 });
 
-// node_modules/zod/v4/classic/checks.js
+// ../e71i2/node_modules/zod/v4/classic/checks.js
 var checks_exports2 = {};
 __export(checks_exports2, {
   endsWith: () => _endsWith,
@@ -24344,7 +24344,7 @@ __export(checks_exports2, {
   uppercase: () => _uppercase
 });
 
-// node_modules/zod/v4/classic/errors.js
+// ../e71i2/node_modules/zod/v4/classic/errors.js
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
@@ -24390,7 +24390,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, void 0
   Parent: Error
 });
 
-// node_modules/zod/v4/classic/parse.js
+// ../e71i2/node_modules/zod/v4/classic/parse.js
 var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse2 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -24404,7 +24404,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// node_modules/zod/v4/classic/schemas.js
+// ../e71i2/node_modules/zod/v4/classic/schemas.js
 function _ensureDefaultLocale() {
   if (!globalConfig.localeError)
     config(en_default());
@@ -25869,7 +25869,7 @@ function preprocess(fn, schema) {
   });
 }
 
-// node_modules/zod/v4/classic/compat.js
+// ../e71i2/node_modules/zod/v4/classic/compat.js
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -25895,7 +25895,7 @@ var ZodFirstPartyTypeKind;
 /* @__PURE__ */ (function(ZodFirstPartyTypeKind3) {
 })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
 
-// node_modules/zod/v4/classic/iso.js
+// ../e71i2/node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -25920,7 +25920,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// node_modules/zod/v4/classic/from-json-schema.js
+// ../e71i2/node_modules/zod/v4/classic/from-json-schema.js
 var z = {
   ...schemas_exports2,
   ...checks_exports2,
@@ -26653,7 +26653,7 @@ function fromJSONSchema(schema, params) {
   return convertSchema(normalized, ctx);
 }
 
-// node_modules/zod/v4/core/visit.js
+// ../e71i2/node_modules/zod/v4/core/visit.js
 var RESOLVING = /* @__PURE__ */ Symbol("z.visit/resolving");
 function visit(schema, fnOrHandlers) {
   const fn = typeof fnOrHandlers === "function" ? fnOrHandlers : (node2, rewritten) => {
@@ -26808,7 +26808,7 @@ function visit(schema, fnOrHandlers) {
   return run(schema);
 }
 
-// node_modules/zod/v4/classic/deep-partial.js
+// ../e71i2/node_modules/zod/v4/classic/deep-partial.js
 function deepPartial(schema) {
   return visit(schema, {
     object: (s) => s.partial(),
@@ -26820,7 +26820,7 @@ function deepPartial(schema) {
   });
 }
 
-// node_modules/zod/v4/classic/in-out.js
+// ../e71i2/node_modules/zod/v4/classic/in-out.js
 function withChecks(side, checks) {
   if (!checks?.length)
     return side;
@@ -26850,7 +26850,7 @@ function output(schema) {
   });
 }
 
-// node_modules/zod/v4/classic/coerce.js
+// ../e71i2/node_modules/zod/v4/classic/coerce.js
 var coerce_exports = {};
 __export(coerce_exports, {
   bigint: () => bigint3,
@@ -26875,7 +26875,7 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js
 var LATEST_PROTOCOL_VERSION = "2025-11-25";
 var SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, "2025-06-18", "2025-03-26", "2024-11-05", "2024-10-07"];
 var RELATED_TASK_META_KEY = "io.modelcontextprotocol/related-task";
@@ -28406,7 +28406,7 @@ var UrlElicitationRequiredError = class extends McpError {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/stdio.js
 var STDIO_DEFAULT_MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 var ReadBuffer = class {
   constructor(options) {
@@ -28443,7 +28443,7 @@ function serializeMessage(message) {
   return JSON.stringify(message) + "\n";
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 var StdioServerTransport = class {
   constructor(_stdin = process2.stdin, _stdout = process2.stdout, options) {
     this._stdin = _stdin;
@@ -29642,6 +29642,388 @@ import { lstatSync as lstatSync2, mkdirSync as mkdirSync2, realpathSync as realp
 import { access as access2 } from "node:fs/promises";
 import path13 from "node:path";
 
+// dist/src/config.js
+import path11 from "node:path";
+
+// dist/src/agent-policy.js
+import * as crypto from "node:crypto";
+import * as path2 from "node:path";
+var serverIdRegex = /^[a-z][a-z0-9-]{0,31}$/;
+var toolNameRegex = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
+var envKeyRegex = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
+var UUID_REGEX2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var nativeToolSchema = external_exports.enum([
+  "finish",
+  "view_file",
+  "write_to_file",
+  "replace_file_content",
+  "multi_replace_file_content"
+]);
+var nativeToolsSchema = external_exports.array(nativeToolSchema).max(5).refine((tools) => new Set(tools).size === tools.length, {
+  message: "Duplicate native tools are not allowed"
+});
+var mcpServerSelectionItemSchema = external_exports.object({
+  serverId: external_exports.string().regex(serverIdRegex),
+  tools: external_exports.array(external_exports.string().regex(toolNameRegex)).min(1).max(100).refine((tools) => new Set(tools).size === tools.length, {
+    message: "Duplicate tool names are not allowed"
+  }).optional()
+}).strict();
+var mcpSelectionSchema = external_exports.array(mcpServerSelectionItemSchema).max(20).refine((servers) => new Set(servers.map((s) => s.serverId)).size === servers.length, { message: "Duplicate serverId in MCP selection" });
+var agentPolicySelectionSchema = external_exports.object({
+  allowedTools: nativeToolsSchema.optional(),
+  mcpServers: mcpSelectionSchema.optional()
+}).strict();
+function isAbsolutePath(val) {
+  if (typeof val !== "string" || val.length === 0 || val.length > 4e3) {
+    return false;
+  }
+  return path2.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
+}
+function isValidServerUrl(urlString) {
+  if (typeof urlString !== "string" || urlString.length > 4e3) {
+    return false;
+  }
+  let parsed;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return false;
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    return false;
+  }
+  if (parsed.protocol === "https:") {
+    return true;
+  }
+  if (parsed.protocol === "http:") {
+    const host = parsed.hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+  }
+  return false;
+}
+var mcpCatalogToolSchema = external_exports.object({
+  name: external_exports.string().regex(toolNameRegex),
+  readOnly: external_exports.boolean()
+}).strict();
+var mcpCatalogEntrySchema = external_exports.object({
+  id: external_exports.string().regex(serverIdRegex),
+  description: external_exports.string().max(500).optional(),
+  nativeServerName: external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/).optional(),
+  command: external_exports.string().max(4e3).refine(isAbsolutePath, { message: "command must be an absolute host path" }).optional(),
+  args: external_exports.array(external_exports.string().max(4e3)).max(100).optional(),
+  env: external_exports.record(external_exports.string().regex(envKeyRegex), external_exports.string().max(16e3)).refine((rec) => Object.keys(rec).length <= 100, {
+    message: "env entries cannot exceed 100"
+  }).optional(),
+  cwd: external_exports.string().max(4e3).refine(isAbsolutePath, { message: "cwd must be an absolute host path" }).optional(),
+  serverUrl: external_exports.string().max(4e3).refine(isValidServerUrl, {
+    message: "serverUrl must be valid HTTPS or loopback HTTP without credentials"
+  }).optional(),
+  headers: external_exports.record(external_exports.string().min(1).max(256), external_exports.string().max(16e3)).refine((rec) => Object.keys(rec).length <= 100, {
+    message: "headers entries cannot exceed 100"
+  }).optional(),
+  tools: external_exports.array(mcpCatalogToolSchema).min(1).max(100).refine((tools) => new Set(tools.map((t) => t.name)).size === tools.length, {
+    message: "tools in catalog entry must have unique names"
+  })
+}).strict().refine((entry) => entry.command !== void 0 !== (entry.serverUrl !== void 0), { message: "Require exactly one transport: command or serverUrl" }).refine((entry) => {
+  if (entry.serverUrl !== void 0) {
+    return entry.args === void 0 && entry.cwd === void 0 && entry.env === void 0;
+  }
+  return true;
+}, { message: "Reject stdio-only fields (args, cwd, env) when HTTP transport is used" }).refine((entry) => {
+  if (entry.command !== void 0) {
+    return entry.headers === void 0;
+  }
+  return true;
+}, { message: "Reject headers when stdio transport is used" });
+var mcpCatalogSchema = external_exports.array(mcpCatalogEntrySchema).max(20).refine((entries) => new Set(entries.map((e) => e.id)).size === entries.length, { message: "Duplicate server id in MCP catalog" }).refine((entries) => {
+  try {
+    const serialized = JSON.stringify(entries);
+    return Buffer.byteLength(serialized, "utf8") <= 1024 * 1024;
+  } catch {
+    return false;
+  }
+}, { message: "Serialized MCP catalog exceeds 1MiB" });
+var resolvedAgentPolicySchema = external_exports.object({
+  mode: external_exports.enum(["write", "read-only"]),
+  nativeTools: nativeToolsSchema,
+  mcpServers: external_exports.array(external_exports.object({ serverId: external_exports.string().regex(serverIdRegex), serverName: external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/), tools: external_exports.array(external_exports.string().regex(toolNameRegex)).min(1).max(100) }).strict()).max(20),
+  catalogSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
+  sha256: external_exports.string().regex(/^[a-f0-9]{64}$/)
+}).strict().superRefine((policy, ctx) => {
+  const { mode, nativeTools, mcpServers, catalogSha256 } = policy;
+  const expected = crypto.createHash("sha256").update(JSON.stringify({ mode, nativeTools, mcpServers, catalogSha256 })).digest("hex");
+  if (policy.sha256 !== expected || !nativeTools.includes("finish") || new Set(mcpServers.map((s) => s.serverId)).size !== mcpServers.length || new Set(mcpServers.map((s) => s.serverName)).size !== mcpServers.length || mcpServers.some((s) => new Set(s.tools).size !== s.tools.length) || mode === "read-only" && nativeTools.some((tool) => !["finish", "view_file"].includes(tool))) {
+    ctx.addIssue({ code: "custom", message: "Invalid resolved policy identity or tool selection" });
+  }
+});
+var WRITE_TOOLS = /* @__PURE__ */ new Set([
+  "write_to_file",
+  "replace_file_content",
+  "multi_replace_file_content"
+]);
+var READ_ONLY_NATIVE_TOOLS = /* @__PURE__ */ new Set([
+  "finish",
+  "view_file"
+]);
+function resolveAgentPolicy(selection, ceilingTools, catalog, mode, namespace) {
+  if (mode !== "write" && mode !== "read-only") {
+    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid mode: ${String(mode)}`);
+  }
+  if (typeof namespace !== "string" || !UUID_REGEX2.test(namespace)) {
+    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid namespace UUID: ${String(namespace)}`);
+  }
+  const parsedCeiling = nativeToolsSchema.safeParse(ceilingTools);
+  if (!parsedCeiling.success) {
+    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid ceiling tools: ${parsedCeiling.error.message}`);
+  }
+  const parsedCatalog = mcpCatalogSchema.safeParse(catalog);
+  if (!parsedCatalog.success) {
+    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid MCP catalog: ${parsedCatalog.error.message}`);
+  }
+  const parsedSelection = agentPolicySelectionSchema.safeParse(selection);
+  if (!parsedSelection.success) {
+    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid agent policy selection: ${parsedSelection.error.message}`);
+  }
+  let resolvedNative;
+  if (parsedSelection.data.allowedTools === void 0) {
+    if (mode === "read-only") {
+      resolvedNative = parsedCeiling.data.filter((t) => READ_ONLY_NATIVE_TOOLS.has(t));
+    } else {
+      resolvedNative = [...parsedCeiling.data];
+    }
+  } else {
+    const ceilingSet = new Set(parsedCeiling.data);
+    ceilingSet.add("finish");
+    for (const tool of parsedSelection.data.allowedTools) {
+      if (!ceilingSet.has(tool)) {
+        throw new BridgeError("POLICY_NOT_ALLOWED", `Tool '${tool}' exceeds ceiling`);
+      }
+      if (mode === "read-only" && WRITE_TOOLS.has(tool)) {
+        throw new BridgeError("POLICY_NOT_ALLOWED", `Write tool '${tool}' is not allowed in read-only mode`);
+      }
+    }
+    resolvedNative = [...parsedSelection.data.allowedTools];
+  }
+  if (!resolvedNative.includes("finish")) {
+    resolvedNative.push("finish");
+  }
+  const resolvedMcpServers = [];
+  if (parsedSelection.data.mcpServers !== void 0) {
+    const seenServerIds = /* @__PURE__ */ new Set();
+    for (const sel of parsedSelection.data.mcpServers) {
+      if (seenServerIds.has(sel.serverId)) {
+        throw new BridgeError("POLICY_NOT_ALLOWED", `Duplicate serverId '${sel.serverId}' in MCP selection`);
+      }
+      seenServerIds.add(sel.serverId);
+      const entry = parsedCatalog.data.find((c) => c.id === sel.serverId);
+      if (!entry) {
+        throw new BridgeError("POLICY_NOT_ALLOWED", `Unknown MCP server '${sel.serverId}'`);
+      }
+      const catalogToolMap = /* @__PURE__ */ new Map();
+      for (const t of entry.tools) {
+        catalogToolMap.set(t.name, t.readOnly);
+      }
+      let eligibleTools;
+      if (sel.tools === void 0) {
+        if (mode === "write") {
+          eligibleTools = entry.tools.map((t) => t.name);
+        } else {
+          eligibleTools = entry.tools.filter((t) => t.readOnly).map((t) => t.name);
+        }
+      } else {
+        const seenTools = /* @__PURE__ */ new Set();
+        eligibleTools = [];
+        for (const toolName of sel.tools) {
+          if (seenTools.has(toolName)) {
+            throw new BridgeError("POLICY_NOT_ALLOWED", `Duplicate tool '${toolName}' in selection for server '${sel.serverId}'`);
+          }
+          seenTools.add(toolName);
+          const isReadOnly = catalogToolMap.get(toolName);
+          if (isReadOnly === void 0) {
+            throw new BridgeError("POLICY_NOT_ALLOWED", `Unknown tool '${toolName}' for server '${sel.serverId}'`);
+          }
+          if (mode === "read-only" && !isReadOnly) {
+            throw new BridgeError("POLICY_NOT_ALLOWED", `Tool '${toolName}' on server '${sel.serverId}' is not read-only`);
+          }
+          eligibleTools.push(toolName);
+        }
+      }
+      if (eligibleTools.length === 0) {
+        throw new BridgeError("POLICY_NOT_ALLOWED", `No eligible tools for server '${sel.serverId}' in ${mode} mode`);
+      }
+      const cleanNs = namespace.replace(/-/g, "").toLowerCase();
+      const cleanServerId = sel.serverId.replace(/-/g, "_");
+      const serverName = entry.nativeServerName ?? `bridge_${cleanNs}_${cleanServerId}`;
+      if (resolvedMcpServers.some((server) => server.serverName === serverName))
+        throw new BridgeError("POLICY_NOT_ALLOWED", "Selected MCP server aliases must be unique");
+      resolvedMcpServers.push({
+        serverId: sel.serverId,
+        serverName,
+        tools: [...eligibleTools]
+      });
+    }
+  }
+  const selectedPrivateDefinitions = resolvedMcpServers.map((s) => {
+    return catalog.find((c) => c.id === s.serverId);
+  });
+  const catalogSha256 = crypto.createHash("sha256").update(JSON.stringify(selectedPrivateDefinitions)).digest("hex");
+  const publicPayload = {
+    mode,
+    nativeTools: resolvedNative,
+    mcpServers: resolvedMcpServers,
+    catalogSha256
+  };
+  const sha256 = crypto.createHash("sha256").update(JSON.stringify(publicPayload)).digest("hex");
+  return {
+    mode,
+    nativeTools: [...resolvedNative],
+    mcpServers: resolvedMcpServers.map((s) => ({
+      serverId: s.serverId,
+      serverName: s.serverName,
+      tools: [...s.tools]
+    })),
+    catalogSha256,
+    sha256
+  };
+}
+
+// dist/src/integration-policy.js
+import { opendirSync, realpathSync as realpathSync2, statSync } from "node:fs";
+import path3 from "node:path";
+function mapFsError(error62) {
+  const code = error62.code;
+  if (code === "ENOENT" || code === "ENOTDIR")
+    return "not-found";
+  if (code === "EACCES" || code === "EPERM")
+    return "access-denied";
+  return "unresolvable";
+}
+function canonicalizeRoot(entry) {
+  if (typeof entry !== "string")
+    return { reason: "not-a-string" };
+  if (!path3.isAbsolute(entry))
+    return { reason: "not-absolute" };
+  let canonical;
+  try {
+    canonical = realpathSync2.native(entry);
+  } catch (error62) {
+    return { reason: mapFsError(error62), error: error62 };
+  }
+  let isDirectory;
+  try {
+    isDirectory = statSync(canonical).isDirectory();
+  } catch (error62) {
+    return { reason: mapFsError(error62), error: error62 };
+  }
+  if (!isDirectory)
+    return { reason: "not-a-directory" };
+  if (canonical === path3.parse(canonical).root)
+    return { reason: "volume-root" };
+  try {
+    opendirSync(canonical).closeSync();
+  } catch (error62) {
+    return { reason: mapFsError(error62), error: error62 };
+  }
+  return { root: process.platform === "win32" ? canonical.toLowerCase() : canonical };
+}
+function preauthorizedIntegrationRoots(value) {
+  const roots = JSON.parse(value ?? "[]");
+  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path3.isAbsolute(root))) {
+    throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
+  }
+  return [...new Set(roots.map((root) => {
+    const result = canonicalizeRoot(root);
+    if ("root" in result)
+      return result.root;
+    throw result.error ?? new Error("Preauthorization requires a project directory, not a volume root");
+  }))];
+}
+function readPreauthorizedIntegrationRoots(value) {
+  const variable = "BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS";
+  if (value === void 0)
+    return { roots: [], issues: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { roots: [], issues: [{ variable, reason: "invalid-json" }] };
+  }
+  if (!Array.isArray(parsed)) {
+    return { roots: [], issues: [{ variable, reason: "not-a-list" }] };
+  }
+  if (parsed.length > 20) {
+    return { roots: [], issues: [{ variable, reason: "too-many-entries" }] };
+  }
+  const roots = [];
+  const issues = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const result = canonicalizeRoot(parsed[i]);
+    if ("root" in result) {
+      roots.push(result.root);
+    } else {
+      issues.push({ variable, index: i, reason: result.reason });
+    }
+  }
+  return { roots: [...new Set(roots)], issues };
+}
+function integrationPreauthorized(workingDirectory, roots) {
+  const canonical = process.platform === "win32" ? workingDirectory.toLowerCase() : workingDirectory;
+  return roots.includes(canonical);
+}
+
+// dist/src/config.js
+import os4 from "node:os";
+
+// dist/src/tool-profiles.js
+var toolProfileSchema = external_exports.enum(["full", "query", "review", "implementation"]);
+var queryTools = /* @__PURE__ */ new Set([
+  "antigravity_workflow_result",
+  "antigravity_peer_receipts",
+  "antigravity_wait_many",
+  "antigravity_group_status",
+  "antigravity_groups",
+  "antigravity_group_wait",
+  "antigravity_group_cancel",
+  "antigravity_memory_list",
+  "antigravity_memory_read",
+  "antigravity_health",
+  "antigravity_get_agent_policy",
+  "antigravity_list_models",
+  "antigravity_get_model",
+  "antigravity_usage",
+  "antigravity_list_project_files",
+  "antigravity_run",
+  "antigravity_resume",
+  "antigravity_status",
+  "antigravity_tasks",
+  "antigravity_events",
+  "antigravity_result",
+  "antigravity_read_result",
+  "antigravity_cancel",
+  "antigravity_sessions",
+  "antigravity_wait",
+  "antigravity_context",
+  "antigravity_handoff",
+  "antigravity_compare",
+  "antigravity_comparison",
+  "antigravity_roles",
+  "antigravity_get_sandbox_policy",
+  "antigravity_set_delivery_mode",
+  "antigravity_send_message",
+  "antigravity_read_structured_result",
+  "antigravity_artifacts",
+  "antigravity_read_artifact"
+]);
+var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
+function toolEnabled(profile, name) {
+  if (profile === "full" || profile === "implementation")
+    return true;
+  return (profile === "query" ? queryTools : reviewTools).has(name);
+}
+function profileReadOnly(profile) {
+  return profile === "query" || profile === "review";
+}
+
 // dist/src/roles.js
 import { createHash as createHash12 } from "node:crypto";
 import { readFile as readFile4, stat as stat2 } from "node:fs/promises";
@@ -29654,12 +30036,12 @@ import { spawn as spawn2 } from "node:child_process";
 import { stat, realpath } from "node:fs/promises";
 import os from "node:os";
 import { StringDecoder } from "node:string_decoder";
-import path3 from "node:path";
+import path5 from "node:path";
 
 // dist/src/subprocess.js
 import { spawn } from "node:child_process";
-import { createHash as createHash2 } from "node:crypto";
-import path2 from "node:path";
+import { createHash as createHash3 } from "node:crypto";
+import path4 from "node:path";
 var stopping = /* @__PURE__ */ new WeakSet();
 var ownedProcessGroups = /* @__PURE__ */ new WeakSet();
 function registerOwnedProcessGroup(child) {
@@ -29740,7 +30122,7 @@ function terminateSubprocess(child, options) {
   if (process.platform === "win32") {
     if (child.pid) {
       try {
-        const executable = path2.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
+        const executable = path4.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
         killer = spawn(executable, ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, shell: false, stdio: "ignore" });
         killer.once("error", force);
         killer.once("close", (code) => {
@@ -29816,7 +30198,7 @@ function environmentSecrets() {
   return Object.entries(process.env).flatMap(([name, secret]) => secret && secret.length >= 8 && /TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL/i.test(name) ? [secret, ...secret.split(/\r?\n/).filter((line) => line !== secret && line.trim().length >= 8)] : []).sort((left, right) => right.length - left.length);
 }
 function redactionContextDigest() {
-  return createHash2("sha256").update(JSON.stringify(environmentSecrets())).digest("hex");
+  return createHash3("sha256").update(JSON.stringify(environmentSecrets())).digest("hex");
 }
 function containsCredential(value) {
   return [value, decodeJsonEscapes(value)].some((text) => /-----BEGIN [^-]*PRIVATE KEY-----/.test(text) || new RegExp(TOKEN_PATTERN).test(text) || environmentSecrets().some((secret) => text.includes(secret)));
@@ -29830,14 +30212,14 @@ var GIT_NULL_FILE = process.platform === "win32" ? "NUL" : os.devNull;
 var MAX_STDERR_LENGTH = 4e3;
 var TRUNCATION_MARKER = "... [diagnostic truncated]";
 function isInsideOrEqual(parent, target, isWindows) {
-  const normParent = isWindows ? path3.resolve(parent).toLowerCase() : path3.resolve(parent);
-  const normTarget = isWindows ? path3.resolve(target).toLowerCase() : path3.resolve(target);
+  const normParent = isWindows ? path5.resolve(parent).toLowerCase() : path5.resolve(parent);
+  const normTarget = isWindows ? path5.resolve(target).toLowerCase() : path5.resolve(target);
   if (normParent === normTarget)
     return true;
-  const rel = path3.relative(normParent, normTarget);
+  const rel = path5.relative(normParent, normTarget);
   if (rel === "")
     return true;
-  if (rel !== ".." && !rel.startsWith(".." + path3.sep) && !path3.isAbsolute(rel))
+  if (rel !== ".." && !rel.startsWith(".." + path5.sep) && !path5.isAbsolute(rel))
     return true;
   return false;
 }
@@ -29848,29 +30230,29 @@ async function buildSafeGitPath(cwd, rawPath, excludedRoots = []) {
     canonicalCwd = await realpath(cwd);
   } catch {
     try {
-      canonicalCwd = path3.resolve(cwd);
+      canonicalCwd = path5.resolve(cwd);
     } catch {
       canonicalCwd = void 0;
     }
   }
-  const allExcluded = [path3.resolve(cwd)];
+  const allExcluded = [path5.resolve(cwd)];
   if (canonicalCwd)
     allExcluded.push(canonicalCwd);
   for (const root of excludedRoots) {
-    allExcluded.push(path3.resolve(root));
+    allExcluded.push(path5.resolve(root));
     try {
       allExcluded.push(await realpath(root));
     } catch {
     }
   }
   const pathStr = rawPath ?? process.env.PATH ?? "";
-  const entries = pathStr.split(path3.delimiter);
+  const entries = pathStr.split(path5.delimiter);
   const safeEntries = [];
   for (const rawEntry of entries) {
     const entry = rawEntry.trim();
     if (!entry)
       continue;
-    if (!path3.isAbsolute(entry))
+    if (!path5.isAbsolute(entry))
       continue;
     if (allExcluded.some((root) => isInsideOrEqual(root, entry, isWindows))) {
       continue;
@@ -29885,7 +30267,7 @@ async function buildSafeGitPath(cwd, rawPath, excludedRoots = []) {
     }
     safeEntries.push(entry);
   }
-  return safeEntries.join(path3.delimiter);
+  return safeEntries.join(path5.delimiter);
 }
 async function resolveGitExecutable(cwd, pathEnv, excludedRoots = []) {
   const safePath = await buildSafeGitPath(cwd, pathEnv, excludedRoots);
@@ -29896,21 +30278,21 @@ async function resolveGitExecutable(cwd, pathEnv, excludedRoots = []) {
     canonicalCwd = await realpath(cwd);
   } catch {
     try {
-      canonicalCwd = path3.resolve(cwd);
+      canonicalCwd = path5.resolve(cwd);
     } catch {
       canonicalCwd = void 0;
     }
   }
   const allExcluded = [
-    path3.resolve(cwd),
+    path5.resolve(cwd),
     ...canonicalCwd ? [canonicalCwd] : [],
-    ...await Promise.all(excludedRoots.flatMap((root) => [Promise.resolve(path3.resolve(root)), realpath(root).catch(() => path3.resolve(root))]))
+    ...await Promise.all(excludedRoots.flatMap((root) => [Promise.resolve(path5.resolve(root)), realpath(root).catch(() => path5.resolve(root))]))
   ];
-  const entries = safePath.split(path3.delimiter);
+  const entries = safePath.split(path5.delimiter);
   for (const entry of entries) {
     if (!entry)
       continue;
-    const candidate = path3.join(entry, executableName);
+    const candidate = path5.join(entry, executableName);
     let stats;
     try {
       stats = await stat(candidate);
@@ -30013,7 +30395,7 @@ function buildHostGitEnv(source = process.env, allowGlobalConfig = false, safePa
   } else {
     const rawPath = source.PATH ?? (isWindows ? Object.entries(source).find(([k]) => k.toUpperCase() === "PATH")?.[1] : void 0);
     if (typeof rawPath === "string") {
-      env.PATH = rawPath.split(path3.delimiter).map((e) => e.trim()).filter((e) => e && path3.isAbsolute(e)).join(path3.delimiter);
+      env.PATH = rawPath.split(path5.delimiter).map((e) => e.trim()).filter((e) => e && path5.isAbsolute(e)).join(path5.delimiter);
     }
   }
   const refFormat = source.GIT_DEFAULT_REF_FORMAT;
@@ -30273,7 +30655,7 @@ async function resolveEffectiveExcludesFile(cwd, gitBinary, envSource, timeoutMs
     throw new BridgeError("GIT_OPERATION_FAILED", "Invalid core.excludesFile configuration response");
   }
   const value = lookupOutput.subarray(0, -1).toString("utf8");
-  return value ? path3.resolve(cwd, value) : GIT_NULL_FILE;
+  return value ? path5.resolve(cwd, value) : GIT_NULL_FILE;
 }
 async function git(cwd, args, input2, allowedCodes = [0], options) {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_GIT_TIMEOUT_MS;
@@ -30377,908 +30759,14 @@ async function git(cwd, args, input2, allowedCodes = [0], options) {
 import { isUtf8 } from "node:buffer";
 import { createReadStream as createReadStream2 } from "node:fs";
 import { link, lstat as lstat5, mkdir as mkdir3, mkdtemp, open as open4, readdir as readdir3, readFile as readFile3, realpath as realpath4, rename as rename2, rm as rm2, unlink as unlink3, writeFile as writeFile4 } from "node:fs/promises";
-import os4 from "node:os";
-import path10 from "node:path";
+import os3 from "node:os";
+import path9 from "node:path";
 
 // dist/src/skills.js
 import { createHash as createHash4 } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readdir, writeFile } from "node:fs/promises";
-import path7 from "node:path";
-
-// dist/src/config.js
 import path6 from "node:path";
-
-// dist/src/agent-policy.js
-import * as crypto from "node:crypto";
-import * as path4 from "node:path";
-var serverIdRegex = /^[a-z][a-z0-9-]{0,31}$/;
-var toolNameRegex = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
-var envKeyRegex = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
-var UUID_REGEX2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var nativeToolSchema = external_exports.enum([
-  "finish",
-  "view_file",
-  "write_to_file",
-  "replace_file_content",
-  "multi_replace_file_content"
-]);
-var nativeToolsSchema = external_exports.array(nativeToolSchema).max(5).refine((tools) => new Set(tools).size === tools.length, {
-  message: "Duplicate native tools are not allowed"
-});
-var mcpServerSelectionItemSchema = external_exports.object({
-  serverId: external_exports.string().regex(serverIdRegex),
-  tools: external_exports.array(external_exports.string().regex(toolNameRegex)).min(1).max(100).refine((tools) => new Set(tools).size === tools.length, {
-    message: "Duplicate tool names are not allowed"
-  }).optional()
-}).strict();
-var mcpSelectionSchema = external_exports.array(mcpServerSelectionItemSchema).max(20).refine((servers) => new Set(servers.map((s) => s.serverId)).size === servers.length, { message: "Duplicate serverId in MCP selection" });
-var agentPolicySelectionSchema = external_exports.object({
-  allowedTools: nativeToolsSchema.optional(),
-  mcpServers: mcpSelectionSchema.optional()
-}).strict();
-function isAbsolutePath(val) {
-  if (typeof val !== "string" || val.length === 0 || val.length > 4e3) {
-    return false;
-  }
-  return path4.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
-}
-function isValidServerUrl(urlString) {
-  if (typeof urlString !== "string" || urlString.length > 4e3) {
-    return false;
-  }
-  let parsed;
-  try {
-    parsed = new URL(urlString);
-  } catch {
-    return false;
-  }
-  if (parsed.username !== "" || parsed.password !== "") {
-    return false;
-  }
-  if (parsed.protocol === "https:") {
-    return true;
-  }
-  if (parsed.protocol === "http:") {
-    const host = parsed.hostname.toLowerCase();
-    return host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
-  }
-  return false;
-}
-var mcpCatalogToolSchema = external_exports.object({
-  name: external_exports.string().regex(toolNameRegex),
-  readOnly: external_exports.boolean()
-}).strict();
-var mcpCatalogEntrySchema = external_exports.object({
-  id: external_exports.string().regex(serverIdRegex),
-  description: external_exports.string().max(500).optional(),
-  nativeServerName: external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/).optional(),
-  command: external_exports.string().max(4e3).refine(isAbsolutePath, { message: "command must be an absolute host path" }).optional(),
-  args: external_exports.array(external_exports.string().max(4e3)).max(100).optional(),
-  env: external_exports.record(external_exports.string().regex(envKeyRegex), external_exports.string().max(16e3)).refine((rec) => Object.keys(rec).length <= 100, {
-    message: "env entries cannot exceed 100"
-  }).optional(),
-  cwd: external_exports.string().max(4e3).refine(isAbsolutePath, { message: "cwd must be an absolute host path" }).optional(),
-  serverUrl: external_exports.string().max(4e3).refine(isValidServerUrl, {
-    message: "serverUrl must be valid HTTPS or loopback HTTP without credentials"
-  }).optional(),
-  headers: external_exports.record(external_exports.string().min(1).max(256), external_exports.string().max(16e3)).refine((rec) => Object.keys(rec).length <= 100, {
-    message: "headers entries cannot exceed 100"
-  }).optional(),
-  tools: external_exports.array(mcpCatalogToolSchema).min(1).max(100).refine((tools) => new Set(tools.map((t) => t.name)).size === tools.length, {
-    message: "tools in catalog entry must have unique names"
-  })
-}).strict().refine((entry) => entry.command !== void 0 !== (entry.serverUrl !== void 0), { message: "Require exactly one transport: command or serverUrl" }).refine((entry) => {
-  if (entry.serverUrl !== void 0) {
-    return entry.args === void 0 && entry.cwd === void 0 && entry.env === void 0;
-  }
-  return true;
-}, { message: "Reject stdio-only fields (args, cwd, env) when HTTP transport is used" }).refine((entry) => {
-  if (entry.command !== void 0) {
-    return entry.headers === void 0;
-  }
-  return true;
-}, { message: "Reject headers when stdio transport is used" });
-var mcpCatalogSchema = external_exports.array(mcpCatalogEntrySchema).max(20).refine((entries) => new Set(entries.map((e) => e.id)).size === entries.length, { message: "Duplicate server id in MCP catalog" }).refine((entries) => {
-  try {
-    const serialized = JSON.stringify(entries);
-    return Buffer.byteLength(serialized, "utf8") <= 1024 * 1024;
-  } catch {
-    return false;
-  }
-}, { message: "Serialized MCP catalog exceeds 1MiB" });
-var resolvedAgentPolicySchema = external_exports.object({
-  mode: external_exports.enum(["write", "read-only"]),
-  nativeTools: nativeToolsSchema,
-  mcpServers: external_exports.array(external_exports.object({ serverId: external_exports.string().regex(serverIdRegex), serverName: external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/), tools: external_exports.array(external_exports.string().regex(toolNameRegex)).min(1).max(100) }).strict()).max(20),
-  catalogSha256: external_exports.string().regex(/^[a-f0-9]{64}$/),
-  sha256: external_exports.string().regex(/^[a-f0-9]{64}$/)
-}).strict().superRefine((policy, ctx) => {
-  const { mode, nativeTools, mcpServers, catalogSha256 } = policy;
-  const expected = crypto.createHash("sha256").update(JSON.stringify({ mode, nativeTools, mcpServers, catalogSha256 })).digest("hex");
-  if (policy.sha256 !== expected || !nativeTools.includes("finish") || new Set(mcpServers.map((s) => s.serverId)).size !== mcpServers.length || new Set(mcpServers.map((s) => s.serverName)).size !== mcpServers.length || mcpServers.some((s) => new Set(s.tools).size !== s.tools.length) || mode === "read-only" && nativeTools.some((tool) => !["finish", "view_file"].includes(tool))) {
-    ctx.addIssue({ code: "custom", message: "Invalid resolved policy identity or tool selection" });
-  }
-});
-var WRITE_TOOLS = /* @__PURE__ */ new Set([
-  "write_to_file",
-  "replace_file_content",
-  "multi_replace_file_content"
-]);
-var READ_ONLY_NATIVE_TOOLS = /* @__PURE__ */ new Set([
-  "finish",
-  "view_file"
-]);
-function resolveAgentPolicy(selection, ceilingTools, catalog, mode, namespace) {
-  if (mode !== "write" && mode !== "read-only") {
-    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid mode: ${String(mode)}`);
-  }
-  if (typeof namespace !== "string" || !UUID_REGEX2.test(namespace)) {
-    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid namespace UUID: ${String(namespace)}`);
-  }
-  const parsedCeiling = nativeToolsSchema.safeParse(ceilingTools);
-  if (!parsedCeiling.success) {
-    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid ceiling tools: ${parsedCeiling.error.message}`);
-  }
-  const parsedCatalog = mcpCatalogSchema.safeParse(catalog);
-  if (!parsedCatalog.success) {
-    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid MCP catalog: ${parsedCatalog.error.message}`);
-  }
-  const parsedSelection = agentPolicySelectionSchema.safeParse(selection);
-  if (!parsedSelection.success) {
-    throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid agent policy selection: ${parsedSelection.error.message}`);
-  }
-  let resolvedNative;
-  if (parsedSelection.data.allowedTools === void 0) {
-    if (mode === "read-only") {
-      resolvedNative = parsedCeiling.data.filter((t) => READ_ONLY_NATIVE_TOOLS.has(t));
-    } else {
-      resolvedNative = [...parsedCeiling.data];
-    }
-  } else {
-    const ceilingSet = new Set(parsedCeiling.data);
-    ceilingSet.add("finish");
-    for (const tool of parsedSelection.data.allowedTools) {
-      if (!ceilingSet.has(tool)) {
-        throw new BridgeError("POLICY_NOT_ALLOWED", `Tool '${tool}' exceeds ceiling`);
-      }
-      if (mode === "read-only" && WRITE_TOOLS.has(tool)) {
-        throw new BridgeError("POLICY_NOT_ALLOWED", `Write tool '${tool}' is not allowed in read-only mode`);
-      }
-    }
-    resolvedNative = [...parsedSelection.data.allowedTools];
-  }
-  if (!resolvedNative.includes("finish")) {
-    resolvedNative.push("finish");
-  }
-  const resolvedMcpServers = [];
-  if (parsedSelection.data.mcpServers !== void 0) {
-    const seenServerIds = /* @__PURE__ */ new Set();
-    for (const sel of parsedSelection.data.mcpServers) {
-      if (seenServerIds.has(sel.serverId)) {
-        throw new BridgeError("POLICY_NOT_ALLOWED", `Duplicate serverId '${sel.serverId}' in MCP selection`);
-      }
-      seenServerIds.add(sel.serverId);
-      const entry = parsedCatalog.data.find((c) => c.id === sel.serverId);
-      if (!entry) {
-        throw new BridgeError("POLICY_NOT_ALLOWED", `Unknown MCP server '${sel.serverId}'`);
-      }
-      const catalogToolMap = /* @__PURE__ */ new Map();
-      for (const t of entry.tools) {
-        catalogToolMap.set(t.name, t.readOnly);
-      }
-      let eligibleTools;
-      if (sel.tools === void 0) {
-        if (mode === "write") {
-          eligibleTools = entry.tools.map((t) => t.name);
-        } else {
-          eligibleTools = entry.tools.filter((t) => t.readOnly).map((t) => t.name);
-        }
-      } else {
-        const seenTools = /* @__PURE__ */ new Set();
-        eligibleTools = [];
-        for (const toolName of sel.tools) {
-          if (seenTools.has(toolName)) {
-            throw new BridgeError("POLICY_NOT_ALLOWED", `Duplicate tool '${toolName}' in selection for server '${sel.serverId}'`);
-          }
-          seenTools.add(toolName);
-          const isReadOnly = catalogToolMap.get(toolName);
-          if (isReadOnly === void 0) {
-            throw new BridgeError("POLICY_NOT_ALLOWED", `Unknown tool '${toolName}' for server '${sel.serverId}'`);
-          }
-          if (mode === "read-only" && !isReadOnly) {
-            throw new BridgeError("POLICY_NOT_ALLOWED", `Tool '${toolName}' on server '${sel.serverId}' is not read-only`);
-          }
-          eligibleTools.push(toolName);
-        }
-      }
-      if (eligibleTools.length === 0) {
-        throw new BridgeError("POLICY_NOT_ALLOWED", `No eligible tools for server '${sel.serverId}' in ${mode} mode`);
-      }
-      const cleanNs = namespace.replace(/-/g, "").toLowerCase();
-      const cleanServerId = sel.serverId.replace(/-/g, "_");
-      const serverName = entry.nativeServerName ?? `bridge_${cleanNs}_${cleanServerId}`;
-      if (resolvedMcpServers.some((server) => server.serverName === serverName))
-        throw new BridgeError("POLICY_NOT_ALLOWED", "Selected MCP server aliases must be unique");
-      resolvedMcpServers.push({
-        serverId: sel.serverId,
-        serverName,
-        tools: [...eligibleTools]
-      });
-    }
-  }
-  const selectedPrivateDefinitions = resolvedMcpServers.map((s) => {
-    return catalog.find((c) => c.id === s.serverId);
-  });
-  const catalogSha256 = crypto.createHash("sha256").update(JSON.stringify(selectedPrivateDefinitions)).digest("hex");
-  const publicPayload = {
-    mode,
-    nativeTools: resolvedNative,
-    mcpServers: resolvedMcpServers,
-    catalogSha256
-  };
-  const sha256 = crypto.createHash("sha256").update(JSON.stringify(publicPayload)).digest("hex");
-  return {
-    mode,
-    nativeTools: [...resolvedNative],
-    mcpServers: resolvedMcpServers.map((s) => ({
-      serverId: s.serverId,
-      serverName: s.serverName,
-      tools: [...s.tools]
-    })),
-    catalogSha256,
-    sha256
-  };
-}
-
-// dist/src/integration-policy.js
-import { opendirSync, realpathSync as realpathSync2, statSync } from "node:fs";
-import path5 from "node:path";
-function mapFsError(error62) {
-  const code = error62.code;
-  if (code === "ENOENT" || code === "ENOTDIR")
-    return "not-found";
-  if (code === "EACCES" || code === "EPERM")
-    return "access-denied";
-  return "unresolvable";
-}
-function canonicalizeRoot(entry) {
-  if (typeof entry !== "string")
-    return { reason: "not-a-string" };
-  if (!path5.isAbsolute(entry))
-    return { reason: "not-absolute" };
-  let canonical;
-  try {
-    canonical = realpathSync2.native(entry);
-  } catch (error62) {
-    return { reason: mapFsError(error62), error: error62 };
-  }
-  let isDirectory;
-  try {
-    isDirectory = statSync(canonical).isDirectory();
-  } catch (error62) {
-    return { reason: mapFsError(error62), error: error62 };
-  }
-  if (!isDirectory)
-    return { reason: "not-a-directory" };
-  if (canonical === path5.parse(canonical).root)
-    return { reason: "volume-root" };
-  try {
-    opendirSync(canonical).closeSync();
-  } catch (error62) {
-    return { reason: mapFsError(error62), error: error62 };
-  }
-  return { root: process.platform === "win32" ? canonical.toLowerCase() : canonical };
-}
-function preauthorizedIntegrationRoots(value) {
-  const roots = JSON.parse(value ?? "[]");
-  if (!Array.isArray(roots) || roots.length > 20 || roots.some((root) => typeof root !== "string" || !path5.isAbsolute(root))) {
-    throw new Error("BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS must be a JSON array of up to 20 absolute project directories");
-  }
-  return [...new Set(roots.map((root) => {
-    const result = canonicalizeRoot(root);
-    if ("root" in result)
-      return result.root;
-    throw result.error ?? new Error("Preauthorization requires a project directory, not a volume root");
-  }))];
-}
-function readPreauthorizedIntegrationRoots(value) {
-  const variable = "BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS";
-  if (value === void 0)
-    return { roots: [], issues: [] };
-  let parsed;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return { roots: [], issues: [{ variable, reason: "invalid-json" }] };
-  }
-  if (!Array.isArray(parsed)) {
-    return { roots: [], issues: [{ variable, reason: "not-a-list" }] };
-  }
-  if (parsed.length > 20) {
-    return { roots: [], issues: [{ variable, reason: "too-many-entries" }] };
-  }
-  const roots = [];
-  const issues = [];
-  for (let i = 0; i < parsed.length; i++) {
-    const result = canonicalizeRoot(parsed[i]);
-    if ("root" in result) {
-      roots.push(result.root);
-    } else {
-      issues.push({ variable, index: i, reason: result.reason });
-    }
-  }
-  return { roots: [...new Set(roots)], issues };
-}
-function integrationPreauthorized(workingDirectory, roots) {
-  const canonical = process.platform === "win32" ? workingDirectory.toLowerCase() : workingDirectory;
-  return roots.includes(canonical);
-}
-
-// dist/src/config.js
-import os2 from "node:os";
-
-// dist/src/tool-profiles.js
-var toolProfileSchema = external_exports.enum(["full", "query", "review", "implementation"]);
-var queryTools = /* @__PURE__ */ new Set([
-  "antigravity_workflow_result",
-  "antigravity_peer_receipts",
-  "antigravity_wait_many",
-  "antigravity_group_status",
-  "antigravity_groups",
-  "antigravity_group_wait",
-  "antigravity_group_cancel",
-  "antigravity_memory_list",
-  "antigravity_memory_read",
-  "antigravity_health",
-  "antigravity_get_agent_policy",
-  "antigravity_list_models",
-  "antigravity_get_model",
-  "antigravity_usage",
-  "antigravity_list_project_files",
-  "antigravity_run",
-  "antigravity_resume",
-  "antigravity_status",
-  "antigravity_tasks",
-  "antigravity_events",
-  "antigravity_result",
-  "antigravity_read_result",
-  "antigravity_cancel",
-  "antigravity_sessions",
-  "antigravity_wait",
-  "antigravity_context",
-  "antigravity_handoff",
-  "antigravity_compare",
-  "antigravity_comparison",
-  "antigravity_roles",
-  "antigravity_get_sandbox_policy",
-  "antigravity_set_delivery_mode",
-  "antigravity_send_message",
-  "antigravity_read_structured_result",
-  "antigravity_artifacts",
-  "antigravity_read_artifact"
-]);
-var reviewTools = /* @__PURE__ */ new Set([...queryTools, "antigravity_preview", "antigravity_read_patch", "antigravity_verify"]);
-function toolEnabled(profile, name) {
-  if (profile === "full" || profile === "implementation")
-    return true;
-  return (profile === "query" ? queryTools : reviewTools).has(name);
-}
-function profileReadOnly(profile) {
-  return profile === "query" || profile === "review";
-}
-
-// dist/src/hardening-policy.js
-function isForbiddenAllowedEnvVar(name) {
-  const norm = name.trim().toUpperCase();
-  if (norm === "NODE_OPTIONS" || norm === "NODE_PATH")
-    return true;
-  if (norm.startsWith("LD_") || norm.startsWith("DYLD_"))
-    return true;
-  return false;
-}
-function assertValidAllowedEnvVar(rawName, contextName = "allowedEnvVars") {
-  if (typeof rawName !== "string" || !rawName.trim() || rawName.includes("\0")) {
-    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
-  }
-  const trimmed = rawName.trim();
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
-    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
-  }
-  if (isForbiddenAllowedEnvVar(trimmed)) {
-    throw new BridgeError("FORBIDDEN_ENV_VAR", `${contextName} cannot include runtime injection variable: ${trimmed}`);
-  }
-  return trimmed;
-}
-function validateAllowedEnvVars(vars, contextName = "allowedEnvVars") {
-  const result = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const item of vars) {
-    const valid = assertValidAllowedEnvVar(item, contextName);
-    if (!seen.has(valid)) {
-      seen.add(valid);
-      result.push(valid);
-    }
-  }
-  return result;
-}
-function validateRelativeGlobPattern(pattern, contextName = "Glob pattern") {
-  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
-  }
-  let norm = pattern.replaceAll("\\", "/").trim();
-  while (norm.startsWith("./")) {
-    norm = norm.slice(2);
-  }
-  if (!norm) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
-  }
-  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be project-relative`);
-  }
-  const parts = norm.split("/");
-  if (parts.some((p) => p === "..")) {
-    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must not contain traversal (..)`);
-  }
-  return norm;
-}
-function normalizeSecretExceptionsPolicy(input2, contextName = "BRIDGE_SECRET_EXCEPTIONS") {
-  if (input2 === void 0) {
-    return { version: 2, namePatterns: [] };
-  }
-  if (Array.isArray(input2)) {
-    if (input2.length === 0) {
-      return { version: 2, namePatterns: [] };
-    }
-    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} uses legacy array format. Migrate to strict version 2 object format: {"version":2,"namePatterns":[...]}`);
-  }
-  if (typeof input2 !== "object" || input2 === null) {
-    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must be a strict JSON object: {"version":2,"namePatterns":[...]}`);
-  }
-  const obj = input2;
-  const keys2 = Object.keys(obj);
-  if (keys2.some((k) => k !== "version" && k !== "namePatterns")) {
-    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} contains unexpected fields. Only version and namePatterns are allowed`);
-  }
-  if (!Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns")) {
-    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain version and namePatterns fields`);
-  }
-  if (obj.version !== 2) {
-    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} specifies an unsupported version. Only version 2 is supported`);
-  }
-  if (!Array.isArray(obj.namePatterns)) {
-    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of strings`);
-  }
-  const validatedPatterns = [];
-  const seenPatterns = /* @__PURE__ */ new Set();
-  for (const item of obj.namePatterns) {
-    if (typeof item !== "string" || !item.trim() || item.includes("\0")) {
-      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of non-empty strings without NUL`);
-    }
-    if (item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === "..")) {
-      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain relative glob patterns without traversal`);
-    }
-    const validated = validateRelativeGlobPattern(item, `${contextName}.namePatterns`);
-    if (!seenPatterns.has(validated)) {
-      seenPatterns.add(validated);
-      validatedPatterns.push(validated);
-    }
-  }
-  return {
-    version: 2,
-    namePatterns: validatedPatterns
-  };
-}
-
-// dist/src/config.js
-function positiveInteger(value, fallback, max) {
-  if (value === void 0)
-    return fallback;
-  const n = Number(value);
-  if (!Number.isSafeInteger(n) || n < 1 || n > max)
-    throw new Error(`Invalid numeric configuration: ${value}`);
-  return n;
-}
-var DEFAULT_PROJECT_LIMITS = {
-  maxCopyFiles: 1e4,
-  maxCopyBytes: 256 * 1024 * 1024,
-  maxChangedFiles: 100,
-  secretExclusions: [],
-  secretExceptions: { version: 2, namePatterns: [] }
-};
-function absoluteDirectory(value, name) {
-  if (!path6.isAbsolute(value) || value.includes("\0"))
-    throw new Error(name + " must be an absolute path");
-  return path6.resolve(value);
-}
-function antiAiCraft(value) {
-  if (value === void 0 || value === "on")
-    return true;
-  if (value === "off")
-    return false;
-  throw new Error("BRIDGE_ANTI_AI_CRAFT must be on or off");
-}
-function approvalMode(value) {
-  if (value === void 0)
-    return "auto";
-  if (value === "auto" || value === "ask")
-    return value;
-  throw new Error("BRIDGE_APPROVAL_MODE must be auto or ask");
-}
-function testExecutor(value) {
-  if (value === void 0)
-    return process.platform === "win32" ? "windows-lpac" : "agy";
-  if (value === "agy" || value === "windows-lpac")
-    return value;
-  throw new Error("BRIDGE_TEST_EXECUTOR must be agy or windows-lpac");
-}
-function windowsNodeRuntime(value) {
-  if (value === void 0)
-    return "system";
-  if (value === "system" || value === "portable")
-    return value;
-  throw new Error("BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable");
-}
-function windowsNodeCacheDirectory(value) {
-  const directory = value ?? path6.join(os2.homedir(), ".antigravity-mcp-bridge", "windows-runtimes");
-  if (value !== void 0) {
-    if (process.platform === "win32") {
-      if (!/^[A-Za-z]:[\\/]/.test(value) || /^(?:\\\\|\/\/|\\\\\?\\)/.test(value) || value.slice(2).includes(":") || value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
-        throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be an absolute local non-device path");
-      }
-    } else if (!path6.isAbsolute(value)) {
-      throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY must be absolute");
-    }
-  }
-  const resolved = path6.resolve(directory);
-  if (resolved === path6.parse(resolved).root)
-    throw new Error("BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY cannot be a volume root");
-  return resolved;
-}
-function parseJsonList(value, variable, maxEntries) {
-  if (value === void 0)
-    return { items: [], issues: [] };
-  let parsed;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return { items: [], issues: [{ variable, reason: "invalid-json" }] };
-  }
-  if (!Array.isArray(parsed)) {
-    return { items: [], issues: [{ variable, reason: "not-a-list" }] };
-  }
-  if (maxEntries !== void 0 && parsed.length > maxEntries) {
-    return { items: [], issues: [{ variable, reason: "too-many-entries" }] };
-  }
-  return { items: parsed, issues: [] };
-}
-function validateUniqueEntries(items, variable, schema, getKey) {
-  const candidateEntries = [];
-  const issues = [];
-  for (let i = 0; i < items.length; i++) {
-    const result = schema.safeParse(items[i]);
-    if (!result.success) {
-      issues.push({ variable, index: i, reason: "invalid-entry" });
-    } else {
-      candidateEntries.push({ index: i, entry: result.data });
-    }
-  }
-  const keyCounts = /* @__PURE__ */ new Map();
-  for (const item of candidateEntries) {
-    const key = getKey(item.entry);
-    keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
-  }
-  const valid = [];
-  for (const item of candidateEntries) {
-    const key = getKey(item.entry);
-    if (keyCounts.get(key) > 1) {
-      issues.push({ variable, index: item.index, reason: "duplicate" });
-    } else {
-      valid.push(item.entry);
-    }
-  }
-  issues.sort((a, b) => (a.index ?? -1) - (b.index ?? -1));
-  return { valid, issues };
-}
-function readSecretExceptionsConfig(value) {
-  const variable = "BRIDGE_SECRET_EXCEPTIONS";
-  const emptyPolicy = { version: 2, namePatterns: [] };
-  if (value === void 0)
-    return { secretExceptions: emptyPolicy, issues: [] };
-  let parsed;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "invalid-json" }] };
-  }
-  if (Array.isArray(parsed)) {
-    if (parsed.length === 0)
-      return { secretExceptions: emptyPolicy, issues: [] };
-    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "legacy-format" }] };
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "not-an-object" }] };
-  }
-  const obj = parsed;
-  const keys2 = Object.keys(obj);
-  if (keys2.length !== 2 || !Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns") || obj.version !== 2 || !Array.isArray(obj.namePatterns)) {
-    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "invalid-format" }] };
-  }
-  const validatedPatterns = [];
-  const seenPatterns = /* @__PURE__ */ new Set();
-  const issues = [];
-  for (let i = 0; i < obj.namePatterns.length; i++) {
-    const item = obj.namePatterns[i];
-    if (typeof item !== "string") {
-      issues.push({ variable, index: i, reason: "not-a-string" });
-      continue;
-    }
-    let validated;
-    try {
-      validated = validateRelativeGlobPattern(item, "BRIDGE_SECRET_EXCEPTIONS.namePatterns");
-    } catch {
-      issues.push({ variable, index: i, reason: "invalid-pattern" });
-      continue;
-    }
-    if (!seenPatterns.has(validated)) {
-      seenPatterns.add(validated);
-      validatedPatterns.push(validated);
-    }
-  }
-  return { secretExceptions: { version: 2, namePatterns: validatedPatterns }, issues };
-}
-function readAllowedEnvVars(value) {
-  const variable = "BRIDGE_ALLOWED_ENV_VARS";
-  const list = parseJsonList(value, variable);
-  if (list.issues.length > 0)
-    return { allowedEnvVars: [], issues: list.issues };
-  const allowedEnvVars = [];
-  const seen = /* @__PURE__ */ new Set();
-  const issues = [];
-  for (let i = 0; i < list.items.length; i++) {
-    const item = list.items[i];
-    if (typeof item !== "string") {
-      issues.push({ variable, index: i, reason: "not-a-string" });
-      continue;
-    }
-    const trimmed = item.trim();
-    if (!trimmed || trimmed.includes("\0") || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
-      issues.push({ variable, index: i, reason: "invalid-name" });
-      continue;
-    }
-    if (isForbiddenAllowedEnvVar(trimmed)) {
-      issues.push({ variable, index: i, reason: "forbidden-name" });
-      continue;
-    }
-    if (!seen.has(trimmed)) {
-      seen.add(trimmed);
-      allowedEnvVars.push(trimmed);
-    }
-  }
-  return { allowedEnvVars, issues };
-}
-function readMcpCatalog(value) {
-  const variable = "BRIDGE_MCP_CATALOG";
-  const list = parseJsonList(value, variable, 20);
-  if (list.issues.length > 0)
-    return { mcpCatalog: [], issues: list.issues };
-  const { valid, issues } = validateUniqueEntries(list.items, variable, mcpCatalogEntrySchema, (entry) => entry.id);
-  let validRemaining = valid;
-  if (validRemaining.length > 0) {
-    const serialized = JSON.stringify(validRemaining);
-    if (Buffer.byteLength(serialized, "utf8") > 1024 * 1024) {
-      validRemaining = [];
-      issues.push({ variable, reason: "too-large" });
-    }
-  }
-  return { mcpCatalog: validRemaining, issues };
-}
-function readCustomRoles(value) {
-  const variable = "BRIDGE_CUSTOM_ROLES";
-  const list = parseJsonList(value, variable, 20);
-  if (list.issues.length > 0)
-    return { customRoles: [], issues: list.issues };
-  const { valid, issues } = validateUniqueEntries(list.items, variable, customRoleElementSchema, (role) => role.name);
-  return { customRoles: valid, issues };
-}
-function readAllowedAgyTools(value) {
-  const variable = "BRIDGE_ALLOWED_AGY_TOOLS";
-  if (value === void 0) {
-    return {
-      allowedAgyTools: [...nativeToolSchema.options],
-      enforceAgentPolicy: false,
-      issues: []
-    };
-  }
-  const list = parseJsonList(value, variable, 5);
-  if (list.issues.length > 0) {
-    return {
-      allowedAgyTools: [],
-      enforceAgentPolicy: true,
-      issues: list.issues
-    };
-  }
-  const valid = [];
-  const seen = /* @__PURE__ */ new Set();
-  const issues = [];
-  for (let i = 0; i < list.items.length; i++) {
-    const item = list.items[i];
-    const parsed = nativeToolSchema.safeParse(item);
-    if (!parsed.success) {
-      issues.push({ variable, index: i, reason: "invalid-entry" });
-      continue;
-    }
-    if (seen.has(parsed.data)) {
-      issues.push({ variable, index: i, reason: "duplicate" });
-    } else {
-      seen.add(parsed.data);
-      valid.push(parsed.data);
-    }
-  }
-  return {
-    allowedAgyTools: valid,
-    enforceAgentPolicy: true,
-    issues
-  };
-}
-function readSecretExclusionsConfig(value) {
-  const variable = "BRIDGE_SECRET_EXCLUSIONS";
-  if (value === void 0)
-    return { secretExclusions: [], issues: [] };
-  const list = parseJsonList(value, variable);
-  if (list.issues.length > 0) {
-    return { secretExclusions: [], secretExclusionsInvalid: true, issues: list.issues };
-  }
-  const issues = [];
-  const items = [];
-  for (let i = 0; i < list.items.length; i++) {
-    const item = list.items[i];
-    if (typeof item !== "string") {
-      issues.push({ variable, index: i, reason: "invalid-entry" });
-      continue;
-    }
-    const trimmed = item.trim();
-    if (!trimmed || trimmed.includes("\0")) {
-      issues.push({ variable, index: i, reason: "invalid-entry" });
-      continue;
-    }
-    let validated;
-    try {
-      validated = validateRelativeGlobPattern(trimmed, variable);
-      if (validateRelativeGlobPattern(validated, variable) !== validated) {
-        issues.push({ variable, index: i, reason: "invalid-pattern" });
-        continue;
-      }
-    } catch {
-      issues.push({ variable, index: i, reason: "invalid-pattern" });
-      continue;
-    }
-    items.push(validated);
-  }
-  if (issues.length > 0) {
-    return { secretExclusions: [], secretExclusionsInvalid: true, issues };
-  }
-  return { secretExclusions: [...new Set(items)], issues: [] };
-}
-function assertSecretExclusionsUsable(limits) {
-  if (limits.secretExclusionsInvalid) {
-    throw new BridgeError("INVALID_CONFIGURATION", "BRIDGE_SECRET_EXCLUSIONS is invalid. See configurationIssues in antigravity_health.");
-  }
-}
-function assertForbiddenDirectoriesUsable(config2) {
-  if (config2.forbiddenDirectoriesInvalid) {
-    throw new BridgeError("INVALID_CONFIGURATION", "FORBIDDEN_DIRECTORIES is invalid. See configurationIssues in antigravity_health.");
-  }
-}
-function isFullWindowsRoot(entry) {
-  if (/^[A-Za-z]:[\\/]/.test(entry))
-    return true;
-  if (/^(?:\\\\|\/\/)(?![\\/]|[?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/].*)?$/.test(entry))
-    return true;
-  return false;
-}
-function readForbiddenDirectories(value) {
-  const variable = "FORBIDDEN_DIRECTORIES";
-  if (!value)
-    return { forbiddenDirectories: [], issues: [] };
-  const entries = value.split(path6.delimiter).filter(Boolean);
-  const issues = [];
-  const valid = [];
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    if (entry.includes("\0")) {
-      issues.push({ variable, index: i, reason: "invalid-entry" });
-      continue;
-    }
-    const isAbsolute4 = process.platform === "win32" ? isFullWindowsRoot(entry) : path6.isAbsolute(entry);
-    if (!isAbsolute4) {
-      issues.push({ variable, index: i, reason: "not-absolute" });
-      continue;
-    }
-    valid.push(path6.resolve(entry));
-  }
-  if (issues.length > 0) {
-    return { forbiddenDirectories: valid, forbiddenDirectoriesInvalid: true, issues };
-  }
-  return { forbiddenDirectories: valid, issues: [] };
-}
-function stateDirectoryFrom(env) {
-  return env.BRIDGE_STATE_DIRECTORY || path6.join(os2.homedir(), ".antigravity-mcp-bridge");
-}
-function loadConfig(env = process.env) {
-  const defaultModel = env.BRIDGE_DEFAULT_MODEL;
-  if (defaultModel !== void 0 && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
-    throw new Error("BRIDGE_DEFAULT_MODEL must be an exact model ID");
-  }
-  const memoryMaxEntries = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRIES, 100, 1e4);
-  const memoryMaxBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_BYTES, 1024 * 1024, 64 * 1024 * 1024);
-  const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
-  if (memoryMaxEntryBytes > memoryMaxBytes)
-    throw new Error("BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES");
-  const preauthorized = readPreauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS);
-  const allowedEnv = readAllowedEnvVars(env.BRIDGE_ALLOWED_ENV_VARS);
-  const secretExceptions = readSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS);
-  const mcpCatalog = readMcpCatalog(env.BRIDGE_MCP_CATALOG);
-  const customRoles = readCustomRoles(env.BRIDGE_CUSTOM_ROLES);
-  const allowedAgyTools = readAllowedAgyTools(env.BRIDGE_ALLOWED_AGY_TOOLS);
-  const secretExclusions = readSecretExclusionsConfig(env.BRIDGE_SECRET_EXCLUSIONS);
-  const forbiddenDirs = readForbiddenDirectories(env.FORBIDDEN_DIRECTORIES);
-  const configurationIssues = [
-    ...preauthorized.issues,
-    ...allowedEnv.issues,
-    ...secretExceptions.issues,
-    ...mcpCatalog.issues,
-    ...customRoles.issues,
-    ...allowedAgyTools.issues,
-    ...secretExclusions.issues,
-    ...forbiddenDirs.issues
-  ];
-  return {
-    approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
-    antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
-    ...env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY ? { antiAiCraftDirectory: absoluteDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY, "BRIDGE_ANTI_AI_CRAFT_DIRECTORY") } : {},
-    toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
-    preauthorizedIntegrationRoots: preauthorized.roots,
-    configurationIssues,
-    customRoles: customRoles.customRoles,
-    enforceAgentPolicy: allowedAgyTools.enforceAgentPolicy || env.BRIDGE_MCP_CATALOG !== void 0,
-    allowedAgyTools: allowedAgyTools.allowedAgyTools,
-    mcpCatalog: mcpCatalog.mcpCatalog,
-    agyPath: env.AGY_PATH || "agy",
-    defaultModel,
-    maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
-    maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1e3),
-    maxRetainedTasks: positiveInteger(env.MAX_RETAINED_TASKS, 100, 1e4),
-    defaultTimeoutSeconds: positiveInteger(env.DEFAULT_TIMEOUT_SECONDS, 1800, 86400),
-    eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
-    maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
-    copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: stateDirectoryFrom(env),
-    memoryMaxEntries,
-    memoryMaxBytes,
-    memoryMaxEntryBytes,
-    maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
-    maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
-    maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
-    forbiddenDirectories: forbiddenDirs.forbiddenDirectories,
-    ...forbiddenDirs.forbiddenDirectoriesInvalid ? { forbiddenDirectoriesInvalid: true } : {},
-    testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
-    windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
-    windowsNodeCacheDirectory: windowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY),
-    secretExclusions: secretExclusions.secretExclusions,
-    ...secretExclusions.secretExclusionsInvalid ? { secretExclusionsInvalid: true } : {},
-    secretExceptions: secretExceptions.secretExceptions,
-    allowedEnvVars: allowedEnv.allowedEnvVars
-  };
-}
-function configurationWarning(issues) {
-  if (issues.length === 0)
-    return void 0;
-  const formatted = issues.map((issue2) => `${issue2.variable}${issue2.index !== void 0 ? `[${issue2.index}]` : ""} ${issue2.reason}`).join(", ");
-  return `Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
-}
-
-// dist/src/skills.js
 var MAX_PROVIDED_SKILLS = 8;
 var MAX_RESOURCES_PER_SKILL = 100;
 var MAX_TOTAL_BUNDLES_BYTES = 1024 * 1024;
@@ -31550,7 +31038,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `copyDirectory must be a non-link directory: ${copyDirectory}`);
   }
-  const agentsPath = path7.join(copyDirectory, ".agents");
+  const agentsPath = path6.join(copyDirectory, ".agents");
   const agentsStat = await lstat(agentsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -31561,7 +31049,7 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Existing .agents is not a directory or is a symbolic link");
     }
   }
-  const skillsPath = path7.join(copyDirectory, ".agents", "skills");
+  const skillsPath = path6.join(copyDirectory, ".agents", "skills");
   const skillsStat = await lstat(skillsPath).catch((err) => {
     if (err.code === "ENOENT")
       return void 0;
@@ -31580,9 +31068,9 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     }
   }
   for (const bundle of bundles) {
-    const relSkillDir = path7.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
+    const relSkillDir = path6.join(".agents", "skills", bundle.name.toLowerCase()).replaceAll("\\", "/");
     await checkedPath(copyDirectory, relSkillDir, false);
-    const targetSkillDir = path7.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
+    const targetSkillDir = path6.join(copyDirectory, ".agents", "skills", bundle.name.toLowerCase());
     const targetStat = await lstat(targetSkillDir).catch((err) => {
       if (err.code === "ENOENT")
         return void 0;
@@ -31595,10 +31083,10 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
   await mkdir(skillsPath, { recursive: true });
   const stagedSkills = [];
   for (const bundle of bundles) {
-    const skillDir = path7.join(skillsPath, bundle.name.toLowerCase());
+    const skillDir = path6.join(skillsPath, bundle.name.toLowerCase());
     await mkdir(skillDir, { recursive: true });
     const files = [];
-    const skillMdTarget = path7.join(skillDir, "SKILL.md");
+    const skillMdTarget = path6.join(skillDir, "SKILL.md");
     await writeFile(skillMdTarget, bundle.content, { encoding: "utf8", flag: "wx" });
     files.push(Object.freeze({
       path: `.agents/skills/${bundle.name.toLowerCase()}/SKILL.md`,
@@ -31607,8 +31095,8 @@ async function stageProvidedSkills(copyDirectory, bundles, limits = DEFAULT_PROJ
     if (bundle.resources) {
       for (const res of bundle.resources) {
         const norm = res.path.replaceAll("\\", "/");
-        const targetFile = path7.join(skillDir, ...norm.split("/"));
-        await mkdir(path7.dirname(targetFile), { recursive: true });
+        const targetFile = path6.join(skillDir, ...norm.split("/"));
+        await mkdir(path6.dirname(targetFile), { recursive: true });
         await writeFile(targetFile, res.content, { encoding: "utf8", flag: "wx" });
         files.push(Object.freeze({
           path: `.agents/skills/${bundle.name.toLowerCase()}/${norm}`,
@@ -31717,7 +31205,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
     throw new BridgeError("SKILL_VERIFICATION_FAILED", "copyDirectory must be a directory and not a link");
   }
   for (const rel of [".agents", ".agents/skills"]) {
-    const full = path7.join(copyDirectory, ...rel.split("/"));
+    const full = path6.join(copyDirectory, ...rel.split("/"));
     const st = await lstat(full).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Missing required directory: ${rel}`);
     });
@@ -31728,7 +31216,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
   let totalVerifiedBytes = 0;
   for (const skill of manifest) {
     const skillRelative = `.agents/skills/${skill.name.toLowerCase()}`;
-    const skillDir = path7.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
+    const skillDir = path6.join(copyDirectory, ".agents", "skills", skill.name.toLowerCase());
     const skillStat = await lstat(skillDir).catch(() => {
       throw new BridgeError("SKILL_VERIFICATION_FAILED", `Skill directory not found: ${skillRelative}`);
     });
@@ -31772,7 +31260,7 @@ async function verifyProvidedSkills(copyDirectory, manifest) {
       const entries = await readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         const entryRel = relPrefix + "/" + entry.name;
-        const fullPath = path7.join(dir, entry.name);
+        const fullPath = path6.join(dir, entry.name);
         const st = await lstat(fullPath);
         if (st.isSymbolicLink()) {
           throw new BridgeError("SKILL_VERIFICATION_FAILED", `Symbolic link found in skill: ${entryRel}`);
@@ -32096,10 +31584,10 @@ function renderLines(text) {
 import * as crypto2 from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import * as path8 from "node:path";
+import * as path7 from "node:path";
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import * as fsp from "node:fs/promises";
-import * as os3 from "node:os";
+import * as os2 from "node:os";
 var EXECUTION_POLICY_PATHS = [
   ".agents/hooks.json",
   ".agents/bridge-execution-hook.mjs",
@@ -32119,7 +31607,7 @@ var stagedExecutionPolicySchema = external_exports.object({
   executionId: external_exports.string().regex(UUID_REGEX3),
   receiptIdentity: external_exports.object({ dev: external_exports.string().regex(/^[0-9]+$/), ino: external_exports.string().regex(/^[0-9]+$/) }).strict(),
   receiptPath: external_exports.string().min(1).max(4e3).refine((val) => {
-    return path8.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
+    return path7.isAbsolute(val) && (process.platform !== "win32" || /^[A-Za-z]:[\\/]/.test(val));
   }, { message: "receiptPath must be an absolute path" }),
   files: external_exports.array(stagedExecutionPolicyFileSchema).length(4).refine((files) => {
     const paths2 = new Set(files.map((f) => f.path));
@@ -32162,15 +31650,15 @@ function isWindowsDeviceName3(segment) {
 }
 function pathsEqual(p1, p2) {
   if (process.platform === "win32") {
-    return path8.resolve(p1).toLowerCase() === path8.resolve(p2).toLowerCase();
+    return path7.resolve(p1).toLowerCase() === path7.resolve(p2).toLowerCase();
   }
-  return path8.resolve(p1) === path8.resolve(p2);
+  return path7.resolve(p1) === path7.resolve(p2);
 }
 function validatePathFormat(targetPath, label) {
   if (typeof targetPath !== "string" || !targetPath || targetPath.length > 4e3) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} must be a valid path string`);
   }
-  if (!path8.isAbsolute(targetPath)) {
+  if (!path7.isAbsolute(targetPath)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", `${label} must be absolute: ${targetPath}`);
   }
   if (process.platform === "win32") {
@@ -32189,8 +31677,8 @@ function validatePathFormat(targetPath, label) {
   }
   if (targetPath.split(/[\\/]+/).some((part) => part === "." || part === ".."))
     throw new BridgeError("UNSAFE_PROJECT_PATH", "Path traversal segments are not allowed");
-  const resolved = path8.resolve(targetPath);
-  const parsed = path8.parse(resolved);
+  const resolved = path7.resolve(targetPath);
+  const parsed = path7.parse(resolved);
   const relFromRoot = resolved.slice(parsed.root.length);
   const segments = relFromRoot.split(/[\\/]+/).filter(Boolean);
   for (const seg of segments) {
@@ -32207,13 +31695,13 @@ function validatePathFormat(targetPath, label) {
 }
 async function assertNoLinkAncestry(targetPath, label) {
   validatePathFormat(targetPath, label);
-  const resolved = path8.resolve(targetPath);
-  const parsed = path8.parse(resolved);
+  const resolved = path7.resolve(targetPath);
+  const parsed = path7.parse(resolved);
   const relFromRoot = resolved.slice(parsed.root.length);
   const segments = relFromRoot.split(/[\\/]+/).filter(Boolean);
   let current = parsed.root;
   for (const seg of segments) {
-    current = path8.join(current, seg);
+    current = path7.join(current, seg);
     let stat4;
     try {
       stat4 = await fsp.lstat(current);
@@ -32741,11 +32229,11 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
   const selectedDefinitions = setup.policy.mcpServers.map((server) => setup.catalog.find((entry) => entry.id === server.serverId));
   if (selectedDefinitions.some((entry) => !entry) || crypto2.createHash("sha256").update(JSON.stringify(selectedDefinitions)).digest("hex") !== setup.policy.catalogSha256)
     throw new BridgeError("AGENT_POLICY_CHANGED", "Trusted MCP catalog changed after task admission");
-  const canonicalTmp = await fsp.realpath(os3.tmpdir());
-  const absoluteCopy = path8.resolve(copyDirectory);
-  const copyParent = path8.dirname(absoluteCopy);
+  const canonicalTmp = await fsp.realpath(os2.tmpdir());
+  const absoluteCopy = path7.resolve(copyDirectory);
+  const copyParent = path7.dirname(absoluteCopy);
   const canonicalParent = await fsp.realpath(copyParent);
-  if (!pathsEqual(canonicalTmp, canonicalParent) || !path8.basename(absoluteCopy).startsWith("agy-mcp-copy-")) {
+  if (!pathsEqual(canonicalTmp, canonicalParent) || !path7.basename(absoluteCopy).startsWith("agy-mcp-copy-")) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory must be an owned temporary copy directly under os.tmpdir()");
   }
   const copyInfo = await fsp.lstat(absoluteCopy).catch(() => void 0);
@@ -32753,12 +32241,12 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory must be an existing non-link directory");
   }
   const canonicalCopy = await fsp.realpath(absoluteCopy);
-  if (!path8.basename(canonicalCopy).startsWith("agy-mcp-copy-")) {
+  if (!path7.basename(canonicalCopy).startsWith("agy-mcp-copy-")) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "canonical copyDirectory basename must start with agy-mcp-copy-");
   }
   await assertNoLinkAncestry(setup.stateDirectory, "stateDirectory");
-  const resolvedState = path8.resolve(setup.stateDirectory);
-  const stateParsed = path8.parse(resolvedState);
+  const resolvedState = path7.resolve(setup.stateDirectory);
+  const stateParsed = path7.parse(resolvedState);
   if (resolvedState === stateParsed.root) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "stateDirectory cannot be a volume root");
   }
@@ -32770,21 +32258,21 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
   if (pathsEqual(canonicalState, stateParsed.root)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "canonical stateDirectory cannot be a root directory");
   }
-  const relCopyState = path8.relative(canonicalCopy, canonicalState);
-  if (relCopyState === "" || !relCopyState.startsWith("..") && !path8.isAbsolute(relCopyState)) {
+  const relCopyState = path7.relative(canonicalCopy, canonicalState);
+  if (relCopyState === "" || !relCopyState.startsWith("..") && !path7.isAbsolute(relCopyState)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "stateDirectory cannot be inside copyDirectory");
   }
-  const relStateCopy = path8.relative(canonicalState, canonicalCopy);
-  if (relStateCopy === "" || !relStateCopy.startsWith("..") && !path8.isAbsolute(relStateCopy)) {
+  const relStateCopy = path7.relative(canonicalState, canonicalCopy);
+  if (relStateCopy === "" || !relStateCopy.startsWith("..") && !path7.isAbsolute(relStateCopy)) {
     throw new BridgeError("UNSAFE_PROJECT_PATH", "copyDirectory cannot be inside stateDirectory");
   }
   if (typeof setup.executionId !== "string" || !UUID_REGEX3.test(setup.executionId)) {
     throw new BridgeError("POLICY_NOT_ALLOWED", `Invalid executionId UUID: ${String(setup.executionId)}`);
   }
   validatePathFormat(copyDirectory, "copyDirectory");
-  for (const directory of [copyDirectory, path8.join(copyDirectory, ".agents")]) {
+  for (const directory of [copyDirectory, path7.join(copyDirectory, ".agents")]) {
     for (const name of ["node", "node.exe", "node.com", "node.cmd", "node.bat"]) {
-      if (await fsp.lstat(path8.join(directory, name)).then(() => true, (error62) => {
+      if (await fsp.lstat(path7.join(directory, name)).then(() => true, (error62) => {
         if (error62.code === "ENOENT")
           return false;
         throw error62;
@@ -32793,7 +32281,7 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
     }
   }
   for (const managedPath of EXECUTION_POLICY_PATHS) {
-    const target = path8.join(copyDirectory, managedPath);
+    const target = path7.join(copyDirectory, managedPath);
     let stat4;
     try {
       stat4 = await fsp.lstat(target);
@@ -32807,7 +32295,7 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       throw new BridgeError("CONFLICTING_EXECUTION_POLICY", `Conflicting managed path exists: ${managedPath}`);
     }
   }
-  const agentsDir = path8.join(copyDirectory, ".agents");
+  const agentsDir = path7.join(copyDirectory, ".agents");
   try {
     const agentsStat = await fsp.lstat(agentsDir);
     if (agentsStat.isSymbolicLink()) {
@@ -32840,10 +32328,10 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       allowedSkillFiles.push(normalized);
     }
   }
-  const canonicalReceiptsDir = path8.join(canonicalState, "execution-receipts");
-  const canonicalReceiptPath = path8.join(canonicalReceiptsDir, `${setup.executionId}.jsonl`);
-  const authorizedReceiptsDir = path8.join(resolvedState, "execution-receipts");
-  const authorizedReceiptPath = path8.join(authorizedReceiptsDir, `${setup.executionId}.jsonl`);
+  const canonicalReceiptsDir = path7.join(canonicalState, "execution-receipts");
+  const canonicalReceiptPath = path7.join(canonicalReceiptsDir, `${setup.executionId}.jsonl`);
+  const authorizedReceiptsDir = path7.join(resolvedState, "execution-receipts");
+  const authorizedReceiptPath = path7.join(authorizedReceiptsDir, `${setup.executionId}.jsonl`);
   await fsp.mkdir(authorizedReceiptsDir, { recursive: true, mode: 448 });
   await assertNoLinkAncestry(authorizedReceiptPath, "receiptPath");
   const createdFiles = [];
@@ -32954,20 +32442,20 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Staging requires ${totalBytes} bytes, but remaining limit is ${remaining.maxCopyBytes}`);
     }
     await fsp.mkdir(agentsDir, { recursive: true, mode: 448 });
-    const hooksPath = path8.join(copyDirectory, ".agents", "hooks.json");
+    const hooksPath = path7.join(copyDirectory, ".agents", "hooks.json");
     await fsp.writeFile(hooksPath, hooksJsonContent, { flag: "wx", mode: 384 });
     createdFiles.push(hooksPath);
-    const hookScriptPath = path8.join(copyDirectory, ".agents", "bridge-execution-hook.mjs");
+    const hookScriptPath = path7.join(copyDirectory, ".agents", "bridge-execution-hook.mjs");
     await fsp.writeFile(hookScriptPath, hookScriptContent, { flag: "wx", mode: 384 });
     createdFiles.push(hookScriptPath);
-    const manifestPath = path8.join(copyDirectory, ".agents", "bridge-execution-policy.json");
+    const manifestPath = path7.join(copyDirectory, ".agents", "bridge-execution-policy.json");
     await fsp.writeFile(manifestPath, manifestContent, { flag: "wx", mode: 384 });
     createdFiles.push(manifestPath);
-    const mcpConfigPath = path8.join(copyDirectory, ".agents", "mcp_config.json");
+    const mcpConfigPath = path7.join(copyDirectory, ".agents", "mcp_config.json");
     await fsp.writeFile(mcpConfigPath, mcpConfigContent, { flag: "wx", mode: 384 });
     createdFiles.push(mcpConfigPath);
     if (process.platform === "win32") {
-      await promisify(execFile)(path8.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "icacls.exe"), [mcpConfigPath, "/inheritance:d"], { windowsHide: true, timeout: 1e4, maxBuffer: 8192 });
+      await promisify(execFile)(path7.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "icacls.exe"), [mcpConfigPath, "/inheritance:d"], { windowsHide: true, timeout: 1e4, maxBuffer: 8192 });
     }
     const hooksSha256 = crypto2.createHash("sha256").update(hooksJsonContent, "utf8").digest("hex");
     const manifestSha256 = crypto2.createHash("sha256").update(manifestContent, "utf8").digest("hex");
@@ -33000,11 +32488,11 @@ async function stageExecutionPolicy(copyDirectory, setup, remaining) {
       try {
         await assertNoLinkAncestry(created, "created helper");
         const isReceipt = pathsEqual(created, authorizedReceiptPath);
-        if (!isReceipt && !EXECUTION_POLICY_PATHS.some((file3) => pathsEqual(created, path8.join(absoluteCopy, file3)))) {
+        if (!isReceipt && !EXECUTION_POLICY_PATHS.some((file3) => pathsEqual(created, path7.join(absoluteCopy, file3)))) {
           throw new Error("Unsafe helper cleanup");
         }
-        const expectedParent = isReceipt ? canonicalReceiptsDir : path8.join(canonicalCopy, ".agents");
-        if (!pathsEqual(await fsp.realpath(path8.dirname(created)), expectedParent))
+        const expectedParent = isReceipt ? canonicalReceiptsDir : path7.join(canonicalCopy, ".agents");
+        if (!pathsEqual(await fsp.realpath(path7.dirname(created)), expectedParent))
           throw new Error("Helper cleanup parent changed");
         const current = await fsp.lstat(created, { bigint: true }).catch((error63) => {
           if (error63.code === "ENOENT")
@@ -33035,17 +32523,17 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
   if (!copyInfo || !copyInfo.isDirectory() || copyInfo.isSymbolicLink()) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "copyDirectory must be a non-link directory");
   }
-  const resolvedState = path8.resolve(stateDirectory);
+  const resolvedState = path7.resolve(stateDirectory);
   const stateInfo = await fsp.lstat(resolvedState).catch(() => void 0);
   if (!stateInfo || !stateInfo.isDirectory() || stateInfo.isSymbolicLink()) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "stateDirectory must be a non-link directory");
   }
   const canonicalState = await fsp.realpath(resolvedState);
-  const expectedReceiptPath = path8.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const expectedReceiptPath = path7.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "Receipt path boundary mismatch");
   }
-  const authorizedReceiptPath = path8.join(resolvedState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const authorizedReceiptPath = path7.join(resolvedState, "execution-receipts", `${staged.executionId}.jsonl`);
   await assertNoLinkAncestry(authorizedReceiptPath, "receiptPath");
   const canonicalActual = await fsp.realpath(authorizedReceiptPath).catch(() => void 0);
   if (!canonicalActual || !pathsEqual(canonicalActual, expectedReceiptPath)) {
@@ -33060,7 +32548,7 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
     throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", "Receipt file is missing or not a regular file");
   }
   for (const file3 of staged.files) {
-    const fullPath = path8.join(copyDirectory, file3.path);
+    const fullPath = path7.join(copyDirectory, file3.path);
     await assertNoLinkAncestry(fullPath, "managed helper");
     const stat4 = await fsp.lstat(fullPath).catch(() => void 0);
     if (!stat4 || stat4.isSymbolicLink() || !stat4.isFile()) {
@@ -33075,7 +32563,7 @@ async function verifyExecutionPolicy(copyDirectory, staged, stateDirectory) {
       throw new BridgeError("EXECUTION_POLICY_VERIFICATION_FAILED", `File hash mismatch for ${file3.path}`);
     }
   }
-  const manifestPath = path8.join(copyDirectory, ".agents", "bridge-execution-policy.json");
+  const manifestPath = path7.join(copyDirectory, ".agents", "bridge-execution-policy.json");
   let manifest;
   try {
     const raw = await fsp.readFile(manifestPath, "utf8");
@@ -33093,17 +32581,17 @@ async function readExecutionPolicyReceipt(staged, stateDirectory, offset = 0, co
     throw new BridgeError("INVALID_RECEIPT", `Invalid staged execution policy metadata: ${parsedStaged.error.message}`);
   }
   await assertNoLinkAncestry(stateDirectory, "stateDirectory");
-  const resolvedState = path8.resolve(stateDirectory);
+  const resolvedState = path7.resolve(stateDirectory);
   const stateInfo = await fsp.lstat(resolvedState).catch(() => void 0);
   if (!stateInfo || !stateInfo.isDirectory() || stateInfo.isSymbolicLink()) {
     throw new BridgeError("INVALID_RECEIPT", "stateDirectory must be an existing non-link directory");
   }
   const canonicalState = await fsp.realpath(resolvedState);
-  const expectedReceiptPath = path8.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const expectedReceiptPath = path7.join(canonicalState, "execution-receipts", `${staged.executionId}.jsonl`);
   if (!pathsEqual(staged.receiptPath, expectedReceiptPath)) {
     throw new BridgeError("INVALID_RECEIPT", "Receipt path does not match stateDirectory and executionId");
   }
-  const authorizedReceiptPath = path8.join(resolvedState, "execution-receipts", `${staged.executionId}.jsonl`);
+  const authorizedReceiptPath = path7.join(resolvedState, "execution-receipts", `${staged.executionId}.jsonl`);
   await assertNoLinkAncestry(authorizedReceiptPath, "receiptPath");
   const canonicalActual = await fsp.realpath(authorizedReceiptPath).catch(() => void 0);
   if (!canonicalActual || !pathsEqual(canonicalActual, expectedReceiptPath)) {
@@ -33295,12 +32783,12 @@ function readReceiptEditsSync(staged, offset, conversationId) {
 async function discardExecutionPolicy(staged, stateDirectory) {
   stagedExecutionPolicySchema.parse(staged);
   await assertNoLinkAncestry(stateDirectory, "stateDirectory");
-  const resolvedState = path8.resolve(stateDirectory);
+  const resolvedState = path7.resolve(stateDirectory);
   const state = await fsp.realpath(resolvedState);
-  const expected = path8.join(state, "execution-receipts", staged.executionId + ".jsonl");
+  const expected = path7.join(state, "execution-receipts", staged.executionId + ".jsonl");
   if (!pathsEqual(expected, staged.receiptPath))
     throw new BridgeError("INVALID_RECEIPT", "Private receipt cleanup boundary mismatch");
-  const authorizedReceiptPath = path8.join(resolvedState, "execution-receipts", staged.executionId + ".jsonl");
+  const authorizedReceiptPath = path7.join(resolvedState, "execution-receipts", staged.executionId + ".jsonl");
   await assertNoLinkAncestry(authorizedReceiptPath, "receiptPath");
   let canonicalActual;
   try {
@@ -33330,7 +32818,111 @@ async function discardExecutionPolicy(staged, stateDirectory) {
 // dist/src/secret-preflight.js
 import { createHash as createHash7 } from "node:crypto";
 import { lstat as lstat4, open as open3 } from "node:fs/promises";
-import path9 from "node:path";
+import path8 from "node:path";
+
+// dist/src/hardening-policy.js
+function isForbiddenAllowedEnvVar(name) {
+  const norm = name.trim().toUpperCase();
+  if (norm === "NODE_OPTIONS" || norm === "NODE_PATH")
+    return true;
+  if (norm.startsWith("LD_") || norm.startsWith("DYLD_"))
+    return true;
+  return false;
+}
+function assertValidAllowedEnvVar(rawName, contextName = "allowedEnvVars") {
+  if (typeof rawName !== "string" || !rawName.trim() || rawName.includes("\0")) {
+    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
+  }
+  const trimmed = rawName.trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+    throw new BridgeError("INVALID_ALLOWED_ENV_VAR", `${contextName} must contain exact environment variable names`);
+  }
+  if (isForbiddenAllowedEnvVar(trimmed)) {
+    throw new BridgeError("FORBIDDEN_ENV_VAR", `${contextName} cannot include runtime injection variable: ${trimmed}`);
+  }
+  return trimmed;
+}
+function validateAllowedEnvVars(vars, contextName = "allowedEnvVars") {
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of vars) {
+    const valid = assertValidAllowedEnvVar(item, contextName);
+    if (!seen.has(valid)) {
+      seen.add(valid);
+      result.push(valid);
+    }
+  }
+  return result;
+}
+function validateRelativeGlobPattern(pattern, contextName = "Glob pattern") {
+  if (typeof pattern !== "string" || !pattern.trim() || pattern.includes("\0")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
+  }
+  let norm = pattern.replaceAll("\\", "/").trim();
+  while (norm.startsWith("./")) {
+    norm = norm.slice(2);
+  }
+  if (!norm) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be a non-empty string without NUL`);
+  }
+  if (norm.startsWith("/") || /^[A-Za-z]:/.test(norm)) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must be project-relative`);
+  }
+  const parts = norm.split("/");
+  if (parts.some((p) => p === "..")) {
+    throw new BridgeError("INVALID_GLOB_PATTERN", `${contextName} must not contain traversal (..)`);
+  }
+  return norm;
+}
+function normalizeSecretExceptionsPolicy(input2, contextName = "BRIDGE_SECRET_EXCEPTIONS") {
+  if (input2 === void 0) {
+    return { version: 2, namePatterns: [] };
+  }
+  if (Array.isArray(input2)) {
+    if (input2.length === 0) {
+      return { version: 2, namePatterns: [] };
+    }
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} uses legacy array format. Migrate to strict version 2 object format: {"version":2,"namePatterns":[...]}`);
+  }
+  if (typeof input2 !== "object" || input2 === null) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must be a strict JSON object: {"version":2,"namePatterns":[...]}`);
+  }
+  const obj = input2;
+  const keys2 = Object.keys(obj);
+  if (keys2.some((k) => k !== "version" && k !== "namePatterns")) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} contains unexpected fields. Only version and namePatterns are allowed`);
+  }
+  if (!Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns")) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain version and namePatterns fields`);
+  }
+  if (obj.version !== 2) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} specifies an unsupported version. Only version 2 is supported`);
+  }
+  if (!Array.isArray(obj.namePatterns)) {
+    throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of strings`);
+  }
+  const validatedPatterns = [];
+  const seenPatterns = /* @__PURE__ */ new Set();
+  for (const item of obj.namePatterns) {
+    if (typeof item !== "string" || !item.trim() || item.includes("\0")) {
+      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName}.namePatterns must be a JSON array of non-empty strings without NUL`);
+    }
+    if (item.startsWith("/") || /^[A-Za-z]:/.test(item) || item.split(/[\\/]+/).some((part) => part === "..")) {
+      throw new BridgeError("INVALID_SECRET_EXCEPTIONS", `${contextName} must contain relative glob patterns without traversal`);
+    }
+    const validated = validateRelativeGlobPattern(item, `${contextName}.namePatterns`);
+    if (!seenPatterns.has(validated)) {
+      seenPatterns.add(validated);
+      validatedPatterns.push(validated);
+    }
+  }
+  return {
+    version: 2,
+    namePatterns: validatedPatterns
+  };
+}
+
+// dist/src/secret-preflight.js
 var CONFIG_EXTENSIONS = /* @__PURE__ */ new Set([
   ".env",
   ".ini",
@@ -33375,7 +32967,7 @@ function matchProjectRelativeGlob(pattern, relativePath2) {
 }
 function isKnownCredentialFile(normalizedRelative) {
   const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
-  const base = path9.posix.basename(norm);
+  const base = path8.posix.basename(norm);
   if (base === ".env" || base === ".envrc")
     return true;
   if (base.startsWith(".env.")) {
@@ -33475,8 +33067,8 @@ function normalizeScanTexts(content) {
 }
 function detectSecretContent(normalizedRelative, content, scanState = {}) {
   const norm = normalizedRelative.replaceAll("\\", "/").toLowerCase();
-  const base = path9.posix.basename(norm);
-  const ext = path9.posix.extname(norm);
+  const base = path8.posix.basename(norm);
+  const ext = path8.posix.extname(norm);
   const isSource = KNOWN_SOURCE_EXTENSIONS.has(ext);
   const isConfigFile = CONFIG_EXTENSIONS.has(ext) || base.startsWith(".env") || base === ".git-credentials" || base === ".netrc" || base === "_netrc" || base === ".npmrc" || norm.includes("/.aws/") || norm.includes("/.kube/") || norm.includes("/.docker/") || ext === ".txt" && (base.includes("config") || base.includes("cred") || base.includes("secret") || base.includes("token") || base.includes("aws") || base.includes("auth"));
   for (const text of normalizeScanTexts(content)) {
@@ -33660,7 +33252,7 @@ async function preflightProjectFiles(directory, candidates, limits, checkedPathF
 // dist/src/isolation.js
 var FENCE_MARKER_NAME = "CLEANUP_UNVERIFIED";
 function getFenceMarkerPath(project) {
-  return path10.join(project.gitDirectory, FENCE_MARKER_NAME);
+  return path9.join(project.gitDirectory, FENCE_MARKER_NAME);
 }
 async function checkFenceMarker(project) {
   const markerPath = getFenceMarkerPath(project);
@@ -33690,10 +33282,10 @@ async function writeFenceMarker(project) {
 var LINE_ENDINGS_MARKER_NAME = "LINE_ENDINGS_CONVERTED";
 async function writeLineEndingConversions(project, conversions) {
   const files = conversions.files.map((file3) => ({ path: validRelative(file3.path), sha256: file3.sha256 }));
-  await writeFile4(path10.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), JSON.stringify({ version: 1, taskId: conversions.taskId, files, existingBefore: conversions.existingBefore }) + "\n", { encoding: "utf8", flag: "wx", mode: 384, flush: true });
+  await writeFile4(path9.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), JSON.stringify({ version: 1, taskId: conversions.taskId, files, existingBefore: conversions.existingBefore }) + "\n", { encoding: "utf8", flag: "wx", mode: 384, flush: true });
 }
 async function readLineEndingConversions(project) {
-  const marker = path10.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME);
+  const marker = path9.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME);
   let text;
   try {
     const info = await lstat5(marker);
@@ -33728,7 +33320,7 @@ async function assertLineEndingsRestored(project) {
   }
 }
 async function clearLineEndingConversions(project) {
-  await rm2(path10.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), { force: true });
+  await rm2(path9.join(project.gitDirectory, LINE_ENDINGS_MARKER_NAME), { force: true });
 }
 async function verifyManagedCopy(project) {
   await checkFenceMarker(project);
@@ -33762,14 +33354,14 @@ async function stageProjectExecutionPolicy(project, request, limits) {
 }
 async function discardProjectCopy(project) {
   await checkFenceMarker(project);
-  const root = await realpath4(os4.tmpdir());
+  const root = await realpath4(os3.tmpdir());
   const targets = [
     [project.copyDirectory, "agy-mcp-copy-"],
     [project.gitDirectory, "agy-mcp-baseline-"]
   ];
   for (const [directory, prefix] of targets) {
-    const absolute = path10.resolve(directory);
-    if (path10.relative(root, await realpath4(path10.dirname(absolute))) !== "" || !path10.basename(absolute).startsWith(prefix)) {
+    const absolute = path9.resolve(directory);
+    if (path9.relative(root, await realpath4(path9.dirname(absolute))) !== "" || !path9.basename(absolute).startsWith(prefix)) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a directory outside bridge temporary storage");
     }
     const info = await lstat5(absolute).catch((error62) => {
@@ -33781,7 +33373,7 @@ async function discardProjectCopy(project) {
       throw new BridgeError("UNSAFE_PROJECT_PATH", "Refusing to delete a replaced copy directory");
   }
   for (const [directory] of targets)
-    await rm2(path10.resolve(directory), { recursive: true, force: true });
+    await rm2(path9.resolve(directory), { recursive: true, force: true });
   if (project.executionPolicy) {
     if (!project.executionStateDirectory)
       throw new BridgeError("INVALID_AGENT_POLICY", "Private execution storage binding is missing");
@@ -33851,7 +33443,7 @@ async function checkedPath(root, relative2, mustExist) {
   const parts = validRelative(relative2).split("/");
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path10.join(current, parts[index]);
+    current = path9.join(current, parts[index]);
     let info;
     try {
       info = await lstat5(current);
@@ -33879,7 +33471,7 @@ async function validateProjectRoot(sourceDirectory) {
   } catch {
     throw new BridgeError("ISOLATION_REQUIRES_GIT", "Isolated copies require a Git repository");
   }
-  if (path10.relative(await realpath4(top), await realpath4(sourceDirectory)) !== "") {
+  if (path9.relative(await realpath4(top), await realpath4(sourceDirectory)) !== "") {
     throw new BridgeError("INVALID_WORKING_DIRECTORY", "workingDirectory must be the Git repository root");
   }
 }
@@ -33924,7 +33516,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
   if (!record2) {
     throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
   }
-  const root = sourceRoot ?? path10.resolve(source, ...validRelative(relative2).split("/").map(() => ".."));
+  const root = sourceRoot ?? path9.resolve(source, ...validRelative(relative2).split("/").map(() => ".."));
   const srcHandle = await open4(source, "r");
   let dstHandle;
   try {
@@ -33943,7 +33535,7 @@ async function copyVerifiedFile(source, target, relative2, record2, budget, erro
     if (fstat.size !== record2.size || record2.ino !== 0 && fstat.ino !== record2.ino || record2.dev !== 0 && fstat.dev !== record2.dev) {
       throw new BridgeError(errorCode, (errorCode === "SOURCE_CHANGED" ? "Source changed during copy: " : "Context changed during copy: ") + relative2);
     }
-    await mkdir3(path10.dirname(target), { recursive: true });
+    await mkdir3(path9.dirname(target), { recursive: true });
     dstHandle = await open4(target, "w", fstat.mode);
     const CHUNK_SIZE = 64 * 1024;
     const buf = Buffer.allocUnsafe(CHUNK_SIZE);
@@ -34026,8 +33618,8 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     if (totalBytes > limits.maxCopyBytes)
       throw new BridgeError("COPY_LIMIT_EXCEEDED", `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
-  const copyDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
   const baseline = /* @__PURE__ */ new Map();
   const project = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected, blockedFiles: preflight.blocked };
   try {
@@ -34035,7 +33627,7 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
     const budget = { remainingBytes: limits.maxCopyBytes };
     for (const relative2 of selected) {
       const source = await checkedPath(sourceDirectory, relative2, true);
-      const target = path10.join(copyDirectory, ...relative2.split("/"));
+      const target = path9.join(copyDirectory, ...relative2.split("/"));
       const record2 = preflight.records.get(relative2);
       const hash3 = await copyVerifiedFile(source, target, relative2, record2, budget, "SOURCE_CHANGED", sourceDirectory);
       baseline.set(relative2, hash3);
@@ -34080,8 +33672,8 @@ async function createProjectCopy(sourceDirectory, includePaths, onCreated, limit
   }
 }
 async function treatFilesAsBytes(gitDirectory) {
-  await mkdir3(path10.join(gitDirectory, "info"), { recursive: true });
-  await writeFile4(path10.join(gitDirectory, "info", "attributes"), "* -text !working-tree-encoding -ident\n", { flag: "wx", mode: 384 });
+  await mkdir3(path9.join(gitDirectory, "info"), { recursive: true });
+  await writeFile4(path9.join(gitDirectory, "info", "attributes"), "* -text !working-tree-encoding -ident\n", { flag: "wx", mode: 384 });
 }
 async function assertTextIsUtf8(project, files) {
   const nulByFile = /* @__PURE__ */ new Map();
@@ -34390,7 +33982,7 @@ async function removeVerifiedWorktree(project, directory, identity) {
   const parent = await realpath4(project.gitDirectory);
   const info = await lstat5(directory);
   const actual = await realpath4(directory);
-  if (!info.isDirectory() || info.isSymbolicLink() || path10.dirname(actual) !== parent || !path10.basename(actual).startsWith("verified-worktree-") || info.ino !== identity.ino || info.dev !== identity.dev) {
+  if (!info.isDirectory() || info.isSymbolicLink() || path9.dirname(actual) !== parent || !path9.basename(actual).startsWith("verified-worktree-") || info.ino !== identity.ino || info.dev !== identity.dev) {
     throw new BridgeError("GIT_CLEANUP_UNVERIFIED", "Verified worktree ownership changed");
   }
   await rm2(actual, { recursive: true, force: true });
@@ -34400,7 +33992,7 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
   const auxPaths = managedAuxiliarySet(project);
   const exclusions = managedExclusions(project);
   const diffPathspec = ["--", ".", ...exclusions];
-  const worktree = await mkdtemp(path10.join(project.gitDirectory, "verified-worktree-"));
+  const worktree = await mkdtemp(path9.join(project.gitDirectory, "verified-worktree-"));
   const identity = await lstat5(worktree);
   const scope = ["--git-dir=" + project.gitDirectory, "--work-tree=" + worktree];
   const snapshotGit = (args) => managedGit(project, worktree, [...scope, ...args]);
@@ -34410,7 +34002,7 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
       if (auxPaths.has(relative2))
         continue;
       const source = await checkedPath(project.copyDirectory, relative2, true);
-      const target = path10.join(worktree, ...validRelative(relative2).split("/"));
+      const target = path9.join(worktree, ...validRelative(relative2).split("/"));
       await copyVerifiedFile(source, target, relative2, checked.records.get(relative2), budget, "CONTEXT_CHANGED", project.copyDirectory);
     }
     await snapshotGit(["read-tree", checked.baselineCommit]);
@@ -34448,7 +34040,7 @@ async function previewProjectCopy(project, limits = DEFAULT_PROJECT_LIMITS) {
     for (const file3 of fileSummaries) {
       if (file3.status !== "A" || !file3.binary)
         continue;
-      const utf16 = decodeUtf16(await readFile3(path10.join(worktree, ...file3.path.split("/"))));
+      const utf16 = decodeUtf16(await readFile3(path9.join(worktree, ...file3.path.split("/"))));
       if (utf16)
         encodingWarnings.push(file3.path + ": new " + utf16.encoding + " text file, carried as binary in the patch; convert it to UTF-8 unless it must stay UTF-16");
     }
@@ -34509,10 +34101,10 @@ async function verifyReadOnlyCopy(project, baseline = project.baseline) {
     for (const entry of await readdir3(directory, { withFileTypes: true })) {
       const relative2 = prefix + entry.name;
       if (entry.isDirectory())
-        await visit2(path10.join(directory, entry.name), relative2 + "/");
+        await visit2(path9.join(directory, entry.name), relative2 + "/");
       else {
         seen.add(relative2);
-        if (!entry.isFile() || expected.get(relative2) !== await sha256File2(path10.join(directory, entry.name))) {
+        if (!entry.isFile() || expected.get(relative2) !== await sha256File2(path9.join(directory, entry.name))) {
           throw new BridgeError("READ_ONLY_VIOLATION", "Read-only task changed the copy: " + relative2);
         }
       }
@@ -34556,8 +34148,8 @@ async function snapshotCopyFiles(project, limits) {
 async function forkProjectCopy(project, limits) {
   const preflight = await inspectCopyFiles(project, limits, false);
   const auxPaths = managedAuxiliarySet(project);
-  const copyDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-copy-"));
-  const gitDirectory = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-baseline-"));
+  const copyDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-copy-"));
+  const gitDirectory = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-baseline-"));
   const fork = {
     ...project,
     executionPolicy: void 0,
@@ -34569,7 +34161,7 @@ async function forkProjectCopy(project, limits) {
     blockedFiles: preflight.blocked
   };
   try {
-    const tempBaselineDir = await mkdtemp(path10.join(os4.tmpdir(), "agy-mcp-worktree-"));
+    const tempBaselineDir = await mkdtemp(path9.join(os3.tmpdir(), "agy-mcp-worktree-"));
     try {
       const budget = { remainingBytes: limits.maxCopyBytes };
       for (const relative2 of preflight.eligible) {
@@ -34584,7 +34176,7 @@ async function forkProjectCopy(project, limits) {
         if (fork.includedFiles.length >= limits.maxCopyFiles) {
           throw new BridgeError("COPY_LIMIT_EXCEEDED", "Context copy exceeds configured limits");
         }
-        const target = path10.join(copyDirectory, ...validRelative(relative2).split("/"));
+        const target = path9.join(copyDirectory, ...validRelative(relative2).split("/"));
         const record2 = preflight.records.get(relative2);
         await copyVerifiedFile(source, target, relative2, record2, budget, "CONTEXT_CHANGED", project.copyDirectory);
         if (!auxPaths.has(relative2)) {
@@ -34638,10 +34230,10 @@ async function forkProjectCopy(project, limits) {
         throw new BridgeError("CONTEXT_CHANGED", "Source baseline HEAD changed during fork");
       return fork;
     } finally {
-      const root = await realpath4(os4.tmpdir());
+      const root = await realpath4(os3.tmpdir());
       const info = await lstat5(tempBaselineDir);
       const absolute = await realpath4(tempBaselineDir);
-      if (info.isSymbolicLink() || !info.isDirectory() || path10.relative(root, path10.dirname(absolute)) !== "" || !path10.basename(absolute).startsWith("agy-mcp-worktree-")) {
+      if (info.isSymbolicLink() || !info.isDirectory() || path9.relative(root, path9.dirname(absolute)) !== "" || !path9.basename(absolute).startsWith("agy-mcp-worktree-")) {
         throw new BridgeError("UNSAFE_PROJECT_PATH", "Private baseline worktree was replaced or escaped temporary storage");
       }
       await rm2(absolute, { recursive: true, force: true });
@@ -34669,7 +34261,7 @@ async function readIfPresent(file3) {
 }
 async function sourcePath(project, relative2) {
   await checkedPath(project.sourceDirectory, relative2, false);
-  return path10.join(project.sourceDirectory, ...relative2.split("/"));
+  return path9.join(project.sourceDirectory, ...relative2.split("/"));
 }
 function integratedMode(original, filePatch) {
   const changed = /^new mode (\d+)$/m.exec(filePatch)?.[1];
@@ -34678,12 +34270,12 @@ function integratedMode(original, filePatch) {
   return changed === "100755" ? original | (original & 292) >> 2 : original & ~73;
 }
 async function lineEndingOnlyChanges(project, area, before, after) {
-  const directory = path10.join(area, "lines");
+  const directory = path9.join(area, "lines");
   await mkdir3(directory, { recursive: true });
   const rendered = [renderLines(before), renderLines(after)];
   const numstat = async (key) => {
-    await writeFile4(path10.join(directory, "before"), rendered[0][key]);
-    await writeFile4(path10.join(directory, "after"), rendered[1][key]);
+    await writeFile4(path9.join(directory, "before"), rendered[0][key]);
+    await writeFile4(path9.join(directory, "after"), rendered[1][key]);
     return (await managedGit(project, directory, [
       "--git-dir=" + project.gitDirectory,
       "diff",
@@ -34700,16 +34292,16 @@ async function lineEndingOnlyChanges(project, area, before, after) {
   return await numstat("withEndings") !== await numstat("withoutEndings");
 }
 async function applyInPrivateArea(project, preview, before) {
-  const area = await mkdtemp(path10.join(project.gitDirectory, "verified-worktree-"));
+  const area = await mkdtemp(path9.join(project.gitDirectory, "verified-worktree-"));
   const identity = await lstat5(area);
   try {
-    const worktree = path10.join(area, "after");
+    const worktree = path9.join(area, "after");
     await mkdir3(worktree);
     for (const [relative2, original] of before) {
       if (!original)
         continue;
-      const target = path10.join(worktree, ...relative2.split("/"));
-      await mkdir3(path10.dirname(target), { recursive: true });
+      const target = path9.join(worktree, ...relative2.split("/"));
+      await mkdir3(path9.dirname(target), { recursive: true });
       await writeFile4(target, original.bytes, { flag: "wx" });
     }
     await managedGit(project, worktree, [
@@ -34728,7 +34320,7 @@ async function applyInPrivateArea(project, preview, before) {
     for (const file3 of preview.files) {
       if (file3.status === "D")
         continue;
-      const target = path10.join(worktree, ...file3.path.split("/"));
+      const target = path9.join(worktree, ...file3.path.split("/"));
       const stat4 = await lstat5(target);
       const original = before.get(file3.path);
       if (!original) {
@@ -34762,7 +34354,7 @@ async function writeIntegration(project, files, before, after) {
   const root = await realpath4(project.sourceDirectory);
   const written = [];
   const movedAside = /* @__PURE__ */ new Map();
-  const relativeToSource = (file3) => path10.relative(project.sourceDirectory, file3).split(path10.sep).join("/");
+  const relativeToSource = (file3) => path9.relative(project.sourceDirectory, file3).split(path9.sep).join("/");
   try {
     for (const file3 of files) {
       const target = await sourcePath(project, file3.path);
@@ -34772,11 +34364,11 @@ async function writeIntegration(project, files, before, after) {
         throw new BridgeError("SOURCE_CHANGED", "Source changed during integration: " + file3.path);
       }
       if (file3.status === "D") {
-        const aside = path10.join(path10.dirname(target), "." + randomUUID3() + ".deleted");
+        const aside = path9.join(path9.dirname(target), "." + randomUUID3() + ".deleted");
         await rename2(target, aside);
         movedAside.set(file3.path, aside);
       } else {
-        await mkdir3(path10.dirname(target), { recursive: true });
+        await mkdir3(path9.dirname(target), { recursive: true });
         await replaceInsideRoot(root, target, after.get(file3.path).bytes, after.get(file3.path).mode);
       }
       written.push(file3);
@@ -34967,7 +34559,7 @@ function compactTask(task2) {
 // dist/src/artifacts.js
 import { createHash as createHash10 } from "node:crypto";
 import { open as open5, lstat as lstat6, readdir as readdir4 } from "node:fs/promises";
-import path11 from "node:path";
+import path10 from "node:path";
 var WINDOWS_DEVICE_NAMES4 = /* @__PURE__ */ new Set([
   "CON",
   "PRN",
@@ -35091,7 +34683,7 @@ async function verifyExactDiskCase(rootDir, relativePath2) {
       }
       throw new BridgeError("ARTIFACT_NOT_FOUND", "Artifact file does not exist: " + relativePath2);
     }
-    current = path11.join(current, seg);
+    current = path10.join(current, seg);
   }
   return current;
 }
@@ -35350,7 +34942,7 @@ async function readArtifact(project, reference, expectedSha256, offset = 0, limi
 // dist/src/structured-results.js
 import { createHash as createHash11 } from "node:crypto";
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/validation/ajv-provider.js
 var import_ajv = __toESM(require_ajv(), 1);
 var import_ajv_formats = __toESM(require_dist(), 1);
 function createDefaultAjvInstance() {
@@ -35968,6 +35560,492 @@ async function validateRoleReport(role, raw, copyDirectory) {
   return { role, source: "agy-reported", data: parsed.data, citationsChecked: true };
 }
 
+// dist/src/config.js
+function positiveInteger(value, fallback, max) {
+  if (value === void 0)
+    return fallback;
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1 || n > max)
+    throw new Error(`Invalid numeric configuration: ${value}`);
+  return n;
+}
+var DEFAULT_PROJECT_LIMITS = {
+  maxCopyFiles: 1e4,
+  maxCopyBytes: 256 * 1024 * 1024,
+  maxChangedFiles: 100,
+  secretExclusions: [],
+  secretExceptions: { version: 2, namePatterns: [] }
+};
+function antiAiCraft(value) {
+  if (value === void 0 || value === "on")
+    return true;
+  if (value === "off")
+    return false;
+  throw new Error("BRIDGE_ANTI_AI_CRAFT must be on or off");
+}
+function approvalMode(value) {
+  if (value === void 0)
+    return "auto";
+  if (value === "auto" || value === "ask")
+    return value;
+  throw new Error("BRIDGE_APPROVAL_MODE must be auto or ask");
+}
+function testExecutor(value) {
+  if (value === void 0)
+    return process.platform === "win32" ? "windows-lpac" : "agy";
+  if (value === "agy" || value === "windows-lpac")
+    return value;
+  throw new Error("BRIDGE_TEST_EXECUTOR must be agy or windows-lpac");
+}
+function windowsNodeRuntime(value) {
+  if (value === void 0)
+    return "system";
+  if (value === "system" || value === "portable")
+    return value;
+  throw new Error("BRIDGE_WINDOWS_NODE_RUNTIME must be system or portable");
+}
+function parseJsonList(value, variable, maxEntries) {
+  if (value === void 0)
+    return { items: [], issues: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { items: [], issues: [{ variable, reason: "invalid-json" }] };
+  }
+  if (!Array.isArray(parsed)) {
+    return { items: [], issues: [{ variable, reason: "not-a-list" }] };
+  }
+  if (maxEntries !== void 0 && parsed.length > maxEntries) {
+    return { items: [], issues: [{ variable, reason: "too-many-entries" }] };
+  }
+  return { items: parsed, issues: [] };
+}
+function validateUniqueEntries(items, variable, schema, getKey) {
+  const candidateEntries = [];
+  const issues = [];
+  for (let i = 0; i < items.length; i++) {
+    const result = schema.safeParse(items[i]);
+    if (!result.success) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+    } else {
+      candidateEntries.push({ index: i, entry: result.data });
+    }
+  }
+  const keyCounts = /* @__PURE__ */ new Map();
+  for (const item of candidateEntries) {
+    const key = getKey(item.entry);
+    keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
+  }
+  const valid = [];
+  for (const item of candidateEntries) {
+    const key = getKey(item.entry);
+    if (keyCounts.get(key) > 1) {
+      issues.push({ variable, index: item.index, reason: "duplicate" });
+    } else {
+      valid.push(item.entry);
+    }
+  }
+  issues.sort((a, b) => (a.index ?? -1) - (b.index ?? -1));
+  return { valid, issues };
+}
+function readSecretExceptionsConfig(value) {
+  const variable = "BRIDGE_SECRET_EXCEPTIONS";
+  const emptyPolicy = { version: 2, namePatterns: [] };
+  if (value === void 0)
+    return { secretExceptions: emptyPolicy, issues: [] };
+  let parsed;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "invalid-json" }] };
+  }
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0)
+      return { secretExceptions: emptyPolicy, issues: [] };
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "legacy-format" }] };
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "not-an-object" }] };
+  }
+  const obj = parsed;
+  const keys2 = Object.keys(obj);
+  if (keys2.length !== 2 || !Object.hasOwn(obj, "version") || !Object.hasOwn(obj, "namePatterns") || obj.version !== 2 || !Array.isArray(obj.namePatterns)) {
+    return { secretExceptions: emptyPolicy, issues: [{ variable, reason: "invalid-format" }] };
+  }
+  const validatedPatterns = [];
+  const seenPatterns = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (let i = 0; i < obj.namePatterns.length; i++) {
+    const item = obj.namePatterns[i];
+    if (typeof item !== "string") {
+      issues.push({ variable, index: i, reason: "not-a-string" });
+      continue;
+    }
+    let validated;
+    try {
+      validated = validateRelativeGlobPattern(item, "BRIDGE_SECRET_EXCEPTIONS.namePatterns");
+    } catch {
+      issues.push({ variable, index: i, reason: "invalid-pattern" });
+      continue;
+    }
+    if (!seenPatterns.has(validated)) {
+      seenPatterns.add(validated);
+      validatedPatterns.push(validated);
+    }
+  }
+  return { secretExceptions: { version: 2, namePatterns: validatedPatterns }, issues };
+}
+function readAllowedEnvVars(value) {
+  const variable = "BRIDGE_ALLOWED_ENV_VARS";
+  const list = parseJsonList(value, variable);
+  if (list.issues.length > 0)
+    return { allowedEnvVars: [], issues: list.issues };
+  const allowedEnvVars = [];
+  const seen = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    if (typeof item !== "string") {
+      issues.push({ variable, index: i, reason: "not-a-string" });
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || trimmed.includes("\0") || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+      issues.push({ variable, index: i, reason: "invalid-name" });
+      continue;
+    }
+    if (isForbiddenAllowedEnvVar(trimmed)) {
+      issues.push({ variable, index: i, reason: "forbidden-name" });
+      continue;
+    }
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      allowedEnvVars.push(trimmed);
+    }
+  }
+  return { allowedEnvVars, issues };
+}
+function readMcpCatalog(value) {
+  const variable = "BRIDGE_MCP_CATALOG";
+  const list = parseJsonList(value, variable, 20);
+  if (list.issues.length > 0)
+    return { mcpCatalog: [], issues: list.issues };
+  const { valid, issues } = validateUniqueEntries(list.items, variable, mcpCatalogEntrySchema, (entry) => entry.id);
+  let validRemaining = valid;
+  if (validRemaining.length > 0) {
+    const serialized = JSON.stringify(validRemaining);
+    if (Buffer.byteLength(serialized, "utf8") > 1024 * 1024) {
+      validRemaining = [];
+      issues.push({ variable, reason: "too-large" });
+    }
+  }
+  return { mcpCatalog: validRemaining, issues };
+}
+function readCustomRoles(value) {
+  const variable = "BRIDGE_CUSTOM_ROLES";
+  const list = parseJsonList(value, variable, 20);
+  if (list.issues.length > 0)
+    return { customRoles: [], issues: list.issues };
+  const { valid, issues } = validateUniqueEntries(list.items, variable, customRoleElementSchema, (role) => role.name);
+  return { customRoles: valid, issues };
+}
+function readAllowedAgyTools(value) {
+  const variable = "BRIDGE_ALLOWED_AGY_TOOLS";
+  if (value === void 0) {
+    return {
+      allowedAgyTools: [...nativeToolSchema.options],
+      enforceAgentPolicy: false,
+      issues: []
+    };
+  }
+  const list = parseJsonList(value, variable, 5);
+  if (list.issues.length > 0) {
+    return {
+      allowedAgyTools: [],
+      enforceAgentPolicy: true,
+      issues: list.issues
+    };
+  }
+  const valid = [];
+  const seen = /* @__PURE__ */ new Set();
+  const issues = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    const parsed = nativeToolSchema.safeParse(item);
+    if (!parsed.success) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    if (seen.has(parsed.data)) {
+      issues.push({ variable, index: i, reason: "duplicate" });
+    } else {
+      seen.add(parsed.data);
+      valid.push(parsed.data);
+    }
+  }
+  return {
+    allowedAgyTools: valid,
+    enforceAgentPolicy: true,
+    issues
+  };
+}
+function readSecretExclusionsConfig(value) {
+  const variable = "BRIDGE_SECRET_EXCLUSIONS";
+  if (value === void 0)
+    return { secretExclusions: [], issues: [] };
+  const list = parseJsonList(value, variable);
+  if (list.issues.length > 0) {
+    return { secretExclusions: [], secretExclusionsInvalid: true, issues: list.issues };
+  }
+  const issues = [];
+  const items = [];
+  for (let i = 0; i < list.items.length; i++) {
+    const item = list.items[i];
+    if (typeof item !== "string") {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed || trimmed.includes("\0")) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    let validated;
+    try {
+      validated = validateRelativeGlobPattern(trimmed, variable);
+      if (validateRelativeGlobPattern(validated, variable) !== validated) {
+        issues.push({ variable, index: i, reason: "invalid-pattern" });
+        continue;
+      }
+    } catch {
+      issues.push({ variable, index: i, reason: "invalid-pattern" });
+      continue;
+    }
+    items.push(validated);
+  }
+  if (issues.length > 0) {
+    return { secretExclusions: [], secretExclusionsInvalid: true, issues };
+  }
+  return { secretExclusions: [...new Set(items)], issues: [] };
+}
+function assertSecretExclusionsUsable(limits) {
+  if (limits.secretExclusionsInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "BRIDGE_SECRET_EXCLUSIONS is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function assertForbiddenDirectoriesUsable(config2) {
+  if (config2.forbiddenDirectoriesInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "FORBIDDEN_DIRECTORIES is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function assertAntiAiCraftDirectoryUsable(config2) {
+  if (config2.antiAiCraftDirectoryInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function assertWindowsNodeCacheDirectoryUsable(config2) {
+  if (config2.windowsNodeCacheDirectoryInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function assertAgyPathUsable(config2) {
+  if (config2.agyPathInvalid) {
+    throw new BridgeError("INVALID_CONFIGURATION", "AGY_PATH is invalid. See configurationIssues in antigravity_health.");
+  }
+}
+function isFullWindowsRoot(entry) {
+  if (/^[A-Za-z]:[\\/]/.test(entry))
+    return true;
+  if (/^(?:\\\\|\/\/)(?![\\/]|[?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/].*)?$/.test(entry))
+    return true;
+  return false;
+}
+function isFullWindowsPath(entry) {
+  if (isFullWindowsRoot(entry))
+    return true;
+  if (/^\\\\\?\\(?:[A-Za-z]:[\\/]|UNC[\\/][^\\/]+[\\/][^\\/]+(?:[\\/].*)?$)/i.test(entry))
+    return true;
+  if (/^\\\\\?\\Volume\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}[\\/]/i.test(entry))
+    return true;
+  return false;
+}
+function readAntiAiCraftDirectory(value) {
+  const variable = "BRIDGE_ANTI_AI_CRAFT_DIRECTORY";
+  if (!value)
+    return { issues: [] };
+  if (value.includes("\0")) {
+    return { antiAiCraftDirectoryInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+  }
+  const isAbsolute4 = process.platform === "win32" ? isFullWindowsPath(value) : path11.isAbsolute(value);
+  if (!isAbsolute4) {
+    return { antiAiCraftDirectoryInvalid: true, issues: [{ variable, reason: "not-absolute" }] };
+  }
+  return { antiAiCraftDirectory: path11.resolve(value), issues: [] };
+}
+function readWindowsNodeCacheDirectory(value) {
+  const variable = "BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY";
+  if (value === void 0) {
+    const defaultDirectory = path11.resolve(path11.join(os4.homedir(), ".antigravity-mcp-bridge", "windows-runtimes"));
+    return { windowsNodeCacheDirectory: defaultDirectory, issues: [] };
+  }
+  if (value.includes("\0")) {
+    return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+  }
+  if (process.platform === "win32") {
+    if (/^(?:\\\\|\/\/|\\\\\?\\)/.test(value)) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+    }
+    if (!/^[A-Za-z]:[\\/]/.test(value)) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "not-absolute" }] };
+    }
+    if (value.slice(2).includes(":")) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+    }
+    if (value.slice(2).split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+    }
+  } else {
+    if (!path11.isAbsolute(value)) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "not-absolute" }] };
+    }
+    if (value.split(/[\\/]+/).filter(Boolean).some((part) => part === "." || part === "..")) {
+      return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+    }
+  }
+  const resolved = path11.resolve(value);
+  if (resolved === path11.parse(resolved).root) {
+    return { windowsNodeCacheDirectoryInvalid: true, issues: [{ variable, reason: "volume-root" }] };
+  }
+  return { windowsNodeCacheDirectory: resolved, issues: [] };
+}
+function readAgyPath(value) {
+  const variable = "AGY_PATH";
+  if (!value) {
+    return { agyPath: "agy", issues: [] };
+  }
+  if (value.includes("\0")) {
+    return { agyPath: "", agyPathInvalid: true, issues: [{ variable, reason: "invalid-entry" }] };
+  }
+  const isPath = process.platform === "win32" ? value.includes("/") || value.includes("\\") || value.includes(":") : value.includes("/") || value.includes("\\");
+  if (isPath) {
+    const isAbsolute4 = process.platform === "win32" ? isFullWindowsPath(value) : path11.isAbsolute(value);
+    if (!isAbsolute4) {
+      return { agyPath: "", agyPathInvalid: true, issues: [{ variable, reason: "not-absolute" }] };
+    }
+  }
+  return { agyPath: value, issues: [] };
+}
+function readForbiddenDirectories(value) {
+  const variable = "FORBIDDEN_DIRECTORIES";
+  if (!value)
+    return { forbiddenDirectories: [], issues: [] };
+  const entries = value.split(path11.delimiter).filter(Boolean);
+  const issues = [];
+  const valid = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.includes("\0")) {
+      issues.push({ variable, index: i, reason: "invalid-entry" });
+      continue;
+    }
+    const isAbsolute4 = process.platform === "win32" ? isFullWindowsRoot(entry) : path11.isAbsolute(entry);
+    if (!isAbsolute4) {
+      issues.push({ variable, index: i, reason: "not-absolute" });
+      continue;
+    }
+    valid.push(path11.resolve(entry));
+  }
+  if (issues.length > 0) {
+    return { forbiddenDirectories: valid, forbiddenDirectoriesInvalid: true, issues };
+  }
+  return { forbiddenDirectories: valid, issues: [] };
+}
+function stateDirectoryFrom(env) {
+  return env.BRIDGE_STATE_DIRECTORY || path11.join(os4.homedir(), ".antigravity-mcp-bridge");
+}
+function loadConfig(env = process.env) {
+  const defaultModel = env.BRIDGE_DEFAULT_MODEL;
+  if (defaultModel !== void 0 && !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(defaultModel)) {
+    throw new Error("BRIDGE_DEFAULT_MODEL must be an exact model ID");
+  }
+  const memoryMaxEntries = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRIES, 100, 1e4);
+  const memoryMaxBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_BYTES, 1024 * 1024, 64 * 1024 * 1024);
+  const memoryMaxEntryBytes = positiveInteger(env.BRIDGE_MEMORY_MAX_ENTRY_BYTES, 64 * 1024, 1024 * 1024);
+  if (memoryMaxEntryBytes > memoryMaxBytes)
+    throw new Error("BRIDGE_MEMORY_MAX_ENTRY_BYTES cannot exceed BRIDGE_MEMORY_MAX_BYTES");
+  const preauthorized = readPreauthorizedIntegrationRoots(env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS);
+  const allowedEnv = readAllowedEnvVars(env.BRIDGE_ALLOWED_ENV_VARS);
+  const secretExceptions = readSecretExceptionsConfig(env.BRIDGE_SECRET_EXCEPTIONS);
+  const mcpCatalog = readMcpCatalog(env.BRIDGE_MCP_CATALOG);
+  const customRoles = readCustomRoles(env.BRIDGE_CUSTOM_ROLES);
+  const allowedAgyTools = readAllowedAgyTools(env.BRIDGE_ALLOWED_AGY_TOOLS);
+  const secretExclusions = readSecretExclusionsConfig(env.BRIDGE_SECRET_EXCLUSIONS);
+  const forbiddenDirs = readForbiddenDirectories(env.FORBIDDEN_DIRECTORIES);
+  const antiAiCraftDir = readAntiAiCraftDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY);
+  const windowsNodeCache = readWindowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY);
+  const agyPath = readAgyPath(env.AGY_PATH);
+  const configurationIssues = [
+    ...preauthorized.issues,
+    ...allowedEnv.issues,
+    ...secretExceptions.issues,
+    ...mcpCatalog.issues,
+    ...customRoles.issues,
+    ...allowedAgyTools.issues,
+    ...secretExclusions.issues,
+    ...forbiddenDirs.issues,
+    ...antiAiCraftDir.issues,
+    ...windowsNodeCache.issues,
+    ...agyPath.issues
+  ];
+  return {
+    approvalMode: approvalMode(env.BRIDGE_APPROVAL_MODE),
+    antiAiCraft: antiAiCraft(env.BRIDGE_ANTI_AI_CRAFT),
+    ...antiAiCraftDir.antiAiCraftDirectory ? { antiAiCraftDirectory: antiAiCraftDir.antiAiCraftDirectory } : {},
+    ...antiAiCraftDir.antiAiCraftDirectoryInvalid ? { antiAiCraftDirectoryInvalid: true } : {},
+    toolProfile: toolProfileSchema.parse(env.BRIDGE_TOOL_PROFILE ?? "full"),
+    preauthorizedIntegrationRoots: preauthorized.roots,
+    configurationIssues,
+    customRoles: customRoles.customRoles,
+    enforceAgentPolicy: allowedAgyTools.enforceAgentPolicy || env.BRIDGE_MCP_CATALOG !== void 0,
+    allowedAgyTools: allowedAgyTools.allowedAgyTools,
+    mcpCatalog: mcpCatalog.mcpCatalog,
+    agyPath: agyPath.agyPath,
+    ...agyPath.agyPathInvalid ? { agyPathInvalid: true } : {},
+    defaultModel,
+    maxConcurrentTasks: positiveInteger(env.MAX_CONCURRENT_TASKS, 1, 16),
+    maxQueuedTasks: positiveInteger(env.MAX_QUEUED_TASKS, 20, 1e3),
+    maxRetainedTasks: positiveInteger(env.MAX_RETAINED_TASKS, 100, 1e4),
+    defaultTimeoutSeconds: positiveInteger(env.DEFAULT_TIMEOUT_SECONDS, 1800, 86400),
+    eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2e3, 1e5),
+    maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 5e4, 1e6),
+    copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
+    stateDirectory: stateDirectoryFrom(env),
+    memoryMaxEntries,
+    memoryMaxBytes,
+    memoryMaxEntryBytes,
+    maxCopyFiles: positiveInteger(env.MAX_COPY_FILES, DEFAULT_PROJECT_LIMITS.maxCopyFiles, 1e6),
+    maxCopyBytes: positiveInteger(env.MAX_COPY_BYTES, DEFAULT_PROJECT_LIMITS.maxCopyBytes, 1024 ** 4),
+    maxChangedFiles: positiveInteger(env.MAX_CHANGED_FILES, DEFAULT_PROJECT_LIMITS.maxChangedFiles, 1e6),
+    forbiddenDirectories: forbiddenDirs.forbiddenDirectories,
+    ...forbiddenDirs.forbiddenDirectoriesInvalid ? { forbiddenDirectoriesInvalid: true } : {},
+    testExecutor: testExecutor(env.BRIDGE_TEST_EXECUTOR),
+    windowsNodeRuntime: windowsNodeRuntime(env.BRIDGE_WINDOWS_NODE_RUNTIME),
+    windowsNodeCacheDirectory: windowsNodeCache.windowsNodeCacheDirectory,
+    ...windowsNodeCache.windowsNodeCacheDirectoryInvalid ? { windowsNodeCacheDirectoryInvalid: true } : {},
+    secretExclusions: secretExclusions.secretExclusions,
+    ...secretExclusions.secretExclusionsInvalid ? { secretExclusionsInvalid: true } : {},
+    secretExceptions: secretExceptions.secretExceptions,
+    allowedEnvVars: allowedEnv.allowedEnvVars
+  };
+}
+function configurationWarning(issues) {
+  if (issues.length === 0)
+    return void 0;
+  const formatted = issues.map((issue2) => `${issue2.variable}${issue2.index !== void 0 ? `[${issue2.index}]` : ""} ${issue2.reason}`).join(", ");
+  return `Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
+}
+
 // dist/src/validation.js
 import { constants } from "node:fs";
 import { access, lstat as lstat7, realpath as realpath5, stat as stat3 } from "node:fs/promises";
@@ -35997,6 +36075,8 @@ async function validateWorkingDirectory(input2, forbidden) {
   }
 }
 async function validateRuntimeCacheSeparation(workingDirectory, cacheDirectory) {
+  if (!cacheDirectory)
+    return;
   let existing = path12.resolve(cacheDirectory);
   const missing = [];
   try {
@@ -36244,6 +36324,9 @@ var CliAdapter = class {
   }
   probe(args, timeoutMs = 1e4) {
     return new Promise((resolve2, reject) => {
+      if (this.config.agyPathInvalid) {
+        return reject(new BridgeError("INVALID_CONFIGURATION", "AGY_PATH is invalid. See configurationIssues in antigravity_health."));
+      }
       let child;
       try {
         child = spawn3(this.config.agyPath, [...this.prefixArgs, ...args], {
@@ -36298,6 +36381,18 @@ var CliAdapter = class {
     });
   }
   async discover() {
+    if (this.config.agyPathInvalid) {
+      this.installed = false;
+      this.version = void 0;
+      this.help = "";
+      return {
+        installed: false,
+        path: "",
+        authenticated: null,
+        capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
+        error: "INVALID_CONFIGURATION: AGY_PATH is invalid. See configurationIssues in antigravity_health."
+      };
+    }
     try {
       const [version2, help] = await Promise.all([this.probe(["--version"]), this.probe(["--help"])]);
       if (version2.timedOut || help.timedOut) {
@@ -36378,6 +36473,7 @@ var CliAdapter = class {
     return discovery;
   }
   async listModels() {
+    assertAgyPathUsable(this.config);
     let result;
     try {
       result = await this.probe(["models"], 2e4);
@@ -36398,6 +36494,7 @@ var CliAdapter = class {
     return models;
   }
   spawnTask(options, model, cwd) {
+    assertAgyPathUsable(this.config);
     if (!this.installed)
       throw new BridgeError("AGY_NOT_FOUND", "agy executable not found");
     if (!this.help.includes("stream-json"))
@@ -37259,7 +37356,7 @@ function jointWaitPage(records, targets) {
   return { tasks, ready: tasks.length > 0 && tasks.every((task2) => task2.ready), hasMessages: tasks.some((task2) => task2.messages.length > 0), hasMoreMessages: tasks.some((task2) => task2.hasMore) };
 }
 
-// node_modules/zod/v3/helpers/util.js
+// ../e71i2/node_modules/zod/v3/helpers/util.js
 var util;
 (function(util2) {
   util2.assertEqual = (_) => {
@@ -37393,7 +37490,7 @@ var getParsedType2 = (data) => {
   }
 };
 
-// node_modules/zod/v3/ZodError.js
+// ../e71i2/node_modules/zod/v3/ZodError.js
 var ZodIssueCode2 = util.arrayToEnum([
   "invalid_type",
   "invalid_literal",
@@ -37522,7 +37619,7 @@ ZodError2.create = (issues) => {
   return error62;
 };
 
-// node_modules/zod/v3/locales/en.js
+// ../e71i2/node_modules/zod/v3/locales/en.js
 var errorMap = (issue2, _ctx) => {
   let message;
   switch (issue2.code) {
@@ -37625,13 +37722,13 @@ var errorMap = (issue2, _ctx) => {
 };
 var en_default2 = errorMap;
 
-// node_modules/zod/v3/errors.js
+// ../e71i2/node_modules/zod/v3/errors.js
 var overrideErrorMap = en_default2;
 function getErrorMap2() {
   return overrideErrorMap;
 }
 
-// node_modules/zod/v3/helpers/parseUtil.js
+// ../e71i2/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
   const { data, path: path26, errorMaps, issueData } = params;
   const fullPath = [...path26, ...issueData.path || []];
@@ -37740,14 +37837,14 @@ var isDirty = (x) => x.status === "dirty";
 var isValid = (x) => x.status === "valid";
 var isAsync = (x) => typeof Promise !== "undefined" && x instanceof Promise;
 
-// node_modules/zod/v3/helpers/errorUtil.js
+// ../e71i2/node_modules/zod/v3/helpers/errorUtil.js
 var errorUtil;
 (function(errorUtil2) {
   errorUtil2.errToObj = (message) => typeof message === "string" ? { message } : message || {};
   errorUtil2.toString = (message) => typeof message === "string" ? message : message?.message;
 })(errorUtil || (errorUtil = {}));
 
-// node_modules/zod/v3/types.js
+// ../e71i2/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
   constructor(parent, value, path26, key) {
     this._cachedPath = [];
@@ -41154,7 +41251,7 @@ var nullableType = ZodNullable2.create;
 var preprocessType = ZodEffects.createWithPreprocess;
 var pipelineType = ZodPipeline.create;
 
-// node_modules/zod/v4/mini/schemas.js
+// ../e71i2/node_modules/zod/v4/mini/schemas.js
 var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
   if (!inst._zod)
     throw new Error("Uninitialized schema in ZodMiniType.");
@@ -41220,7 +41317,7 @@ function object2(shape, params) {
   return new ZodMiniObject(def);
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-compat.js
 function isZ4Schema(s) {
   const schema = s;
   return !!schema._zod;
@@ -41380,12 +41477,12 @@ function getLiteralValue(schema) {
   return void 0;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/interfaces.js
 function isTerminal(status2) {
   return status2 === "completed" || status2 === "failed" || status2 === "cancelled";
 }
 
-// node_modules/zod-to-json-schema/dist/esm/Options.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/Options.js
 var ignoreOverride = /* @__PURE__ */ Symbol("Let zodToJsonSchema decide on which parser to use");
 var defaultOptions = {
   name: void 0,
@@ -41419,7 +41516,7 @@ var getDefaultOptions = (options) => typeof options === "string" ? {
   ...options
 };
 
-// node_modules/zod-to-json-schema/dist/esm/Refs.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/Refs.js
 var getRefs = (options) => {
   const _options = getDefaultOptions(options);
   const currentPath = _options.name !== void 0 ? [..._options.basePath, _options.definitionPath, _options.name] : _options.basePath;
@@ -41440,7 +41537,7 @@ var getRefs = (options) => {
   };
 };
 
-// node_modules/zod-to-json-schema/dist/esm/errorMessages.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/errorMessages.js
 function addErrorMessage(res, key, errorMessage, refs) {
   if (!refs?.errorMessages)
     return;
@@ -41456,7 +41553,7 @@ function setResponseValueAndErrors(res, key, value, errorMessage, refs) {
   addErrorMessage(res, key, errorMessage, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/getRelativePath.js
 var getRelativePath = (pathA, pathB) => {
   let i = 0;
   for (; i < pathA.length && i < pathB.length; i++) {
@@ -41466,7 +41563,7 @@ var getRelativePath = (pathA, pathB) => {
   return [(pathA.length - i).toString(), ...pathB.slice(i)].join("/");
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/any.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/any.js
 function parseAnyDef(refs) {
   if (refs.target !== "openAi") {
     return {};
@@ -41482,7 +41579,7 @@ function parseAnyDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/array.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/array.js
 function parseArrayDef(def, refs) {
   const res = {
     type: "array"
@@ -41506,7 +41603,7 @@ function parseArrayDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/bigint.js
 function parseBigintDef(def, refs) {
   const res = {
     type: "integer",
@@ -41552,24 +41649,24 @@ function parseBigintDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/boolean.js
 function parseBooleanDef() {
   return {
     type: "boolean"
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/branded.js
 function parseBrandedDef(_def, refs) {
   return parseDef(_def.type._def, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/catch.js
 var parseCatchDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/date.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/date.js
 function parseDateDef(def, refs, overrideDateStrategy) {
   const strategy = overrideDateStrategy ?? refs.dateStrategy;
   if (Array.isArray(strategy)) {
@@ -41628,7 +41725,7 @@ var integerDateParser = (def, refs) => {
   return res;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/default.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/default.js
 function parseDefaultDef(_def, refs) {
   return {
     ...parseDef(_def.innerType._def, refs),
@@ -41636,12 +41733,12 @@ function parseDefaultDef(_def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/effects.js
 function parseEffectsDef(_def, refs) {
   return refs.effectStrategy === "input" ? parseDef(_def.schema._def, refs) : parseAnyDef(refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/enum.js
 function parseEnumDef(def) {
   return {
     type: "string",
@@ -41649,7 +41746,7 @@ function parseEnumDef(def) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/intersection.js
 var isJsonSchema7AllOfType = (type) => {
   if ("type" in type && type.type === "string")
     return false;
@@ -41691,7 +41788,7 @@ function parseIntersectionDef(def, refs) {
   } : void 0;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/literal.js
 function parseLiteralDef(def, refs) {
   const parsedType2 = typeof def.value;
   if (parsedType2 !== "bigint" && parsedType2 !== "number" && parsedType2 !== "boolean" && parsedType2 !== "string") {
@@ -41711,7 +41808,7 @@ function parseLiteralDef(def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/string.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/string.js
 var emojiRegex2 = void 0;
 var zodPatterns = {
   /**
@@ -42036,7 +42133,7 @@ function stringifyRegExpWithFlags(regex, refs) {
   return pattern;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/record.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/record.js
 function parseRecordDef(def, refs) {
   if (refs.target === "openAi") {
     console.warn("Warning: OpenAI may not support records in schemas! Try an array of key-value pairs instead.");
@@ -42088,7 +42185,7 @@ function parseRecordDef(def, refs) {
   return schema;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/map.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/map.js
 function parseMapDef(def, refs) {
   if (refs.mapStrategy === "record") {
     return parseRecordDef(def, refs);
@@ -42113,7 +42210,7 @@ function parseMapDef(def, refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/nativeEnum.js
 function parseNativeEnumDef(def) {
   const object3 = def.values;
   const actualKeys = Object.keys(def.values).filter((key) => {
@@ -42127,7 +42224,7 @@ function parseNativeEnumDef(def) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/never.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/never.js
 function parseNeverDef(refs) {
   return refs.target === "openAi" ? void 0 : {
     not: parseAnyDef({
@@ -42137,7 +42234,7 @@ function parseNeverDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/null.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/null.js
 function parseNullDef(refs) {
   return refs.target === "openApi3" ? {
     enum: ["null"],
@@ -42147,7 +42244,7 @@ function parseNullDef(refs) {
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/union.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/union.js
 var primitiveMappings = {
   ZodString: "string",
   ZodNumber: "number",
@@ -42215,7 +42312,7 @@ var asAnyOf = (def, refs) => {
   return anyOf.length ? { anyOf } : void 0;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/nullable.js
 function parseNullableDef(def, refs) {
   if (["ZodString", "ZodNumber", "ZodBigInt", "ZodBoolean", "ZodNull"].includes(def.innerType._def.typeName) && (!def.innerType._def.checks || !def.innerType._def.checks.length)) {
     if (refs.target === "openApi3") {
@@ -42247,7 +42344,7 @@ function parseNullableDef(def, refs) {
   return base && { anyOf: [base, { type: "null" }] };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/number.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/number.js
 function parseNumberDef(def, refs) {
   const res = {
     type: "number"
@@ -42296,7 +42393,7 @@ function parseNumberDef(def, refs) {
   return res;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/object.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/object.js
 function parseObjectDef(def, refs) {
   const forceOptionalIntoNullable = refs.target === "openAi";
   const result = {
@@ -42366,7 +42463,7 @@ function safeIsOptional(schema) {
   }
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/optional.js
 var parseOptionalDef = (def, refs) => {
   if (refs.currentPath.toString() === refs.propertyPath?.toString()) {
     return parseDef(def.innerType._def, refs);
@@ -42385,7 +42482,7 @@ var parseOptionalDef = (def, refs) => {
   } : parseAnyDef(refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/pipeline.js
 var parsePipelineDef = (def, refs) => {
   if (refs.pipeStrategy === "input") {
     return parseDef(def.in._def, refs);
@@ -42405,12 +42502,12 @@ var parsePipelineDef = (def, refs) => {
   };
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/promise.js
 function parsePromiseDef(def, refs) {
   return parseDef(def.type._def, refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/set.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/set.js
 function parseSetDef(def, refs) {
   const items = parseDef(def.valueType._def, {
     ...refs,
@@ -42430,7 +42527,7 @@ function parseSetDef(def, refs) {
   return schema;
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/tuple.js
 function parseTupleDef(def, refs) {
   if (def.rest) {
     return {
@@ -42458,24 +42555,24 @@ function parseTupleDef(def, refs) {
   }
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/undefined.js
 function parseUndefinedDef(refs) {
   return {
     not: parseAnyDef(refs)
   };
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/unknown.js
 function parseUnknownDef(refs) {
   return parseAnyDef(refs);
 }
 
-// node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parsers/readonly.js
 var parseReadonlyDef = (def, refs) => {
   return parseDef(def.innerType._def, refs);
 };
 
-// node_modules/zod-to-json-schema/dist/esm/selectParser.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/selectParser.js
 var selectParser = (def, typeName, refs) => {
   switch (typeName) {
     case ZodFirstPartyTypeKind2.ZodString:
@@ -42551,7 +42648,7 @@ var selectParser = (def, typeName, refs) => {
   }
 };
 
-// node_modules/zod-to-json-schema/dist/esm/parseDef.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/parseDef.js
 function parseDef(def, refs, forceResolution = false) {
   const seenItem = refs.seen.get(def);
   if (refs.override) {
@@ -42607,7 +42704,7 @@ var addMeta = (def, refs, jsonSchema) => {
   return jsonSchema;
 };
 
-// node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
+// ../e71i2/node_modules/zod-to-json-schema/dist/esm/zodToJsonSchema.js
 var zodToJsonSchema = (schema, options) => {
   const refs = getRefs(options);
   let definitions = typeof options === "object" && options.definitions ? Object.entries(options.definitions).reduce((acc, [name2, schema2]) => ({
@@ -42669,7 +42766,7 @@ var zodToJsonSchema = (schema, options) => {
   return combined;
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/zod-json-schema-compat.js
 function mapMiniTarget(t) {
   if (!t)
     return "draft-7";
@@ -42711,7 +42808,7 @@ function parseWithCompat(schema, data) {
   return result.data;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/protocol.js
 var DEFAULT_REQUEST_TIMEOUT_MSEC = 6e4;
 var Protocol = class {
   constructor(_options) {
@@ -43665,7 +43762,7 @@ function mergeCapabilities(base, additional) {
   return result;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/server.js
 var ExperimentalServerTasks = class {
   constructor(_server) {
     this._server = _server;
@@ -43878,7 +43975,7 @@ var ExperimentalServerTasks = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/helpers.js
 function assertToolsCallTaskCapability(requests, method, entityName) {
   if (!requests) {
     throw new Error(`${entityName} does not support task creation (required for ${method})`);
@@ -43913,7 +44010,7 @@ function assertClientRequestTaskCapability(requests, method, entityName) {
   }
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js
 var Server = class extends Protocol {
   /**
    * Initializes this server with the given name and version information.
@@ -44284,7 +44381,7 @@ var Server = class extends Protocol {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/completable.js
 var COMPLETABLE_SYMBOL = /* @__PURE__ */ Symbol.for("mcp.completable");
 function isCompletable(schema) {
   return !!schema && typeof schema === "object" && COMPLETABLE_SYMBOL in schema;
@@ -44298,7 +44395,7 @@ var McpZodTypeKind;
   McpZodTypeKind2["Completable"] = "McpCompletable";
 })(McpZodTypeKind || (McpZodTypeKind = {}));
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/shared/toolNameValidation.js
 var TOOL_NAME_REGEX = /^[A-Za-z0-9._-]{1,128}$/;
 function validateToolName(name) {
   const warnings = [];
@@ -44356,7 +44453,7 @@ function validateAndWarnToolName(name) {
   return result.isValid;
 }
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/experimental/tasks/mcp-server.js
 var ExperimentalMcpServerTasks = class {
   constructor(_mcpServer) {
     this._mcpServer = _mcpServer;
@@ -44371,7 +44468,7 @@ var ExperimentalMcpServerTasks = class {
   }
 };
 
-// node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
+// ../e71i2/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js
 var McpServer = class {
   constructor(serverInfo, options) {
     this._registeredResources = {};
@@ -46508,6 +46605,8 @@ var StateStore = class {
         writeFileSync3(file3, JSON.stringify({ pid: process.pid, token }), { flag: "wx", mode: 384, flush: true });
         created = true;
       } catch (error62) {
+        if (process.platform === "win32" && error62.code === "EPERM")
+          continue;
         if (error62.code !== "EEXIST")
           throw error62;
       }
@@ -48814,6 +48913,7 @@ function boundedCatalog(entries) {
 async function prepareCraft(config2) {
   if (!config2.antiAiCraft)
     return void 0;
+  assertAntiAiCraftDirectoryUsable(config2);
   const source = config2.antiAiCraftDirectory ?? bundledSnapshot();
   if (!source)
     throw new BridgeError("CRAFT_SNAPSHOT_MISSING", "The bundled Anti-AI Craft snapshot is missing; reinstall this bridge version");
@@ -51431,10 +51531,14 @@ async function acquirePreparationLock(root, descriptor) {
   fail("PORTABLE_NODE_BUSY", "Another process is preparing the portable Node runtime");
 }
 async function preparePortableNodeRuntime(options) {
+  const cacheDirectory = options.cacheDirectory;
+  if (options.cacheDirectoryInvalid || !cacheDirectory) {
+    fail("INVALID_CONFIGURATION", "BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.");
+  }
   if (process.platform !== "win32" || process.arch !== "x64")
     fail("WINDOWS_RUNTIME_UNSUPPORTED", "Portable Node preparation is only available on Windows x64");
   const descriptor = requireDescriptor(options.descriptor ?? portableNodeDescriptor);
-  const root = absoluteCacheDirectory(options.cacheDirectory);
+  const root = absoluteCacheDirectory(cacheDirectory);
   await inspectCachePath(root, true);
   try {
     return await resolvePortableNodeRuntime(root, descriptor);
@@ -51488,7 +51592,7 @@ async function preparePortableNodeRuntime(options) {
       throw cleanupError;
   }
 }
-async function portableNodeStatus(requestedMode, cacheDirectory, descriptor = portableNodeDescriptor) {
+async function portableNodeStatus(requestedMode, cacheDirectory, descriptor = portableNodeDescriptor, options) {
   const base = {
     requestedMode,
     supported: process.platform === "win32" && process.arch === "x64",
@@ -51498,6 +51602,9 @@ async function portableNodeStatus(requestedMode, cacheDirectory, descriptor = po
     libuvVersion: descriptor.libuvVersion,
     sha256: descriptor.available ? descriptor.assets.node.sha256 : null
   };
+  if (options?.cacheDirectoryInvalid || !cacheDirectory) {
+    return { ...base, error: { code: "INVALID_CONFIGURATION", message: "BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health." } };
+  }
   if (!base.supported)
     return { ...base, error: { code: "WINDOWS_RUNTIME_UNSUPPORTED", message: "Portable Node is only supported on Windows x64" } };
   try {
@@ -51998,9 +52105,11 @@ async function portableNodeForHostRuntime(file3, selection) {
   const major = Number.parseInt(process.versions.node.split(".")[0] || "", 10);
   if (major !== 24)
     fail2("PORTABLE_NODE_HOST_UNSUPPORTED", "Portable Node substitution requires the bridge host Node.js major version to be 24");
-  if (!selection.portableNodeCacheDirectory)
-    fail2("PORTABLE_NODE_NOT_PREPARED", "Portable Node cache directory was not configured");
-  return resolvePortableNodeRuntime(selection.portableNodeCacheDirectory);
+  const cacheDirectory = selection.portableNodeCacheDirectory;
+  if (selection.portableNodeCacheDirectoryInvalid || !cacheDirectory) {
+    fail2("INVALID_CONFIGURATION", "BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.");
+  }
+  return resolvePortableNodeRuntime(cacheDirectory);
 }
 async function stageWindowsCommand(command2, runtimeDirectory, limits, selection = {}) {
   if (process.platform !== "win32")
@@ -52073,7 +52182,7 @@ var recoverySchema = external_exports.object({
 }).strict();
 var libraryRuntime = (() => {
   const config2 = loadConfig();
-  return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory };
+  return { mode: config2.windowsNodeRuntime, portableNodeCacheDirectory: config2.windowsNodeCacheDirectory, portableNodeCacheDirectoryInvalid: config2.windowsNodeCacheDirectoryInvalid };
 })();
 function verifyPathMappings(result, roots) {
   const expected = new Map(Object.entries(roots).map(([kind, physicalRoot]) => [kind, path24.resolve(physicalRoot).toLocaleLowerCase("en-US")]));
@@ -52412,8 +52521,14 @@ async function executeWindowsTest(command2, copyDirectory, options) {
   const runtimeSelection = {
     mode: options.windowsNodeRuntime ?? libraryRuntime.mode,
     portableNodeCacheDirectory: options.portableNodeCacheDirectory ?? libraryRuntime.portableNodeCacheDirectory,
+    portableNodeCacheDirectoryInvalid: options.portableNodeCacheDirectoryInvalid ?? libraryRuntime.portableNodeCacheDirectoryInvalid,
     includeGit
   };
+  if ((runtimeSelection.mode ?? "system") === "portable") {
+    if (runtimeSelection.portableNodeCacheDirectoryInvalid || !runtimeSelection.portableNodeCacheDirectory) {
+      throw new BridgeError("INVALID_CONFIGURATION", "BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.");
+    }
+  }
   const stateDirectory = path24.resolve(options.stateDirectory ?? path24.join(os8.homedir(), ".antigravity-mcp-bridge"));
   await mkdir8(stateDirectory, { recursive: true, mode: 448 });
   await runRecoveryWithController(stateDirectory, options);
@@ -52427,7 +52542,7 @@ async function executeWindowsTest(command2, copyDirectory, options) {
     scratch = await realpath8(await mkdtemp3(path24.join(temp, "agy-mcp-scratch-")));
     scratchStat = await lstat13(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command2, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles }, runtimeSelection);
-    const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, runtimeSelection.portableNodeCacheDirectory], maxFiles);
+    const grants = await grantPaths(selection, [...options.protectedPaths ?? [], stateDirectory, ...runtimeSelection.portableNodeCacheDirectory ? [runtimeSelection.portableNodeCacheDirectory] : []], maxFiles);
     const nonce = randomUUID12(), systemRoot = process.env.SystemRoot || "C:\\Windows";
     const environment = {
       SystemRoot: systemRoot,
@@ -52662,7 +52777,7 @@ var TaskManager = class {
     return this.state.loadSandboxPolicy();
   }
   windowsRuntimeStatus() {
-    return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory);
+    return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory, void 0, { cacheDirectoryInvalid: this.config.windowsNodeCacheDirectoryInvalid });
   }
   async setSandboxPolicy(value, expectedSha256, confirm) {
     const previous = this.state.loadSandboxPolicy();
@@ -52814,6 +52929,7 @@ var TaskManager = class {
     if (options.artifactPaths !== void 0)
       options.artifactPaths = [...artifactPathsSchema.parse(options.artifactPaths)];
     assertSecretExclusionsUsable(this.config);
+    assertAgyPathUsable(this.config);
     const workingDirectory = await validateWorkingDirectory(options.workingDirectory, this.forbiddenDirectories());
     await validateRuntimeCacheSeparation(workingDirectory, this.config.windowsNodeCacheDirectory);
     if (options.groupAdmission) {
@@ -52872,6 +52988,8 @@ var TaskManager = class {
         throw new BridgeError("INVALID_CRITERIA", "A resumed task retains its original acceptance criteria");
       if ((previous || contextSource) && options.skills !== void 0)
         throw new BridgeError("INVALID_SKILLS", "Resume and handoff retain supplied skills; new bundles require a new task");
+      if (this.config.antiAiCraft)
+        assertAntiAiCraftDirectoryUsable(this.config);
       if (previous || contextSource)
         options.craft = (previous ?? contextSource).options.craft;
       else if (!options.sessionId) {
@@ -53455,6 +53573,8 @@ var TaskManager = class {
     });
   }
   async queueWindowsTest(sourceTaskId, source, expectedSha256, command2, retries, timeoutSeconds, sandbox) {
+    if (this.config.antiAiCraft)
+      assertAntiAiCraftDirectoryUsable(this.config);
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
       throw new BridgeError("INVALID_TIMEOUT", "timeoutSeconds must be between 1 and 86400");
     }
@@ -54454,6 +54574,9 @@ ${redacted}`;
   async executeWindowsCommand(task2, request, timeoutSeconds) {
     if (!task2.project)
       throw new BridgeError("TASK_NOT_READY", "Windows tests require an isolated project copy");
+    if (this.config.windowsNodeRuntime === "portable") {
+      assertWindowsNodeCacheDirectoryUsable(this.config);
+    }
     const controller = new AbortController();
     task2.nativeAbort = controller;
     try {
@@ -54463,9 +54586,10 @@ ${redacted}`;
         maxFiles: this.config.maxCopyFiles,
         mode: task2.record.mode,
         stateDirectory: this.config.stateDirectory,
-        protectedPaths: [task2.record.workingDirectory, this.config.stateDirectory, this.config.windowsNodeCacheDirectory, ...this.forbiddenDirectories()],
+        protectedPaths: [task2.record.workingDirectory, this.config.stateDirectory, ...this.config.windowsNodeCacheDirectory ? [this.config.windowsNodeCacheDirectory] : [], ...this.forbiddenDirectories()],
         windowsNodeRuntime: this.config.windowsNodeRuntime,
         portableNodeCacheDirectory: this.config.windowsNodeCacheDirectory,
+        portableNodeCacheDirectoryInvalid: this.config.windowsNodeCacheDirectoryInvalid,
         sandbox: request.sandbox,
         signal: controller.signal,
         onProcess: (child) => {
@@ -55148,12 +55272,12 @@ async function runtimeCommand() {
   }
   const config2 = loadConfig();
   if (command[0] === "--windows-runtime-status") {
-    process.stdout.write(JSON.stringify(await portableNodeStatus(config2.windowsNodeRuntime, config2.windowsNodeCacheDirectory)) + "\n");
+    process.stdout.write(JSON.stringify(await portableNodeStatus(config2.windowsNodeRuntime, config2.windowsNodeCacheDirectory, void 0, { cacheDirectoryInvalid: config2.windowsNodeCacheDirectoryInvalid })) + "\n");
     return true;
   }
   try {
-    await preparePortableNodeRuntime({ cacheDirectory: config2.windowsNodeCacheDirectory });
-    process.stdout.write(JSON.stringify(await portableNodeStatus(config2.windowsNodeRuntime, config2.windowsNodeCacheDirectory)) + "\n");
+    await preparePortableNodeRuntime({ cacheDirectory: config2.windowsNodeCacheDirectory, cacheDirectoryInvalid: config2.windowsNodeCacheDirectoryInvalid });
+    process.stdout.write(JSON.stringify(await portableNodeStatus(config2.windowsNodeRuntime, config2.windowsNodeCacheDirectory, void 0, { cacheDirectoryInvalid: config2.windowsNodeCacheDirectoryInvalid })) + "\n");
     return true;
   } catch (error62) {
     process.stderr.write((error62 instanceof Error ? error62.message : String(error62)) + "\n");

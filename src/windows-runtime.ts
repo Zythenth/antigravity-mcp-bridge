@@ -25,6 +25,7 @@ export interface StagedWindowsCommand {
 export interface WindowsRuntimeSelection {
   mode?: WindowsNodeRuntime;
   portableNodeCacheDirectory?: string;
+  portableNodeCacheDirectoryInvalid?: boolean;
   includeGit?: boolean;
 }
 
@@ -536,8 +537,11 @@ async function portableNodeForHostRuntime(file: string, selection: WindowsRuntim
   if ((selection.mode ?? 'system') !== 'portable' || !await hostNodeIdentity(file)) return undefined;
   const major = Number.parseInt(process.versions.node.split('.')[0] || '', 10);
   if (major !== 24) fail('PORTABLE_NODE_HOST_UNSUPPORTED', 'Portable Node substitution requires the bridge host Node.js major version to be 24');
-  if (!selection.portableNodeCacheDirectory) fail('PORTABLE_NODE_NOT_PREPARED', 'Portable Node cache directory was not configured');
-  return resolvePortableNodeRuntime(selection.portableNodeCacheDirectory);
+  const cacheDirectory = selection.portableNodeCacheDirectory;
+  if (selection.portableNodeCacheDirectoryInvalid || !cacheDirectory) {
+    fail('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+  }
+  return resolvePortableNodeRuntime(cacheDirectory);
 }
 
 export async function stageWindowsCommand(command: TestCommand, runtimeDirectory: string, limits: WindowsRuntimeLimits,

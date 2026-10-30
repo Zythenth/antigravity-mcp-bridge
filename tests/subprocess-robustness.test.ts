@@ -135,7 +135,7 @@ test('discover reports AGY_PERMISSION_DENIED when spawn fails with EACCES or EPE
     });
     syncBuiltinESMExports();
     try {
-      const adapter = new CliAdapter(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: `/mock/denied/${code.toLowerCase()}` }));
+      const adapter = new CliAdapter(loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: path.resolve(`/mock/denied/${code.toLowerCase()}`) }));
       const result = await adapter.discover();
       assert.equal(result.installed, false);
       assert.ok(result.error?.includes('AGY_PERMISSION_DENIED'), `Expected AGY_PERMISSION_DENIED error for ${code}, got: ${result.error}`);
