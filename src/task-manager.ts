@@ -51,6 +51,15 @@ const MAX_RESPONSE_STEPS = 1000;
 const MAX_HELD_RESPONSE_LINES = 100;
 const RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5_000_000 };
 
+export interface MaintenanceIssue { operation: 'copy-cleanup'; code: string; since: string; failures: number }
+
+function maintenanceErrorCode(error: unknown): string {
+  const candidate = error instanceof BridgeError
+    ? error.code
+    : (typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined);
+  return typeof candidate === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(candidate) ? candidate : 'UNEXPECTED_ERROR';
+}
+
 interface PendingResponse { text: string; redaction: RedactionState; suppressing: boolean; dropped: string; untilDone: boolean; held: string[]; overflow: boolean }
 
 interface InternalTask { publicResponses?: Map<number, string>; pendingResponses?: Map<number, PendingResponse>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; editReceipts?: { offset: number; pending: Map<string, ReceiptEdit[]>; ambiguous: Set<string> }; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
@@ -97,6 +106,7 @@ export class TaskManager {
   private stateStore?: StateStore;
   private degraded = false;
   private degradedIssue?: ConfigurationIssue;
+  private maintenanceIssue?: MaintenanceIssue;
   private get state(): StateStore {
     this.assertStateDirectoryUsable();
     return this.stateStore!;
@@ -250,6 +260,9 @@ export class TaskManager {
         : [...this.config.configurationIssues];
     }
     return [...this.config.configurationIssues, ...this.state.readIntegrationRoots().issues];
+  }
+  get maintenanceIssues(): MaintenanceIssue[] {
+    return this.maintenanceIssue ? [{ ...this.maintenanceIssue }] : [];
   }
   private integrationRoots(): string[] {
     if (this.degraded) return [...new Set(this.config.preauthorizedIntegrationRoots)];
@@ -1041,6 +1054,28 @@ export class TaskManager {
       discardedTaskIds.push(...related.map(task => task.record.taskId));
     }
     return { discardedTaskIds };
+  }
+
+  // The warning carries only the code, since error messages may contain private paths.
+  async maintain(now = Date.now()): Promise<string | undefined> {
+    try {
+      await this.cleanup(now);
+      this.maintenanceIssue = undefined;
+      return undefined;
+    } catch (error) {
+      const code = maintenanceErrorCode(error);
+      if (this.maintenanceIssue && this.maintenanceIssue.code === code) {
+        this.maintenanceIssue.failures++;
+        return undefined;
+      }
+      this.maintenanceIssue = {
+        operation: 'copy-cleanup',
+        code,
+        since: new Date(now).toISOString(),
+        failures: 1,
+      };
+      return `Copy cleanup failed (${code}); the server keeps running and retries every minute. See maintenanceIssues in antigravity_health.`;
+    }
   }
 
   async integrate(taskId: string, expectedSha256: string, confirm?: (preview: ChangePreview) => Promise<boolean | IntegrationApproval>) {

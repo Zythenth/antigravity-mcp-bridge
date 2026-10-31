@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -591,6 +592,36 @@ test('cleanup discards every expired copy at startup and keeps copies still reta
     for (const task of expired) await assert.rejects(readFile(path.join(task.copyDirectory!, 'source.txt')), { code: 'ENOENT' });
     assert.equal(await readFile(path.join(retained.copyDirectory!, 'source.txt'), 'utf8'), 'source');
     assert.equal(restarted.status(retained.taskId).discardedAt, undefined);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('startup maintenance keeps a failed cleanup for health, warns once and retries on the next run', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const completed = await until(tasks, (await tasks.run({ prompt: 'test', workingDirectory: dir })).taskId, done);
+    const expiredAt = Date.parse(completed.completedAt!) + 168 * 3600000;
+    const lockFile = path.join(config.stateDirectory, 'copy-' + createHash('sha256').update(completed.copyDirectory!).digest('hex') + '.lock');
+    await writeFile(lockFile, JSON.stringify({ pid: process.pid }));
+    const restarted = new TaskManager(adapter, config); managers.push(restarted);
+    const firstWarn = await restarted.maintain(expiredAt);
+    assert.ok(typeof firstWarn === 'string' && firstWarn.includes('STATE_BUSY'));
+    assert.ok(!firstWarn.includes(completed.copyDirectory!));
+    assert.ok(!firstWarn.includes(config.stateDirectory));
+    assert.ok(!firstWarn.includes(dir));
+    assert.deepEqual(restarted.maintenanceIssues, [{ operation: 'copy-cleanup', code: 'STATE_BUSY', since: new Date(expiredAt).toISOString(), failures: 1 }]);
+    assert.equal(await readFile(path.join(completed.copyDirectory!, 'source.txt'), 'utf8'), 'source');
+    assert.equal(restarted.status(completed.taskId).discardedAt, undefined);
+    const secondWarn = await restarted.maintain(expiredAt + 60000);
+    assert.equal(secondWarn, undefined);
+    assert.deepEqual(restarted.maintenanceIssues, [{ operation: 'copy-cleanup', code: 'STATE_BUSY', since: new Date(expiredAt).toISOString(), failures: 2 }]);
+    await rm(lockFile, { force: true });
+    const thirdWarn = await restarted.maintain(expiredAt + 120000);
+    assert.equal(thirdWarn, undefined);
+    assert.deepEqual(restarted.maintenanceIssues, []);
+    await assert.rejects(readFile(path.join(completed.copyDirectory!, 'source.txt')), { code: 'ENOENT' });
+    assert.ok(restarted.status(completed.taskId).discardedAt);
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
