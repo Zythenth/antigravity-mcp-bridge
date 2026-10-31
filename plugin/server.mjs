@@ -45961,6 +45961,7 @@ var successOutputSchemas = {
     toolProfile: toolProfileSchema.optional(),
     approvalMode: external_exports.enum(["auto", "ask"]).optional(),
     configurationIssues: external_exports.array(external_exports.object({ variable: external_exports.string(), index: count.optional(), reason: external_exports.enum(["invalid-json", "not-a-list", "too-many-entries", "not-a-string", "not-absolute", "not-found", "access-denied", "not-a-directory", "volume-root", "unresolvable", "not-an-object", "legacy-format", "invalid-format", "invalid-name", "forbidden-name", "invalid-pattern", "invalid-entry", "duplicate", "too-large", "unsafe-file", "link", "not-directory", "unusable"]) }).strict()).optional(),
+    maintenanceIssues: external_exports.array(external_exports.object({ operation: external_exports.literal("copy-cleanup"), code: external_exports.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), since: external_exports.string(), failures: count }).strict()).optional(),
     installed: external_exports.boolean(),
     path: external_exports.string(),
     version: external_exports.string().optional(),
@@ -47006,6 +47007,7 @@ function createMcpServer(adapter, tasks, options = {}) {
         toolProfile: tasks.toolProfile,
         approvalMode: tasks.approvalMode,
         configurationIssues: tasks.configurationIssues,
+        maintenanceIssues: tasks.maintenanceIssues,
         windowsRuntime: await tasks.windowsRuntimeStatus(),
         ...options.waitCommand && tasks.isStateDirectoryUsable() ? { waitCommand: waitCommandInfo(options.waitCommand) } : {},
         bridgeLimitations: {
@@ -52704,6 +52706,10 @@ var MAX_BUFFERED_RESPONSE_STEPS = 16;
 var MAX_RESPONSE_STEPS = 1e3;
 var MAX_HELD_RESPONSE_LINES = 100;
 var RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5e6 };
+function maintenanceErrorCode(error62) {
+  const candidate = error62 instanceof BridgeError ? error62.code : typeof error62?.code === "string" ? error62.code : void 0;
+  return typeof candidate === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(candidate) ? candidate : "UNEXPECTED_ERROR";
+}
 var terminal3 = /* @__PURE__ */ new Set(["completed", "failed", "cancelled", "timeout"]);
 function restoredEvents(stored) {
   const steps = /* @__PURE__ */ new Map();
@@ -52751,6 +52757,7 @@ var TaskManager = class {
   stateStore;
   degraded = false;
   degradedIssue;
+  maintenanceIssue;
   get state() {
     this.assertStateDirectoryUsable();
     return this.stateStore;
@@ -52902,6 +52909,9 @@ var TaskManager = class {
       return this.degradedIssue ? [...this.config.configurationIssues, this.degradedIssue] : [...this.config.configurationIssues];
     }
     return [...this.config.configurationIssues, ...this.state.readIntegrationRoots().issues];
+  }
+  get maintenanceIssues() {
+    return this.maintenanceIssue ? [{ ...this.maintenanceIssue }] : [];
   }
   integrationRoots() {
     if (this.degraded)
@@ -53932,6 +53942,27 @@ var TaskManager = class {
       discardedTaskIds.push(...related.map((task2) => task2.record.taskId));
     }
     return { discardedTaskIds };
+  }
+  // The warning carries only the code, since error messages may contain private paths.
+  async maintain(now = Date.now()) {
+    try {
+      await this.cleanup(now);
+      this.maintenanceIssue = void 0;
+      return void 0;
+    } catch (error62) {
+      const code = maintenanceErrorCode(error62);
+      if (this.maintenanceIssue && this.maintenanceIssue.code === code) {
+        this.maintenanceIssue.failures++;
+        return void 0;
+      }
+      this.maintenanceIssue = {
+        operation: "copy-cleanup",
+        code,
+        since: new Date(now).toISOString(),
+        failures: 1
+      };
+      return `Copy cleanup failed (${code}); the server keeps running and retries every minute. See maintenanceIssues in antigravity_health.`;
+    }
   }
   async integrate(taskId, expectedSha256, confirm) {
     this.assertStateDirectoryUsable();
@@ -55474,6 +55505,11 @@ async function runtimeCommand() {
 if (command[0] === "wait") {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, (line) => process.stdout.write(line + "\n"));
 } else if (!await runtimeCommand()) {
+  let reportMaintenance2 = function(problem) {
+    if (problem !== void 0)
+      process.stderr.write(problem + "\n");
+  };
+  reportMaintenance = reportMaintenance2;
   const config2 = loadConfig();
   const adapter = new CliAdapter(config2);
   await adapter.discover();
@@ -55481,13 +55517,12 @@ if (command[0] === "wait") {
   const warning = configurationWarning(tasks.configurationIssues);
   if (warning)
     process.stderr.write(warning + "\n");
-  await tasks.cleanup();
+  reportMaintenance2(await tasks.maintain());
   const waitCommand = tasks.isStateDirectoryUsable() ? waitCommandArgv(config2.stateDirectory) : void 0;
   const server = createMcpServer(adapter, tasks, { waitCommand });
   await server.connect(new StdioServerTransport());
   const cleanupTimer = setInterval(() => {
-    void tasks.cleanup().catch((error62) => process.stderr.write(`Copy cleanup failed: ${String(error62)}
-`));
+    void tasks.maintain().then(reportMaintenance2);
   }, 6e4);
   cleanupTimer.unref();
   let closing = false;
@@ -55506,3 +55541,4 @@ if (command[0] === "wait") {
     void shutdown();
   });
 }
+var reportMaintenance;

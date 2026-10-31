@@ -38,12 +38,15 @@ if (command[0] === 'wait') {
   const tasks = new TaskManager(adapter, config);
   const warning = configurationWarning(tasks.configurationIssues);
   if (warning) process.stderr.write(warning + '\n');
-  await tasks.cleanup();
+  function reportMaintenance(problem: string | undefined) {
+    if (problem !== undefined) process.stderr.write(problem + '\n');
+  }
+  reportMaintenance(await tasks.maintain());
   const waitCommand = tasks.isStateDirectoryUsable() ? waitCommandArgv(config.stateDirectory) : undefined;
   const server = createMcpServer(adapter, tasks, { waitCommand });
   await server.connect(new StdioServerTransport());
   const cleanupTimer = setInterval(() => {
-    void tasks.cleanup().catch(error => process.stderr.write(`Copy cleanup failed: ${String(error)}\n`));
+    void tasks.maintain().then(reportMaintenance);
   }, 60000);
   cleanupTimer.unref();
 
