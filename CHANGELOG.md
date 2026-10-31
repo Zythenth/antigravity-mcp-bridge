@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- Falha da limpeza automática de cópias na partida ou no temporizador deixa de derrubar o servidor; aviso único no stderr só com o código, sem caminhos; `antigravity_health.maintenanceIssues` com `{ operation: 'copy-cleanup', code, since, failures }`; a limpeza é tentada de novo a cada minuto e o item some no primeiro sucesso; nenhuma cópia é descartada por causa da falha.
+
 - A limpeza de cópias expiradas (`COPY_RETENTION_HOURS`) deixa de derrubar o servidor MCP na partida. Antes, quando havia uma cópia expirada e outra cópia depois dela, o descarte da primeira recarregava o estado e a volta seguinte lançava `TypeError: Cannot read properties of undefined (reading 'record')`; na partida o processo encerrava antes do `initialize` e o cliente mostrava apenas "Connection closed", e no temporizador a limpeza parava no meio. Agora todas as cópias expiradas e inativas são descartadas na mesma limpeza, e as cópias ativas ou ainda dentro da retenção continuam preservadas.
 
 - `BRIDGE_STATE_DIRECTORY` passa a adotar inicialização em modo degradado quando configurado com caminho inválido (relativo, no Windows raiz ou unidade relativa como `\state` ou `C:state`, contendo byte NUL, caracteres reservados no Windows ou sendo link simbólico/junção), em vez de derrubar o servidor MCP antes do `initialize`:
