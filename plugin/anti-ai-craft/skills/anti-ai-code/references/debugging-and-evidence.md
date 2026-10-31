@@ -12,6 +12,17 @@
 
 Avoid successive patches without new evidence, simultaneous changes that prevent attributing the cause, and explanations after the fact.
 
+## Defect class
+
+After the cause is confirmed, fix the class, not only the instance:
+
+1. **Product or test.** Before changing only a test, fixture, or harness, decide whether a real user can reach the same condition (another launcher, operating system, slower machine, missing variable). A test-only fix requires evidence that production cannot reach it; otherwise fix the product.
+2. **Siblings.** Name the class (for example: path compared without canonicalization, child process without an explicit environment, fixed wait) and search the repository for other occurrences. Fix them or record them with a location.
+3. **Prevention.** Prefer a change that makes the wrong form hard to write again: one shared helper, a lint or static check, or a type. A rule that depends only on remembering it is weaker.
+4. **Record.** Report the class, the root cause, and the preventive change, not only the failing test.
+
+A failure that passes on rerun without a change is a defect with an unknown cause, not a pass.
+
 ## Change and evidence
 
 Every non-trivial step must form a pair:

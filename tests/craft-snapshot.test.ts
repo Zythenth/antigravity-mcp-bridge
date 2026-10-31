@@ -25,7 +25,7 @@ async function synthetic(change?: (manifest: CraftManifest, root: string) => Pro
 
 test('the packaged Anti-AI Craft snapshot matches its pinned manifest', async () => {
   const snapshot = await verifyCraftSnapshot(packaged);
-  assert.equal(snapshot.manifest.revision, '8f6d539500d67c503a6cb32f5061147885b83c33');
+  assert.equal(snapshot.manifest.revision, '201fec54431bdf7e4c8bb3660100601b41b97b08');
   assert.deepEqual(snapshot.manifest.skills, ['anti-ai-audit', 'anti-ai-code', 'anti-ai-design', 'anti-ai-design-flow', 'anti-ai-remediate', 'anti-ai-security']);
   assert.ok(snapshot.manifest.files.some(file => file.mediaType === 'image/png'));
   assert.equal(snapshot.manifest.files.some(file => file.path.endsWith('.py')), false);

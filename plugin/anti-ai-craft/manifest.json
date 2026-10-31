@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "origin": "https://github.com/Zythenth/anti-ai-craft",
-  "revision": "8f6d539500d67c503a6cb32f5061147885b83c33",
+  "revision": "201fec54431bdf7e4c8bb3660100601b41b97b08",
   "version": "0.6.0",
   "skills": [
     "anti-ai-audit",
@@ -44,8 +44,8 @@
     },
     {
       "path": "skills/anti-ai-code/SKILL.md",
-      "bytes": 8489,
-      "sha256": "f3685c3767798640e1faf7623b92fff7143f7289aeb65a766a1e6502acaa1dd8",
+      "bytes": 8544,
+      "sha256": "da92dece1882d89911c1451558e131f639913bc7d019d7b5a7dfb76b8b9bbadb",
       "mediaType": "text/markdown"
     },
     {
@@ -68,8 +68,8 @@
     },
     {
       "path": "skills/anti-ai-code/references/debugging-and-evidence.md",
-      "bytes": 3100,
-      "sha256": "069c5bd724d37cfadcfcb42beca76a5d2df28fbdd2e0201860ce4a72d165e539",
+      "bytes": 4107,
+      "sha256": "f7ba49ceb4254fb1ad178431a6fcfddd8f9f86757a88e8dc1d264cd51661d6e6",
       "mediaType": "text/markdown"
     },
     {
@@ -86,8 +86,8 @@
     },
     {
       "path": "skills/anti-ai-code/references/testing-antipatterns.md",
-      "bytes": 5028,
-      "sha256": "eec83d5500e7b8c6141e6fd0f87df685222f809928be60b2ad1cd939e8edde9a",
+      "bytes": 6328,
+      "sha256": "b7785e7f136ddd379815a8b7dab66498afd45c41c792a28dc93338c81e355570",
       "mediaType": "text/markdown"
     },
     {

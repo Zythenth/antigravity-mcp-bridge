@@ -24,7 +24,7 @@ Use `$anti-ai-audit` for a broad read-only scan, `$anti-ai-security` for abuse p
 - Read [code-antipatterns.md](references/code-antipatterns.md) for correctness, errors, state, security, integration, and implemented UI.
 - Read [testing-antipatterns.md](references/testing-antipatterns.md) when creating, reviewing, or using tests as evidence.
 - Read [architecture-antipatterns.md](references/architecture-antipatterns.md) when evaluating abstraction, fragmentation, compatibility, performance, or logging.
-- Read [debugging-and-evidence.md](references/debugging-and-evidence.md) when debugging, refactoring, dealing with repeated failures, or building the evidence for a claim.
+- Read [debugging-and-evidence.md](references/debugging-and-evidence.md) when debugging, refactoring, dealing with repeated failures or failures seen only in CI or on one operating system, or building the evidence for a claim.
 - Read [review-workflow.md](references/review-workflow.md) for investigation, a localized fix, validation, and reporting.
 - Read [sources.md](references/sources.md) when justifying a rule or calibrating quality and correctness claims.
 - When the change comes from a design flow, read the brief, the [information architecture](../anti-ai-design/references/information-architecture.md), the [tokens](../anti-ai-design/references/design-tokens.md), and the plan only if they are relevant and current; a draft or merely present file does not authorize implementation.

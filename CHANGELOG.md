@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- O snapshot do Anti-AI Craft passa para a revisão fixa `201fec5`. A skill `anti-ai-code` ganha regras para testes que dependem do ambiente de execução (caminhos canônicos, ambiente explícito nos processos filhos, `EPERM`/`EBUSY` transitórios no Windows, finais de linha e prazos no runner mais lento) e uma seção de classe de defeito: decidir se a falha alcança o produto antes de corrigir só o teste, procurar outras ocorrências e preferir prevenção. O manifesto e `THIRD_PARTY_NOTICES.md` acompanham a revisão.
+
 - `antigravity_test` com o executor `agy` (padrão no Linux e no macOS; no Windows, com `BRIDGE_TEST_EXECUTOR=agy`) volta a funcionar no pacote distribuído. O empacotamento com esbuild trocava `require` por `__require` dentro da função serializada que executa o comando na cópia; o processo de teste falhava com `ReferenceError: __require is not defined` antes de emitir o recibo, e a tarefa terminava sempre com `TEST_EXECUTION_UNVERIFIED`. A função passa a receber o carregador de módulos como parâmetro.
 
 - `npm run test:package` passa a chamar as 50 ferramentas MCP do pacote extraído, com o agy falso, em dois estados isolados (vazio e envelhecido). Uma tabela com um caso por ferramenta é comparada com `tools/list` nos dois sentidos; cada resposta é validada contra o `outputSchema` publicado ou contra o envelope de erro esperado; o servidor precisa responder a `ping` depois de cada chamada; e a duração de cada estado é registrada. Ferramenta sem caso ou caso sem ferramenta reprova o teste.

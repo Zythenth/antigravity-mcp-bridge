@@ -6,6 +6,7 @@
 - [False confidence](#false-confidence)
 - [Mocks](#mocks)
 - [Waits](#waits)
+- [Execution environment](#execution-environment)
 - [Snapshots](#snapshots)
 - [Required cases](#required-cases)
 - [Oracle quality](#oracle-quality)
@@ -71,6 +72,17 @@ If the previous state cannot be executed safely or has already changed, record t
 - Prefer an observable event or condition with a diagnostic timeout over an arbitrary `sleep`.
 - Use a fixed delay only when time is an explicit part of the contract.
 - When the timeout expires, record the observed state to distinguish slowness, deadlock, and a missing event.
+
+## Execution environment
+
+A test that starts processes or touches paths, files, or time must hold on every runner of the CI matrix, not only on the author's machine. Assume a CI runner is several times slower, starts from a minimal environment, and uses different temporary paths.
+
+- Paths: canonicalize both sides with the same function before comparing (Windows 8.3 short names, symbolic links, junctions, letter case).
+- Environment: pass child processes an explicit environment; know which variables the launcher or SDK drops instead of relying on the author's shell.
+- File locks: on Windows an open handle, antivirus, or indexer can make a delete, rename, or open fail transiently with `EPERM`/`EBUSY`; retry only that error, bounded, at the narrowest boundary. This is not the retry that masks flakiness above.
+- Line endings: do not assume LF or CRLF in fixtures and byte comparisons; follow the repository's Git attributes.
+- Time budgets: derive test windows from condition waits; a fixed production deadline must hold on the slowest supported runner.
+- Centralize each concern (process launch, temporary directories, waits, transient-lock retry) in one helper and reject direct use in review, so a new test cannot reintroduce the defect.
 
 ## Snapshots
 
