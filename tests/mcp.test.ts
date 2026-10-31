@@ -108,7 +108,8 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal((await call('antigravity_preview', { taskId })).tests[0].stale, false);
     taskId = (await call('antigravity_test', { taskId, expectedSha256: preview.sha256, timeoutSeconds: 20,
       command: { executable: process.execPath, args: ['-e', testScript] } })).task.taskId;
-    const testDeadline = Date.now() + 15000;
+    // Observe longer than the task's own 20 s timeout, so a slow sandbox start fails through the task instead of this loop.
+    const testDeadline = Date.now() + 60000;
     let observed;
     while (Date.now() < testDeadline) {
       observed = await call('antigravity_result', { taskId });

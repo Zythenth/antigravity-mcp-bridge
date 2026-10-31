@@ -452,7 +452,7 @@ after(async () => {
   for (const directory of stateDirectories) {
     assert.equal(path.dirname(directory), os.tmpdir());
     assert.ok(path.basename(directory).startsWith('agy-mcp-state-test-'));
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
