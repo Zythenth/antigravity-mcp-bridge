@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- A limpeza de cópias expiradas (`COPY_RETENTION_HOURS`) deixa de derrubar o servidor MCP na partida. Antes, quando havia uma cópia expirada e outra cópia depois dela, o descarte da primeira recarregava o estado e a volta seguinte lançava `TypeError: Cannot read properties of undefined (reading 'record')`; na partida o processo encerrava antes do `initialize` e o cliente mostrava apenas "Connection closed", e no temporizador a limpeza parava no meio. Agora todas as cópias expiradas e inativas são descartadas na mesma limpeza, e as cópias ativas ou ainda dentro da retenção continuam preservadas.
+
 - `BRIDGE_STATE_DIRECTORY` passa a adotar inicialização em modo degradado quando configurado com caminho inválido (relativo, no Windows raiz ou unidade relativa como `\state` ou `C:state`, contendo byte NUL, caracteres reservados no Windows ou sendo link simbólico/junção), em vez de derrubar o servidor MCP antes do `initialize`:
   - O servidor inicia normalmente, responde a `initialize` e `tools/list` e emite aviso único no `stderr`;
   - `antigravity_health` relata o problema em `configurationIssues` como `{ variable: 'BRIDGE_STATE_DIRECTORY', reason }` (motivos: `not-absolute`, `invalid-entry`, `link`, `not-directory` ou `unusable`) sem expor o valor configurado nem tocar no diretório de estado, e omite `waitCommand` no modo degradado;

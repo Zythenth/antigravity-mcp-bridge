@@ -576,6 +576,24 @@ test('cleanup expires only inactive copies and deletion rejects source paths', a
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
+test('cleanup discards every expired copy at startup and keeps copies still retained', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const expired = [];
+    for (let index = 0; index < 3; index++) expired.push(await until(tasks, (await tasks.run({ prompt: 'test', workingDirectory: dir })).taskId, done));
+    const lastExpired = Math.max(...expired.map(task => Date.parse(task.completedAt!)));
+    const retained = await until(tasks, (await tasks.run({ prompt: 'test', workingDirectory: dir })).taskId, done);
+    assert.ok(Date.parse(retained.completedAt!) > lastExpired);
+    const restarted = new TaskManager(adapter, config); managers.push(restarted);
+    assert.deepEqual((await restarted.cleanup(lastExpired + 168 * 3600000)).discardedTaskIds.sort(), expired.map(task => task.taskId).sort());
+    for (const task of expired) await assert.rejects(readFile(path.join(task.copyDirectory!, 'source.txt')), { code: 'ENOENT' });
+    assert.equal(await readFile(path.join(retained.copyDirectory!, 'source.txt'), 'utf8'), 'source');
+    assert.equal(restarted.status(retained.taskId).discardedAt, undefined);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
 function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> = {}) {
   const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(stateDirectory);
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '30', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });

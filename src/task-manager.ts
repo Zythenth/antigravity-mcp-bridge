@@ -1031,9 +1031,10 @@ export class TaskManager {
     if (this.degraded) return { discardedTaskIds: [] };
     this.refresh();
     const discardedTaskIds: string[] = [];
-    for (const project of new Set([...this.tasks.values()].map(task => task.project).filter((p): p is ProjectCopy => Boolean(p)))) {
-      const related = [...this.tasks.values()].filter(task => task.project === project);
-      if (this.busyProjects.has(project) || related.some(task => !terminal.has(task.record.status))) continue;
+    // discard() reloads the state, which replaces the copy objects of tasks this server does not run, so each copy is looked up again by directory.
+    for (const copyDirectory of new Set([...this.tasks.values()].flatMap(task => task.project ? [task.project.copyDirectory] : []))) {
+      const related = [...this.tasks.values()].filter(task => task.project?.copyDirectory === copyDirectory);
+      if (!related.length || related.some(task => this.busyProjects.has(task.project!) || !terminal.has(task.record.status))) continue;
       const latest = Math.max(...related.map(task => Date.parse(task.record.completedAt || task.record.createdAt)));
       if (now - latest < this.config.copyRetentionHours * 3600000) continue;
       await this.discard(related[0]!.record.taskId);
