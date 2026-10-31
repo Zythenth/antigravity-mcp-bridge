@@ -213,6 +213,8 @@ export async function checkToolContracts(bin, root) {
   const agySpawn = fileURLToPath(new URL('./agy-spawn.mjs', import.meta.url));
   const serverArgs = ['--import', pathToFileURL(agySpawn).href];
   // The SDK passes the real profile variables; an empty profile keeps personal folders out of the contract.
+  // PSModulePath is not among the SDK defaults; without it, the PowerShell listing that verifies process cleanup
+  // took 18 to 25 s on Windows CI runners, past its 15 s limit, against under half a second with it.
   const home = path.join(root, 'contract-home');
   await mkdir(home, { recursive: true });
   const serverEnv = {
@@ -224,7 +226,7 @@ export async function checkToolContracts(bin, root) {
     APPDATA: home,
     LOCALAPPDATA: home,
   };
-  for (const key of ['PATH', 'PATHEXT', 'SystemRoot']) {
+  for (const key of ['PATH', 'PATHEXT', 'SystemRoot', 'PSModulePath']) {
     if (process.env[key] !== undefined) serverEnv[key] = process.env[key];
   }
   const serverOptions = { args: serverArgs, env: serverEnv };
