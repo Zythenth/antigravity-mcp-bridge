@@ -4,13 +4,7 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
-var __commonJS = (cb, mod) => function __require2() {
+var __commonJS = (cb, mod) => function __require() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   } catch (e) {
@@ -45312,11 +45306,11 @@ var receiptSchema = external_exports.object({
   error: external_exports.string().optional(),
   truncated: external_exports.boolean()
 }).strict();
-async function nativeRunner(settings) {
-  const fs = __require("node:fs");
-  const crypto3 = __require("node:crypto");
-  const paths2 = __require("node:path");
-  const processes = __require("node:child_process");
+async function nativeRunner(load, settings) {
+  const fs = load("node:fs");
+  const crypto3 = load("node:crypto");
+  const paths2 = load("node:path");
+  const processes = load("node:child_process");
   const receipt = { nonce: settings.nonce, exitCode: null, truncated: false };
   let gitDirectory;
   let output2 = "";
@@ -45400,7 +45394,7 @@ async function prepareNativeTest(project, request, settings) {
   const nonce = randomUUID6();
   const file3 = ".agy-bridge-test-" + nonce + ".cjs";
   const absolute = path14.join(project.copyDirectory, file3);
-  const script = "(" + nativeRunner.toString() + ")(" + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
+  const script = "(" + nativeRunner.toString() + ")(require, " + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
   const hash3 = createHash16("sha256").update(script).digest("hex");
   const exclude = path14.join(project.gitDirectory, "info", "exclude");
   await mkdir4(path14.dirname(exclude), { recursive: true });

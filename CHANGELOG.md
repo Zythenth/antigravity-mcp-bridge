@@ -2,6 +2,10 @@
 
 ## Não publicado
 
+- `antigravity_test` com o executor `agy` (padrão no Linux e no macOS; no Windows, com `BRIDGE_TEST_EXECUTOR=agy`) volta a funcionar no pacote distribuído. O empacotamento com esbuild trocava `require` por `__require` dentro da função serializada que executa o comando na cópia; o processo de teste falhava com `ReferenceError: __require is not defined` antes de emitir o recibo, e a tarefa terminava sempre com `TEST_EXECUTION_UNVERIFIED`. A função passa a receber o carregador de módulos como parâmetro.
+
+- `npm run test:package` passa a chamar as 50 ferramentas MCP do pacote extraído, com o agy falso, em dois estados isolados (vazio e envelhecido). Uma tabela com um caso por ferramenta é comparada com `tools/list` nos dois sentidos; cada resposta é validada contra o `outputSchema` publicado ou contra o envelope de erro esperado; o servidor precisa responder a `ping` depois de cada chamada; e a duração de cada estado é registrada. Ferramenta sem caso ou caso sem ferramenta reprova o teste.
+
 - Falha da limpeza automática de cópias na partida ou no temporizador deixa de derrubar o servidor; aviso único no stderr só com o código, sem caminhos; `antigravity_health.maintenanceIssues` com `{ operation: 'copy-cleanup', code, since, failures }`; a limpeza é tentada de novo a cada minuto e o item some no primeiro sucesso; nenhuma cópia é descartada por causa da falha.
 
 - A limpeza de cópias expiradas (`COPY_RETENTION_HOURS`) deixa de derrubar o servidor MCP na partida. Antes, quando havia uma cópia expirada e outra cópia depois dela, o descarte da primeira recarregava o estado e a volta seguinte lançava `TypeError: Cannot read properties of undefined (reading 'record')`; na partida o processo encerrava antes do `initialize` e o cliente mostrava apenas "Connection closed", e no temporizador a limpeza parava no meio. Agora todas as cópias expiradas e inativas são descartadas na mesma limpeza, e as cópias ativas ou ainda dentro da retenção continuam preservadas.

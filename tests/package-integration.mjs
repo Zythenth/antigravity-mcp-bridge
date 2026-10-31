@@ -9,6 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { outputSchemas } from '../dist/src/output-schemas.js';
 import { verifyCraftSnapshot } from '../dist/src/craft-snapshot.js';
 import { checkAgedState, checkFailedCleanup } from './aged-state.mjs';
+import { checkToolContracts } from './tool-contract.mjs';
 
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 const craft = JSON.parse(await readFile('plugin/anti-ai-craft/manifest.json', 'utf8'));
@@ -106,6 +107,7 @@ try {
   await check(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--offline', '--yes', '--ignore-scripts', '--cache', path.join(directory, 'cache'), '--package', archive, 'antigravity-mcp-bridge'], 'npx');
   await checkAgedState(bin, directory);
   await checkFailedCleanup(bin, directory);
+  await checkToolContracts(bin, directory);
   console.log(`Package ${manifest.version}: exact ${expectedFiles.length}-file allowlist passed; no runtime dependency installation`);
 } finally {
   if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('agy-package-test-')) throw Error('Unsafe package-test cleanup path');

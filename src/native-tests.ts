@@ -29,11 +29,12 @@ export const receiptSchema = z.object({
 }).strict();
 export type NativeTestReceipt = z.infer<typeof receiptSchema>;
 
-async function nativeRunner(settings: TestCommand & { nonce: string; copyDirectory: string; file: string; timeoutSeconds: number; maxCopyFiles: number; maxCopyBytes: number }) {
-  const fs = require('node:fs') as typeof import('node:fs');
-  const crypto = require('node:crypto') as typeof import('node:crypto');
-  const paths = require('node:path') as typeof import('node:path');
-  const processes = require('node:child_process') as typeof import('node:child_process');
+// The loader is a parameter because bundlers rewrite free require calls.
+async function nativeRunner(load: NodeJS.Require, settings: TestCommand & { nonce: string; copyDirectory: string; file: string; timeoutSeconds: number; maxCopyFiles: number; maxCopyBytes: number }) {
+  const fs = load('node:fs') as typeof import('node:fs');
+  const crypto = load('node:crypto') as typeof import('node:crypto');
+  const paths = load('node:path') as typeof import('node:path');
+  const processes = load('node:child_process') as typeof import('node:child_process');
   const receipt: NativeTestReceipt = { nonce: settings.nonce, exitCode: null, truncated: false };
   let gitDirectory: string | undefined;
   let output = '';
@@ -102,7 +103,7 @@ export async function prepareNativeTest(project: ProjectCopy, request: NativeTes
   const nonce = randomUUID();
   const file = '.agy-bridge-test-' + nonce + '.cjs';
   const absolute = path.join(project.copyDirectory, file);
-  const script = '(' + nativeRunner.toString() + ')(' + JSON.stringify({ executable: request.executable, args: request.args, nonce, file, copyDirectory: project.copyDirectory, ...settings }) + ');';
+  const script = '(' + nativeRunner.toString() + ')(require, ' + JSON.stringify({ executable: request.executable, args: request.args, nonce, file, copyDirectory: project.copyDirectory, ...settings }) + ');';
   const hash = createHash('sha256').update(script).digest('hex');
   const exclude = path.join(project.gitDirectory, 'info', 'exclude');
   await mkdir(path.dirname(exclude), { recursive: true });

@@ -675,7 +675,7 @@ npm.cmd run build:plugin
 npm.cmd run test:package
 ```
 
-`npm test` usa um mock do `agy` e não consome quota. `npm run test:package` também consulta o status do runtime pelo pacote empacotado; em plataformas fora do Windows ele deve informar `supported: false` sem preparar nada. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
+`npm test` usa um mock do `agy` e não consome quota. `npm run test:package` também consulta o status do runtime pelo pacote empacotado; em plataformas fora do Windows ele deve informar `supported: false` sem preparar nada. Ele também inicia o servidor do pacote extraído com o agy falso de `tests/mock-agy.mjs` e chama cada ferramenta MCP em dois estados isolados, vazio e envelhecido; uma ferramenta nova sem caso em `tests/tool-contract.mjs` reprova o teste. A integração real é opcional: `npm run test:integration` cria um repositório descartável, executa uma tarefa pelo cliente MCP, confere que o original permanece intacto até a integração e remove o repositório. Esse teste simula a resposta de confirmação somente para seu projeto descartável; a confirmação humana da interface deve ser usada nos projetos reais. Execute-a apenas com `agy` autenticado e quando quiser usar a conta real.
 
 ## Licença e políticas
 
