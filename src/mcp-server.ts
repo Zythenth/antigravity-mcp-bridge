@@ -85,6 +85,25 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   const instructions = 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. ' +
     approvalInstructions;
   const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.9.0' }, { instructions });
+  // Intercept tool registration so state-dependent tools immediately refuse when BRIDGE_STATE_DIRECTORY is invalid/degraded.
+  const statelessTools = new Set(['antigravity_health', 'antigravity_list_models', 'antigravity_roles']);
+  const originalRegisterTool = server.registerTool.bind(server);
+  server.registerTool = ((name: string, ...args: unknown[]) => {
+    if (!statelessTools.has(name)) {
+      const handlerIndex = args.length - 1;
+      const handler = args[handlerIndex];
+      if (typeof handler === 'function') {
+        const originalHandler = handler as (...handlerArgs: unknown[]) => unknown;
+        args[handlerIndex] = async (...handlerArgs: unknown[]) => {
+          if (!tasks.isStateDirectoryUsable()) {
+            return failure(new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in antigravity_health.'));
+          }
+          return originalHandler(...handlerArgs);
+        };
+      }
+    }
+    return (originalRegisterTool as (...toolArgs: unknown[]) => unknown)(name, ...args);
+  }) as typeof server.registerTool;
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   const configuredRoleSchema = z.enum(tasks.roles().map(role => role.name) as [string, ...string[]]);
@@ -105,7 +124,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
       approvalMode: tasks.approvalMode,
       configurationIssues: tasks.configurationIssues,
       windowsRuntime: await tasks.windowsRuntimeStatus(),
-      ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand) } : {}),
+      ...(options.waitCommand && tasks.isStateDirectoryUsable() ? { waitCommand: waitCommandInfo(options.waitCommand) } : {}),
       bridgeLimitations: {
         interactiveReplies: { available: false, reason: 'The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures.' },
         preflightTokenCount: { available: false, exactTokens: null, reason: 'No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts.' },

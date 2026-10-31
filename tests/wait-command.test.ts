@@ -505,6 +505,10 @@ test('stopped owner, corrupt state and invalid arguments return their respective
       { args: ['--state-directory', f.directory, validId, '--timeout', '86401'], reason: 'INVALID_ARGUMENTS' },
       { args: ['--state-directory', f.directory, validId, '--after', '-1'], reason: 'INVALID_ARGUMENTS' },
       { args: ['--state-directory', 'relative-state-dir', validId], reason: 'INVALID_STATE_DIRECTORY' },
+      ...(process.platform === 'win32' ? [
+        { args: ['--state-directory', '\\root-relative-state-dir', validId], reason: 'INVALID_STATE_DIRECTORY' },
+        { args: ['--state-directory', 'C:drive-relative-state-dir', validId], reason: 'INVALID_STATE_DIRECTORY' },
+      ] : []),
     ];
     for (const item of invalidArgCases) {
       const res = await runWaitArgs(item.args);

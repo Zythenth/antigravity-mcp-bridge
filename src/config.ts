@@ -44,7 +44,10 @@ export type ConfigurationIssueReason =
   | 'invalid-entry'
   | 'duplicate'
   | 'too-large'
-  | 'unsafe-file';
+  | 'unsafe-file'
+  | 'link'
+  | 'not-directory'
+  | 'unusable';
 export interface ConfigurationIssue { variable: string; index?: number; reason: ConfigurationIssueReason }
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
@@ -93,6 +96,7 @@ export interface Config extends ProjectLimits {
   maxPromptChars: number;
   copyRetentionHours: number;
   stateDirectory: string;
+  stateDirectoryInvalid?: boolean;
   memoryMaxEntries: number;
   memoryMaxBytes: number;
   memoryMaxEntryBytes: number;
@@ -415,17 +419,49 @@ export function assertAgyPathUsable(config: Pick<Config, 'agyPathInvalid'>): voi
   }
 }
 
+export function assertStateDirectoryUsable(config: Pick<Config, 'stateDirectoryInvalid'>): void {
+  if (config.stateDirectoryInvalid) {
+    throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+  }
+}
+
 export function isFullWindowsRoot(entry: string): boolean {
   if (/^[A-Za-z]:[\\/]/.test(entry)) return true;
   if (/^(?:\\\\|\/\/)(?![\\/]|[?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/].*)?$/.test(entry)) return true;
   return false;
 }
 
-function isFullWindowsPath(entry: string): boolean {
+export function isFullWindowsPath(entry: string): boolean {
   if (isFullWindowsRoot(entry)) return true;
   if (/^\\\\\?\\(?:[A-Za-z]:[\\/]|UNC[\\/][^\\/]+[\\/][^\\/]+(?:[\\/].*)?$)/i.test(entry)) return true;
   if (/^\\\\\?\\Volume\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}[\\/]/i.test(entry)) return true;
   return false;
+}
+
+const WINDOWS_ROOT_PREFIX = /^\\\\\?\\(?:Volume\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}[\\/]|[A-Za-z]:[\\/]|UNC[\\/])|^[A-Za-z]:[\\/]|^(?:\\\\|\/\/)/i;
+const WINDOWS_RESERVED_PATH_CHARS = /[\u0001-\u001f<>:"|*?]/;
+
+export function validateStateDirectory(directory: string): { valid: true } | { valid: false; reason: 'not-absolute' | 'invalid-entry' } {
+  if (directory.includes('\0')) {
+    return { valid: false, reason: 'invalid-entry' };
+  }
+  const isAbsolute = process.platform === 'win32'
+    ? isFullWindowsPath(directory)
+    : path.isAbsolute(directory);
+  if (!isAbsolute) {
+    return { valid: false, reason: 'not-absolute' };
+  }
+  if (process.platform === 'win32') {
+    const prefix = directory.match(WINDOWS_ROOT_PREFIX)?.[0];
+    const remainder = directory.slice(prefix ? prefix.length : 0);
+    if (WINDOWS_RESERVED_PATH_CHARS.test(remainder)) {
+      return { valid: false, reason: 'invalid-entry' };
+    }
+    if (remainder.split(/[\\/]+/).some(part => part.length > 255)) {
+      return { valid: false, reason: 'invalid-entry' };
+    }
+  }
+  return { valid: true };
 }
 
 function readAntiAiCraftDirectory(value: string | undefined): {
@@ -545,6 +581,22 @@ function readForbiddenDirectories(value: string | undefined): {
   return { forbiddenDirectories: valid, issues: [] };
 }
 
+function readStateDirectory(value: string | undefined): {
+  stateDirectory: string;
+  stateDirectoryInvalid?: boolean;
+  issues: ConfigurationIssue[];
+} {
+  const variable = 'BRIDGE_STATE_DIRECTORY';
+  if (!value) {
+    return { stateDirectory: path.join(os.homedir(), '.antigravity-mcp-bridge'), issues: [] };
+  }
+  const validation = validateStateDirectory(value);
+  if (!validation.valid) {
+    return { stateDirectory: '', stateDirectoryInvalid: true, issues: [{ variable, reason: validation.reason }] };
+  }
+  return { stateDirectory: path.resolve(value), issues: [] };
+}
+
 export function stateDirectoryFrom(env: NodeJS.ProcessEnv): string {
   return env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge');
 }
@@ -569,7 +621,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const antiAiCraftDir = readAntiAiCraftDirectory(env.BRIDGE_ANTI_AI_CRAFT_DIRECTORY);
   const windowsNodeCache = readWindowsNodeCacheDirectory(env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY);
   const agyPath = readAgyPath(env.AGY_PATH);
+  const stateDir = readStateDirectory(env.BRIDGE_STATE_DIRECTORY);
   const configurationIssues: ConfigurationIssue[] = [
+    ...stateDir.issues,
     ...preauthorized.issues,
     ...allowedEnv.issues,
     ...secretExceptions.issues,
@@ -604,7 +658,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     eventBufferSize: positiveInteger(env.EVENT_BUFFER_SIZE, 2000, 100000),
     maxPromptChars: positiveInteger(env.MAX_PROMPT_CHARS, 50000, 1000000),
     copyRetentionHours: positiveInteger(env.COPY_RETENTION_HOURS, 168, 87600),
-    stateDirectory: stateDirectoryFrom(env),
+    stateDirectory: stateDir.stateDirectory,
+    ...(stateDir.stateDirectoryInvalid ? { stateDirectoryInvalid: true } : {}),
     memoryMaxEntries,
     memoryMaxBytes,
     memoryMaxEntryBytes,

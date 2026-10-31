@@ -39,7 +39,8 @@ if (command[0] === 'wait') {
   const warning = configurationWarning(tasks.configurationIssues);
   if (warning) process.stderr.write(warning + '\n');
   await tasks.cleanup();
-  const server = createMcpServer(adapter, tasks, { waitCommand: waitCommandArgv(config.stateDirectory) });
+  const waitCommand = tasks.isStateDirectoryUsable() ? waitCommandArgv(config.stateDirectory) : undefined;
+  const server = createMcpServer(adapter, tasks, { waitCommand });
   await server.connect(new StdioServerTransport());
   const cleanupTimer = setInterval(() => {
     void tasks.cleanup().catch(error => process.stderr.write(`Copy cleanup failed: ${String(error)}\n`));

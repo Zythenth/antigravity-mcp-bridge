@@ -2,7 +2,7 @@ import { lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { z } from 'zod';
-import { stateDirectoryFrom } from './config.js';
+import { stateDirectoryFrom, validateStateDirectory } from './config.js';
 import { processAlive } from './state-store.js';
 
 export const WAIT_EXIT_CODES = {
@@ -123,7 +123,7 @@ export async function runWaitCommand(args: readonly string[], env: NodeJS.Proces
 
   if (invalidArgs || taskId === null) return finish('error', 'INVALID_ARGUMENTS');
   const stateDirectory = stateDirectoryArg ?? stateDirectoryFrom(env);
-  if (!path.isAbsolute(stateDirectory) || stateDirectory.includes('\0')) {
+  if (!validateStateDirectory(stateDirectory).valid) {
     return finish('error', 'INVALID_STATE_DIRECTORY');
   }
 
@@ -139,7 +139,7 @@ export async function runWaitCommand(args: readonly string[], env: NodeJS.Proces
       dirStat = lstatSync(stateDirectory);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || code === 'ENOTDIR') return finish('unknown-task', 'TASK_NOT_FOUND');
+      if (code === 'ENOENT') return finish('unknown-task', 'TASK_NOT_FOUND');
       return finish('error', 'INVALID_STATE_DIRECTORY');
     }
     if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
