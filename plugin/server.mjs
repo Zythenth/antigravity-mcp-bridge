@@ -53921,9 +53921,9 @@ var TaskManager = class {
       return { discardedTaskIds: [] };
     this.refresh();
     const discardedTaskIds = [];
-    for (const project of new Set([...this.tasks.values()].map((task2) => task2.project).filter((p) => Boolean(p)))) {
-      const related = [...this.tasks.values()].filter((task2) => task2.project === project);
-      if (this.busyProjects.has(project) || related.some((task2) => !terminal3.has(task2.record.status)))
+    for (const copyDirectory of new Set([...this.tasks.values()].flatMap((task2) => task2.project ? [task2.project.copyDirectory] : []))) {
+      const related = [...this.tasks.values()].filter((task2) => task2.project?.copyDirectory === copyDirectory);
+      if (!related.length || related.some((task2) => this.busyProjects.has(task2.project) || !terminal3.has(task2.record.status)))
         continue;
       const latest = Math.max(...related.map((task2) => Date.parse(task2.record.completedAt || task2.record.createdAt)));
       if (now - latest < this.config.copyRetentionHours * 36e5)
