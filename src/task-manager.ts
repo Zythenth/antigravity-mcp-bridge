@@ -22,13 +22,13 @@ import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES }
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
-import { assertForbiddenDirectoriesUsable, assertSecretExclusionsUsable, assertAgyPathUsable, assertWindowsNodeCacheDirectoryUsable, assertAntiAiCraftDirectoryUsable, type Config, type ApprovalMode } from './config.js';
+import { assertForbiddenDirectoriesUsable, assertSecretExclusionsUsable, assertAgyPathUsable, assertWindowsNodeCacheDirectoryUsable, assertAntiAiCraftDirectoryUsable, type Config, type ApprovalMode, type ConfigurationIssue, type ConfigurationIssueReason } from './config.js';
 import { EventStore, MAX_EVENT_PAYLOAD_CHARS } from './event-store.js';
 import { assertTextIsUtf8, createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
 import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
-import { processAlive, StateStore } from './state-store.js';
+import { processAlive, StateStore, StateStoreLinkError, stateDirectoryProblem } from './state-store.js';
 import { criteriaSchema, verifyCriteria, type ReviewEvidence } from './verification.js';
 import { prepareNativeTest, readNativeReceipt, readNativeSandboxError, testCommandSchema, type NativeTestReceipt, type TestCommand, type WindowsNativeTestRequest } from './native-tests.js';
 import { textChunk } from './chunks.js';
@@ -83,7 +83,7 @@ function restoredEvents(stored: readonly BridgeEvent[]): BridgeEvent[] {
 }
 
 export class TaskManager {
-  readonly events: EventStore;
+  events: EventStore;
   private readonly tasks = new Map<string, InternalTask>();
   private readonly queue: string[] = [];
   private active = 0;
@@ -94,28 +94,81 @@ export class TaskManager {
   private readonly flushingInboxes = new Set<string>();
   private readonly claimingMessages = new Set<string>();
   private readonly busyProjects = new Set<ProjectCopy>();
-  private readonly state: StateStore;
+  private stateStore?: StateStore;
+  private degraded = false;
+  private degradedIssue?: ConfigurationIssue;
+  private get state(): StateStore {
+    this.assertStateDirectoryUsable();
+    return this.stateStore!;
+  }
+  isStateDirectoryUsable(): boolean {
+    return !this.degraded;
+  }
+  assertStateDirectoryUsable(): void {
+    if (this.degraded) {
+      throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    }
+  }
   private memoryStore?: ProjectMemoryStore;
   private groupManager?: GroupManager;
-  get groups(): GroupManager { return this.groupManager ??= new GroupManager(this, this.config); }
-  runInGroup(options: RunOptions, admission: GroupAdmission) { return this.run({ ...options, role: admission.owner, groupAdmission: groupAdmissionSchema.parse(admission) }); }
+  get groups(): GroupManager {
+    this.assertStateDirectoryUsable();
+    return this.groupManager ??= new GroupManager(this, this.config);
+  }
+  runInGroup(options: RunOptions, admission: GroupAdmission) {
+    this.assertStateDirectoryUsable();
+    return this.run({ ...options, role: admission.owner, groupAdmission: groupAdmissionSchema.parse(admission) });
+  }
   private forbiddenDirectories(): string[] {
     assertForbiddenDirectoriesUsable(this.config);
     return this.config.forbiddenDirectories;
   }
-  private readonly nativeRecovery: Promise<void>;
+  private nativeRecovery: Promise<void> = Promise.resolve();
   private nativeRecoveryError: unknown;
 
+  private enterDegradedMode(reason: ConfigurationIssueReason, fromConfig = false): void {
+    this.degraded = true;
+    this.degradedIssue = fromConfig ? undefined : { variable: 'BRIDGE_STATE_DIRECTORY', reason };
+    this.stateStore = undefined;
+    this.tasks.clear();
+    this.events = new EventStore(this.config.eventBufferSize, taskId => this.persist(taskId));
+    this.nativeRecovery = Promise.resolve();
+    this.nativeRecoveryError = undefined;
+  }
+
   constructor(private readonly adapter: CliAdapter, private readonly config: Config) {
-    this.state = new StateStore(config.stateDirectory);
     this.events = new EventStore(config.eventBufferSize, taskId => this.persist(taskId));
+
+    if (config.stateDirectoryInvalid) {
+      const reason = config.configurationIssues.find(i => i.variable === 'BRIDGE_STATE_DIRECTORY')?.reason ?? 'not-absolute';
+      this.enterDegradedMode(reason, true);
+      return;
+    }
+
+    const problem = stateDirectoryProblem(config.stateDirectory);
+    if (problem) {
+      this.enterDegradedMode(problem, false);
+      return;
+    }
+
+    try {
+      this.stateStore = new StateStore(config.stateDirectory);
+      this.stateStore.probeWritable();
+      this.refresh();
+      this.recoverInboxClaims();
+    } catch (error) {
+      const isLink = error instanceof StateStoreLinkError || stateDirectoryProblem(config.stateDirectory) === 'link';
+      this.enterDegradedMode(isLink ? 'link' : 'unusable', false);
+      return;
+    }
+
+    this.degraded = false;
     this.nativeRecovery = (config.testExecutor === 'windows-lpac' ? recoverWindowsExecutions(config.stateDirectory) : Promise.resolve())
       .catch(error => { this.nativeRecoveryError = error; });
-    this.refresh();
-    this.recoverInboxClaims();
   }
 
   private persist(taskId: string): void {
+    if (this.degraded) return;
     const task = this.tasks.get(taskId);
     if (task) this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
   }
@@ -125,6 +178,7 @@ export class TaskManager {
   }
 
   private refresh(): void {
+    this.assertStateDirectoryUsable();
     const stored = this.state.load();
     const projects = new Map([...this.tasks.values()].filter(task => task.project && (task.owned || this.busyProjects.has(task.project))).map(task => [task.project!.copyDirectory, task.project!]));
     const ids = new Set(stored.map(task => task.record.taskId));
@@ -182,23 +236,41 @@ export class TaskManager {
   }
 
   getModel(): string | undefined {
+    this.assertStateDirectoryUsable();
     const selection = this.state.loadModel();
     return selection === undefined ? this.config.defaultModel : selection.model ?? undefined;
   }
 
   get toolProfile() { return this.config.toolProfile; }
   get approvalMode(): ApprovalMode { return this.config.approvalMode; }
-  get configurationIssues() { return [...this.config.configurationIssues, ...this.state.readIntegrationRoots().issues]; }
-  private integrationRoots() { return [...new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.readIntegrationRoots().roots])]; }
+  get configurationIssues(): ConfigurationIssue[] {
+    if (this.degraded) {
+      return this.degradedIssue
+        ? [...this.config.configurationIssues, this.degradedIssue]
+        : [...this.config.configurationIssues];
+    }
+    return [...this.config.configurationIssues, ...this.state.readIntegrationRoots().issues];
+  }
+  private integrationRoots(): string[] {
+    if (this.degraded) return [...new Set(this.config.preauthorizedIntegrationRoots)];
+    return [...new Set([...this.config.preauthorizedIntegrationRoots, ...this.state.readIntegrationRoots().roots])];
+  }
   get preauthorizedProjectCount() { return this.integrationRoots().length; }
-  integrationPreauthorized(taskId: string) { return integrationPreauthorized(this.status(taskId).workingDirectory, this.integrationRoots()); }
+  integrationPreauthorized(taskId: string) {
+    this.assertStateDirectoryUsable();
+    return integrationPreauthorized(this.status(taskId).workingDirectory, this.integrationRoots());
+  }
   roles() { return listRoles(this.config.customRoles); }
 
-  getSandboxPolicy(): SandboxPolicySnapshot { return this.state.loadSandboxPolicy(); }
+  getSandboxPolicy(): SandboxPolicySnapshot {
+    this.assertStateDirectoryUsable();
+    return this.state.loadSandboxPolicy();
+  }
   windowsRuntimeStatus(): Promise<PortableNodeStatus> { return portableNodeStatus(this.config.windowsNodeRuntime, this.config.windowsNodeCacheDirectory, undefined, { cacheDirectoryInvalid: this.config.windowsNodeCacheDirectoryInvalid }); }
 
   async setSandboxPolicy(value: unknown, expectedSha256: string,
     confirm?: (previous: SandboxPolicySnapshot, proposed: SandboxPolicySnapshot) => Promise<boolean>): Promise<SandboxPolicySnapshot> {
+    this.assertStateDirectoryUsable();
     const previous = this.state.loadSandboxPolicy();
     if (previous.sha256 !== expectedSha256) throw new BridgeError('SANDBOX_POLICY_CHANGED', 'Reload the current sandbox policy before proposing an update');
     const policy = await normalizeSandboxPolicy(value, this.config.stateDirectory, this.forbiddenDirectories(), this.config, this.config.windowsNodeCacheDirectory);
@@ -221,6 +293,7 @@ export class TaskManager {
   }
 
   async setModel(model: string | null): Promise<string | null> {
+    this.assertStateDirectoryUsable();
     if (model !== null) {
       const models = await this.adapter.listModels();
       if (!models.some(item => item.id === model)) throw new BridgeError('MODEL_NOT_AVAILABLE', `Model is not listed by agy: ${model}`);
@@ -245,6 +318,7 @@ export class TaskManager {
   }
 
   private projectMemory(): ProjectMemoryStore {
+    this.assertStateDirectoryUsable();
     return this.memoryStore ??= new ProjectMemoryStore(this.config.stateDirectory, {
       maxEntries: this.config.memoryMaxEntries, maxBytes: this.config.memoryMaxBytes, maxEntryBytes: this.config.memoryMaxEntryBytes,
     });
@@ -258,6 +332,7 @@ export class TaskManager {
   }
 
   async listProjectFiles(workingDirectory: string): Promise<string[]> {
+    this.assertStateDirectoryUsable();
     const directory = await validateWorkingDirectory(workingDirectory, this.forbiddenDirectories());
     await validateStateSeparation(directory, this.config.stateDirectory);
     await validateRuntimeCacheSeparation(directory, this.config.windowsNodeCacheDirectory);
@@ -266,11 +341,13 @@ export class TaskManager {
   }
 
   async listMemory(workingDirectory: string) {
+    this.assertStateDirectoryUsable();
     const directory = await this.memoryProject(workingDirectory), store = this.projectMemory();
     return { memories: await store.list(directory), limits: store.limits };
   }
 
   async readMemory(workingDirectory: string, specialist: string, expectedSha256: string, offset = 0, limit = 10000) {
+    this.assertStateDirectoryUsable();
     const entry = await this.projectMemory().read(await this.memoryProject(workingDirectory), specialist);
     if (!entry) throw new BridgeError('MEMORY_NOT_FOUND', 'Selected memory does not exist');
     if (entry.sha256 !== expectedSha256) throw new BridgeError('MEMORY_CHANGED', 'Reload memory metadata before reading the current version');
@@ -279,6 +356,7 @@ export class TaskManager {
   }
 
   async writeMemory(workingDirectory: string, specialist: string, text: string, expectedSha256: string | null) {
+    this.assertStateDirectoryUsable();
     if (profileReadOnly(this.config.toolProfile)) throw new BridgeError('PROFILE_READ_ONLY', 'This profile cannot change private memory');
     if (containsCredential(text)) throw new BridgeError('INPUT_SECRET_DETECTED', 'Private memory cannot store credential-like values; remove them and retry');
     const entry = await this.projectMemory().write(await this.memoryProject(workingDirectory), specialist, { text, expectedSha256 });
@@ -286,11 +364,13 @@ export class TaskManager {
   }
 
   async removeMemory(workingDirectory: string, specialist: string, expectedSha256: string) {
+    this.assertStateDirectoryUsable();
     if (profileReadOnly(this.config.toolProfile)) throw new BridgeError('PROFILE_READ_ONLY', 'This profile cannot remove private memory');
     return this.projectMemory().remove(await this.memoryProject(workingDirectory), specialist, expectedSha256);
   }
 
   async run(options: RunOptions): Promise<TaskRecord> {
+    this.assertStateDirectoryUsable();
     options = { ...options };
     delete options.group;
     if (!options.groupAdmission) delete options.peerContext;
@@ -544,6 +624,7 @@ export class TaskManager {
   }
 
   status(taskId: string): TaskRecord {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
@@ -551,11 +632,13 @@ export class TaskManager {
   }
 
   list(): TaskRecord[] {
+    this.assertStateDirectoryUsable();
     this.refresh();
     return [...this.tasks.values()].map(task => ({ ...task.record, tokenUsage: taskTokenUsage(task.record) }));
   }
 
   usage(filters: { taskId?: string; sessionId?: string; model?: string } = {}) {
+    this.assertStateDirectoryUsable();
     if (filters.taskId) this.status(filters.taskId);
     return aggregateUsage(this.list().filter(task => (!filters.taskId || task.taskId === filters.taskId) &&
       (!filters.sessionId || task.sessionId === filters.sessionId) && (!filters.model || task.model === filters.model)));
@@ -569,11 +652,13 @@ export class TaskManager {
   }
 
   result(taskId: string) {
+    this.assertStateDirectoryUsable();
     const task = this.status(taskId);
     return { task, ready: terminal.has(task.status) };
   }
 
   readResult(taskId: string, offset = 0, limit = 10000, expectedContentSha256?: string) {
+    this.assertStateDirectoryUsable();
     const result = this.result(taskId);
     if (!result.ready) return { ready: false as const, taskId, status: result.task.status };
     return { ready: true as const, taskId, status: result.task.status,
@@ -581,6 +666,7 @@ export class TaskManager {
   }
 
   readStructuredResult(taskId: string, offset = 0, limit = 10000, expectedContentSha256?: string) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
@@ -597,6 +683,7 @@ export class TaskManager {
   }
 
   listArtifacts(taskId: string) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
@@ -610,6 +697,7 @@ export class TaskManager {
   }
 
   async readArtifact(taskId: string, artifactPath: string, expectedSha256: string, offset = 0, limit = 65536) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
@@ -628,6 +716,7 @@ export class TaskManager {
   }
 
   async readPatch(taskId: string, expectedSha256: string, relative?: string, offset = 0, limit = 10000) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before reading its patch');
@@ -646,6 +735,7 @@ export class TaskManager {
   }
 
   async preview(taskId: string, includePatch = true) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for an isolated task to finish');
@@ -661,6 +751,7 @@ export class TaskManager {
   }
 
   async context(taskId: string) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task?.project || task.record.status !== 'completed' || task.record.integratedAt) throw new BridgeError('INVALID_CONTEXT', 'Context requires a completed, non-integrated task with a retained copy');
@@ -672,6 +763,7 @@ export class TaskManager {
   }
 
   async compare(sourceTaskId: string, expectedContextSha256: string, models: string[], prompt: string, timeoutSeconds?: number) {
+    this.assertStateDirectoryUsable();
     models = comparisonModelsSchema.parse(models);
     const context = await this.context(sourceTaskId);
     if (context.treeSha256 !== expectedContextSha256) throw new BridgeError('CONTEXT_CHANGED', 'Inspect the current context before comparison');
@@ -700,6 +792,7 @@ export class TaskManager {
   }
 
   async comparison(comparisonId: string) {
+    this.assertStateDirectoryUsable();
     const tasks = this.list().filter(task => task.comparison?.comparisonId === comparisonId);
     const comparison = tasks[0]?.comparison;
     if (!comparison) throw new BridgeError('COMPARISON_NOT_FOUND', 'No retained tasks for this comparison');
@@ -732,6 +825,7 @@ export class TaskManager {
   }
 
   async verify(taskId: string, expectedSha256: string, reviews: ReviewEvidence[] = []) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before verification');
@@ -746,6 +840,7 @@ export class TaskManager {
   }
 
   async workflowSnapshot(taskId: string, outputTaskId: string, nodeKey: string, hooks: WorkflowHook = {}, createdAt = new Date().toISOString()) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId), output = this.tasks.get(outputTaskId);
     if (!task?.project || !output?.project || task.record.status !== 'completed' || output.record.status !== 'completed' ||
@@ -804,6 +899,7 @@ export class TaskManager {
   }
 
   async startTests(taskId: string, expectedSha256: string, command: TestCommand, retries = 0, timeoutSeconds = 600, sandbox?: unknown) {
+    this.assertStateDirectoryUsable();
     testCommandSchema.parse(command);
     if (!Number.isInteger(retries) || retries < 0 || retries > 3) throw new BridgeError('INVALID_TEST_COMMAND', 'retries must be between 0 and 3');
     const task = this.status(taskId);
@@ -883,6 +979,7 @@ export class TaskManager {
   }
 
   async recordTest(taskId: string, expectedSha256: string, command: string, exitCode: number, output = '') {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task?.project || !terminal.has(task.record.status)) throw new BridgeError('TASK_NOT_READY', 'Wait for the task before recording tests');
@@ -910,6 +1007,7 @@ export class TaskManager {
   }
 
   async discard(taskId: string): Promise<TaskRecord> {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
@@ -930,6 +1028,7 @@ export class TaskManager {
   }
 
   async cleanup(now = Date.now()): Promise<{ discardedTaskIds: string[] }> {
+    if (this.degraded) return { discardedTaskIds: [] };
     this.refresh();
     const discardedTaskIds: string[] = [];
     for (const project of new Set([...this.tasks.values()].map(task => task.project).filter((p): p is ProjectCopy => Boolean(p)))) {
@@ -944,6 +1043,7 @@ export class TaskManager {
   }
 
   async integrate(taskId: string, expectedSha256: string, confirm?: (preview: ChangePreview) => Promise<boolean | IntegrationApproval>) {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task || !task.project || task.record.status !== 'completed') throw new BridgeError('TASK_NOT_READY', 'Only completed tasks can be integrated');
@@ -997,6 +1097,7 @@ export class TaskManager {
   }
 
   inbox(taskId: string) {
+    this.assertStateDirectoryUsable();
     this.status(taskId);
     const task = this.tasks.get(taskId)!;
     if (task.project) this.scheduleInbox(task.project.copyDirectory);
@@ -1006,6 +1107,7 @@ export class TaskManager {
   }
 
   async sendMessage(taskId: string, messageId: string, text: string, peerOrigin?: PeerOrigin) {
+    this.assertStateDirectoryUsable();
     if (this.stopped) throw new BridgeError('AGY_PROCESS_FAILED', 'Server is shutting down');
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(messageId) || !text.trim() || text.length > 2000) {
       throw new BridgeError('INVALID_MESSAGE', 'Provide a UUID and between 1 and 2000 characters of caller text');
@@ -1206,6 +1308,7 @@ export class TaskManager {
   }
 
   setDeliveryMode(taskId: string, mode: DeliveryMode) {
+    this.assertStateDirectoryUsable();
     const deliveryMode = deliveryModeSchema.parse(mode);
     const release = this.state.acquire('registry');
     try {
@@ -1221,11 +1324,13 @@ export class TaskManager {
   }
 
   readEvents(taskId: string, after = 0, limit = 200) {
+    this.assertStateDirectoryUsable();
     this.status(taskId);
     return this.events.read(taskId, after, limit);
   }
 
   async waitMany(input: unknown, timeoutSeconds = 30, signal?: AbortSignal) {
+    this.assertStateDirectoryUsable();
     const targets = waitTargetsSchema.parse(input);
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) throw new BridgeError('INVALID_TIMEOUT', 'Wait timeout must be between 1 and 60 seconds');
     if (this.waiting >= this.config.maxConcurrentTasks + this.config.maxQueuedTasks) throw new BridgeError('WAIT_LIMIT_EXCEEDED', 'Too many concurrent waits');
@@ -1243,6 +1348,7 @@ export class TaskManager {
   }
 
   async wait(taskId: string, after = 0, timeoutSeconds = 30, signal?: AbortSignal, onEvent?: (event: BridgeEvent) => Promise<void>, cursorMode?: DeliveryMode) {
+    this.assertStateDirectoryUsable();
     if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 60) {
       throw new BridgeError('INVALID_TIMEOUT', 'Wait timeout must be between 1 and 60 seconds');
     }
@@ -1284,6 +1390,7 @@ export class TaskManager {
   }
 
   sessions(): Array<{ sessionId: string; taskIds: string[] }> {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const sessions = new Map<string, string[]>();
     for (const { record } of this.tasks.values()) {
@@ -1293,6 +1400,7 @@ export class TaskManager {
   }
 
   async cancel(taskId: string): Promise<TaskRecord> {
+    this.assertStateDirectoryUsable();
     this.refresh();
     const task = this.tasks.get(taskId);
     if (!task) throw new BridgeError('TASK_NOT_FOUND', `Unknown task: ${taskId}`);
@@ -1321,6 +1429,7 @@ export class TaskManager {
   }
 
   async shutdown(): Promise<void> {
+    if (this.degraded) return;
     await this.groupManager?.shutdown();
     this.stopped = true;
     const owned = [...this.tasks.values()].filter(task => task.owned);

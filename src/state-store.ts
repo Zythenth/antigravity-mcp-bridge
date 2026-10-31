@@ -18,7 +18,7 @@ import { usageCountersSchema } from './usage.js';
 import { roleDefinitionSchema, effortSchema } from './roles.js';
 import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
 import { preauthorizedIntegrationRoots, mapFsError } from './integration-policy.js';
-import type { ConfigurationIssue } from './config.js';
+import { validateStateDirectory, type ConfigurationIssue } from './config.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
 const SANITIZED_CACHE_VERSION = 1;
@@ -137,11 +137,57 @@ function expandEvent(event: z.infer<typeof snapshotSchema>['events'][number]): B
   return rebuiltRaw === undefined ? rest : { ...rest, raw: rebuiltRaw };
 }
 
+export type StateDirectoryProblemReason = 'not-absolute' | 'invalid-entry' | 'link' | 'not-directory' | 'unusable';
+
+export function stateDirectoryProblem(directory: string): StateDirectoryProblemReason | undefined {
+  const validation = validateStateDirectory(directory);
+  if (!validation.valid) return validation.reason;
+  try {
+    const stat = lstatSync(directory);
+    if (stat.isSymbolicLink()) return 'link';
+    if (!stat.isDirectory()) return 'not-directory';
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return 'unusable';
+  }
+  return undefined;
+}
+
+export class StateStoreLinkError extends BridgeError {
+  constructor(message = 'State directory cannot be a link') {
+    super('INVALID_STATE_DIRECTORY', message);
+    this.name = 'StateStoreLinkError';
+  }
+}
+
 export class StateStore {
   constructor(private readonly directory: string) {
-    if (!path.isAbsolute(directory)) throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY must be absolute');
+    const problem = stateDirectoryProblem(directory);
+    if (problem) {
+      if (problem === 'link') throw new StateStoreLinkError();
+      const message = problem === 'not-directory'
+        ? 'State directory must be a directory'
+        : problem === 'unusable'
+        ? 'State directory is unusable'
+        : problem === 'invalid-entry'
+        ? 'BRIDGE_STATE_DIRECTORY is invalid'
+        : 'BRIDGE_STATE_DIRECTORY must be absolute';
+      throw new BridgeError('INVALID_STATE_DIRECTORY', message);
+    }
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    if (lstatSync(directory).isSymbolicLink()) throw new BridgeError('INVALID_STATE_DIRECTORY', 'State directory cannot be a link');
+    const stat = lstatSync(directory);
+    if (stat.isSymbolicLink()) {
+      throw new StateStoreLinkError();
+    }
+    if (!stat.isDirectory()) {
+      throw new BridgeError('INVALID_STATE_DIRECTORY', 'State directory must be a directory');
+    }
+  }
+
+  probeWritable(): void {
+    readdirSync(this.directory);
+    const probeFile = path.join(this.directory, '.startup-probe-' + randomUUID());
+    writeFileSync(probeFile, '', { flag: 'wx', mode: 0o600 });
+    rmSync(probeFile);
   }
 
   private file(taskId: string): string {
