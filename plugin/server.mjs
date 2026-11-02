@@ -45804,6 +45804,65 @@ async function resolveSandboxSelection(policy, value, sourceDirectory, stateDire
   return { readPaths, writePaths, network, childProcesses, maxOutputChars };
 }
 
+// dist/src/wait-profiles.js
+var WAIT_MODES = ["background", "foreground"];
+var WAIT_MODE_REASONS = [
+  "verified-profile",
+  "unknown-client",
+  "version-below-minimum",
+  "invalid-client-version",
+  "missing-client-info"
+];
+var WAIT_MODE_PROFILES = [
+  {
+    client: "claude-code",
+    minimumVersion: "2.1.310",
+    mode: "background",
+    evidence: "Background wait command resumed by the host completion notice, verified with Claude Code 2.1.310."
+  }
+];
+var versionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+function parseVersion(value) {
+  const match = versionPattern.exec(value);
+  if (!match)
+    return void 0;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor) || !Number.isSafeInteger(patch)) {
+    return void 0;
+  }
+  return [major, minor, patch];
+}
+function isVersionBelow(actual, minimum) {
+  if (actual[0] !== minimum[0])
+    return actual[0] < minimum[0];
+  if (actual[1] !== minimum[1])
+    return actual[1] < minimum[1];
+  return actual[2] < minimum[2];
+}
+function recommendWaitMode(client) {
+  if (!client || typeof client.name !== "string" || client.name.length === 0) {
+    return { recommendedMode: "foreground", reason: "missing-client-info" };
+  }
+  const profile = WAIT_MODE_PROFILES.find((entry) => entry.client === client.name);
+  if (!profile) {
+    return { recommendedMode: "foreground", reason: "unknown-client" };
+  }
+  if (typeof client.version !== "string" || client.version.length === 0) {
+    return { recommendedMode: "foreground", reason: "missing-client-info" };
+  }
+  const actual = parseVersion(client.version);
+  const minimum = parseVersion(profile.minimumVersion);
+  if (!actual || !minimum) {
+    return { recommendedMode: "foreground", reason: "invalid-client-version" };
+  }
+  if (isVersionBelow(actual, minimum)) {
+    return { recommendedMode: "foreground", reason: "version-below-minimum" };
+  }
+  return { recommendedMode: profile.mode, reason: "verified-profile" };
+}
+
 // dist/src/output-schemas.js
 var hash2 = external_exports.string().regex(/^[a-f0-9]{64}$/);
 var id = external_exports.string().uuid();
@@ -45903,7 +45962,7 @@ var taskRecordSchema = external_exports.object({
   processCleanup: external_exports.object({ verified: external_exports.boolean(), spawnedAt: timestamp, checkedAt: timestamp, remaining: count }).strict().optional(),
   craft: external_exports.object({ revision: external_exports.string(), manifestSha256: hash2, permanent: external_exports.array(external_exports.string()), catalog: external_exports.array(external_exports.string()) }).strict().optional()
 }).strict();
-var waitCommandSchema = external_exports.object({ argv: external_exports.array(external_exports.string().min(1)).min(5).max(6), sh: external_exports.string().min(1) }).strict();
+var waitCommandSchema = external_exports.object({ argv: external_exports.array(external_exports.string().min(1)).min(5).max(37), sh: external_exports.string().min(1), recommendedMode: external_exports.enum(WAIT_MODES), reason: external_exports.enum(WAIT_MODE_REASONS) }).strict();
 var task = external_exports.object({ task: taskRecordSchema }).strict();
 var startedTask = external_exports.object({ task: taskRecordSchema, waitCommand: waitCommandSchema.optional() }).strict();
 var file2 = external_exports.object({ status: external_exports.enum(["A", "M", "D"]), path: external_exports.string() }).strict();
@@ -45931,7 +45990,7 @@ var chunkShape = {
 var usageRow = external_exports.object({ taskId: id, sessionId: external_exports.string().nullable(), model: external_exports.string().nullable(), status, ...tokenUsage.shape }).strict();
 var sandboxPolicySnapshot = external_exports.object({ version: external_exports.literal(1), policy: sandboxPolicySchema, sha256: hash2 }).strict();
 var successOutputSchemas = {
-  antigravity_wait_many: external_exports.object({ ready: external_exports.boolean(), timedOut: external_exports.boolean(), hasMoreMessages: external_exports.boolean(), tasks: external_exports.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_wait_many: external_exports.object({ ready: external_exports.boolean(), timedOut: external_exports.boolean(), hasMoreMessages: external_exports.boolean(), tasks: external_exports.array(jointWaitTaskSchema).max(32), waitCommand: waitCommandSchema.optional() }).strict(),
   antigravity_workflow_result: external_exports.object({
     groupId: id,
     finalNode: external_exports.string(),
@@ -45942,7 +46001,7 @@ var successOutputSchemas = {
   }).strict(),
   antigravity_peer_receipts: peerReceiptsPageSchema,
   antigravity_group_create: external_exports.object({ group: groupSummarySchema }).strict(),
-  antigravity_group_start: external_exports.object({ group: groupSummarySchema }).strict(),
+  antigravity_group_start: external_exports.object({ group: groupSummarySchema, waitCommand: waitCommandSchema.optional() }).strict(),
   antigravity_group_status: external_exports.object({ group: groupSummarySchema }).strict(),
   antigravity_groups: external_exports.object({ groups: external_exports.array(groupSummarySchema).max(100) }).strict(),
   antigravity_group_wait: external_exports.object({ group: groupSummarySchema, ready: external_exports.boolean(), timedOut: external_exports.boolean(), hasMoreMessages: external_exports.boolean(), tasks: external_exports.array(jointWaitTaskSchema).max(32) }).strict(),
@@ -46044,7 +46103,8 @@ var successOutputSchemas = {
     comparisonId: id,
     taskIds: external_exports.array(id),
     models: comparisonSchema.shape.models,
-    startErrors: comparisonSchema.shape.startErrors
+    startErrors: comparisonSchema.shape.startErrors,
+    waitCommand: waitCommandSchema.optional()
   }).strict(),
   antigravity_comparison: comparisonSchema.extend({
     ready: external_exports.boolean(),
@@ -46728,7 +46788,10 @@ var WAIT_EXIT_CODES = {
   blocker: 6,
   "unknown-task": 7,
   "wait-deadline": 8,
-  "owner-stopped": 9
+  "owner-stopped": 9,
+  "unknown-group": 10,
+  "group-paused": 11,
+  "group-ended": 12
 };
 var DEFAULT_WAIT_TIMEOUT_SECONDS = 1800;
 var MAX_WAIT_TIMEOUT_SECONDS = 86400;
@@ -46736,6 +46799,10 @@ var WAIT_POLL_INTERVAL_MS = 500;
 var taskIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 var decimalPattern = /^[0-9]+$/;
 var errorCodePattern = /^[A-Z][A-Z0-9_]{0,63}$/;
+var maxTaskStateBytes = 70000000n;
+var maxGroupStateBytes = BigInt(5 * 1024 * 1024);
+var maxPositionalTargets = 32;
+var maxContinuationHops = 64;
 var waitSnapshotSchema = external_exports.object({
   version: external_exports.literal(1),
   ownerPid: external_exports.number().int().positive(),
@@ -46751,6 +46818,92 @@ var waitSnapshotSchema = external_exports.object({
     continuationTaskId: external_exports.string().uuid().optional()
   }).passthrough()
 }).passthrough();
+var waitGroupSchema = external_exports.object({
+  version: external_exports.literal(1),
+  groupId: external_exports.string(),
+  state: external_exports.enum(["created", "running", "paused", "completed", "failed", "cancelled"]),
+  definition: external_exports.object({
+    jobs: external_exports.array(external_exports.object({
+      key: external_exports.string()
+    }).passthrough())
+  }).passthrough(),
+  nodes: external_exports.record(external_exports.string(), external_exports.object({
+    state: external_exports.string(),
+    taskId: external_exports.string().uuid().optional()
+  }).passthrough()),
+  ownerPid: external_exports.number().int().positive().optional(),
+  error: external_exports.object({ code: external_exports.string() }).passthrough().optional()
+}).passthrough();
+function inspectStateDirectory(stateDirectory) {
+  let dirStat;
+  try {
+    dirStat = lstatSync4(stateDirectory);
+  } catch (error62) {
+    const code = error62.code;
+    return code === "ENOENT" ? "missing" : "invalid";
+  }
+  return dirStat.isSymbolicLink() || !dirStat.isDirectory() ? "invalid" : "ok";
+}
+function createFileReader(file3, maxBytes, requireSingleLink, parse4) {
+  let lastKey;
+  let current;
+  let failures = 0;
+  return {
+    get value() {
+      return current;
+    },
+    read() {
+      let stat4;
+      try {
+        stat4 = lstatSync4(file3, { bigint: true });
+      } catch (error62) {
+        const code = error62.code;
+        return code === "ENOENT" ? { status: "missing" } : { status: "invalid" };
+      }
+      if (stat4.isSymbolicLink() || !stat4.isFile() || requireSingleLink && stat4.nlink !== 1n || stat4.size > maxBytes) {
+        return { status: "invalid" };
+      }
+      const key = `${stat4.dev}:${stat4.ino}:${stat4.size}:${stat4.mtimeNs}`;
+      if (key !== lastKey || !current) {
+        try {
+          current = parse4(JSON.parse(readFileSync3(file3, "utf8")));
+          lastKey = key;
+          failures = 0;
+        } catch {
+          failures++;
+          return { status: failures >= 3 ? "invalid" : "transient" };
+        }
+      }
+      return { status: "ok", value: current };
+    }
+  };
+}
+function createTaskReader(stateDirectory, taskId) {
+  return createFileReader(path17.join(stateDirectory, `${taskId}.json`), maxTaskStateBytes, false, (raw) => {
+    const parsed = waitSnapshotSchema.parse(raw);
+    if (parsed.record.taskId !== taskId)
+      throw new Error("Task ID mismatch");
+    return parsed;
+  });
+}
+function isTerminalStatus(status2) {
+  return status2 === "completed" || status2 === "failed" || status2 === "cancelled" || status2 === "timeout";
+}
+function failureReason(status2, error62) {
+  const code = error62?.code;
+  return status2 === "failed" && code && errorCodePattern.test(code) ? code : null;
+}
+function findPromptMessage(record2, after) {
+  let promptMessage;
+  for (const message of record2.messages ?? []) {
+    if (message.sequence > after && (message.kind === "question" || message.kind === "blocker")) {
+      if (!promptMessage || message.sequence < promptMessage.sequence) {
+        promptMessage = { sequence: message.sequence, kind: message.kind };
+      }
+    }
+  }
+  return promptMessage;
+}
 function waitCommandArgv(stateDirectory, entry = process.argv[1], node2 = process.execPath) {
   if (!entry)
     return void 0;
@@ -46764,31 +46917,19 @@ function waitCommandInfo(prefix, taskId) {
   return { argv, sh: shellCommand(argv) };
 }
 async function runWaitCommand(args, env, write, options = {}) {
-  let taskId = null;
   let after = 0;
   let timeout = DEFAULT_WAIT_TIMEOUT_SECONDS;
   let stateDirectoryArg;
-  let seenPositional = false;
+  let groupId = null;
   let seenAfter = false;
   let seenTimeout = false;
   let seenStateDirectory = false;
+  let seenGroup = false;
+  let seenColon = false;
   let invalidArgs = false;
-  let snapshot;
-  const finish = (outcome, reason, cursorOverride) => {
-    const exitCode = WAIT_EXIT_CODES[outcome];
-    const record2 = snapshot?.record;
-    write(JSON.stringify({
-      taskId,
-      outcome,
-      exitCode,
-      status: record2?.status ?? null,
-      reason,
-      after,
-      cursor: cursorOverride ?? (record2 ? record2.messageCursor ?? 0 : null),
-      ...record2?.continuationTaskId ? { continuationTaskId: record2.continuationTaskId } : {}
-    }));
-    return exitCode;
-  };
+  let positionalCount = 0;
+  const parsedPositionals = [];
+  const seenTaskIds = /* @__PURE__ */ new Set();
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--after") {
@@ -46814,91 +46955,315 @@ async function runWaitCommand(args, env, write, options = {}) {
       else
         stateDirectoryArg = value;
       seenStateDirectory = true;
-    } else if (arg.startsWith("-") || seenPositional) {
+    } else if (arg === "--group") {
+      const value = args[++i];
+      const lower = value?.toLowerCase();
+      if (seenGroup || !lower || !taskIdPattern.test(lower))
+        invalidArgs = true;
+      else
+        groupId = lower;
+      seenGroup = true;
+    } else if (arg.startsWith("-")) {
       invalidArgs = true;
     } else {
-      seenPositional = true;
-      const lower = arg.toLowerCase();
-      if (taskIdPattern.test(lower))
-        taskId = lower;
-      else
-        invalidArgs = true;
-    }
-  }
-  if (invalidArgs || taskId === null)
-    return finish("error", "INVALID_ARGUMENTS");
-  const stateDirectory = stateDirectoryArg ?? stateDirectoryFrom(env);
-  if (!validateStateDirectory(stateDirectory).valid) {
-    return finish("error", "INVALID_STATE_DIRECTORY");
-  }
-  const deadline = Date.now() + timeout * 1e3;
-  const interval = Math.max(1, options.pollIntervalMs ?? WAIT_POLL_INTERVAL_MS);
-  const file3 = path17.join(stateDirectory, `${taskId}.json`);
-  let lastKey;
-  let failures = 0;
-  for (; ; ) {
-    let dirStat;
-    try {
-      dirStat = lstatSync4(stateDirectory);
-    } catch (error62) {
-      const code = error62.code;
-      if (code === "ENOENT")
-        return finish("unknown-task", "TASK_NOT_FOUND");
-      return finish("error", "INVALID_STATE_DIRECTORY");
-    }
-    if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
-      return finish("error", "INVALID_STATE_DIRECTORY");
-    }
-    let stat4;
-    try {
-      stat4 = lstatSync4(file3, { bigint: true });
-    } catch (error62) {
-      const code = error62.code;
-      if (code === "ENOENT")
-        return finish("unknown-task", "TASK_NOT_FOUND");
-      return finish("error", "INVALID_STATE");
-    }
-    if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.size > 70000000n) {
-      return finish("error", "INVALID_STATE");
-    }
-    const key = `${stat4.dev}:${stat4.ino}:${stat4.size}:${stat4.mtimeNs}`;
-    if (key !== lastKey || !snapshot) {
-      try {
-        const parsed = waitSnapshotSchema.parse(JSON.parse(readFileSync3(file3, "utf8")));
-        if (parsed.record.taskId !== taskId)
-          throw new Error("Task ID mismatch");
-        snapshot = parsed;
-        lastKey = key;
-        failures = 0;
-      } catch {
-        failures++;
-        if (failures >= 3)
-          return finish("error", "INVALID_STATE");
-        if (Date.now() >= deadline)
-          return finish("wait-deadline", "WAIT_DEADLINE");
-        await setTimeout2(Math.min(interval, Math.max(1, deadline - Date.now())));
-        continue;
-      }
-    }
-    const { record: record2 } = snapshot;
-    if (record2.status === "completed" || record2.status === "failed" || record2.status === "cancelled" || record2.status === "timeout") {
-      const code = record2.error?.code;
-      return finish(record2.status, record2.status === "failed" && code && errorCodePattern.test(code) ? code : null);
-    }
-    let promptMessage;
-    for (const message of record2.messages ?? []) {
-      if (message.sequence > after && (message.kind === "question" || message.kind === "blocker")) {
-        if (!promptMessage || message.sequence < promptMessage.sequence) {
-          promptMessage = { sequence: message.sequence, kind: message.kind };
+      positionalCount++;
+      const colon = arg.indexOf(":");
+      if (colon !== -1) {
+        seenColon = true;
+        const lower = arg.slice(0, colon).toLowerCase();
+        const afterStr = arg.slice(colon + 1);
+        const parsedAfter = decimalPattern.test(afterStr) ? Number(afterStr) : NaN;
+        if (!taskIdPattern.test(lower) || !Number.isSafeInteger(parsedAfter) || parsedAfter < 0 || seenTaskIds.has(lower)) {
+          invalidArgs = true;
+        } else {
+          seenTaskIds.add(lower);
+          parsedPositionals.push({ taskId: lower, after: parsedAfter, hasColon: true });
+        }
+      } else {
+        const lower = arg.toLowerCase();
+        if (!taskIdPattern.test(lower) || seenTaskIds.has(lower)) {
+          invalidArgs = true;
+        } else {
+          seenTaskIds.add(lower);
+          parsedPositionals.push({ taskId: lower, after: 0, hasColon: false });
         }
       }
     }
-    if (promptMessage)
-      return finish(promptMessage.kind, null, promptMessage.sequence);
-    if (!processAlive2(snapshot.ownerPid))
-      return finish("owner-stopped", "OWNER_STOPPED");
+  }
+  const useMultiShape = seenGroup || positionalCount > 1 || seenColon;
+  if (!useMultiShape) {
+    const taskId = parsedPositionals[0]?.taskId ?? null;
+    let reader;
+    const finish = (outcome, reason, cursorOverride) => {
+      const exitCode = WAIT_EXIT_CODES[outcome];
+      const record2 = reader?.value?.record;
+      write(JSON.stringify({
+        taskId,
+        outcome,
+        exitCode,
+        status: record2?.status ?? null,
+        reason,
+        after,
+        cursor: cursorOverride ?? (record2 ? record2.messageCursor ?? 0 : null),
+        ...record2?.continuationTaskId ? { continuationTaskId: record2.continuationTaskId } : {}
+      }));
+      return exitCode;
+    };
+    if (invalidArgs || taskId === null)
+      return finish("error", "INVALID_ARGUMENTS");
+    const stateDirectory2 = stateDirectoryArg ?? stateDirectoryFrom(env);
+    if (!validateStateDirectory(stateDirectory2).valid) {
+      return finish("error", "INVALID_STATE_DIRECTORY");
+    }
+    const deadline2 = Date.now() + timeout * 1e3;
+    const interval2 = Math.max(1, options.pollIntervalMs ?? WAIT_POLL_INTERVAL_MS);
+    reader = createTaskReader(stateDirectory2, taskId);
+    for (; ; ) {
+      const dirStatus = inspectStateDirectory(stateDirectory2);
+      if (dirStatus === "missing")
+        return finish("unknown-task", "TASK_NOT_FOUND");
+      if (dirStatus === "invalid")
+        return finish("error", "INVALID_STATE_DIRECTORY");
+      const res = reader.read();
+      if (res.status === "missing")
+        return finish("unknown-task", "TASK_NOT_FOUND");
+      if (res.status === "invalid")
+        return finish("error", "INVALID_STATE");
+      if (res.status === "transient") {
+        if (Date.now() >= deadline2)
+          return finish("wait-deadline", "WAIT_DEADLINE");
+        await setTimeout2(Math.min(interval2, Math.max(1, deadline2 - Date.now())));
+        continue;
+      }
+      const { record: record2 } = res.value;
+      if (isTerminalStatus(record2.status)) {
+        return finish(record2.status, failureReason(record2.status, record2.error));
+      }
+      const promptMessage = findPromptMessage(record2, after);
+      if (promptMessage)
+        return finish(promptMessage.kind, null, promptMessage.sequence);
+      if (!processAlive2(res.value.ownerPid))
+        return finish("owner-stopped", "OWNER_STOPPED");
+      if (Date.now() >= deadline2)
+        return finish("wait-deadline", "WAIT_DEADLINE");
+      await setTimeout2(Math.min(interval2, Math.max(1, deadline2 - Date.now())));
+    }
+  }
+  let groupSnapshot;
+  let targets = [];
+  const finishMulti = (outcome, reason, cause, cursorOverride) => {
+    const exitCode = WAIT_EXIT_CODES[outcome];
+    const causeRecord = cause?.snapshot?.record;
+    write(JSON.stringify({
+      taskId: cause ? cause.taskId : null,
+      groupId,
+      outcome,
+      exitCode,
+      status: causeRecord?.status ?? null,
+      groupState: groupSnapshot?.state ?? null,
+      reason,
+      after: cause ? cause.after : null,
+      cursor: cursorOverride ?? (causeRecord ? causeRecord.messageCursor ?? 0 : null),
+      targets: targets.map((target) => {
+        const record2 = target.snapshot?.record;
+        return {
+          taskId: target.taskId,
+          ...target.nodeKey !== void 0 ? { nodeKey: target.nodeKey } : {},
+          status: record2?.status ?? null,
+          after: target.after,
+          resumeAfter: (outcome === "question" || outcome === "blocker") && cause === target && cursorOverride !== void 0 ? cursorOverride : target.after,
+          cursor: record2 ? record2.messageCursor ?? 0 : null,
+          ...record2?.continuationTaskId ? { continuationTaskId: record2.continuationTaskId } : {}
+        };
+      })
+    }));
+    return exitCode;
+  };
+  if (invalidArgs || seenAfter || positionalCount > maxPositionalTargets || !seenGroup && positionalCount === 0 || seenGroup && parsedPositionals.some((p) => !p.hasColon)) {
+    return finishMulti("error", "INVALID_ARGUMENTS");
+  }
+  if (!seenGroup) {
+    targets = parsedPositionals.map((p) => ({ taskId: p.taskId, after: p.after }));
+  }
+  const seeds = new Map(parsedPositionals.map((p) => [p.taskId, p.after]));
+  const stateDirectory = stateDirectoryArg ?? stateDirectoryFrom(env);
+  if (!validateStateDirectory(stateDirectory).valid) {
+    return finishMulti("error", "INVALID_STATE_DIRECTORY");
+  }
+  const deadline = Date.now() + timeout * 1e3;
+  const interval = Math.max(1, options.pollIntervalMs ?? WAIT_POLL_INTERVAL_MS);
+  const taskReaders = /* @__PURE__ */ new Map();
+  const getTaskReader = (id2) => {
+    let reader = taskReaders.get(id2);
+    if (!reader) {
+      reader = createTaskReader(stateDirectory, id2);
+      taskReaders.set(id2, reader);
+    }
+    return reader;
+  };
+  const groupReader = groupId !== null ? createFileReader(path17.join(stateDirectory, `group-${groupId}.json`), maxGroupStateBytes, true, (raw) => {
+    const parsed = waitGroupSchema.parse(raw);
+    if (parsed.groupId.toLowerCase() !== groupId)
+      throw new Error("Group ID mismatch");
+    return parsed;
+  }) : void 0;
+  for (; ; ) {
+    const dirStatus = inspectStateDirectory(stateDirectory);
+    if (dirStatus === "invalid")
+      return finishMulti("error", "INVALID_STATE_DIRECTORY");
+    if (dirStatus === "missing") {
+      if (groupReader) {
+        groupSnapshot = void 0;
+        targets = [];
+        return finishMulti("unknown-group", "GROUP_NOT_FOUND");
+      }
+      return finishMulti("unknown-task", "TASK_NOT_FOUND", targets[0]);
+    }
+    let transient = false;
+    let invalidState = false;
+    let missingTarget;
+    if (groupReader) {
+      const groupRes = groupReader.read();
+      if (groupRes.status === "missing") {
+        groupSnapshot = void 0;
+        targets = [];
+        return finishMulti("unknown-group", "GROUP_NOT_FOUND");
+      }
+      if (groupRes.status === "invalid")
+        return finishMulti("error", "INVALID_STATE");
+      if (groupRes.status === "transient") {
+        if (Date.now() >= deadline)
+          return finishMulti("wait-deadline", "WAIT_DEADLINE");
+        await setTimeout2(Math.min(interval, Math.max(1, deadline - Date.now())));
+        continue;
+      }
+      groupSnapshot = groupRes.value;
+      const nextTargets = [];
+      for (const job of groupSnapshot.definition.jobs) {
+        const node2 = Object.hasOwn(groupSnapshot.nodes, job.key) ? groupSnapshot.nodes[job.key] : void 0;
+        const rootTaskId = node2?.taskId?.toLowerCase();
+        if (!rootTaskId)
+          continue;
+        const rootReader = getTaskReader(rootTaskId);
+        const rootRes = rootReader.read();
+        if (rootRes.status !== "ok") {
+          const target = {
+            taskId: rootTaskId,
+            nodeKey: job.key,
+            after: seeds.get(rootTaskId) ?? 0,
+            snapshot: rootRes.status === "missing" ? void 0 : rootReader.value
+          };
+          if (rootRes.status === "missing")
+            missingTarget ??= target;
+          else if (rootRes.status === "invalid")
+            invalidState = true;
+          else
+            transient = true;
+          nextTargets.push(target);
+          continue;
+        }
+        let currentId = rootTaskId;
+        let currentSnapshot = rootRes.value;
+        let hops = 0;
+        while (currentSnapshot?.record.continuationTaskId) {
+          const contId = currentSnapshot.record.continuationTaskId.toLowerCase();
+          const contReader = getTaskReader(contId);
+          const contRes = contReader.read();
+          if (contRes.status === "missing")
+            break;
+          hops++;
+          if (hops > maxContinuationHops) {
+            invalidState = true;
+            break;
+          }
+          if (contRes.status === "invalid") {
+            invalidState = true;
+            currentId = contId;
+            currentSnapshot = contReader.value;
+            break;
+          }
+          if (contRes.status === "transient") {
+            transient = true;
+            currentId = contId;
+            currentSnapshot = contReader.value;
+            break;
+          }
+          currentId = contId;
+          currentSnapshot = contRes.value;
+        }
+        nextTargets.push({
+          taskId: currentId,
+          nodeKey: job.key,
+          after: seeds.get(currentId) ?? 0,
+          snapshot: currentSnapshot
+        });
+      }
+      targets = nextTargets;
+    } else {
+      for (const target of targets) {
+        const reader = getTaskReader(target.taskId);
+        const res = reader.read();
+        if (res.status === "missing") {
+          target.snapshot = void 0;
+          missingTarget ??= target;
+        } else if (res.status === "invalid") {
+          target.snapshot = reader.value;
+          invalidState = true;
+        } else if (res.status === "transient") {
+          target.snapshot = reader.value;
+          transient = true;
+        } else {
+          target.snapshot = res.value;
+        }
+      }
+    }
+    if (invalidState)
+      return finishMulti("error", "INVALID_STATE");
+    if (missingTarget)
+      return finishMulti("unknown-task", "TASK_NOT_FOUND", missingTarget);
+    if (transient) {
+      if (Date.now() >= deadline)
+        return finishMulti("wait-deadline", "WAIT_DEADLINE");
+      await setTimeout2(Math.min(interval, Math.max(1, deadline - Date.now())));
+      continue;
+    }
+    for (const target of targets) {
+      const promptMessage = findPromptMessage(target.snapshot.record, target.after);
+      if (promptMessage) {
+        return finishMulti(promptMessage.kind, null, target, promptMessage.sequence);
+      }
+    }
+    for (const target of targets) {
+      const { status: status2, error: error62 } = target.snapshot.record;
+      if (status2 === "failed" || status2 === "cancelled" || status2 === "timeout") {
+        return finishMulti(status2, failureReason(status2, error62), target);
+      }
+    }
+    if (groupSnapshot && (groupSnapshot.state === "failed" || groupSnapshot.state === "cancelled")) {
+      const code = groupSnapshot.error?.code;
+      const reason = code && errorCodePattern.test(code) ? code : groupSnapshot.state === "failed" ? "GROUP_FAILED" : "GROUP_CANCELLED";
+      return finishMulti("group-ended", reason);
+    }
+    if (groupSnapshot) {
+      if (groupSnapshot.state === "completed" && targets.every((t) => t.snapshot?.record.status === "completed")) {
+        return finishMulti("completed", null);
+      }
+      if (groupSnapshot.state === "paused") {
+        return finishMulti("group-paused", "GROUP_PAUSED");
+      }
+      if (groupSnapshot.state === "running" && groupSnapshot.ownerPid !== void 0 && !processAlive2(groupSnapshot.ownerPid)) {
+        return finishMulti("group-paused", "OWNER_STOPPED");
+      }
+    } else if (targets.length > 0 && targets.every((t) => t.snapshot?.record.status === "completed")) {
+      return finishMulti("completed", null);
+    }
+    for (const target of targets) {
+      if (!isTerminalStatus(target.snapshot.record.status) && !processAlive2(target.snapshot.ownerPid)) {
+        return finishMulti("owner-stopped", "OWNER_STOPPED", target);
+      }
+    }
     if (Date.now() >= deadline)
-      return finish("wait-deadline", "WAIT_DEADLINE");
+      return finishMulti("wait-deadline", "WAIT_DEADLINE");
     await setTimeout2(Math.min(interval, Math.max(1, deadline - Date.now())));
   }
 }
@@ -46983,6 +47348,12 @@ function createMcpServer(adapter, tasks, options = {}) {
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   const configuredRoleSchema = external_exports.enum(tasks.roles().map((role) => role.name));
+  const waitCommand = (args = []) => options.waitCommand ? {
+    waitCommand: {
+      ...waitCommandInfo([...options.waitCommand, ...args]),
+      ...recommendWaitMode(server.server.getClientVersion())
+    }
+  } : {};
   if (toolEnabled(tasks.toolProfile, "antigravity_health"))
     server.registerTool("antigravity_health", {
       outputSchema: outputSchemas.antigravity_health,
@@ -47003,7 +47374,7 @@ function createMcpServer(adapter, tasks, options = {}) {
         configurationIssues: tasks.configurationIssues,
         maintenanceIssues: tasks.maintenanceIssues,
         windowsRuntime: await tasks.windowsRuntimeStatus(),
-        ...options.waitCommand && tasks.isStateDirectoryUsable() ? { waitCommand: waitCommandInfo(options.waitCommand) } : {},
+        ...tasks.isStateDirectoryUsable() ? waitCommand() : {},
         bridgeLimitations: {
           interactiveReplies: { available: false, reason: "The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures." },
           preflightTokenCount: { available: false, exactTokens: null, reason: "No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts." }
@@ -47166,7 +47537,10 @@ function createMcpServer(adapter, tasks, options = {}) {
       description: "Start pending nodes whose prerequisites completed. Bind to the saved definition hash. Explicit resume recovers accepted task IDs and never repeats terminal nodes. Interrupted provider tasks remain failed; no automatic provider replay.",
       inputSchema: { ...groupIdInput, expectedDefinitionSha256: external_exports.string().regex(/^[a-f0-9]{64}$/) },
       annotations: action
-    }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => ({ group: tasks.groups.start(groupId, expectedDefinitionSha256) }))());
+    }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => {
+      const group = tasks.groups.start(groupId, expectedDefinitionSha256);
+      return { group, ...waitCommand(["--group", group.groupId]) };
+    })());
   if (toolEnabled(tasks.toolProfile, "antigravity_group_status"))
     server.registerTool("antigravity_group_status", {
       outputSchema: outputSchemas.antigravity_group_status,
@@ -47206,7 +47580,11 @@ function createMcpServer(adapter, tasks, options = {}) {
       description: "Wait jointly for1..32 retained task IDs with independent message cursors. Returns at most4 public messages total, no tool history. Missing tasks are explicit per-target errors. ready means all targets ended, not that they succeeded.",
       inputSchema: { targets: waitTargetsSchema, timeoutSeconds: external_exports.number().int().min(1).max(60).optional() },
       annotations: readOnly
-    }, async ({ targets, timeoutSeconds }, extra) => safe(() => tasks.waitMany(targets, timeoutSeconds, extra.signal))());
+    }, async ({ targets, timeoutSeconds }, extra) => safe(async () => {
+      const result = await tasks.waitMany(targets, timeoutSeconds, extra.signal);
+      const waitArgs = result.tasks.filter((task2) => !task2.error).map((task2) => `${task2.taskId}:${task2.nextCursor}`);
+      return { ...result, ...waitArgs.length > 0 ? waitCommand(waitArgs) : {} };
+    })());
   const runSchema = {
     prompt: external_exports.string().min(1),
     model: external_exports.string().min(1).max(128).nullable().optional(),
@@ -47236,7 +47614,7 @@ function createMcpServer(adapter, tasks, options = {}) {
       annotations: action
     }, async (args) => safe(async () => {
       const task2 = await tasks.run(args);
-      return { task: clientTask(task2), ...options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task2.taskId) } : {} };
+      return { task: clientTask(task2), ...waitCommand([task2.taskId]) };
     })());
   if (toolEnabled(tasks.toolProfile, "antigravity_resume"))
     server.registerTool("antigravity_resume", {
@@ -47247,7 +47625,7 @@ function createMcpServer(adapter, tasks, options = {}) {
       annotations: action
     }, async (args) => safe(async () => {
       const task2 = await tasks.run(args);
-      return { task: clientTask(task2), ...options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task2.taskId) } : {} };
+      return { task: clientTask(task2), ...waitCommand([task2.taskId]) };
     })());
   if (toolEnabled(tasks.toolProfile, "antigravity_context"))
     server.registerTool("antigravity_context", {
@@ -47279,7 +47657,7 @@ function createMcpServer(adapter, tasks, options = {}) {
     }, async ({ sourceTaskId, ...args }) => safe(async () => {
       const source = tasks.status(sourceTaskId);
       const task2 = await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory });
-      return { task: clientTask(task2), ...options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task2.taskId) } : {} };
+      return { task: clientTask(task2), ...waitCommand([task2.taskId]) };
     })());
   if (toolEnabled(tasks.toolProfile, "antigravity_compare"))
     server.registerTool("antigravity_compare", {
@@ -47294,7 +47672,10 @@ function createMcpServer(adapter, tasks, options = {}) {
         timeoutSeconds: external_exports.number().int().min(1).max(86400).optional()
       },
       annotations: action
-    }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) => safe(() => tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds))());
+    }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) => safe(async () => {
+      const result = await tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds);
+      return { ...result, ...result.taskIds.length > 0 ? waitCommand(result.taskIds) : {} };
+    })());
   if (toolEnabled(tasks.toolProfile, "antigravity_comparison"))
     server.registerTool("antigravity_comparison", {
       outputSchema: outputSchemas.antigravity_comparison,

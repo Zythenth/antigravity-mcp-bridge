@@ -23,6 +23,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { redactDiagnostic } from './subprocess.js';
 import { waitCommandInfo } from './wait-command.js';
+import { recommendWaitMode } from './wait-profiles.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -107,6 +108,15 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
   const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   const configuredRoleSchema = z.enum(tasks.roles().map(role => role.name) as [string, ...string[]]);
+  const waitCommand = (args: readonly string[] = []) =>
+    options.waitCommand
+      ? {
+          waitCommand: {
+            ...waitCommandInfo([...options.waitCommand, ...args]),
+            ...recommendWaitMode(server.server.getClientVersion()),
+          },
+        }
+      : {};
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_health')) server.registerTool('antigravity_health', {
     outputSchema: outputSchemas.antigravity_health,
@@ -125,7 +135,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
       configurationIssues: tasks.configurationIssues,
       maintenanceIssues: tasks.maintenanceIssues,
       windowsRuntime: await tasks.windowsRuntimeStatus(),
-      ...(options.waitCommand && tasks.isStateDirectoryUsable() ? { waitCommand: waitCommandInfo(options.waitCommand) } : {}),
+      ...(tasks.isStateDirectoryUsable() ? waitCommand() : {}),
       bridgeLimitations: {
         interactiveReplies: { available: false, reason: 'The verified agy headless protocol rejects control_request/control_response. This bridge cannot answer pending permission requests; use supported sandbox permissions and inspect failures.' },
         preflightTokenCount: { available: false, exactTokens: null, reason: 'No verified agy command counts tokens before sending. Observe result usage after execution; do not infer exact tokens from character counts.' },
@@ -246,7 +256,10 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     outputSchema: outputSchemas.antigravity_group_start, title: 'Start or resume a dependency group',
     description: 'Start pending nodes whose prerequisites completed. Bind to the saved definition hash. Explicit resume recovers accepted task IDs and never repeats terminal nodes. Interrupted provider tasks remain failed; no automatic provider replay.',
     inputSchema: { ...groupIdInput, expectedDefinitionSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
-  }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => ({ group: tasks.groups.start(groupId, expectedDefinitionSha256) }))());
+  }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => {
+    const group = tasks.groups.start(groupId, expectedDefinitionSha256);
+    return { group, ...waitCommand(['--group', group.groupId]) };
+  })());
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_status')) server.registerTool('antigravity_group_status', {
     outputSchema: outputSchemas.antigravity_group_status, title: 'Inspect group state',
     description: 'Return node owners, dependencies, statuses and task references without task prompts, file histories or intermediate results. Group completion is execution state, not patch verification.',
@@ -271,7 +284,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     outputSchema: outputSchemas.antigravity_wait_many, title: 'Wait for several tasks',
     description: 'Wait jointly for1..32 retained task IDs with independent message cursors. Returns at most4 public messages total, no tool history. Missing tasks are explicit per-target errors. ready means all targets ended, not that they succeeded.',
     inputSchema: { targets: waitTargetsSchema, timeoutSeconds: z.number().int().min(1).max(60).optional() }, annotations: readOnly,
-  }, async ({ targets, timeoutSeconds }, extra) => safe(() => tasks.waitMany(targets, timeoutSeconds, extra.signal))());
+  }, async ({ targets, timeoutSeconds }, extra) => safe(async () => {
+    const result = await tasks.waitMany(targets, timeoutSeconds, extra.signal);
+    const waitArgs = result.tasks.filter(task => !task.error).map(task => `${task.taskId}:${task.nextCursor}`);
+    return { ...result, ...(waitArgs.length > 0 ? waitCommand(waitArgs) : {}) };
+  })());
 
   const runSchema = {
     prompt: z.string().min(1),
@@ -299,7 +316,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     inputSchema: runSchema, annotations: action,
   }, async args => safe(async () => {
     const task = await tasks.run(args);
-    return { task: clientTask(task), ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task.taskId) } : {}) };
+    return { task: clientTask(task), ...waitCommand([task.taskId]) };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_resume')) server.registerTool('antigravity_resume', {
@@ -308,7 +325,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     inputSchema: { ...runSchema, sessionId: z.string().min(1).max(128) }, annotations: action,
   }, async args => safe(async () => {
     const task = await tasks.run(args);
-    return { task: clientTask(task), ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task.taskId) } : {}) };
+    return { task: clientTask(task), ...waitCommand([task.taskId]) };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_context')) server.registerTool('antigravity_context', {
@@ -327,7 +344,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
     const source = tasks.status(sourceTaskId);
     const task = await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory });
-    return { task: clientTask(task), ...(options.waitCommand ? { waitCommand: waitCommandInfo(options.waitCommand, task.taskId) } : {}) };
+    return { task: clientTask(task), ...waitCommand([task.taskId]) };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_compare')) server.registerTool('antigravity_compare', {
@@ -337,7 +354,10 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
       models: comparisonModelsSchema, prompt: z.string().min(1), timeoutSeconds: z.number().int().min(1).max(86400).optional() },
     annotations: action,
   }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) =>
-    safe(() => tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds))());
+    safe(async () => {
+      const result = await tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds);
+      return { ...result, ...(result.taskIds.length > 0 ? waitCommand(result.taskIds) : {}) };
+    })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_comparison')) server.registerTool('antigravity_comparison', {
     outputSchema: outputSchemas.antigravity_comparison, title: 'Compare model review evidence',

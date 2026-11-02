@@ -146,34 +146,49 @@ A resposta inclui `ready`, `timedOut`, estado, uso de tokens e até 1.000 evento
 
 ### Comando de terminal `wait`
 
-Em hosts que executam comandos em segundo plano e notificam o término, você pode aguardar uma tarefa sem chamadas repetidas a `antigravity_wait`:
+Você pode aguardar uma tarefa, várias tarefas (1 a 32) ou um grupo inteiro pelo subcomando somente leitura `wait`:
 
 ```powershell
 antigravity-mcp-bridge wait [--state-directory <caminho-absoluto>] <taskId> [--after <n>] [--timeout <s>]
+antigravity-mcp-bridge wait [--state-directory <caminho-absoluto>] <taskId>[:<after>] ... [--timeout <s>]
+antigravity-mcp-bridge wait [--state-directory <caminho-absoluto>] --group <groupId> [<taskId>:<after> ...] [--timeout <s>]
 ```
 
-Com o plugin, o mesmo comando é `node plugin/server.mjs wait ...`, e o caminho exato do build em uso vem em `waitCommand.argv`. `antigravity_health` devolve `waitCommand` (`{ argv, sh }`) com o prefixo configurado para o diretório de estado do servidor (sem `taskId`), e `antigravity_run`, `antigravity_resume` e `antigravity_handoff` devolvem `waitCommand` já com o `taskId` ao final. Sem `--state-directory`, o comando usa `BRIDGE_STATE_DIRECTORY` ou `~/.antigravity-mcp-bridge`. `--after <n>` (inteiro `>= 0`, padrão `0`) ignora perguntas e bloqueios já consumidos com `sequence <= n`; `--timeout <s>` define o prazo em segundos (padrão `1800`, máximo `86400`), com sondagem a cada 500 ms.
+Com o plugin, o mesmo comando é `node plugin/server.mjs wait ...`, e o caminho exato do build em uso vem em `waitCommand.argv`. `antigravity_health`, `antigravity_run`, `antigravity_resume`, `antigravity_handoff`, `antigravity_compare` (quando há `taskIds`), `antigravity_group_start` (`--group <groupId>`) e `antigravity_wait_many` (`<taskId>:<nextCursor>` para tarefas sem erro) devolvem `waitCommand` com `{ argv, sh, recommendedMode, reason }`:
 
-O comando lê apenas `<stateDirectory>/<taskId>.json` com `lstatSync` e `readFileSync`: não cria diretórios, não grava arquivos nem adquire locks, e encerrar ou matar o processo `wait` não cancela a tarefa. Perguntas e bloqueios só encerram a espera quando a tarefa publica mensagens estruturadas no estado (como em `deliveryMode: "messages"`). Ao terminar, imprime uma única linha JSON sem textos de prompt, mensagens ou erros:
+- `recommendedMode`: `"background"` apenas para clientes e versões presentes na tabela versionada `WAIT_MODE_PROFILES` (`claude-code >= 2.1.310`, com `reason: "verified-profile"`). Somente Claude Code >= 2.1.310 é comprovado para execução em background. Codex, Copilot CLI, VS Code, agy, Cursor, Gemini CLI e quaisquer outros hosts sem prova são identificados explicitamente como não verificados para background; nenhuma notificação de conclusão é prometida neles e nenhum perfil adicional é incluído. Se uma exceção por capacidade explícita das ferramentas de terminal do host for descrita ou escolhida, essa escolha deve ser informada como não verificada. `"foreground"` aplica-se nos demais casos (`unknown-client`, `version-below-minimum`, `invalid-client-version` ou `missing-client-info`), onde o comando deve rodar em primeiro plano (bloqueante) em vez de fazer polling MCP de 60 segundos; o fallback para espera via MCP (`antigravity_wait` com `timeoutSeconds: 60`) deve ser utilizado apenas quando o host não puder executar comandos de terminal. A identidade do cliente MCP é usada exclusivamente para preencher `recommendedMode` e `reason`, sem alterar permissões, catálogo de ferramentas ou qualquer outro resultado.
+
+Sem `--state-directory`, o comando usa `BRIDGE_STATE_DIRECTORY` ou `~/.antigravity-mcp-bridge`. `--after <n>` (inteiro seguro `>= 0`, padrão `0`) é exclusivo do modo simples (um `<taskId>` sem `:` e sem `--group`); no modo múltiplo (2 a 32 alvos, ou 1 alvo com `:`), cada alvo aceita `<taskId>` (cursor `0`) ou `<taskId>:<after>`; no modo de grupo (`--group <groupId>`), 0 a 32 argumentos `<taskId>:<after>` semeiam o cursor inicial de tarefas específicas quando rastreadas. `--timeout <s>` define o prazo em segundos (padrão `1800`, máximo `86400`), com sondagem a cada 500 ms. Para execução em primeiro plano (foreground), exige-se explicitamente `--timeout` estritamente inferior ao prazo real do terminal do host, com margem de segurança; qualquer exemplo numérico é unicamente condicional a um limite conhecido do terminal do host (por exemplo, sob um limite de terminal conhecido de 600 s, passar `--timeout` estritamente inferior com margem, como `--timeout 540`; se o terminal do host não impuser limite de tempo, o padrão de 1800 s do produto é mantido, sem alteração).
+
+O comando lê apenas `<stateDirectory>/<taskId>.json` e, no modo de grupo, `<stateDirectory>/group-<groupId>.json` (seguindo cadeias de `continuationTaskId` existentes até 64 saltos) com `lstatSync` e `readFileSync`: não cria diretórios, não grava arquivos nem adquire locks, e encerrar ou matar o processo `wait` não cancela tarefas nem grupos. Perguntas e bloqueios só encerram a espera quando a tarefa publica mensagens estruturadas no estado (como em `deliveryMode: "messages"`). Ao terminar, imprime uma única linha JSON sem textos de prompt, mensagens ou erros. No modo simples:
 
 ```json
 {"taskId":"<uuid>","outcome":"completed","exitCode":0,"status":"completed","reason":null,"after":0,"cursor":1}
 ```
 
-Quando o registro possui `continuationTaskId`, o campo é incluído no JSON. Em `failed`, `reason` informa `error.code` apenas quando o código casa com `/^[A-Z][A-Z0-9_]{0,63}$/` (`null` nos demais desfechos normais). Para ler a pergunta ou o bloqueio após `question` ou `blocker`, chame `antigravity_wait` com `after: cursor - 1` e depois reinicie o comando com `--after <cursor>`. Os códigos de saída (`WAIT_EXIT_CODES`) são distintos por desfecho:
+Nos modos múltiplo e de grupo, a linha JSON inclui `groupId`, `groupState` e `targets` (com `resumeAfter` pronto para reiniciar como `<taskId>:<resumeAfter>`):
+
+```json
+{"taskId":null,"groupId":null,"outcome":"completed","exitCode":0,"status":null,"groupState":null,"reason":null,"after":null,"cursor":null,"targets":[{"taskId":"<uuid>","status":"completed","after":0,"resumeAfter":0,"cursor":1}]}
+```
+
+Nesses modos, `taskId`, `status`, `after` e `cursor` de topo descrevem o alvo que causou a saída e ficam `null` quando não há alvo causador (conclusão conjunta, grupo pausado ou encerrado, prazo). A ordem de decisão é: pergunta ou bloqueio de qualquer alvo; falha, cancelamento ou timeout de um alvo; grupo `failed` ou `cancelled`; conclusão; grupo pausado ou sem processo dono; processo dono de tarefa encerrado; prazo. Quando o registro possui `continuationTaskId`, o campo é incluído no JSON (e no item correspondente de `targets`). Em `failed`, `reason` informa `error.code` apenas quando o código casa com `/^[A-Z][A-Z0-9_]{0,63}$/` (`null` nos demais desfechos normais). Para ler a pergunta ou o bloqueio após `question` ou `blocker`, chame `antigravity_wait` na tarefa `taskId` com `after: cursor - 1` e depois reinicie o comando avançando o cursor com `--after <cursor>` (modo simples) ou com os pares `<taskId>:<resumeAfter>` de `targets` (modo múltiplo/grupo), pois a pergunta/bloqueio foi lida e respondida. Em caso de `wait-deadline` (código de saída `8`), reinicie o comando preservando o cursor de entrada sem avançar: no modo simples com `--after <after>` (mantendo o campo `after` retornado, sem avanço automático para `cursor`/`messageCursor` para não pular mensagens não lidas); no modo múltiplo ou de grupo com todos os pares `<taskId>:<resumeAfter>` retornados no array `targets`, sem recorrer a polling MCP quando houver terminal disponível. Os códigos de saída (`WAIT_EXIT_CODES`) são distintos por desfecho:
 
 | Código | `outcome` | Condição e `reason` |
 | --- | --- | --- |
-| `0` | `completed` | Tarefa concluída (`reason: null`) |
-| `1` | `error` | Argumentos inválidos (`INVALID_ARGUMENTS`), diretório relativo/inválido (`INVALID_STATE_DIRECTORY`) ou JSON inválido por 3 leituras seguidas (`INVALID_STATE`) |
-| `2` | `failed` | Tarefa falhou (`reason`: `error.code` válido ou `null`) |
-| `3` | `cancelled` | Tarefa cancelada (`reason: null`) |
+| `0` | `completed` | Tarefa concluída; no modo múltiplo, todos os alvos concluídos; no modo de grupo, grupo em `completed` com todos os alvos concluídos (`reason: null`) |
+| `1` | `error` | Argumentos inválidos (`INVALID_ARGUMENTS`), diretório relativo/inválido (`INVALID_STATE_DIRECTORY`) ou arquivo/JSON inválido por 3 leituras seguidas (`INVALID_STATE`) |
+| `2` | `failed` | Tarefa acompanhada falhou (`reason`: `error.code` válido ou `null`) |
+| `3` | `cancelled` | Tarefa acompanhada cancelada (`reason: null`) |
 | `4` | `timeout` | Tarefa encerrada por timeout de execução (`reason: null`) |
-| `5` | `question` | Pergunta pública com `sequence > after` (`cursor` recebe essa `sequence`) |
-| `6` | `blocker` | Bloqueio público com `sequence > after` (`cursor` recebe essa `sequence`) |
+| `5` | `question` | Pergunta pública com `sequence > after` (`cursor` e `resumeAfter` do alvo causador recebem essa `sequence`) |
+| `6` | `blocker` | Bloqueio público com `sequence > after` (`cursor` e `resumeAfter` do alvo causador recebem essa `sequence`) |
 | `7` | `unknown-task` | Diretório de estado ou `<taskId>.json` ausente (`TASK_NOT_FOUND`) |
-| `8` | `wait-deadline` | Prazo `--timeout` atingido com a tarefa ainda ativa (`WAIT_DEADLINE`) |
-| `9` | `owner-stopped` | Processo `ownerPid` do snapshot não está mais ativo (`OWNER_STOPPED`) |
+| `8` | `wait-deadline` | Prazo `--timeout` atingido com alvos ainda ativos ou grupo não encerrado, inclusive em `created` (`WAIT_DEADLINE`); reinicie preservando o cursor de entrada (`--after <after>` no simples e todos os `taskId:resumeAfter` no múltiplo/grupo) |
+| `9` | `owner-stopped` | Processo `ownerPid` de uma tarefa acompanhada ainda ativa não está mais ativo (`OWNER_STOPPED`) |
+| `10` | `unknown-group` | Diretório de estado ou `group-<groupId>.json` ausente (`GROUP_NOT_FOUND`) |
+| `11` | `group-paused` | Grupo em `paused` (`GROUP_PAUSED`) ou em `running` com o processo `ownerPid` do grupo encerrado (`OWNER_STOPPED`) |
+| `12` | `group-ended` | Grupo em `failed` ou `cancelled` (`reason`: `error.code` válido do grupo, `GROUP_FAILED` ou `GROUP_CANCELLED`) |
 
 ## Transferência entre papéis
 
@@ -464,7 +479,7 @@ Fluxo típico:
 
 1. Consulte `antigravity_health` para conferir CLI, perfil e modo de aprovação (`approvalMode` e `integrationApproval`). Use `antigravity_list_models` e `antigravity_roles` para selecionar IDs e papéis anunciados pelo servidor.
 2. Liste os arquivos elegíveis com `antigravity_list_project_files`, selecione `includePaths` quando necessário e defina `acceptanceCriteria` cobrindo os requisitos antes de iniciar a implementação com `antigravity_run`. Guarde o `taskId`.
-3. Acompanhe com `antigravity_wait`, preservando `nextCursor` e repetindo a espera quando `ready` for falso. `timedOut` encerra apenas a espera. Use `antigravity_events` para consultar os eventos detalhados.
+3. Acompanhe seguindo `waitCommand`: com terminal disponível, prefira o comando `wait` em foreground (ou background em hosts comprovados como Claude Code >= 2.1.310), exigindo `--timeout` estritamente inferior ao limite real do terminal do host com margem; em `wait-deadline`, reinicie preservando o cursor de entrada (`--after <after>` no simples e pares `<taskId>:<resumeAfter>` no múltiplo/grupo). Use `antigravity_wait` (`timeoutSeconds: 60`) apenas como fallback quando o host não puder executar comandos de terminal, preservando `nextCursor` e repetindo a espera quando `ready` for falso. `timedOut` encerra apenas a espera. Use `antigravity_events` para consultar os eventos detalhados.
 4. Após o término, confira o status e os erros em `antigravity_result` com `includeResult: false`. Leia o resultado com `antigravity_read_result` e o patch com `antigravity_preview` (`includePatch: false`) e `antigravity_read_patch`. Se houver falha, confira a causa antes de retomar; `completed` não comprova os requisitos.
 5. No Windows com o executor LPAC, consulte a política de sandbox e execute os testes pertinentes com `antigravity_test`, usando o hash da prévia e somente uma seleção já aprovada. Nos demais sistemas, ou com `BRIDGE_TEST_EXECUTOR=agy`, execute o teste sem seletor `sandbox`, pois a seleção explícita é recusada no caminho legado. A ferramenta devolve outro `taskId`: acompanhe e revise esse ID, confira a origem da evidência, exit codes e evidências desatualizadas e obtenha a prévia atual novamente. `antigravity_record_test` registra testes executados pelo cliente, como relatos; não substitui a evidência observada do executor.
 6. Confira os arquivos reais contra cada critério e envie evidências de revisão a `antigravity_verify` com o hash atual. Com verificação aprovada e atual, confira também se os testes observados continuam válidos e chame `antigravity_integrate` na tarefa de implementação mais recente dessa cópia para aplicar segundo a política de autorização configurada. Alterações no patch, nas evidências ou nos arquivos afetados do original exigem nova conferência.

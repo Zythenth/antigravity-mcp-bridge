@@ -13,6 +13,7 @@ import { toolProfileSchema } from './tool-profiles.js';
 import { handoffSchema } from './handoff.js';
 import { comparisonSchema, comparisonFindingSchema } from './comparison.js';
 import { sandboxPolicySchema, sandboxSelectionSchema } from './sandbox-policy.js';
+import { WAIT_MODES, WAIT_MODE_REASONS } from './wait-profiles.js';
 
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const id = z.string().uuid();
@@ -76,7 +77,7 @@ export const taskRecordSchema = z.object({
   processCleanup: z.object({ verified: z.boolean(), spawnedAt: timestamp, checkedAt: timestamp, remaining: count }).strict().optional(),
   craft: z.object({ revision: z.string(), manifestSha256: hash, permanent: z.array(z.string()), catalog: z.array(z.string()) }).strict().optional(),
 }).strict();
-const waitCommandSchema = z.object({ argv: z.array(z.string().min(1)).min(5).max(6), sh: z.string().min(1) }).strict();
+const waitCommandSchema = z.object({ argv: z.array(z.string().min(1)).min(5).max(37), sh: z.string().min(1), recommendedMode: z.enum(WAIT_MODES), reason: z.enum(WAIT_MODE_REASONS) }).strict();
 const task = z.object({ task: taskRecordSchema }).strict();
 const startedTask = z.object({ task: taskRecordSchema, waitCommand: waitCommandSchema.optional() }).strict();
 const file = z.object({ status: z.enum(['A', 'M', 'D']), path: z.string() }).strict();
@@ -94,12 +95,12 @@ const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model:
 const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxPolicySchema, sha256: hash }).strict();
 
 export const successOutputSchemas = {
-  antigravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
+  antigravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32), waitCommand: waitCommandSchema.optional() }).strict(),
   antigravity_workflow_result: z.object({ groupId: id, finalNode: z.string(), taskId: id, outputSha256: hash, summary: z.string().max(2000).optional(),
     reference: z.object({ tool: z.literal('antigravity_read_result'), taskId: id, contentSha256: hash }).strict() }).strict(),
   antigravity_peer_receipts: peerReceiptsPageSchema,
   antigravity_group_create: z.object({ group: groupSummarySchema }).strict(),
-  antigravity_group_start: z.object({ group: groupSummarySchema }).strict(),
+  antigravity_group_start: z.object({ group: groupSummarySchema, waitCommand: waitCommandSchema.optional() }).strict(),
   antigravity_group_status: z.object({ group: groupSummarySchema }).strict(),
   antigravity_groups: z.object({ groups: z.array(groupSummarySchema).max(100) }).strict(),
   antigravity_group_wait: z.object({ group: groupSummarySchema, ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
@@ -159,7 +160,7 @@ export const successOutputSchemas = {
   antigravity_context: z.object({ taskId: id, treeSha256: hash, role: roleSchema, report: report.nullable(), handoff: handoffSchema.nullable(),
     acceptanceCriteria: z.array(criterionSchema), includedFiles: z.array(z.string()) }).strict(),
   antigravity_compare: z.object({ comparisonId: id, taskIds: z.array(id), models: comparisonSchema.shape.models,
-    startErrors: comparisonSchema.shape.startErrors }).strict(),
+    startErrors: comparisonSchema.shape.startErrors, waitCommand: waitCommandSchema.optional() }).strict(),
   antigravity_comparison: comparisonSchema.extend({
     ready: z.boolean(), complete: z.boolean(), missingModels: z.array(z.string()), contextStale: z.boolean(),
     opinions: z.array(z.object({ taskId: id, model: z.string(), status, contextMatches: z.boolean().nullable(), report: report.nullable(),
