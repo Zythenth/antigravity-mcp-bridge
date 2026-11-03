@@ -50,6 +50,8 @@ const MAX_BUFFERED_RESPONSE_STEPS = 16;
 const MAX_RESPONSE_STEPS = 1000;
 const MAX_HELD_RESPONSE_LINES = 100;
 const RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5_000_000 };
+const RESUME_GUIDANCE = 'Pass the taskId of the task to continue, or a sessionId obtained from antigravity_status';
+const RESUME_REFUSED = `Resume requires a completed, non-integrated task in this project. ${RESUME_GUIDANCE}`;
 
 export interface MaintenanceIssue { operation: 'copy-cleanup'; code: string; since: string; failures: number }
 
@@ -382,7 +384,13 @@ export class TaskManager {
     return this.projectMemory().remove(await this.memoryProject(workingDirectory), specialist, expectedSha256);
   }
 
-  async run(options: RunOptions): Promise<TaskRecord> {
+  async resume(options: RunOptions, resumeTaskId?: string): Promise<TaskRecord> {
+    this.assertStateDirectoryUsable();
+    if (Boolean(options.sessionId) === Boolean(resumeTaskId)) throw new BridgeError('INVALID_SESSION', `Resume requires exactly one of taskId or sessionId. ${RESUME_GUIDANCE}`);
+    return this.run(options, resumeTaskId);
+  }
+
+  async run(options: RunOptions, resumeTaskId?: string): Promise<TaskRecord> {
     this.assertStateDirectoryUsable();
     options = { ...options };
     delete options.group;
@@ -392,9 +400,9 @@ export class TaskManager {
       if (options.peerContext.groupId.toLowerCase() !== options.groupAdmission.groupId.toLowerCase() || options.peerContext.nodeKey !== options.groupAdmission.nodeKey) throw new BridgeError('INVALID_GROUP', 'Peer context differs from group admission');
     }
     if (!options.sourceMessage) delete options.peerOrigin;
-    if (options.groupAdmission && options.sessionId) throw new BridgeError('INVALID_GROUP', 'Group admission starts a new session');
+    if (options.groupAdmission && (options.sessionId || resumeTaskId)) throw new BridgeError('INVALID_GROUP', 'Group admission starts a new session');
     delete options.memorySnapshots; // Internal snapshots are resolved only by the bridge.
-    const initialRoleDefinition = options.sessionId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
+    const initialRoleDefinition = options.sessionId || resumeTaskId ? undefined : resolveRole(options.role ?? 'implementer', this.config.customRoles);
     if (initialRoleDefinition) {
       const { skills, includePaths, memory } = options;
       options = applyRoleDefaults(options, initialRoleDefinition);
@@ -429,7 +437,7 @@ export class TaskManager {
       if (options.workingDirectory !== workingDirectory) throw new BridgeError('GROUP_CHANGED', 'Group project no longer resolves to its saved canonical directory');
     }
     if (options.isolateWorktree === false) throw new BridgeError('ISOLATION_REQUIRED', 'Direct execution in the source project is disabled');
-    if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', 'Invalid conversation ID');
+    if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId)) throw new BridgeError('INVALID_SESSION', `Invalid conversation ID. ${RESUME_GUIDANCE}`);
     const releaseRegistry = this.state.acquire('registry');
     let pendingProjectRelease: (() => void) | undefined;
     let contextProject: ProjectCopy | undefined;
@@ -446,15 +454,24 @@ export class TaskManager {
           return this.status(existing.record.taskId);
         }
       }
+      const resumeSource = resumeTaskId ? this.tasks.get(resumeTaskId) : undefined;
+      if (resumeTaskId) {
+        if (!resumeSource?.project || !resumeSource.record.sessionId || resumeSource.record.workingDirectory !== workingDirectory ||
+          (resumeSource.record.status !== 'completed' && resumeSource.record.error?.code !== 'TEST_FAILED') || resumeSource.record.integratedAt) {
+          throw new BridgeError('INVALID_SESSION', RESUME_REFUSED);
+        }
+        options.sessionId = resumeSource.record.sessionId;
+      }
       const contextSource = options.contextTaskId ? this.tasks.get(options.contextTaskId) : undefined;
       if (options.contextTaskId && (options.sessionId || !contextSource?.project || contextSource.record.status !== 'completed' ||
         contextSource.record.integratedAt || contextSource.record.workingDirectory !== workingDirectory)) {
         throw new BridgeError('INVALID_CONTEXT', 'Context requires a completed, retained, non-integrated task in the same project; use a new session');
       }
-      const previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
-        task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project && !(task.record.error?.code === 'STATE_PERSISTENCE_FAILED' && !task.record.startedAt)) : undefined;
+      let previous = options.sessionId ? [...this.tasks.values()].reverse().find(task =>
+        task.record.sessionId === options.sessionId && task.record.workingDirectory === workingDirectory && task.project &&
+        (!resumeSource || task.project.copyDirectory === resumeSource.project!.copyDirectory) && !(task.record.error?.code === 'STATE_PERSISTENCE_FAILED' && !task.record.startedAt)) : undefined;
       if (options.sessionId && (!previous || (previous.record.status !== 'completed' && previous.record.error?.code !== 'TEST_FAILED') || previous.record.integratedAt)) {
-        throw new BridgeError('INVALID_SESSION', 'Resume requires a completed, non-integrated task in this project');
+        throw new BridgeError('INVALID_SESSION', RESUME_REFUSED);
       }
       if (previous?.record.group) options.parentTaskId = previous.record.taskId;
       if (previous?.record.group && new GroupStore(this.config.stateDirectory).read(previous.record.group.groupId).state !== 'running') throw new BridgeError('GROUP_CLOSED', 'Start or resume the group coordinator before another conversation turn');
@@ -589,7 +606,14 @@ export class TaskManager {
       }
       options.providedSkills = (previous?.project ?? contextProject)?.providedSkills;
       taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
+      if (previous && !previous.project) throw new BridgeError('INVALID_SESSION', RESUME_REFUSED);
       pendingProjectRelease = previous?.project || contextProject ? this.state.acquire(this.projectLock((previous?.project ?? contextProject)!)) : undefined;
+      if (previous) {
+        // Integration and discard do not hold the registry lock and may have ended during the awaits above; the copy lock now keeps them out.
+        this.refresh();
+        previous = this.tasks.get(previous.record.taskId);
+        if (!previous?.project || previous.record.integratedAt) throw new BridgeError('INVALID_SESSION', RESUME_REFUSED);
+      }
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find(task => terminal.has(task.record.status) && task !== contextSource && !this.hasPendingInbox(task.record) && !(options.sourceMessage && task === previous));
         if (!oldestFinished) throw new BridgeError('QUEUE_FULL', 'Task retention limit reached with active tasks');

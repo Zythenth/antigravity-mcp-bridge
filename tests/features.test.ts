@@ -118,6 +118,45 @@ test('custom roles inherit read-only contracts and freeze instructions across co
   } finally { await other?.close(); await f.close(); }
 });
 
+test('antigravity_resume accepts exactly one of taskId or sessionId through MCP', async () => {
+  const f = await fixture();
+  try {
+    const { tools } = await f.client.listTools();
+    const resumeTool = tools.find(tool => tool.name === 'antigravity_resume')!;
+    assert.ok(resumeTool.inputSchema.properties?.taskId);
+    assert.ok(resumeTool.inputSchema.properties?.sessionId);
+    assert.deepEqual([...(resumeTool.inputSchema.required ?? [])].sort(), ['prompt', 'workingDirectory']);
+    assert.match(resumeTool.description ?? '', /taskId \(preferred\)/);
+    assert.equal(tools.find(tool => tool.name === 'antigravity_run')!.inputSchema.properties?.taskId, undefined);
+
+    const started = await f.call('antigravity_run', { prompt: 'write:test', workingDirectory: f.source });
+    const taskId = started.task.taskId as string;
+    assert.equal((await f.call('antigravity_wait', { taskId, timeoutSeconds: 60 })).status, 'completed');
+    const original = (await f.call('antigravity_status', { taskId })).task;
+    const resumeWith = async (selector: Record<string, unknown>) => {
+      const resumed = await f.call('antigravity_resume', { prompt: 'consult:resume', workingDirectory: f.source, ...selector });
+      assert.equal((await f.call('antigravity_wait', { taskId: resumed.task.taskId, timeoutSeconds: 60 })).status, 'completed');
+      return (await f.call('antigravity_status', { taskId: resumed.task.taskId })).task;
+    };
+    const byTask = await resumeWith({ taskId });
+    assert.equal(byTask.sessionId, original.sessionId);
+    assert.equal(byTask.copyDirectory, original.copyDirectory);
+    const bySession = await resumeWith({ sessionId: original.sessionId });
+    assert.equal(bySession.sessionId, original.sessionId);
+    assert.equal(bySession.copyDirectory, original.copyDirectory);
+
+    const before = (await f.call('antigravity_tasks')).tasks.length;
+    for (const selector of [{}, { taskId, sessionId: original.sessionId }, { taskId: '00000000-0000-4000-8000-000000000000' }]) {
+      const refused = await f.client.callTool({ name: 'antigravity_resume', arguments: { prompt: 'consult:refused', workingDirectory: f.source, ...selector } });
+      assert.equal(refused.isError, true);
+      const { error } = refused.structuredContent as { error: { code: string; message: string } };
+      assert.equal(error.code, 'INVALID_SESSION');
+      assert.match(error.message, /taskId.*antigravity_status/);
+    }
+    assert.equal((await f.call('antigravity_tasks')).tasks.length, before);
+  } finally { await f.close(); }
+});
+
 test('role handoff transfers plans, criteria and decisions to independent copies and rejects stale context', async () => {
   const f = await fixture('full', true);
   try {

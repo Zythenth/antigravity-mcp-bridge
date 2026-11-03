@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, writeFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -532,6 +532,163 @@ test('read-only uses plan mode, survives resume, rejects integration and detects
     await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
     await tasks.discard(violation.taskId);
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('resume by taskId continues the conversation of that task in its own copy, like resume by sessionId', async () => {
+  const dir = await repository();
+  const { adapter, tasks, config } = setup();
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'write:test', workingDirectory: dir });
+    const finished = await until(tasks, first.taskId, done);
+    assert.equal(finished.status, 'completed');
+    // The mock reuses one conversation for every task, so a second copy proves that the taskId selects the copy.
+    const sibling = await until(tasks, (await tasks.run({ prompt: 'write:other', workingDirectory: dir })).taskId, done);
+    assert.equal(sibling.sessionId, finished.sessionId);
+    assert.notEqual(sibling.copyDirectory, finished.copyDirectory);
+    const conversation = (taskId: string) => {
+      const args = (tasks.readEvents(taskId).events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;
+      return args[args.indexOf('--conversation') + 1];
+    };
+    const byTask = await until(tasks, (await tasks.resume({ prompt: 'consult:resume', workingDirectory: dir }, first.taskId)).taskId, done);
+    assert.equal(byTask.status, 'completed');
+    assert.equal(byTask.sessionId, finished.sessionId);
+    assert.equal(byTask.copyDirectory, finished.copyDirectory);
+    assert.equal(conversation(byTask.taskId), finished.sessionId);
+    const bySession = await until(tasks, (await tasks.resume({ prompt: 'consult:resume', workingDirectory: dir, sessionId: finished.sessionId })).taskId, done);
+    assert.equal(bySession.copyDirectory, finished.copyDirectory);
+    assert.equal(conversation(bySession.taskId), finished.sessionId);
+    for (const field of ['status', 'sessionId', 'copyDirectory', 'workingDirectory', 'mode', 'role', 'deliveryMode', 'model', 'exitCode'] as const) {
+      assert.equal(byTask[field], bySession[field], field);
+    }
+    assert.deepEqual(byTask.agentPolicy, bySession.agentPolicy);
+    assert.equal((await tasks.preview(byTask.taskId)).sha256, (await tasks.preview(bySession.taskId)).sha256);
+    const olderTurn = await until(tasks, (await tasks.resume({ prompt: 'consult:older', workingDirectory: dir }, first.taskId)).taskId, done);
+    assert.equal(olderTurn.status, 'completed');
+    assert.equal(olderTurn.copyDirectory, finished.copyDirectory);
+    const recovered = new TaskManager(adapter, config); managers.push(recovered);
+    const afterRestart = await until(recovered, (await recovered.resume({ prompt: 'consult:restart', workingDirectory: dir }, first.taskId)).taskId, done);
+    assert.equal(afterRestart.status, 'completed');
+    assert.equal(afterRestart.copyDirectory, finished.copyDirectory);
+    const siblingTurn = await until(tasks, (await tasks.resume({ prompt: 'consult:sibling', workingDirectory: dir }, sibling.taskId)).taskId, done);
+    assert.equal(siblingTurn.status, 'completed');
+    assert.equal(siblingTurn.copyDirectory, sibling.copyDirectory);
+  } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('resume refuses invalid selectors before any process, task or copy', async () => {
+  const dir = await repository();
+  const otherDir = await repository();
+  const { adapter, tasks } = setup();
+  const spawnTask = adapter.spawnTask.bind(adapter);
+  let spawned = 0;
+  adapter.spawnTask = (...args) => { spawned += 1; return spawnTask(...args); };
+  // Test files run one at a time, so a copy that appears during a refused call came from that call.
+  const copies = async () => (await readdir(os.tmpdir())).filter(name => name.startsWith('agy-mcp-copy-'));
+  const refused = async (options: Parameters<TaskManager['resume']>[0], taskId: string | undefined, hidden: string[] = []) => {
+    const tasksBefore = tasks.list().length;
+    const spawnedBefore = spawned;
+    const copiesBefore = new Set(await copies());
+    await assert.rejects(tasks.resume(options, taskId), (error: Error & { code?: string }) => {
+      assert.equal(error.code, 'INVALID_SESSION');
+      assert.ok(error.message.includes('taskId') && error.message.includes('antigravity_status'), error.message);
+      for (const value of hidden) assert.ok(!error.message.includes(value), error.message);
+      return true;
+    });
+    assert.deepEqual((await copies()).filter(name => !copiesBefore.has(name)), []);
+    assert.equal(tasks.list().length, tasksBefore);
+    assert.equal(spawned, spawnedBefore);
+  };
+  try {
+    await adapter.discover();
+    const first = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
+    const finished = await until(tasks, first.taskId, done);
+    const other = await until(tasks, (await tasks.run({ prompt: 'write:other', workingDirectory: otherDir })).taskId, done);
+    const resume = { prompt: 'consult:refused', workingDirectory: dir };
+    const details = (task: TaskRecord) => [task.taskId, task.sessionId!, task.workingDirectory, task.copyDirectory!];
+
+    await refused({ ...resume, sessionId: finished.sessionId }, first.taskId, [first.taskId]);
+    await refused(resume, undefined);
+    await refused(resume, '00000000-0000-4000-8000-000000000000');
+    await refused(resume, other.taskId, details(other));
+    await refused({ ...resume, workingDirectory: otherDir }, first.taskId, details(finished));
+    await refused({ ...resume, sessionId: 'unknown-conversation' }, undefined, details(finished));
+    await refused({ ...resume, sessionId: 'not valid!' }, undefined, details(finished));
+
+    const running = await tasks.run({ prompt: 'cancel:test', workingDirectory: dir });
+    await refused(resume, running.taskId, [running.taskId]);
+    await tasks.cancel(running.taskId);
+    assert.equal((await until(tasks, running.taskId, done)).status, 'cancelled');
+    await refused(resume, running.taskId, [running.taskId]);
+
+    const failure = await until(tasks, (await tasks.run({ prompt: 'failure:test', workingDirectory: dir })).taskId, done);
+    assert.equal(failure.status, 'failed');
+    await refused(resume, failure.taskId, [failure.taskId]);
+
+    const tested = await until(tasks, (await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria })).taskId, done);
+    const testedPreview = await tasks.preview(tested.taskId);
+    const testRun = await tasks.startTests(tested.taskId, testedPreview.sha256, { executable: process.execPath, args: ['-e', 'process.exit(7)'] }, 0, 20);
+    const failedTest = await until(tasks, testRun.taskId, done);
+    assert.equal(failedTest.error?.code, 'TEST_FAILED');
+    const repaired = await until(tasks, (await tasks.resume(resume, testRun.taskId)).taskId, done);
+    assert.equal(repaired.status, 'completed');
+    assert.equal(repaired.copyDirectory, tested.copyDirectory);
+
+    // A newer turn in the copy governs an older selector, exactly as it does for a sessionId.
+    const continuation = await tasks.resume({ prompt: 'cancel:test', workingDirectory: dir }, first.taskId);
+    await refused(resume, first.taskId, [first.taskId]);
+    await tasks.cancel(continuation.taskId);
+    await until(tasks, continuation.taskId, done);
+    await refused(resume, first.taskId, [first.taskId]);
+
+    const discarded = await until(tasks, (await tasks.run({ prompt: 'write:other', workingDirectory: otherDir })).taskId, done);
+    await tasks.discard(discarded.taskId);
+    await refused({ ...resume, workingDirectory: otherDir }, discarded.taskId, [discarded.taskId]);
+
+    const integrated = await until(tasks, (await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria })).taskId, done);
+    const integratedPreview = await tasks.preview(integrated.taskId);
+    await verifyTask(tasks, integrated.taskId, integratedPreview.sha256);
+    await tasks.integrate(integrated.taskId, integratedPreview.sha256, async () => true);
+    await refused(resume, integrated.taskId, [integrated.taskId]);
+  } finally {
+    await tasks.shutdown();
+    await rm(dir, { recursive: true, force: true });
+    await rm(otherDir, { recursive: true, force: true });
+  }
+});
+
+test('resume refuses a copy integrated or discarded while it was being prepared', async () => {
+  const dir = await repository();
+  const { adapter, tasks } = setup();
+  const listModels = adapter.listModels.bind(adapter);
+  const spawnTask = adapter.spawnTask.bind(adapter);
+  let spawned = 0;
+  adapter.spawnTask = (...args) => { spawned += 1; return spawnTask(...args); };
+  const refusedWhile = async (taskId: string, interfere: () => Promise<unknown>) => {
+    const tasksBefore = tasks.list().length;
+    const spawnedBefore = spawned;
+    let interfered = false;
+    adapter.listModels = async () => { await interfere(); interfered = true; return listModels(); };
+    try {
+      await assert.rejects(tasks.resume({ prompt: 'consult:refused', workingDirectory: dir, model: 'mock-pro' }, taskId), { code: 'INVALID_SESSION' });
+    } finally { adapter.listModels = listModels; }
+    assert.equal(interfered, true);
+    assert.equal(tasks.list().length, tasksBefore);
+    assert.equal(spawned, spawnedBefore);
+  };
+  try {
+    await adapter.discover();
+    const integrated = await until(tasks, (await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria })).taskId, done);
+    const preview = await tasks.preview(integrated.taskId);
+    await verifyTask(tasks, integrated.taskId, preview.sha256);
+    await refusedWhile(integrated.taskId, () => tasks.integrate(integrated.taskId, preview.sha256, async () => true));
+
+    const discarded = await until(tasks, (await tasks.run({ prompt: 'write:other', workingDirectory: dir })).taskId, done);
+    await refusedWhile(discarded.taskId, () => tasks.discard(discarded.taskId));
+  } finally {
+    await tasks.shutdown();
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('discard removes copy and baseline, refuses active shared copies, and is idempotent', async () => {

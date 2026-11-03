@@ -165,7 +165,19 @@ export const toolCases = [
   {
     name: 'antigravity_resume',
     args: c => ({ prompt: 'Continue the review.', workingDirectory: c.source, sessionId: c.session }),
-    check: async (result, c) => { await settle(c.client, result.task.taskId); },
+    check: async (result, c) => {
+      await settle(c.client, result.task.taskId);
+      const byTask = await c.client.request(
+        { method: 'tools/call', params: { name: 'antigravity_resume', arguments: { prompt: 'Continue the review.', workingDirectory: c.source, taskId: result.task.taskId } } },
+        CallToolResultSchema,
+      );
+      assert.equal(!byTask.isError, true, `[${c.scenario}] antigravity_resume by taskId: ${JSON.stringify(byTask.structuredContent?.error)}`);
+      const { valid, errorMessage } = c.validators.get('antigravity_resume')(byTask.structuredContent);
+      assert.equal(valid, true, `[${c.scenario}] antigravity_resume by taskId: ${errorMessage}`);
+      assert.equal(byTask.structuredContent.task.sessionId, result.task.sessionId, `[${c.scenario}] antigravity_resume by taskId: session mismatch`);
+      assert.ok(byTask.structuredContent.waitCommand.argv.includes(byTask.structuredContent.task.taskId), `[${c.scenario}] antigravity_resume by taskId: waitCommand mismatch`);
+      await settle(c.client, byTask.structuredContent.task.taskId);
+    },
   },
   { name: 'antigravity_set_delivery_mode', args: c => ({ taskId: c.task, deliveryMode: 'messages' }) },
   { name: 'antigravity_send_message', args: c => ({ taskId: c.task, messageId: randomUUID(), text: 'Contract message.' }) },
@@ -238,7 +250,7 @@ export async function checkToolContracts(bin, root) {
     assertCoverage(listedNames, caseNames);
     const ajv = new AjvJsonSchemaValidator();
     const validators = new Map(listed.tools.map(tool => [tool.name, ajv.getValidator(tool.outputSchema)]));
-    const context = { source, client, scenario };
+    const context = { source, client, scenario, validators };
     for (const toolCase of toolCases) {
       const args = toolCase.args(context);
       const response = await client.request(

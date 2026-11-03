@@ -47626,11 +47626,11 @@ function createMcpServer(adapter, tasks, options = {}) {
     server.registerTool("antigravity_resume", {
       outputSchema: outputSchemas.antigravity_resume,
       title: "Resume Antigravity conversation",
-      description: "Continue a completed session in its existing isolated copy.",
-      inputSchema: { ...runSchema, sessionId: external_exports.string().min(1).max(128) },
+      description: "Continue a completed session in its existing isolated copy. Pass exactly one: taskId (preferred) or a sessionId obtained from antigravity_status. A task that is unknown, running, failed (except TEST_FAILED), integrated or from another project is refused before anything starts.",
+      inputSchema: { ...runSchema, taskId: external_exports.string().uuid().optional(), sessionId: external_exports.string().min(1).max(128).optional() },
       annotations: action
-    }, async (args) => safe(async () => {
-      const task2 = await tasks.run(args);
+    }, async ({ taskId, ...args }) => safe(async () => {
+      const task2 = await tasks.resume(args, taskId);
       return { task: clientTask(task2), ...waitCommand([task2.taskId]) };
     })());
   if (toolEnabled(tasks.toolProfile, "antigravity_context"))
@@ -53129,6 +53129,8 @@ var MAX_BUFFERED_RESPONSE_STEPS = 16;
 var MAX_RESPONSE_STEPS = 1e3;
 var MAX_HELD_RESPONSE_LINES = 100;
 var RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5e6 };
+var RESUME_GUIDANCE = "Pass the taskId of the task to continue, or a sessionId obtained from antigravity_status";
+var RESUME_REFUSED = `Resume requires a completed, non-integrated task in this project. ${RESUME_GUIDANCE}`;
 function maintenanceErrorCode(error62) {
   const candidate = error62 instanceof BridgeError ? error62.code : typeof error62?.code === "string" ? error62.code : void 0;
   return typeof candidate === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(candidate) ? candidate : "UNEXPECTED_ERROR";
@@ -53462,7 +53464,13 @@ var TaskManager = class {
       throw new BridgeError("PROFILE_READ_ONLY", "This profile cannot remove private memory");
     return this.projectMemory().remove(await this.memoryProject(workingDirectory), specialist, expectedSha256);
   }
-  async run(options) {
+  async resume(options, resumeTaskId) {
+    this.assertStateDirectoryUsable();
+    if (Boolean(options.sessionId) === Boolean(resumeTaskId))
+      throw new BridgeError("INVALID_SESSION", `Resume requires exactly one of taskId or sessionId. ${RESUME_GUIDANCE}`);
+    return this.run(options, resumeTaskId);
+  }
+  async run(options, resumeTaskId) {
     this.assertStateDirectoryUsable();
     options = { ...options };
     delete options.group;
@@ -53475,10 +53483,10 @@ var TaskManager = class {
     }
     if (!options.sourceMessage)
       delete options.peerOrigin;
-    if (options.groupAdmission && options.sessionId)
+    if (options.groupAdmission && (options.sessionId || resumeTaskId))
       throw new BridgeError("INVALID_GROUP", "Group admission starts a new session");
     delete options.memorySnapshots;
-    const initialRoleDefinition = options.sessionId ? void 0 : resolveRole(options.role ?? "implementer", this.config.customRoles);
+    const initialRoleDefinition = options.sessionId || resumeTaskId ? void 0 : resolveRole(options.role ?? "implementer", this.config.customRoles);
     if (initialRoleDefinition) {
       const { skills, includePaths, memory } = options;
       options = applyRoleDefaults(options, initialRoleDefinition);
@@ -53528,7 +53536,7 @@ var TaskManager = class {
     if (options.isolateWorktree === false)
       throw new BridgeError("ISOLATION_REQUIRED", "Direct execution in the source project is disabled");
     if (options.sessionId && !/^[a-zA-Z0-9-]{1,128}$/.test(options.sessionId))
-      throw new BridgeError("INVALID_SESSION", "Invalid conversation ID");
+      throw new BridgeError("INVALID_SESSION", `Invalid conversation ID. ${RESUME_GUIDANCE}`);
     const releaseRegistry = this.state.acquire("registry");
     let pendingProjectRelease;
     let contextProject;
@@ -53544,13 +53552,20 @@ var TaskManager = class {
           return this.status(existing.record.taskId);
         }
       }
+      const resumeSource = resumeTaskId ? this.tasks.get(resumeTaskId) : void 0;
+      if (resumeTaskId) {
+        if (!resumeSource?.project || !resumeSource.record.sessionId || resumeSource.record.workingDirectory !== workingDirectory || resumeSource.record.status !== "completed" && resumeSource.record.error?.code !== "TEST_FAILED" || resumeSource.record.integratedAt) {
+          throw new BridgeError("INVALID_SESSION", RESUME_REFUSED);
+        }
+        options.sessionId = resumeSource.record.sessionId;
+      }
       const contextSource = options.contextTaskId ? this.tasks.get(options.contextTaskId) : void 0;
       if (options.contextTaskId && (options.sessionId || !contextSource?.project || contextSource.record.status !== "completed" || contextSource.record.integratedAt || contextSource.record.workingDirectory !== workingDirectory)) {
         throw new BridgeError("INVALID_CONTEXT", "Context requires a completed, retained, non-integrated task in the same project; use a new session");
       }
-      const previous = options.sessionId ? [...this.tasks.values()].reverse().find((task2) => task2.record.sessionId === options.sessionId && task2.record.workingDirectory === workingDirectory && task2.project && !(task2.record.error?.code === "STATE_PERSISTENCE_FAILED" && !task2.record.startedAt)) : void 0;
+      let previous = options.sessionId ? [...this.tasks.values()].reverse().find((task2) => task2.record.sessionId === options.sessionId && task2.record.workingDirectory === workingDirectory && task2.project && (!resumeSource || task2.project.copyDirectory === resumeSource.project.copyDirectory) && !(task2.record.error?.code === "STATE_PERSISTENCE_FAILED" && !task2.record.startedAt)) : void 0;
       if (options.sessionId && (!previous || previous.record.status !== "completed" && previous.record.error?.code !== "TEST_FAILED" || previous.record.integratedAt)) {
-        throw new BridgeError("INVALID_SESSION", "Resume requires a completed, non-integrated task in this project");
+        throw new BridgeError("INVALID_SESSION", RESUME_REFUSED);
       }
       if (previous?.record.group)
         options.parentTaskId = previous.record.taskId;
@@ -53729,7 +53744,15 @@ var TaskManager = class {
       }
       options.providedSkills = (previous?.project ?? contextProject)?.providedSkills;
       taskPrompt({ ...options, role, acceptanceCriteria }, this.config.maxPromptChars);
+      if (previous && !previous.project)
+        throw new BridgeError("INVALID_SESSION", RESUME_REFUSED);
       pendingProjectRelease = previous?.project || contextProject ? this.state.acquire(this.projectLock(previous?.project ?? contextProject)) : void 0;
+      if (previous) {
+        this.refresh();
+        previous = this.tasks.get(previous.record.taskId);
+        if (!previous?.project || previous.record.integratedAt)
+          throw new BridgeError("INVALID_SESSION", RESUME_REFUSED);
+      }
       if (this.tasks.size >= this.config.maxRetainedTasks) {
         const oldestFinished = [...this.tasks.values()].find((task2) => terminal3.has(task2.record.status) && task2 !== contextSource && !this.hasPendingInbox(task2.record) && !(options.sourceMessage && task2 === previous));
         if (!oldestFinished)

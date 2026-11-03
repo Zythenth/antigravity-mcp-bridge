@@ -321,10 +321,10 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_resume')) server.registerTool('antigravity_resume', {
     outputSchema: outputSchemas.antigravity_resume,
-    title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy.',
-    inputSchema: { ...runSchema, sessionId: z.string().min(1).max(128) }, annotations: action,
-  }, async args => safe(async () => {
-    const task = await tasks.run(args);
+    title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy. Pass exactly one: taskId (preferred) or a sessionId obtained from antigravity_status. A task that is unknown, running, failed (except TEST_FAILED), integrated or from another project is refused before anything starts.',
+    inputSchema: { ...runSchema, taskId: z.string().uuid().optional(), sessionId: z.string().min(1).max(128).optional() }, annotations: action,
+  }, async ({ taskId, ...args }) => safe(async () => {
+    const task = await tasks.resume(args, taskId);
     return { task: clientTask(task), ...waitCommand([task.taskId]) };
   })());
 
