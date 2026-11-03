@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, readFile, rm, writeFile, rename, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile, rename, symlink } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -139,6 +140,52 @@ test('explicit resume recovers accepted task identity when checkpoint omitted it
     await until(() => resumed.groups.status(group.groupId).state === 'completed');
     assert.deepEqual(adapter.calls.map(call => call.key), ['a','join']);
     assert.equal(resumed.list().filter(task => task.group?.nodeKey === 'a').length, 1);
+  });
+});
+test('an unexpected coordination error pauses with a sanitized cause and never cancels or repeats work', async t => {
+  await fixture(async ({ source, tasks, adapter, config }) => {
+    const group = await tasks.groups.create(randomUUID(), chain(source)); tasks.groups.start(group.groupId, group.definitionSha256);
+    await until(() => adapter.calls.length === 1);
+    const secret = path.join(source, 'PRIVATE_CAUSE_PATH'), lines: string[] = [], list = tasks.list.bind(tasks); let thrown = false;
+    const forged = '\n    at PRIVATE_TASK_CONTENT (' + path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'group-manager.js') + ':1:1)';
+    t.mock.method(process.stderr, 'write', (chunk: unknown) => { lines.push(String(chunk)); return true; });
+    t.mock.method(tasks, 'list', (...args: Parameters<TaskManager['list']>) => {
+      if (!thrown && new Error().stack?.includes('GroupManager.advance')) {
+        thrown = true; throw Object.assign(new Error('EPERM: operation not permitted, lstat ' + secret + forged), { code: 'EPERM', syscall: 'lstat', path: secret });
+      }
+      return list(...args);
+    });
+    const store = new GroupStore(config.stateDirectory);
+    await until(() => store.read(group.groupId).state === 'paused'); t.mock.restoreAll();
+    const record = store.read(group.groupId), status = tasks.groups.status(group.groupId);
+    assert.equal(record.error!.code, 'GROUP_COORDINATION_FAILED');
+    assert.equal(record.error!.message, 'Coordination stopped; inspect existing tasks before explicitly resuming');
+    assert.deepEqual(record.error!.cause, { errorClass: 'Error', code: 'EPERM', syscall: 'lstat', frame: 'GroupManager.advance' });
+    assert.deepEqual(successOutputSchemas.antigravity_group_status.parse({ group: status }).group.error, record.error);
+    const serialized = JSON.stringify(record) + JSON.stringify(status);
+    assert.equal(serialized.includes('PRIVATE_CAUSE_PATH'), false); assert.equal(serialized.includes('operation not permitted'), false); assert.equal(serialized.includes('PRIVATE_TASK_CONTENT'), false);
+    const pauses = lines.filter(line => line.startsWith('Group coordination paused: '));
+    assert.equal(pauses.length, 1); assert.equal(pauses[0]!.endsWith('\n'), true); assert.equal(pauses[0]!.includes('PRIVATE_CAUSE_PATH'), false); assert.equal(pauses[0]!.includes('PRIVATE_TASK_CONTENT'), false);
+    assert.deepEqual(JSON.parse(pauses[0]!.slice('Group coordination paused: '.length)), { groupId: group.groupId, ...record.error!.cause });
+    await delay(300);
+    const admitted = tasks.list().filter(task => task.group?.groupId === group.groupId);
+    assert.equal(adapter.calls.length, 1); assert.equal(admitted.length, 1); assert.notEqual(admitted[0]!.status, 'cancelled');
+    adapter.calls[0]!.finish(); await until(() => tasks.list().find(task => task.taskId === admitted[0]!.taskId)!.status === 'completed');
+    await delay(300); assert.equal(adapter.calls.length, 1); assert.equal(store.read(group.groupId).state, 'paused');
+  });
+});
+test('a paused group record without a recorded cause loads unchanged and is not rewritten', async () => {
+  await fixture(async ({ source, tasks, adapter, config, managers }) => {
+    const group = await tasks.groups.create(randomUUID(), chain(source)), error = { code: 'GROUP_COORDINATION_FAILED', message: 'Coordination stopped; inspect existing tasks before explicitly resuming' };
+    const store = new GroupStore(config.stateDirectory), release = store.state.acquire('group-' + group.groupId);
+    try { const record = store.read(group.groupId); record.state = 'paused'; record.error = { ...error }; store.write(record); } finally { release(); }
+    const file = path.join(realpathSync.native(config.stateDirectory), 'group-' + group.groupId + '.json'), bytes = await readFile(file), before = (await stat(file)).mtimeMs;
+    const reloaded = new TaskManager(adapter, config); managers.push(reloaded);
+    const status = reloaded.groups.status(group.groupId);
+    assert.deepEqual(successOutputSchemas.antigravity_group_status.parse({ group: status }).group.error, error);
+    assert.equal('cause' in status.error!, false); assert.deepEqual(store.read(group.groupId).error, error);
+    await delay(300);
+    assert.deepEqual(await readFile(file), bytes); assert.equal((await stat(file)).mtimeMs, before); assert.equal(adapter.calls.length, 0);
   });
 });
 test('profile changes pause admission and malformed DAGs fail before any provider starts', async () => {

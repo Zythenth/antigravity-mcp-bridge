@@ -134,13 +134,21 @@ export const peerReceiptsPageSchema = z.object({
 }).strict();
 export type PeerReceiptsPage = z.infer<typeof peerReceiptsPageSchema>;
 
+export const coordinationCauseSchema = z.object({
+  errorClass: z.string().regex(/^[A-Za-z_$][\w$]{0,63}$/),
+  code: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/).optional(),
+  syscall: z.string().regex(/^[a-z][a-z0-9_]{0,31}$/).optional(),
+  frame: z.string().max(128).regex(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/).optional(),
+}).strict();
+export type CoordinationCause = z.infer<typeof coordinationCauseSchema>;
+
 export const groupRecordSchema = z.object({
   version: z.literal(1), groupId: z.string().uuid(), definitionSha256: z.string().regex(/^[a-f0-9]{64}$/),
   definition: groupDefinitionSchema, profiles: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)),
   nodes: z.record(z.string(), groupNodeRecordSchema), state: groupStateSchema,
   createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
   ownerPid: z.number().int().positive().optional(), ownerId: z.string().uuid().optional(),
-  error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+  error: z.object({ code: z.string(), message: z.string(), cause: coordinationCauseSchema.optional() }).strict().optional(),
   peerDeliveries: z.array(peerDeliverySchema).max(100).optional(),
 }).strict().superRefine((record, ctx) => {
   if (record.peerDeliveries !== undefined) {
@@ -180,7 +188,7 @@ export const groupSummarySchema = z.object({
   groupId: z.string().uuid(), definitionSha256: z.string().regex(/^[a-f0-9]{64}$/),
   workingDirectory: z.string(), title: z.string(), state: groupStateSchema,
   createdAt: z.string().datetime(), updatedAt: z.string().datetime(), resumeRequired: z.boolean(),
-  error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
+  error: z.object({ code: z.string(), message: z.string(), cause: coordinationCauseSchema.optional() }).strict().optional(),
   nodes: z.array(z.object({
     key: z.string(), owner: roleSchema, dependsOn: z.array(z.string()),
     state: z.lazy(() => GroupNodeStatus), taskId: z.string().uuid().optional(),

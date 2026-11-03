@@ -10,13 +10,38 @@ import { validateProjectRoot } from './isolation.js';
 import { applyRoleDefaults, resolveRole } from './roles.js';
 import { taskPrompt } from './cli-adapter.js';
 import { GroupStore } from './group-store.js';
-import { groupDefinitionSchema, groupDefinitionSha256, summarizeGroup, type GroupDefinition, type GroupRecord, type PeerDelivery } from './group-contract.js';
+import { groupDefinitionSchema, groupDefinitionSha256, summarizeGroup, type GroupDefinition, type GroupRecord, type PeerDelivery, type CoordinationCause } from './group-contract.js';
 import { groupReadiness, initialGroupProgress, type GroupNodeStatus } from './task-groups.js';
 import { jointWaitPage, waitCursorsSchema, type WaitTarget } from './joint-wait.js';
 import { isPeerRouteAllowed } from './peer-messages.js';
 import { processAlive } from './state-store.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const finished = new Set(['completed', 'failed', 'cancelled']);
+const bridgeDirectory = path.dirname(fileURLToPath(import.meta.url));
+function coordinationCause(error: unknown): CoordinationCause {
+  const name = error instanceof Error ? error.constructor?.name : undefined;
+  const cause: CoordinationCause = { errorClass: typeof name === 'string' && /^[A-Za-z_$][\w$]{0,63}$/.test(name) ? name : error instanceof Error ? 'Error' : 'NonError' };
+  const fields = error !== null && typeof error === 'object' ? error as { code?: unknown; syscall?: unknown } : {};
+  if (typeof fields.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(fields.code)) cause.code = fields.code;
+  if (typeof fields.syscall === 'string' && /^[a-z][a-z0-9_]{0,31}$/.test(fields.syscall)) cause.syscall = fields.syscall;
+  const stack = error instanceof Error && typeof error.stack === 'string' ? error.stack : '';
+  const message = error instanceof Error && typeof error.message === 'string' ? error.message : '', label = error instanceof Error ? String(error.name) : '';
+  const end = message ? stack.lastIndexOf(message) : -1;
+  const frames = message ? (end < 0 ? '' : stack.slice(end + message.length)) : label.includes('\n') ? '' : stack.slice(stack.indexOf('\n') + 1 || stack.length);
+  for (const line of frames.split('\n')) {
+    const match = /^\s*at (?:async )?(?:new )?(\S+) \((.+):\d+:\d+\)$/.exec(line);
+    if (!match) continue;
+    let file = match[2]!;
+    if (file.startsWith('file:')) { try { file = fileURLToPath(file); } catch { continue; } }
+    if (!path.isAbsolute(file)) continue;
+    const relative = path.relative(bridgeDirectory, file);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative) || relative.split(/[\\/]/).includes('node_modules')) continue;
+    if (match[1]!.length <= 128 && /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(match[1]!)) { cause.frame = match[1]!; break; }
+  }
+  return cause;
+}
 function profileHash(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
 function graph(record: Pick<GroupRecord, 'definition'>) { return { nodes: record.definition.jobs.map(({ key, owner, dependsOn }) => ({ key, owner, dependsOn })) }; }
 function progress(record: GroupRecord) { return Object.fromEntries(Object.entries(record.nodes).map(([key, node]) => [key, node.state])); }
@@ -230,12 +255,14 @@ export class GroupManager {
       try { if (!await this.advance(groupId)) return; }
       catch (error) {
         if (!(error instanceof BridgeError) || error.code !== 'STATE_BUSY') {
+          const cause = error instanceof BridgeError ? undefined : coordinationCause(error);
+          if (cause) process.stderr.write('Group coordination paused: ' + JSON.stringify({ groupId, ...cause }) + '\n');
           try {
             const release = this.store.state.acquire('group-' + groupId);
             try {
               const record = this.store.read(groupId);
               if (record.ownerId === this.ownerId && record.state === 'running') {
-                record.state = 'paused'; record.error = { code: error instanceof BridgeError ? error.code : 'GROUP_COORDINATION_FAILED', message: 'Coordination stopped; inspect existing tasks before explicitly resuming' };
+                record.state = 'paused'; record.error = { code: error instanceof BridgeError ? error.code : 'GROUP_COORDINATION_FAILED', message: 'Coordination stopped; inspect existing tasks before explicitly resuming', ...(cause ? { cause } : {}) };
                 record.updatedAt = new Date().toISOString(); this.store.write(record);
               }
             } finally { release(); }
