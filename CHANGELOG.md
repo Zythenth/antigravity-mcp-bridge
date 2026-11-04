@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- `npm test` e os shards da CI passam a rodar com um diretório temporário próprio, removido ao final, e deixam de acumular pastas `agy-*` no diretório temporário do sistema. A pasta de uma execução interrompida é removida numa execução seguinte, depois que o processo dono termina e a pasta fica uma hora sem alterações.
+
 - A restauração de fins de linha deixa de falhar quando um arquivo alheio à tarefa, como o temporário de outro programa, some da cópia entre a listagem e a leitura. Outros erros de leitura continuam interrompendo a operação.
 
 - As operações Git do bridge gastam menos processos: `rev-parse`, `ls-tree` e `cat-file`, que só leem objetos e referências, deixam de consultar `core.excludesfile` antes de executar. A consulta continua em todo comando que aplica regras de ignore.

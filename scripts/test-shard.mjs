@@ -78,5 +78,5 @@ if (!job.files.length) {
 const minutes = (job.load / 60).toFixed(1);
 console.log(`Job ${index}/${total}: ${job.files.length} arquivos, carga estimada ${minutes} min`);
 
-const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', ...job.files], { stdio: 'inherit' });
+const result = spawnSync(process.execPath, ['scripts/run-tests.mjs', ...job.files], { stdio: 'inherit' });
 process.exit(result.signal || result.status === null ? 1 : result.status);
