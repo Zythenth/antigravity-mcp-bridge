@@ -31393,16 +31393,15 @@ async function replaceInsideRoot(canonicalRoot, absolutePath, content, mode) {
   }
 }
 async function readCopyFile(root, relative2) {
-  let absolutePath;
   try {
-    absolutePath = await checkedPath(root, relative2, true);
+    const absolutePath = await checkedPath(root, relative2, true);
+    const stat4 = await lstat2(absolutePath);
+    return { path: absolutePath, buffer: stat4.size > MAX_FILE_SIZE ? void 0 : await readFile(absolutePath), mode: stat4.mode };
   } catch (error62) {
     if (error62.code === "ENOENT")
       return void 0;
     throw error62;
   }
-  const stat4 = await lstat2(absolutePath);
-  return { path: absolutePath, buffer: stat4.size > MAX_FILE_SIZE ? void 0 : await readFile(absolutePath), mode: stat4.mode };
 }
 function contentSha256(content) {
   return createHash5("sha256").update(content).digest("hex");

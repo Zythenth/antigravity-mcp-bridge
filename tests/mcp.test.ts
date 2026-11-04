@@ -10,6 +10,9 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { outputSchemas } from '../src/output-schemas.js';
 
+// These tests assert the default integration policy, so a value from the developer's shell must not reach the servers they start.
+delete process.env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS;
+
 test('MCP subprocess restart recovers results, events, review baseline and discard', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-protocol-test-'));
   const source = path.join(dir, 'source');

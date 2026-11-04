@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { copyFileSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import fsPromises, { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import { CliAdapter, DELEGATION_GUIDANCE, taskPrompt, type Discovery, type Model } from '../src/cli-adapter.js';
 import { DEFAULT_PROJECT_LIMITS, loadConfig } from '../src/config.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
@@ -357,6 +358,41 @@ test('restoring keeps edits, isolated CRs and deletions, and an unrestored copy 
       await discardProjectCopy(copy);
     }
   } finally {
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('a file that vanishes while the copy is read counts as missing, and other read errors still surface', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'line-endings-vanishing-'));
+  const failure = (code: string) => Object.assign(new Error(code), { code });
+  const realLstat = fsPromises.lstat;
+  const realReadFile = fsPromises.readFile;
+  let failingRead = 'ENOENT';
+  let lstatCalls = 0;
+  try {
+    await writeFile(path.join(dir, 'kept.txt'), 'x\r\ny\r\n');
+    const { conversions } = await planLineEndings(dir, ['kept.txt']);
+    await convertCrlfToLf(dir, conversions);
+    await writeFile(path.join(dir, 'gone-at-stat.tmp'), 'a\n');
+    await writeFile(path.join(dir, 'gone-at-read.tmp'), 'b\n');
+    // checkedPath makes the first lstat of a top-level file, so the second one is the read that follows the check.
+    mock.method(fsPromises, 'lstat', async (target: string) => {
+      if (target.endsWith('gone-at-stat.tmp') && ++lstatCalls === 2) throw failure('ENOENT');
+      return realLstat(target);
+    });
+    mock.method(fsPromises, 'readFile', async (target: string, options?: never) => {
+      if (target.endsWith('gone-at-read.tmp')) throw failure(failingRead);
+      return realReadFile(target, options);
+    });
+    syncBuiltinESMExports();
+    assert.deepEqual(await restoreCrlfLineEndings(dir, conversions, ['kept.txt']), ['kept.txt']);
+    assert.equal(lstatCalls, 2);
+    assert.equal(await readFile(path.join(dir, 'kept.txt'), 'utf8'), 'x\r\ny\r\n');
+    failingRead = 'EPERM';
+    await assert.rejects(restoreCrlfLineEndings(dir, conversions, ['kept.txt']), { code: 'EPERM' });
+  } finally {
+    mock.restoreAll();
+    syncBuiltinESMExports();
     await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });

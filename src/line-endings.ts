@@ -122,14 +122,14 @@ export async function replaceInsideRoot(canonicalRoot: string, absolutePath: str
 
 // A missing file reads as undefined; a file above the size limit comes back without its content.
 async function readCopyFile(root: string, relative: string): Promise<{ path: string; buffer?: Buffer; mode: number } | undefined> {
-  let absolutePath: string;
-  try { absolutePath = await checkedPath(root, relative, true); }
-  catch (error) {
+  try {
+    const absolutePath = await checkedPath(root, relative, true);
+    const stat = await lstat(absolutePath);
+    return { path: absolutePath, buffer: stat.size > MAX_FILE_SIZE ? undefined : await readFile(absolutePath), mode: stat.mode };
+  } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
   }
-  const stat = await lstat(absolutePath);
-  return { path: absolutePath, buffer: stat.size > MAX_FILE_SIZE ? undefined : await readFile(absolutePath), mode: stat.mode };
 }
 
 function contentSha256(content: string | Buffer): string {

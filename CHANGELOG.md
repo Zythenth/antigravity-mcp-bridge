@@ -2,6 +2,8 @@
 
 ## Não publicado
 
+- A restauração de fins de linha deixa de falhar quando um arquivo alheio à tarefa, como o temporário de outro programa, some da cópia entre a listagem e a leitura. Outros erros de leitura continuam interrompendo a operação.
+
 - As operações Git do bridge gastam menos processos: `rev-parse`, `ls-tree` e `cat-file`, que só leem objetos e referências, deixam de consultar `core.excludesfile` antes de executar. A consulta continua em todo comando que aplica regras de ignore.
 
 - O subcomando somente leitura `wait` passa a suportar espera conjunta de várias tarefas (1 a 32 alvos `<taskId>[:<after>]`) e espera de grupos inteiros (`--group <groupId>` com 0 a 32 seeds `<taskId>:<after>`, acompanhando cadeias de `continuationTaskId` até 64 saltos e novos nós admitidos), mantendo idêntico o modo de tarefa única (`<taskId> [--after <n>]`). Nos modos múltiplo e de grupo, a linha JSON inclui `groupId`, `groupState` e `targets` (com `resumeAfter` pronto para reiniciar como `<taskId>:<resumeAfter>`) e acrescenta os códigos de saída `10` (`unknown-group`), `11` (`group-paused`) e `12` (`group-ended`). O metadado `waitCommand` passa a incluir `recommendedMode` (`"background"` ou `"foreground"`) e `reason` (`verified-profile`, `unknown-client`, `version-below-minimum`, `invalid-client-version`, `missing-client-info`) a partir da tabela versionada `WAIT_MODE_PROFILES` (`claude-code >= 2.1.310` verificado para `"background"`, demais clientes em `"foreground"`), sem alterar permissões, lista de ferramentas ou qualquer outro campo, e passa a ser retornado também por `antigravity_compare`, `antigravity_group_start` e `antigravity_wait_many`.

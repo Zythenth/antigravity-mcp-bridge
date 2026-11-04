@@ -28,6 +28,9 @@ import { portableNodeStatus, preparePortableNodeRuntime } from '../src/portable-
 import { validateRuntimeCacheSeparation } from '../src/validation.js';
 import { executeWindowsTest } from '../src/windows-executor.js';
 
+// These tests assert the default integration policy, so a value from the developer's shell must not reach the servers they start.
+delete process.env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS;
+
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const fixturePath = fileURLToPath(new URL('./mcp-fixture.js', import.meta.url));
 
