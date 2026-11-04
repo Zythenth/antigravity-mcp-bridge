@@ -30730,7 +30730,7 @@ async function git(cwd, args, input2, allowedCodes = [0], options) {
   if (command2 !== "version" && args[0] !== "--version") {
     await ensureGitVersionAdmission(gitBinary, spawnFn, envSource, safePath);
   }
-  const skipLookup = ["config", "version", "init", "clone"].includes(command2 ?? "") || args[0] === "--version";
+  const skipLookup = ["config", "version", "init", "clone", "rev-parse", "ls-tree", "cat-file"].includes(command2 ?? "") || args[0] === "--version";
   let effectiveExcludes;
   if (!skipLookup) {
     effectiveExcludes = await resolveEffectiveExcludesFile(cwd, gitBinary, envSource, timeoutMs, scope, spawnFn, safePath);

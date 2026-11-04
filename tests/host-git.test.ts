@@ -791,6 +791,21 @@ test('host-git: separated value-taking options do not masquerade as command', as
     assert.ok(configCall2, 'Config lookup should execute for status');
     assert.ok(!configCall2.some(a => a.includes('--git-dir=literal')),
       'Filename after command must not be added to scope');
+
+    // Commands that only read objects and refs skip the lookup, also behind a global --git-dir.
+    for (const objectRead of [['rev-parse', '--verify', 'HEAD'], ['ls-tree', '-r', 'HEAD'], ['cat-file', '--batch'], ['--git-dir=scoped', 'rev-parse', 'HEAD']]) {
+      capturedArgs = [];
+      await git(dir, objectRead, undefined, [0], { spawnImpl: mockCapturingSpawn });
+      assert.equal(capturedArgs.some(a => a.includes('core.excludesfile')), false, `No lookup expected for ${objectRead.join(' ')}`);
+      assert.ok(capturedArgs.some(a => a.includes(objectRead.at(-1)!)), `Command must still run: ${objectRead.join(' ')}`);
+    }
+
+    // Commands that apply ignore rules keep the lookup.
+    for (const ignoreReader of [['ls-files', '--others', '--exclude-standard', '-z'], ['check-ignore', '--stdin', '-z'], ['add', '-A', '--', '.'], ['--git-dir=scoped', 'status']]) {
+      capturedArgs = [];
+      await git(dir, ignoreReader, undefined, [0], { spawnImpl: mockCapturingSpawn });
+      assert.ok(capturedArgs.some(a => a.includes('core.excludesfile')), `Lookup expected for ${ignoreReader.join(' ')}`);
+    }
   } finally {
     _resetGitAdmissionCache();
     await rm(dir, { recursive: true, force: true });

@@ -646,7 +646,8 @@ export async function git(
     await ensureGitVersionAdmission(gitBinary, spawnFn, envSource, safePath);
   }
 
-  const skipLookup = ['config', 'version', 'init', 'clone'].includes(command ?? '') || args[0] === '--version';
+  // rev-parse, ls-tree and cat-file only read objects and refs, so ignore rules cannot change their result.
+  const skipLookup = ['config', 'version', 'init', 'clone', 'rev-parse', 'ls-tree', 'cat-file'].includes(command ?? '') || args[0] === '--version';
 
   let effectiveExcludes: string | undefined;
   if (!skipLookup) {
