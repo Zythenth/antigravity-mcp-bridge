@@ -20,6 +20,7 @@ const expectedFiles = [
   'package.json', 'bin/antigravity-mcp-bridge.mjs', 'plugin/server.mjs',
   'plugin/.codex-plugin/plugin.json', 'plugin/.mcp.json',
   'plugin/skills/antigravity/SKILL.md', 'plugin/skills/antigravity/agents/openai.yaml',
+  ...['approval-modes', 'copy-and-execution', 'groups', 'models', 'private-memory', 'provided-skills', 'review-and-integration', 'roles', 'session-control', 'specialist-tools', 'token-usage', 'waiting', 'windows-sandbox', 'workflows'].map(name => `plugin/skills/antigravity/references/${name}.md`),
   'LICENSE', 'README.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
   'plugin/anti-ai-craft/manifest.json', ...craft.files.map(file => 'plugin/anti-ai-craft/' + file.path),
 ].sort();
@@ -100,6 +101,10 @@ try {
   assert.equal(packagedManifest.bin['antigravity-mcp-bridge'], 'bin/antigravity-mcp-bridge.mjs');
   assert.equal(JSON.parse(await readFile(path.join(directory, 'package/plugin/.codex-plugin/plugin.json'), 'utf8')).version, manifest.version);
   assert.equal((await verifyCraftSnapshot(path.join(directory, 'package/plugin/anti-ai-craft'))).manifest.revision, craft.revision);
+  const packagedSkill = await readFile(path.join(directory, 'package/plugin/skills/antigravity/SKILL.md'));
+  assert.ok(packagedSkill.length <= 12000, `Skill core has ${packagedSkill.length} bytes; the limit is 12000`);
+  const linkedReferences = [...packagedSkill.toString('utf8').matchAll(/\]\((references\/[^)]+\.md)\)/g)].map(match => `plugin/skills/antigravity/${match[1]}`).sort();
+  assert.deepEqual(linkedReferences, expectedFiles.filter(file => file.startsWith('plugin/skills/antigravity/references/')));
   const bin = path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs');
   assert.ok((await readFile(bin, 'utf8')).startsWith('#!/usr/bin/env node\n'));
   checkRuntimeStatus(process.execPath, [bin], 'tarball');
