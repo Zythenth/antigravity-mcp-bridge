@@ -9,8 +9,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Antigravity",
-    "shortDescription": "Delegue tarefas ao agy e acompanhe a execução.",
-    "longDescription": "Use o CLI oficial do Antigravity pelo Codex para escolher modelos, executar tarefas e revisar eventos e resultados.",
+    "shortDescription": "Delegate tasks to agy and follow their execution.",
+    "longDescription": "Use the official Antigravity CLI through Codex to choose models, run tasks, and review events and results.",
     "developerName": "Zythenth",
     "category": "Productivity",
     "capabilities": [
@@ -18,7 +18,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use o Antigravity para implementar esta tarefa e revise o resultado."
+      "Use Antigravity to implement this task and review the result."
     ]
   }
 }

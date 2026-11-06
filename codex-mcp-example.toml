@@ -1,4 +1,4 @@
-# Substitua o caminho abaixo pelo caminho absoluto do checkout compilado.
+# Replace the path below with the absolute path of the compiled checkout.
 [mcp_servers.antigravity]
 command = "node"
 args = ["C:\\path\\to\\antigravity-mcp-bridge\\dist\\src\\index.js"]

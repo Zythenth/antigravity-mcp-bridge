@@ -1,10 +1,10 @@
-# Avisos de dependências
+# Dependency notices
 
-Estas dependências estão incluídas em `plugin/server.mjs`. Seus avisos e licenças permanecem aplicáveis.
+These dependencies are included in `plugin/server.mjs`. Their notices and licenses remain applicable.
 
 ## @modelcontextprotocol/sdk 1.30.1
 
-Licença declarada: MIT.
+Declared license: MIT.
 
 ```text
 MIT License
@@ -32,7 +32,7 @@ SOFTWARE.
 
 ## ajv 8.20.0
 
-Licença declarada: MIT.
+Declared license: MIT.
 
 ```text
 The MIT License (MIT)
@@ -60,7 +60,7 @@ SOFTWARE.
 
 ## ajv-formats 3.0.1
 
-Licença declarada: MIT.
+Declared license: MIT.
 
 ```text
 MIT License
@@ -88,7 +88,7 @@ SOFTWARE.
 
 ## fast-deep-equal 3.1.3
 
-Licença declarada: MIT.
+Declared license: MIT.
 
 ```text
 MIT License
@@ -116,7 +116,7 @@ SOFTWARE.
 
 ## fast-uri 3.1.8
 
-Licença declarada: BSD-3-Clause.
+Declared license: BSD-3-Clause.
 
 ```text
 Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
@@ -153,7 +153,7 @@ The complete list of contributors can be found at:
 
 ## json-schema-traverse 1.0.0
 
-Licença declarada: MIT.
+Declared license: MIT.
 
 ```text
 MIT License
@@ -181,7 +181,7 @@ SOFTWARE.
 
 ## zod 4.6.5
 
-Licença declarada: MIT.
+Declared license: MIT.
 
 ```text
 MIT License
@@ -209,7 +209,7 @@ SOFTWARE.
 
 ## zod-to-json-schema 3.25.2
 
-Licença declarada: ISC.
+Declared license: ISC.
 
 ```text
 ISC License
@@ -231,4 +231,4 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ## Anti-AI Craft 0.6.0
 
-Conteúdo de skills distribuído em `plugin/anti-ai-craft/`, obtido de https://github.com/Zythenth/anti-ai-craft na revisão `201fec54431bdf7e4c8bb3660100601b41b97b08` (176 arquivos, manifesto SHA-256 `147a53ce170842441c0fc01cdfc21852ee91906e62cea6a8070e6e0d39f0a5aa`). As imagens de `skills/anti-ai-design/references/visual-library/images/` permanecem sob as licenças e atribuições de suas fontes, descritas em `ATTRIBUTIONS.md`, `catalog.jsonl` e `LICENSES/` no mesmo diretório; a licença MIT deste pacote não se aplica a elas.
+Skill content distributed in `plugin/anti-ai-craft/`, obtained from https://github.com/Zythenth/anti-ai-craft at revision `201fec54431bdf7e4c8bb3660100601b41b97b08` (176 files, SHA-256 manifest `147a53ce170842441c0fc01cdfc21852ee91906e62cea6a8070e6e0d39f0a5aa`). The images in `skills/anti-ai-design/references/visual-library/images/` remain under the licenses and attributions of their sources, described in `ATTRIBUTIONS.md`, `catalog.jsonl`, and `LICENSES/` in the same directory; the MIT license of this package does not apply to them.

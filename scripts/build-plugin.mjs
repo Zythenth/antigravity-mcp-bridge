@@ -17,13 +17,13 @@ for (const root of [...roots].sort()) {
   const names = (await readdir(root)).filter(name => /^licen[cs]e(?:[.-]|$)/i.test(name)).sort();
   if (!names.length) throw new Error(`Missing license text for bundled dependency: ${manifest.name}`);
   const texts = await Promise.all(names.map(name => readFile(path.join(root, name), 'utf8')));
-  notices.push(`## ${manifest.name} ${manifest.version}\n\nLicença declarada: ${manifest.license}.\n\n\`\`\`text\n${texts.join('\n').replace(/[ \t]+$/gm, '').trim()}\n\`\`\`\n`);
+  notices.push(`## ${manifest.name} ${manifest.version}\n\nDeclared license: ${manifest.license}.\n\n\`\`\`text\n${texts.join('\n').replace(/[ \t]+$/gm, '').trim()}\n\`\`\`\n`);
 }
 // The bundled skill content is verified against its pinned manifest before the plugin counts as built.
 const { verifyCraftSnapshot } = await import('../dist/src/craft-snapshot.js');
 const craft = await verifyCraftSnapshot(path.resolve('plugin', 'anti-ai-craft'));
-const craftNotice = `## Anti-AI Craft ${craft.manifest.version}\n\nConteúdo de skills distribuído em \`plugin/anti-ai-craft/\`, obtido de ${craft.manifest.origin} na revisão \`${craft.manifest.revision}\` ` +
-  `(${craft.manifest.files.length} arquivos, manifesto SHA-256 \`${craft.manifestSha256}\`). As imagens de \`skills/anti-ai-design/references/visual-library/images/\` ` +
-  'permanecem sob as licenças e atribuições de suas fontes, descritas em `ATTRIBUTIONS.md`, `catalog.jsonl` e `LICENSES/` no mesmo diretório; a licença MIT deste pacote não se aplica a elas.\n';
-await writeFile('THIRD_PARTY_NOTICES.md', '# Avisos de dependências\n\nEstas dependências estão incluídas em `plugin/server.mjs`. Seus avisos e licenças permanecem aplicáveis.\n\n' + notices.join('\n') + '\n' + craftNotice, 'utf8');
+const craftNotice = `## Anti-AI Craft ${craft.manifest.version}\n\nSkill content distributed in \`plugin/anti-ai-craft/\`, obtained from ${craft.manifest.origin} at revision \`${craft.manifest.revision}\` ` +
+  `(${craft.manifest.files.length} files, SHA-256 manifest \`${craft.manifestSha256}\`). The images in \`skills/anti-ai-design/references/visual-library/images/\` ` +
+  'remain under the licenses and attributions of their sources, described in `ATTRIBUTIONS.md`, `catalog.jsonl`, and `LICENSES/` in the same directory; the MIT license of this package does not apply to them.\n';
+await writeFile('THIRD_PARTY_NOTICES.md', '# Dependency notices\n\nThese dependencies are included in `plugin/server.mjs`. Their notices and licenses remain applicable.\n\n' + notices.join('\n') + '\n' + craftNotice, 'utf8');
 console.log(`Plugin compilado; avisos de ${notices.length} dependências atualizados.`);

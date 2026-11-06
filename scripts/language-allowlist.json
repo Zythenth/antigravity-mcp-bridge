@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "paths": [
+    {
+      "pattern": "README.pt-BR.md",
+      "category": "portuguese-edition",
+      "reason": "Portuguese edition of the README, written in that language on purpose."
+    },
+    {
+      "pattern": "plugin/anti-ai-craft/skills/anti-ai-design/references/visual-library/LICENSES/**",
+      "category": "third-party-license",
+      "reason": "Third-party license texts, kept verbatim."
+    }
+  ],
+  "terms": []
+}
