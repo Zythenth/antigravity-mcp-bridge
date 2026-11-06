@@ -46248,7 +46248,7 @@ import { setTimeout as setTimeout2 } from "node:timers/promises";
 
 // dist/src/state-store.js
 import { createHash as createHash18, randomUUID as randomUUID7 } from "node:crypto";
-import { lstatSync as lstatSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { closeSync as closeSync2, lstatSync as lstatSync3, mkdirSync as mkdirSync3, openSync as openSync2, readFileSync as readFileSync2, readdirSync as readdirSync2, realpathSync as realpathSync4, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
 import path16 from "node:path";
 import os6 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
@@ -46354,11 +46354,11 @@ function processAlive2(pid) {
     return error62.code !== "ESRCH";
   }
 }
-function replaceStateFile2(temporary, target) {
+function retryTransient(action) {
   const delays = [10, 20, 40, 80, 160];
   for (let attempt = 0; ; attempt++) {
     try {
-      renameSync2(temporary, target);
+      action();
       return;
     } catch (error62) {
       const code = error62.code;
@@ -46367,6 +46367,19 @@ function replaceStateFile2(temporary, target) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
     }
   }
+}
+function assertReplaceable(target) {
+  retryTransient(() => {
+    try {
+      closeSync2(openSync2(target, "r+"));
+    } catch (error62) {
+      if (error62.code !== "ENOENT")
+        throw error62;
+    }
+  });
+}
+function replaceStateFile2(temporary, target) {
+  retryTransient(() => renameSync2(temporary, target));
 }
 function removeCachedFile(file3) {
   try {
@@ -46583,12 +46596,46 @@ var StateStore = class {
   save(task2) {
     this.writeSnapshot(this.file(task2.record.taskId), task2);
   }
-  writeSnapshot(target, task2) {
-    const temporary = target + "." + randomUUID7() + ".tmp";
+  serializeSnapshot(task2) {
     const snapshot = { ...task2, version: 1, redacted: true, events: task2.events.map(compactEvent), project: task2.project && { ...task2.project, baseline: [...task2.project.baseline] } };
     delete snapshot.fingerprint;
+    return JSON.stringify(snapshot);
+  }
+  // Renames across files cannot be atomic, so a failed rename can leave a prefix of
+  // entries published, and callers must order entries so that the next startup can finish the rest.
+  saveBatch(entries, onPublished) {
+    const targets = entries.map((entry) => {
+      const target = this.file(entry.taskId);
+      assertReplaceable(target);
+      return target;
+    });
+    const temporaries = [];
     try {
-      writeFileSync3(temporary, JSON.stringify(snapshot), { flag: "wx", mode: 384, flush: true });
+      const staged = [];
+      for (let i = 0; i < entries.length; i++) {
+        const target = targets[i];
+        const temporary = target + "." + randomUUID7() + ".tmp";
+        temporaries.push(temporary);
+        writeFileSync3(temporary, entries[i].content, { flag: "wx", mode: 384, flush: true });
+        staged.push({ temporary, target, taskId: entries[i].taskId });
+      }
+      for (const { temporary, target, taskId } of staged) {
+        replaceStateFile2(temporary, target);
+        onPublished(taskId);
+      }
+    } finally {
+      for (const temporary of temporaries) {
+        try {
+          rmSync2(temporary, { force: true });
+        } catch {
+        }
+      }
+    }
+  }
+  writeSnapshot(target, task2) {
+    const temporary = target + "." + randomUUID7() + ".tmp";
+    try {
+      writeFileSync3(temporary, this.serializeSnapshot(task2), { flag: "wx", mode: 384, flush: true });
       replaceStateFile2(temporary, target);
     } finally {
       rmSync2(temporary, { force: true });
@@ -49495,9 +49542,23 @@ var EventStore = class {
   onAppend;
   events = [];
   cursors = /* @__PURE__ */ new Map();
+  heldLogs;
   constructor(capacity, onAppend) {
     this.capacity = capacity;
     this.onAppend = onAppend;
+  }
+  holdLogs() {
+    this.heldLogs = [];
+  }
+  releaseLogs(shouldPublish) {
+    const held = this.heldLogs;
+    this.heldLogs = void 0;
+    if (held) {
+      for (const [taskId, type, data] of held) {
+        if (shouldPublish(taskId))
+          logTaskEvent(taskId, type, data);
+      }
+    }
   }
   append(taskId, type, data, raw) {
     const sequence = (this.cursors.get(taskId) || 0) + 1;
@@ -49512,7 +49573,10 @@ var EventStore = class {
     this.events.push(event);
     if (this.events.length > this.capacity)
       this.events.splice(0, this.events.length - this.capacity);
-    logTaskEvent(taskId, type, data);
+    if (this.heldLogs)
+      this.heldLogs.push([taskId, type, data]);
+    else
+      logTaskEvent(taskId, type, data);
     this.onAppend?.(taskId);
     return event;
   }
@@ -53248,12 +53312,18 @@ var TaskManager = class {
       this.nativeRecoveryError = error62;
     });
   }
+  pendingSnapshots;
   persist(taskId) {
     if (this.degraded)
       return;
     const task2 = this.tasks.get(taskId);
-    if (task2)
-      this.state.save({ record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) });
+    if (task2) {
+      const snapshot = { record: task2.record, options: task2.options, project: task2.project, ownerPid: task2.ownerPid, ...this.events.snapshot(taskId) };
+      if (this.pendingSnapshots)
+        this.pendingSnapshots.set(taskId, this.state.serializeSnapshot(snapshot));
+      else
+        this.state.save(snapshot);
+    }
   }
   projectLock(project) {
     return "copy-" + createHash24("sha256").update(project.copyDirectory).digest("hex");
@@ -53268,53 +53338,68 @@ var TaskManager = class {
         this.tasks.delete(id2);
         this.events.drop(id2);
       }
-    for (const item of stored) {
-      item.record.usageIsResume ??= Boolean(item.options.sessionId);
-      const existing = this.tasks.get(item.record.taskId);
-      if (existing?.owned || existing?.project && this.busyProjects.has(existing.project))
-        continue;
-      const legacy = item.redacted || !item.fingerprint ? void 0 : createHash24("sha256").update(item.fingerprint + ":" + redactionContextDigest()).digest("hex");
-      const cached2 = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : void 0;
-      if (cached2)
-        Object.assign(item, cached2);
-      const ownProject = item.project;
-      if (item.project) {
-        if (!projects.has(item.project.copyDirectory))
-          projects.set(item.project.copyDirectory, item.project);
-        item.project = projects.get(item.project.copyDirectory);
-      }
-      const restored = item.redacted ? void 0 : sanitizePayload(item.record, RESTORE_LIMITS);
-      if (restored && (restored.redacted || restored.truncated)) {
-        const { taskId, workingDirectory, copyDirectory, structuredResult } = item.record;
-        item.record = { ...restored.value, taskId, workingDirectory, copyDirectory };
-        item.options = { ...item.options, prompt: item.record.prompt };
-        const structured = structuredResult && sanitizePayload(structuredResult.value, RESTORE_LIMITS);
-        if (structured && (structured.redacted || structured.truncated)) {
-          item.record.structuredResult = { value: structured.value, sha256: createHash24("sha256").update(JSON.stringify(structured.value)).digest("hex") };
-        } else if (structuredResult)
-          item.record.structuredResult = structuredResult;
-        if (restored.truncated)
-          item.record.error ??= { code: "STATE_RESTORE_TRUNCATED", message: "Retained state exceeded restore limits and was truncated; discard this task" };
-      }
-      const task2 = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
-      this.tasks.set(item.record.taskId, task2);
-      const events = item.redacted ? item.events : restoredEvents(item.events);
-      this.events.restore(item.record.taskId, events, item.cursor);
-      const verbatim = legacy && !cached2 ? sanitizePayload({ record: item.record, events: events.map(({ taskId, sequence, type, timestamp: timestamp2 }) => ({ taskId, sequence, type, timestamp: timestamp2 })), options: { ...item.options, prompt: "" }, project: ownProject && { ...ownProject, baseline: [...ownProject.baseline] } }, RESTORE_LIMITS) : void 0;
-      if (verbatim && !verbatim.redacted && !verbatim.truncated) {
-        try {
-          this.state.saveSanitized({ ...item, project: ownProject, events, redacted: true }, legacy);
-        } catch {
+    const interrupted = /* @__PURE__ */ new Set();
+    const landed = /* @__PURE__ */ new Set();
+    this.pendingSnapshots = /* @__PURE__ */ new Map();
+    this.events.holdLogs();
+    let published = false;
+    try {
+      for (const item of stored) {
+        item.record.usageIsResume ??= Boolean(item.options.sessionId);
+        const existing = this.tasks.get(item.record.taskId);
+        if (existing?.owned || existing?.project && this.busyProjects.has(existing.project))
+          continue;
+        const legacy = item.redacted || !item.fingerprint ? void 0 : createHash24("sha256").update(item.fingerprint + ":" + redactionContextDigest()).digest("hex");
+        const cached2 = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : void 0;
+        if (cached2)
+          Object.assign(item, cached2);
+        const ownProject = item.project;
+        if (item.project) {
+          if (!projects.has(item.project.copyDirectory))
+            projects.set(item.project.copyDirectory, item.project);
+          item.project = projects.get(item.project.copyDirectory);
+        }
+        const restored = item.redacted ? void 0 : sanitizePayload(item.record, RESTORE_LIMITS);
+        if (restored && (restored.redacted || restored.truncated)) {
+          const { taskId, workingDirectory, copyDirectory, structuredResult } = item.record;
+          item.record = { ...restored.value, taskId, workingDirectory, copyDirectory };
+          item.options = { ...item.options, prompt: item.record.prompt };
+          const structured = structuredResult && sanitizePayload(structuredResult.value, RESTORE_LIMITS);
+          if (structured && (structured.redacted || structured.truncated)) {
+            item.record.structuredResult = { value: structured.value, sha256: createHash24("sha256").update(JSON.stringify(structured.value)).digest("hex") };
+          } else if (structuredResult)
+            item.record.structuredResult = structuredResult;
+          if (restored.truncated)
+            item.record.error ??= { code: "STATE_RESTORE_TRUNCATED", message: "Retained state exceeded restore limits and was truncated; discard this task" };
+        }
+        const task2 = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
+        this.tasks.set(item.record.taskId, task2);
+        const events = item.redacted ? item.events : restoredEvents(item.events);
+        this.events.restore(item.record.taskId, events, item.cursor);
+        const verbatim = legacy && !cached2 ? sanitizePayload({ record: item.record, events: events.map(({ taskId, sequence, type, timestamp: timestamp2 }) => ({ taskId, sequence, type, timestamp: timestamp2 })), options: { ...item.options, prompt: "" }, project: ownProject && { ...ownProject, baseline: [...ownProject.baseline] } }, RESTORE_LIMITS) : void 0;
+        if (verbatim && !verbatim.redacted && !verbatim.truncated) {
+          try {
+            this.state.saveSanitized({ ...item, project: ownProject, events, redacted: true }, legacy);
+          } catch {
+          }
+        }
+        if (!terminal3.has(item.record.status) && !processAlive2(item.ownerPid)) {
+          if (item.record.pid && processAlive2(item.record.pid)) {
+            item.record.error = { code: "ORPHAN_PROCESS_RUNNING", message: "The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination" };
+          } else {
+            task2.ownerPid = process.pid;
+            interrupted.add(item.record.taskId);
+            this.finish(task2, "failed", "SERVER_RESTARTED", "Previous execution was interrupted; inspect its copy before starting new work");
+          }
         }
       }
-      if (!terminal3.has(item.record.status) && !processAlive2(item.ownerPid)) {
-        if (item.record.pid && processAlive2(item.record.pid)) {
-          item.record.error = { code: "ORPHAN_PROCESS_RUNNING", message: "The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination" };
-        } else {
-          task2.ownerPid = process.pid;
-          this.finish(task2, "failed", "SERVER_RESTARTED", "Previous execution was interrupted; inspect its copy before starting new work");
-        }
-      }
+      const entries = [...this.pendingSnapshots.entries()].map(([taskId, content]) => ({ taskId, content })).sort((a, b) => (interrupted.has(a.taskId) ? 1 : 0) - (interrupted.has(b.taskId) ? 1 : 0));
+      if (entries.length > 0)
+        this.state.saveBatch(entries, (taskId) => landed.add(taskId));
+      published = true;
+    } finally {
+      this.pendingSnapshots = void 0;
+      this.events.releaseLogs((taskId) => published || landed.has(taskId));
     }
   }
   getModel() {

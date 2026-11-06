@@ -179,10 +179,15 @@ export class TaskManager {
       .catch(error => { this.nativeRecoveryError = error; });
   }
 
+  private pendingSnapshots?: Map<string, string>;
   private persist(taskId: string): void {
     if (this.degraded) return;
     const task = this.tasks.get(taskId);
-    if (task) this.state.save({ record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) });
+    if (task) {
+      const snapshot = { record: task.record, options: task.options, project: task.project, ownerPid: task.ownerPid, ...this.events.snapshot(taskId) };
+      if (this.pendingSnapshots) this.pendingSnapshots.set(taskId, this.state.serializeSnapshot(snapshot));
+      else this.state.save(snapshot);
+    }
   }
 
   private projectLock(project: ProjectCopy): string {
@@ -197,53 +202,71 @@ export class TaskManager {
     for (const [id, task] of this.tasks) if (!ids.has(id) && !task.owned && !this.busyProjects.has(task.project!)) {
       this.tasks.delete(id); this.events.drop(id);
     }
-    for (const item of stored) {
-      item.record.usageIsResume ??= Boolean(item.options.sessionId);
-      const existing = this.tasks.get(item.record.taskId);
-      if (existing?.owned || (existing?.project && this.busyProjects.has(existing.project))) continue;
-      // A legacy snapshot is sanitized once per file version and redaction context; the key covers the source bytes and the environment secrets.
-      // The cached copy is a complete snapshot validated by StateStore.load() like any other, so it replaces the source as a whole. Anyone able to
-      // write the state directory could already mark a snapshot as redacted, so the cache only has to stay consistent and current.
-      const legacy = item.redacted || !item.fingerprint ? undefined : createHash('sha256').update(item.fingerprint + ':' + redactionContextDigest()).digest('hex');
-      const cached = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : undefined;
-      if (cached) Object.assign(item, cached);
-      // The cache keeps this snapshot's own project; sharing one object between snapshots of the same copy happens only in memory.
-      const ownProject = item.project;
-      if (item.project) {
-        if (!projects.has(item.project.copyDirectory)) projects.set(item.project.copyDirectory, item.project);
-        item.project = projects.get(item.project.copyDirectory);
-      }
-      // State written by earlier versions may hold unredacted results, reports, messages or tests; every returned field derives from the record.
-      const restored = item.redacted ? undefined : sanitizePayload(item.record, RESTORE_LIMITS);
-      if (restored && (restored.redacted || restored.truncated)) {
-        const { taskId, workingDirectory, copyDirectory, structuredResult } = item.record;
-        item.record = { ...restored.value as TaskRecord, taskId, workingDirectory, copyDirectory };
-        // The prompt is mirrored in the options and must stay identical for the state to load again.
-        item.options = { ...item.options, prompt: item.record.prompt };
-        const structured = structuredResult && sanitizePayload(structuredResult.value, RESTORE_LIMITS);
-        if (structured && (structured.redacted || structured.truncated)) {
-          item.record.structuredResult = { value: structured.value, sha256: createHash('sha256').update(JSON.stringify(structured.value)).digest('hex') };
-        } else if (structuredResult) item.record.structuredResult = structuredResult;
-        if (restored.truncated) item.record.error ??= { code: 'STATE_RESTORE_TRUNCATED', message: 'Retained state exceeded restore limits and was truncated; discard this task' };
-      }
-      const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
-      this.tasks.set(item.record.taskId, task);
-      const events = item.redacted ? item.events : restoredEvents(item.events);
-      this.events.restore(item.record.taskId, events, item.cursor);
-      // The cache keeps the full sanitized event list, before the in-memory buffer limit.
-      // Restoration keeps some record fields, event metadata, the options and the project verbatim, so a copy is cached only when all of them are a fixed point of the sanitizer.
-      const verbatim = legacy && !cached ? sanitizePayload({ record: item.record, events: events.map(({ taskId, sequence, type, timestamp }) => ({ taskId, sequence, type, timestamp })), options: { ...item.options, prompt: '' }, project: ownProject && { ...ownProject, baseline: [...ownProject.baseline] } }, RESTORE_LIMITS) : undefined;
-      if (verbatim && !verbatim.redacted && !verbatim.truncated) {
-        try { this.state.saveSanitized({ ...item, project: ownProject, events, redacted: true }, legacy!); } catch { /* rebuilt on the next load */ }
-      }
-      if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
-        if (item.record.pid && processAlive(item.record.pid)) {
-          item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };
-        } else {
-          task.ownerPid = process.pid;
-          this.finish(task, 'failed', 'SERVER_RESTARTED', 'Previous execution was interrupted; inspect its copy before starting new work');
+    const interrupted = new Set<string>();
+    const landed = new Set<string>();
+    this.pendingSnapshots = new Map();
+    this.events.holdLogs();
+    let published = false;
+    try {
+      for (const item of stored) {
+        item.record.usageIsResume ??= Boolean(item.options.sessionId);
+        const existing = this.tasks.get(item.record.taskId);
+        if (existing?.owned || (existing?.project && this.busyProjects.has(existing.project))) continue;
+        // A legacy snapshot is sanitized once per file version and redaction context; the key covers the source bytes and the environment secrets.
+        // The cached copy is a complete snapshot validated by StateStore.load() like any other, so it replaces the source as a whole. Anyone able to
+        // write the state directory could already mark a snapshot as redacted, so the cache only has to stay consistent and current.
+        const legacy = item.redacted || !item.fingerprint ? undefined : createHash('sha256').update(item.fingerprint + ':' + redactionContextDigest()).digest('hex');
+        const cached = legacy ? this.state.loadSanitized(item.record.taskId, legacy) : undefined;
+        if (cached) Object.assign(item, cached);
+        // The cache keeps this snapshot's own project; sharing one object between snapshots of the same copy happens only in memory.
+        const ownProject = item.project;
+        if (item.project) {
+          if (!projects.has(item.project.copyDirectory)) projects.set(item.project.copyDirectory, item.project);
+          item.project = projects.get(item.project.copyDirectory);
+        }
+        // State written by earlier versions may hold unredacted results, reports, messages or tests; every returned field derives from the record.
+        const restored = item.redacted ? undefined : sanitizePayload(item.record, RESTORE_LIMITS);
+        if (restored && (restored.redacted || restored.truncated)) {
+          const { taskId, workingDirectory, copyDirectory, structuredResult } = item.record;
+          item.record = { ...restored.value as TaskRecord, taskId, workingDirectory, copyDirectory };
+          // The prompt is mirrored in the options and must stay identical for the state to load again.
+          item.options = { ...item.options, prompt: item.record.prompt };
+          const structured = structuredResult && sanitizePayload(structuredResult.value, RESTORE_LIMITS);
+          if (structured && (structured.redacted || structured.truncated)) {
+            item.record.structuredResult = { value: structured.value, sha256: createHash('sha256').update(JSON.stringify(structured.value)).digest('hex') };
+          } else if (structuredResult) item.record.structuredResult = structuredResult;
+          if (restored.truncated) item.record.error ??= { code: 'STATE_RESTORE_TRUNCATED', message: 'Retained state exceeded restore limits and was truncated; discard this task' };
+        }
+        const task: InternalTask = { record: item.record, options: item.options, ownerPid: item.ownerPid, project: item.project };
+        this.tasks.set(item.record.taskId, task);
+        const events = item.redacted ? item.events : restoredEvents(item.events);
+        this.events.restore(item.record.taskId, events, item.cursor);
+        // The cache keeps the full sanitized event list, before the in-memory buffer limit.
+        // Restoration keeps some record fields, event metadata, the options and the project verbatim, so a copy is cached only when all of them are a fixed point of the sanitizer.
+        const verbatim = legacy && !cached ? sanitizePayload({ record: item.record, events: events.map(({ taskId, sequence, type, timestamp }) => ({ taskId, sequence, type, timestamp })), options: { ...item.options, prompt: '' }, project: ownProject && { ...ownProject, baseline: [...ownProject.baseline] } }, RESTORE_LIMITS) : undefined;
+        if (verbatim && !verbatim.redacted && !verbatim.truncated) {
+          try { this.state.saveSanitized({ ...item, project: ownProject, events, redacted: true }, legacy!); } catch { /* rebuilt on the next load */ }
+        }
+        if (!terminal.has(item.record.status) && !processAlive(item.ownerPid)) {
+          if (item.record.pid && processAlive(item.record.pid)) {
+            item.record.error = { code: 'ORPHAN_PROCESS_RUNNING', message: 'The previous bridge stopped but its recorded process is still alive; no automatic replay or PID-based termination' };
+          } else {
+            task.ownerPid = process.pid;
+            interrupted.add(item.record.taskId);
+            this.finish(task, 'failed', 'SERVER_RESTARTED', 'Previous execution was interrupted; inspect its copy before starting new work');
+          }
         }
       }
+      // A transitioned task is never transitioned again, so its snapshot must land after the sibling updates its transition produced, or a failed rename would lose them.
+      const entries = [...this.pendingSnapshots.entries()]
+        .map(([taskId, content]) => ({ taskId, content }))
+        .sort((a, b) => (interrupted.has(a.taskId) ? 1 : 0) - (interrupted.has(b.taskId) ? 1 : 0));
+      if (entries.length > 0) this.state.saveBatch(entries, taskId => landed.add(taskId));
+      published = true;
+    } finally {
+      this.pendingSnapshots = undefined;
+      // A snapshot that landed is terminal on the next startup, so its log would never be emitted again.
+      this.events.releaseLogs(taskId => published || landed.has(taskId));
     }
   }
 

@@ -6,7 +6,22 @@ export const MAX_EVENT_PAYLOAD_CHARS = 16000;
 export class EventStore {
   private readonly events: BridgeEvent[] = [];
   private readonly cursors = new Map<string, number>();
+  private heldLogs?: Array<[string, string, unknown]>;
   constructor(private readonly capacity: number, private readonly onAppend?: (taskId: string) => void) {}
+
+  holdLogs(): void {
+    this.heldLogs = [];
+  }
+
+  releaseLogs(shouldPublish: (taskId: string) => boolean): void {
+    const held = this.heldLogs;
+    this.heldLogs = undefined;
+    if (held) {
+      for (const [taskId, type, data] of held) {
+        if (shouldPublish(taskId)) logTaskEvent(taskId, type, data);
+      }
+    }
+  }
 
   append(taskId: string, type: string, data: unknown, raw?: unknown): BridgeEvent {
     const sequence = (this.cursors.get(taskId) || 0) + 1;
@@ -19,7 +34,8 @@ export class EventStore {
     if (raw !== undefined) event.raw = bounded(raw);
     this.events.push(event);
     if (this.events.length > this.capacity) this.events.splice(0, this.events.length - this.capacity);
-    logTaskEvent(taskId, type, data);
+    if (this.heldLogs) this.heldLogs.push([taskId, type, data]);
+    else logTaskEvent(taskId, type, data);
     this.onAppend?.(taskId);
     return event;
   }

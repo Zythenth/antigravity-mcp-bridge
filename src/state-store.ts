@@ -3,7 +3,7 @@ import { groupAssignmentSchema } from './group-contract.js';
 import { memorySelectionSchema, memorySnapshotsSchema, summarizeMemory } from './memory-context.js';
 import { computeProjectId, memorySummarySchema } from './project-memory.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
@@ -100,18 +100,33 @@ export function processAlive(pid: number): boolean {
   catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
 }
 
-// Windows can transiently deny replacement while another process holds the file.
-// Keep the existing atomic rename and never unlink the last valid state as a fallback.
-export function replaceStateFile(temporary: string, target: string): void {
+function retryTransient(action: () => void): void {
   const delays = [10, 20, 40, 80, 160];
   for (let attempt = 0; ; attempt++) {
-    try { renameSync(temporary, target); return; }
+    try { action(); return; }
     catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (process.platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '') || attempt >= delays.length) throw error;
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delays[attempt]);
     }
   }
+}
+
+// On Windows a rename succeeds over a file whose ACL denies writing, while opening it for
+// writing refuses both that ACL and the read-only attribute, and on POSIX a rename ignores the file mode.
+function assertReplaceable(target: string): void {
+  retryTransient(() => {
+    try { closeSync(openSync(target, 'r+')); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  });
+}
+
+// Windows can transiently deny replacement while another process holds the file.
+// Keep the existing atomic rename and never unlink the last valid state as a fallback.
+export function replaceStateFile(temporary: string, target: string): void {
+  retryTransient(() => renameSync(temporary, target));
 }
 
 // The sanitized cache never blocks loading or removal: only regular files are removed, and failures are ignored.
@@ -331,12 +346,46 @@ export class StateStore {
     this.writeSnapshot(this.file(task.record.taskId), task);
   }
 
-  private writeSnapshot(target: string, task: StoredTask): void {
-    const temporary = target + '.' + randomUUID() + '.tmp';
+  serializeSnapshot(task: StoredTask): string {
     const snapshot: Record<string, unknown> = { ...task, version: 1, redacted: true, events: task.events.map(compactEvent), project: task.project && { ...task.project, baseline: [...task.project.baseline] } };
     delete snapshot.fingerprint;
+    return JSON.stringify(snapshot);
+  }
+
+  // Renames across files cannot be atomic, so a failed rename can leave a prefix of
+  // entries published, and callers must order entries so that the next startup can finish the rest.
+  saveBatch(entries: ReadonlyArray<{ taskId: string; content: string }>, onPublished: (taskId: string) => void): void {
+    const targets = entries.map(entry => {
+      const target = this.file(entry.taskId);
+      assertReplaceable(target);
+      return target;
+    });
+    const temporaries: string[] = [];
     try {
-      writeFileSync(temporary, JSON.stringify(snapshot), { flag: 'wx', mode: 0o600, flush: true });
+      const staged: Array<{ temporary: string; target: string; taskId: string }> = [];
+      for (let i = 0; i < entries.length; i++) {
+        const target = targets[i]!;
+        const temporary = target + '.' + randomUUID() + '.tmp';
+        temporaries.push(temporary);
+        writeFileSync(temporary, entries[i]!.content, { flag: 'wx', mode: 0o600, flush: true });
+        staged.push({ temporary, target, taskId: entries[i]!.taskId });
+      }
+      for (const { temporary, target, taskId } of staged) {
+        replaceStateFile(temporary, target);
+        onPublished(taskId);
+      }
+    } finally {
+      for (const temporary of temporaries) {
+        try { rmSync(temporary, { force: true }); }
+        catch { /* a leftover temporary is not state, and must not hide the publication error */ }
+      }
+    }
+  }
+
+  private writeSnapshot(target: string, task: StoredTask): void {
+    const temporary = target + '.' + randomUUID() + '.tmp';
+    try {
+      writeFileSync(temporary, this.serializeSnapshot(task), { flag: 'wx', mode: 0o600, flush: true });
       replaceStateFile(temporary, target);
     } finally { rmSync(temporary, { force: true }); }
   }

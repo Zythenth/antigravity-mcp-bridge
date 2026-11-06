@@ -613,7 +613,7 @@ test('TaskManager enters degraded mode and discards events when refresh throws a
   };
   writeFileSync(path.join(stateDir, `${taskId}.json`), JSON.stringify(snapshot));
 
-  t.mock.method(StateStore.prototype, 'save', () => {
+  t.mock.method(StateStore.prototype, 'saveBatch', () => {
     throw new Error('disk failure during refresh save');
   });
 
