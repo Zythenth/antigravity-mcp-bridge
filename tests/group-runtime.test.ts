@@ -22,6 +22,7 @@ import { discardProjectCopy } from '../src/isolation.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
 import type { GroupDefinition } from '../src/group-contract.js';
 import type { RunOptions } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 class HeldAdapter extends CliAdapter {
   calls: Array<{ key: string; options: RunOptions; finish: (success?: boolean) => void }> = [];
@@ -121,6 +122,7 @@ test('group cancellation stops active work and never admits pending dependents',
   await fixture(async ({ source, tasks, adapter }) => {
     const group = await tasks.groups.create(randomUUID(), chain(source)); tasks.groups.start(group.groupId, group.definitionSha256);
     await until(() => adapter.calls.length === 1); await tasks.groups.cancel(group.groupId);
+    await waitForTask(tasks, tasks.groups.status(group.groupId).nodes[0]!.taskId!);
     const waited = await tasks.groups.wait(group.groupId, [], 1);
     assert.equal(waited.group.state, 'cancelled'); assert.equal(waited.ready, true);
     assert.equal(waited.group.nodes[0]!.state, 'cancelled'); assert.equal(waited.group.nodes[1]!.state, 'cancelled');

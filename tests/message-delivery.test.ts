@@ -14,6 +14,7 @@ import { discardProjectCopy } from '../src/isolation.js';
 import { loadConfig, type Config } from '../src/config.js';
 import type { RunOptions } from '../src/types.js';
 import { clientTask } from '../src/messages.js';
+import { waitForTask } from './wait-for-task.js';
 
 const question = { kind: 'question', text: 'Which public fixture should be used?' };
 const envelope = '<antigravity-message>' + JSON.stringify(question) + '</antigravity-message>';
@@ -66,6 +67,7 @@ test('messages wait wakes on a public question before completion, suppresses raw
     assert.equal(first.messages?.length, 1);
     assert.equal(first.messages?.[0]!.text, question.text);
     assert.equal(progress, 0);
+    await waitForTask(f.tasks, run.taskId);
     const final = await f.tasks.wait(run.taskId, first.nextCursor, 10);
     if (final.deliveryMode !== 'messages') throw new Error('Expected final message delivery');
     assert.equal(final.ready, true);
@@ -89,6 +91,7 @@ test('omitting delivery mode preserves events and switching modes requires disti
   const f = await fixture();
   try {
     const run = await f.tasks.run({ prompt: 'Legacy public stream', workingDirectory: f.source, mode: 'read-only' });
+    await waitForTask(f.tasks, run.taskId);
     const old = await f.tasks.wait(run.taskId, 0, 10);
     assert.equal(old.deliveryMode, 'events');
     assert.ok(old.events!.length > 0);

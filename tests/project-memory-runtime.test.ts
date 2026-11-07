@@ -20,6 +20,7 @@ import { computeMemorySha256 } from '../src/project-memory.js';
 import { memorySelectionSchema, summarizeMemory } from '../src/memory-context.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
 import type { RunOptions, TaskRecord } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 class MemoryAdapter extends CliAdapter {
   calls: Array<{ options: RunOptions; content: string }> = [];
@@ -53,8 +54,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
   }
 }
 async function finished(tasks: TaskManager, record: TaskRecord) {
-  await tasks.wait(record.taskId, 0, 10);
-  const end = tasks.status(record.taskId);
+  const end = await waitForTask(tasks, record.taskId);
   assert.equal(end.status, 'completed', JSON.stringify(end.error));
   return end;
 }

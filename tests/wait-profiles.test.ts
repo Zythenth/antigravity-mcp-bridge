@@ -18,7 +18,7 @@ import { createMcpServer } from '../src/mcp-server.js';
 import { appendMessage } from '../src/messages.js';
 import { StateStore } from '../src/state-store.js';
 import { TaskManager } from '../src/task-manager.js';
-import type { RunOptions, TaskRecord } from '../src/types.js';
+import type { RunOptions } from '../src/types.js';
 import { shellCommand, waitCommandArgv } from '../src/wait-command.js';
 import {
   WAIT_MODES,
@@ -29,9 +29,9 @@ import {
   type WaitMode,
   type WaitModeReason,
 } from '../src/wait-profiles.js';
+import { waitForTask } from './wait-for-task.js';
 
 const entry = fileURLToPath(new URL('../src/index.js', import.meta.url));
-const isTerminalStatus = (status: string) => ['completed', 'failed', 'cancelled', 'timeout'].includes(status);
 
 let cachedWaitCliBundle: Promise<string> | undefined;
 
@@ -56,16 +56,6 @@ function getWaitCliBundle(): Promise<string> {
     });
     return built.outputFiles[0]!.text;
   })());
-}
-
-async function waitForTask(tasks: TaskManager, taskId: string, timeoutMs = 180_000): Promise<TaskRecord> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const current = tasks.status(taskId);
-    if (isTerminalStatus(current.status)) return current;
-    await new Promise(resolve => setTimeout(resolve, 25));
-  }
-  throw new Error(`Timed out waiting for task ${taskId}`);
 }
 
 async function waitForGroup(tasks: TaskManager, groupId: string, timeoutMs = 180_000): Promise<{ ready: boolean }> {

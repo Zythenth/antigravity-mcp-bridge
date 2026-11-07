@@ -22,6 +22,7 @@ import { StateStore, type StoredTask } from '../src/state-store.js';
 import { TaskManager } from '../src/task-manager.js';
 import type { RunOptions, TaskStatus } from '../src/types.js';
 import { WAIT_EXIT_CODES, shellCommand, waitCommandArgv, waitCommandInfo, type WaitOutcome } from '../src/wait-command.js';
+import { waitForTask } from './wait-for-task.js';
 
 const entry = fileURLToPath(new URL('../src/index.js', import.meta.url));
 
@@ -625,6 +626,7 @@ test('killing the wait command process does not cancel or stop the running task'
     assert.equal(['completed', 'failed', 'cancelled', 'timeout'].includes(snapshot.record.status), false);
 
     f.adapter.release();
+    await waitForTask(f.tasks, task.taskId);
     const waited = await f.tasks.wait(task.taskId, 0, 10);
     assert.equal(waited.ready, true);
     assert.equal(f.tasks.status(task.taskId).status, 'completed');

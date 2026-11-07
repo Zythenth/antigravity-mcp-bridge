@@ -13,6 +13,7 @@ import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy, fingerprintProjectCopy } from '../src/isolation.js';
 import type { RunOptions, TaskRecord } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 function hook(cwd: string, conversationId: string, name: string, args: unknown) {
   const child = spawnSync(process.execPath, ['bridge-execution-hook.mjs'], { cwd: path.join(cwd, '.agents'), input: JSON.stringify({ workspacePaths: [cwd], conversationId, toolCall: { name, args } }), encoding: 'utf8', windowsHide: true, timeout: 60000 });
@@ -57,7 +58,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
     assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert.ok(path.basename(root).startsWith('agy-policy-runtime-')); await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
-async function end(tasks: TaskManager, task: TaskRecord) { await tasks.wait(task.taskId); return tasks.status(task.taskId); }
+async function end(tasks: TaskManager, task: TaskRecord) { return waitForTask(tasks, task.taskId); }
 
 test('enforced task executes real hooks, excludes managed files from preview and persists policy identity', async () => {
   await fixture(async ({ source, tasks, config }) => {

@@ -17,6 +17,7 @@ import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy } from '../src/isolation.js';
 import { TaskManager } from '../src/task-manager.js';
 import { BridgeError, type RunOptions } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 function createMockProcess(events: unknown[], exitCode = 0, onSpawn?: () => void) {
   const child = new EventEmitter() as any;
@@ -110,7 +111,7 @@ describe('Task results and artifacts runtime', () => {
       { event: 'result', result: { status: 'SUCCESS', structured_output: { count: 7 } } },
     ]);
     const task = await tasks.run({ prompt: 'valid schema', workingDirectory: repoDir, outputSchema: schema });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).status, 'completed');
     assert.deepEqual(adapter.lastSpawnOptions?.outputSchema, schema);
     const res = tasks.readStructuredResult(task.taskId);
@@ -124,7 +125,7 @@ describe('Task results and artifacts runtime', () => {
       { event: 'result', result: { status: 'SUCCESS', structured_output: { count: 'not-a-num' } } },
     ]);
     const task = await tasks.run({ prompt: 'invalid schema output', workingDirectory: repoDir, outputSchema: schema });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).status, 'failed');
     assert.throws(() => tasks.readStructuredResult(task.taskId), (err: any) => err instanceof BridgeError && err.code === 'TASK_NOT_READY');
   });
@@ -138,7 +139,7 @@ describe('Task results and artifacts runtime', () => {
       ]);
     };
     const task = await tasks.run({ prompt: 'artifact task', workingDirectory: repoDir, artifactPaths: ['artifact.txt'] });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).status, 'completed');
     const listed = tasks.listArtifacts(task.taskId);
     assert.equal(listed.artifacts.length, 1);
@@ -174,7 +175,7 @@ describe('Task results and artifacts runtime', () => {
     let reloaded: TaskManager | undefined;
     try {
       const task = await initial.run({ prompt: 'artifact policy', workingDirectory: repoDir, artifactPaths: ['artifact.txt'] });
-      await initial.wait(task.taskId);
+      await waitForTask(initial, task.taskId);
       assert.equal(initial.status(task.taskId).status, 'completed');
       const ref = initial.listArtifacts(task.taskId).artifacts[0]!;
       assert.ok(ref);
@@ -270,7 +271,7 @@ describe('Task results and artifacts runtime', () => {
     ]);
     const resumed = await tasks.run({ prompt: 'resume retained', workingDirectory: repoDir, sessionId: 'session-valid' });
     assert.deepEqual(resumed.outputSchema, { type: 'object', properties: { count: { type: 'number' } }, required: ['count'] });
-    await tasks.wait(resumed.taskId);
+    await waitForTask(tasks, resumed.taskId);
     assert.equal(tasks.status(resumed.taskId).status, 'completed');
     assert.equal(tasks.readStructuredResult(resumed.taskId).text, '{"count":99}');
   });
@@ -313,7 +314,7 @@ else {
       { event: 'result', result: { status: 'SUCCESS' } },
     ]);
     const task = await tasks.run({ prompt: 'missing output', workingDirectory: repoDir, outputSchema: { type: 'object' } });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).error?.code, 'INVALID_STRUCTURED_RESULT');
   });
 
@@ -356,14 +357,14 @@ else {
       return child;
     };
     const denied = await tasks.run({prompt:'Permission fixture.',workingDirectory:repoDir,outputSchema:{type:'object'}});
-    await tasks.wait(denied.taskId);
+    await waitForTask(tasks, denied.taskId);
     assert.equal(tasks.status(denied.taskId).error?.code,'AGY_MCP_PERMISSION_REQUIRED');
     adapter.nextProcessFactory = () => {
       const child = createMockProcess([{event:'init',conversation_id:'session-mcp-documentation'},{event:'result',result:{status:'SUCCESS',structured_output:{}}}],0,()=>child.stderr.write('Documentation mentions mcp permission in headless mode.\n'));
       return child;
     };
     const normal = await tasks.run({prompt:'Harmless stderr fixture.',workingDirectory:repoDir,outputSchema:{type:'object'}});
-    await tasks.wait(normal.taskId);assert.equal(tasks.status(normal.taskId).status,'completed');
+    await waitForTask(tasks, normal.taskId);assert.equal(tasks.status(normal.taskId).status,'completed');
   });
 
 });

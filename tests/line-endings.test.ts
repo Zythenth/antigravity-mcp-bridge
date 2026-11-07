@@ -18,6 +18,7 @@ import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEnd
 import { StateStore } from '../src/state-store.js';
 import { TaskManager } from '../src/task-manager.js';
 import { BridgeError, type RunOptions } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 async function file(dir: string, name: string, content?: string | Uint8Array): Promise<Buffer> {
   const target = path.join(dir, name);
@@ -217,7 +218,7 @@ for (const [fixture, attributes] of [['no attributes', undefined], ['* text=auto
       assert.equal(FIXTURE['crlf.txt']!.indexOf('two\nthree\n'), -1, 'the search must fail against the CRLF original');
 
       const task = await tasks.run({ prompt: 'edit one line', workingDirectory: repo });
-      await tasks.wait(task.taskId);
+      await waitForTask(tasks, task.taskId);
       assert.equal(tasks.status(task.taskId).status, 'completed');
       assert.equal(found, true);
       assert.equal(seen.get('crlf.txt')!.toString('utf8'), 'one\ntwo\nthree\n');
@@ -246,7 +247,7 @@ test('a launch that fails after the conversion gets the original bytes back', as
       throw new BridgeError('AGY_NOT_FOUND', 'fixture launch failure');
     };
     const task = await tasks.run({ prompt: 'never starts', workingDirectory: repo });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).error?.code, 'AGY_NOT_FOUND');
     for (const [name, content] of Object.entries(FIXTURE)) assert.deepEqual(await readFile(path.join(copy, name)), Buffer.from(content), name);
     assert.equal((await tasks.preview(task.taskId)).files.length, 0);
@@ -260,7 +261,7 @@ test('converted content renamed or copied by the CLI regains its original bytes 
       copyFileSync(path.join(cwd, 'crlf.txt'), path.join(cwd, 'duplicate.txt'));
     };
     const task = await tasks.run({ prompt: 'move and copy', workingDirectory: repo });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).status, 'completed');
     const copy = tasks.status(task.taskId).copyDirectory!;
     assert.deepEqual(await readFile(path.join(copy, 'moved.txt')), Buffer.from(FIXTURE['untouched-crlf.txt']!));
@@ -275,13 +276,13 @@ test('a resumed run converts files added earlier, and only the run that converte
   await withTaskManager(undefined, async (repo, adapter, tasks) => {
     adapter.onSpawn = cwd => writeFileSync(path.join(cwd, 'added.txt'), 'new\r\nfile\r\n');
     const first = await tasks.run({ prompt: 'add a file', workingDirectory: repo });
-    await tasks.wait(first.taskId);
+    await waitForTask(tasks, first.taskId);
     assert.equal(tasks.status(first.taskId).status, 'completed');
 
     let seen: Buffer | undefined;
     adapter.onSpawn = cwd => { seen = readFileSync(path.join(cwd, 'added.txt')); };
     const second = await tasks.run({ prompt: 'resume', workingDirectory: repo, sessionId: 'line-endings-session' });
-    await tasks.wait(second.taskId);
+    await waitForTask(tasks, second.taskId);
     assert.equal(tasks.status(second.taskId).status, 'completed');
     assert.equal(seen?.toString('utf8'), 'new\nfile\n');
     const copy = tasks.status(second.taskId).copyDirectory!;
@@ -515,7 +516,7 @@ for (const [fixture, attributes] of [['no attributes', undefined], ['* text=auto
         writeFileSync(target, readFileSync(target, 'utf8').replace('b\n', 'B\n'));
       };
       const task = await tasks.run({ prompt: 'edit one line', workingDirectory: repo });
-      await tasks.wait(task.taskId);
+      await waitForTask(tasks, task.taskId);
       assert.equal(tasks.status(task.taskId).status, 'completed');
       const preview = await tasks.preview(task.taskId);
       assert.equal((tasks.readEvents(task.taskId).events.find(event => event.type === 'process.cleanup')?.data as { verified?: boolean })?.verified, true);
@@ -539,7 +540,7 @@ test('a BOM the CLI drops comes back in the copy and stays in the original', asy
       writeFileSync(target, 'one\nTWO\n');
     };
     const task = await tasks.run({ prompt: 'edit one line', workingDirectory: repo });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).status, 'completed');
     // The LF conversion of the earlier step keeps the BOM.
     assert.deepEqual(seen, Buffer.concat([BOM, Buffer.from('one\ntwo\n')]));
@@ -582,7 +583,7 @@ test('a write run is refused before the CLI starts when an included text file is
     let started = 0;
     adapter.onSpawn = () => { started++; };
     const refused = await tasks.run({ prompt: 'edit', workingDirectory: repo });
-    await tasks.wait(refused.taskId);
+    await waitForTask(tasks, refused.taskId);
     const error = tasks.status(refused.taskId).error!;
     assert.equal(error.code, 'UNSUPPORTED_TEXT_ENCODING');
     assert.ok(error.message.includes(': forced.txt, legacy.txt, named.txt.') && error.message.includes('binary'), error.message);
@@ -592,12 +593,12 @@ test('a write run is refused before the CLI starts when an included text file is
 
     // A read-only run leaves no patch to preview, so the file does not stop it.
     const readOnly = await tasks.run({ prompt: 'read', workingDirectory: repo, mode: 'read-only' });
-    await tasks.wait(readOnly.taskId);
+    await waitForTask(tasks, readOnly.taskId);
     assert.equal(tasks.status(readOnly.taskId).status, 'completed');
 
     await writeFile(path.join(repo, '.gitattributes'), 'marked.txt binary\nunset.txt -diff\nlegacy.txt binary\nnamed.txt binary\n');
     const accepted = await tasks.run({ prompt: 'edit', workingDirectory: repo });
-    await tasks.wait(accepted.taskId);
+    await waitForTask(tasks, accepted.taskId);
     assert.equal(tasks.status(accepted.taskId).status, 'completed');
   });
 });
@@ -612,7 +613,7 @@ test('a new UTF-16 file is flagged in the preview instead of passing as a silent
       writeFileSync(path.join(cwd, 'lf.txt'), utf16('changed\n'));
     };
     const task = await tasks.run({ prompt: 'write output', workingDirectory: repo });
-    await tasks.wait(task.taskId);
+    await waitForTask(tasks, task.taskId);
     assert.equal(tasks.status(task.taskId).status, 'completed');
     const preview = await tasks.preview(task.taskId);
     assert.deepEqual(preview.fileSummaries.filter(file => file.binary).map(file => file.status + ' ' + file.path), ['A data.bin', 'M lf.txt', 'A out-be.txt', 'A out.txt']);

@@ -20,6 +20,7 @@ import {
   discardExecutionPolicy,
 } from '../src/execution-policy.js';
 import type { BridgeEvent, RunOptions, TaskRecord } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 const INITIAL_SOURCE = [
   'alpha distinctive-le-one',
@@ -133,8 +134,7 @@ async function fixture(
 }
 
 async function end(tasks: TaskManager, task: TaskRecord) {
-  await tasks.wait(task.taskId);
-  return tasks.status(task.taskId);
+  return waitForTask(tasks, task.taskId);
 }
 
 function emitToolError(

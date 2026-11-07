@@ -15,6 +15,7 @@ import { discardProjectCopy } from '../src/isolation.js';
 import { compactTask } from '../src/messages.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
 import type { RunOptions, TaskRecord } from '../src/types.js';
+import { waitForTask } from './wait-for-task.js';
 
 class RecordingAdapter extends CliAdapter {
   calls: Array<{ options: RunOptions; model: string | undefined; cwd: string }> = [];
@@ -68,7 +69,7 @@ const role = { name: 'specialist', baseRole: 'implementer', instruction: 'Use th
   skills: [{ name: 'fixture-skill', content: '---\nname: fixture-skill\ndescription: Public fixture.\n---\nRead the selected file.' }], outputSchema: schema, artifactPaths: ['chosen.txt'],
 } };
 async function completed(tasks: TaskManager, task: TaskRecord) {
-  await tasks.wait(task.taskId); const current = tasks.status(task.taskId);
+  const current = await waitForTask(tasks, task.taskId);
   assert.equal(current.status, 'completed', JSON.stringify(current.error)); return current;
 }
 
@@ -130,7 +131,7 @@ test('specialist configuration cannot weaken read-only base or Git ignored selec
     const planned = await completed(tasks, await tasks.run({ workingDirectory: repo, role: 'planning-specialist', prompt: 'Plan.' }));
     assert.equal(planned.mode, 'read-only'); assert.equal(planned.report?.role, 'planner');
     const ignored = await tasks.run({ workingDirectory: repo, role: 'specialist', prompt: 'Ignored fixture.', includePaths: ['secret.txt'] });
-    await tasks.wait(ignored.taskId); assert.equal(tasks.status(ignored.taskId).status, 'failed');
+    await waitForTask(tasks, ignored.taskId); assert.equal(tasks.status(ignored.taskId).status, 'failed');
   });
 });
 

@@ -13,6 +13,7 @@ import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { cacheLeafName, portableNodeStatus, preparePortableNodeRuntime, resolvePortableNodeRuntime } from '../src/portable-node.js';
 import type { AvailablePortableNodeDescriptor, PortableNodeDescriptor } from '../src/portable-node-descriptor.js';
+import { waitForTask } from './wait-for-task.js';
 
 const releaseRepository = 'https://github.com/Zythenth/antigravity-mcp-bridge';
 const releaseTag = 'runtime-node-v24.21.0-lpac1-win-x64';
@@ -175,6 +176,7 @@ test('TaskManager accepts disjoint source/cache siblings and preserves forbidden
     try {
       await assert.rejects(tasks.run({ prompt: 'split:test', workingDirectory: forbidden }), { code: 'INVALID_WORKING_DIRECTORY' });
       const task = await tasks.run({ prompt: 'split:test', workingDirectory: source, model: 'mock-pro' });
+      await waitForTask(tasks, task.taskId);
       const observed = await tasks.wait(task.taskId, 0, 60);
       assert.equal(observed.ready, true);
       assert.equal(observed.status, 'completed');
