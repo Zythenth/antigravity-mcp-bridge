@@ -47349,7 +47349,7 @@ function sandboxPolicyConfirmation(previous, proposed) {
     childProcesses: snapshot.policy.childProcesses,
     maxOutputChars: snapshot.policy.maxOutputChars
   });
-  return "Atualizar o teto global do sandbox para testes Windows LPAC?\nPol\xEDtica anterior (vers\xE3o e digest): " + describe3(previous) + "\nProposta normalizada (vers\xE3o e digest): " + describe3(proposed) + "\nA confirma\xE7\xE3o humana autoriza apenas este teto global; o agente que chama o MCP seleciona concess\xF5es menores por teste e o Gemini delegado n\xE3o pode autoriz\xE1-las nem alter\xE1-las.\nRede habilitada concede internet e conex\xF5es de LAN de entrada e sa\xEDda ao processo LPAC. localhost continua sujeito \xE0s restri\xE7\xF5es do sistema operacional. Processos-filho e o limite de sa\xEDda acima ser\xE3o aplicados como teto. Confirme apenas os caminhos can\xF4nicos, capacidades e limite de sa\xEDda revisados.";
+  return "Update the global sandbox ceiling for Windows LPAC tests?\nPrevious policy (version and digest): " + describe3(previous) + "\nNormalized proposal (version and digest): " + describe3(proposed) + "\nHuman confirmation authorizes only this global ceiling; the agent calling the MCP selects narrower grants per test and the delegated Gemini cannot authorize or change them.\nEnabled network grants internet access and inbound and outbound LAN connections to the LPAC process. localhost remains subject to the operating system restrictions. Child processes and the output limit above will be applied as a ceiling. Confirm only the reviewed canonical paths, capabilities and output limit.";
 }
 function redactMessage(message) {
   if ("error" in message) {
@@ -47501,7 +47501,7 @@ function createMcpServer(adapter, tasks, options = {}) {
       const answer = await server.server.elicitInput({
         mode: "form",
         message: sandboxPolicyConfirmation(previous, proposed),
-        requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "Confirmo esta pol\xEDtica de sandbox", default: false } }, required: ["confirm"] }
+        requestedSchema: { type: "object", properties: { confirm: { type: "boolean", title: "I confirm this sandbox policy", default: false } }, required: ["confirm"] }
       }, { timeout: 3e5 }).catch(() => {
         throw new BridgeError("APPROVAL_FAILED", "Sandbox policy confirmation failed or timed out; no changes were applied");
       });
@@ -47809,17 +47809,17 @@ function createMcpServer(adapter, tasks, options = {}) {
       if (!server.server.getClientCapabilities()?.elicitation?.form) {
         throw new BridgeError("APPROVAL_UNAVAILABLE", "The MCP client must support form elicitation to confirm integration");
       }
-      const files = preview.fileSummaries.map((file3) => `${file3.status} ${JSON.stringify(file3.path)} (${file3.binary ? "bin\xE1rio" : "+" + file3.insertions + " -" + file3.deletions})`).join("\n");
+      const files = preview.fileSummaries.map((file3) => `${file3.status} ${JSON.stringify(file3.path)} (${file3.binary ? "binary" : "+" + file3.insertions + " -" + file3.deletions})`).join("\n");
       const answer = await server.server.elicitInput({
         mode: "form",
-        message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?
-Origem: ${JSON.stringify(preview.sourceDirectory)}
-Tarefa: ${taskId}
-SHA-256 revisado: ${preview.sha256}
+        message: `Apply ${preview.summary.filesChanged} file(s) to the original project?
+Source: ${JSON.stringify(preview.sourceDirectory)}
+Task: ${taskId}
+Reviewed SHA-256: ${preview.sha256}
 ${files}
-A integra\xE7\xE3o modifica o original. Confirme apenas ap\xF3s revisar o patch e os testes.`,
+Integration modifies the original. Confirm only after reviewing the patch and the tests.`,
         requestedSchema: { type: "object", properties: {
-          confirm: { type: "boolean", title: "Confirmo a integra\xE7\xE3o deste patch", default: false }
+          confirm: { type: "boolean", title: "I confirm the integration of this patch", default: false }
         }, required: ["confirm"] }
       }, { timeout: 3e5 }).catch(() => {
         throw new BridgeError("APPROVAL_FAILED", "Client confirmation failed or timed out; no changes were applied");

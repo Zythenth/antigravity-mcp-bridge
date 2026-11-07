@@ -2,9 +2,9 @@
 
 Reference for the [core skill](../SKILL.md). Open it when reporting usage across resumed or failed tasks.
 
-## Informar tokens usados
+## Reporting tokens used
 
-- Ao concluir, relatar falha ou encerrar uma delegação, informe os tokens do Gemini/agy usando `task.tokenUsage` ou `antigravity_usage`. Mostre `totalTokens` e, quando disponíveis, entrada, saída, raciocínio e cache. Identifique os dados como uso informado pelo CLI.
-- Para uma sequência com retomadas, consulte o consolidado da sessão; não some `result.usage` cumulativo de cada resposta. O consumo por tarefa já usa a diferença dos contadores anteriores. Preserve a distinção entre tarefas retidas e o acumulado observado da sessão.
-- Se houver `null`, `available: false`, `partial: true` ou avisos, explique a limitação. Não estime contadores ausentes, não atribua zero a uma execução sem dados e não confunda tokens com preço ou quota da conta.
-- Informe também consumo de tarefas falhas quando disponível. Não afirme execução de testes somente porque houve consumo do modelo; o recibo do terminal continua necessário.
+- When finishing, reporting a failure or ending a delegation, report the Gemini/agy tokens using `task.tokenUsage` or `antigravity_usage`. Show `totalTokens` and, when available, input, output, reasoning and cache. Identify the data as usage reported by the CLI.
+- For a sequence with resumes, check the session's consolidated total; do not add up the cumulative `result.usage` of each response. Per-task consumption already uses the difference from the previous counters. Preserve the distinction between retained tasks and the session's observed accumulated total.
+- If there is `null`, `available: false`, `partial: true` or warnings, explain the limitation. Do not estimate missing counters, do not assign zero to a run without data and do not confuse tokens with the account's price or quota.
+- Also report the consumption of failed tasks when available. Do not claim that tests ran only because the model consumed tokens; the terminal receipt is still required.

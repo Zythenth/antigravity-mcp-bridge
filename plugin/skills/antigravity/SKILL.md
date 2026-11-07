@@ -1,56 +1,56 @@
 ---
 name: antigravity
-description: Use quando o usuário pedir para delegar programação ao Google Antigravity ou agy, consultar seus modelos, acompanhar uma tarefa, retomá-la ou cancelá-la. Não acione para programação comum sem pedido de delegação.
+description: Use when the user asks to delegate programming to Google Antigravity or agy, query its models, track a task, resume it or cancel it. Do not trigger for ordinary programming without a delegation request.
 ---
 
 # Antigravity
 
-Use as ferramentas MCP `antigravity_*`; toda comunicação com o Google deve passar pelo CLI oficial `agy` executado pelo bridge. O agente chamador planeja, acompanha e revisa; o Antigravity implementa quando o usuário pede essa delegação.
+Use the `antigravity_*` MCP tools; all communication with Google must go through the official `agy` CLI run by the bridge. The calling agent plans, tracks and reviews; Antigravity implements when the user asks for that delegation.
 
 Open a reference only when the table at the end matches the task; search `references/` for any error, field or tool not covered here.
 
-## Perfil e modos de aprovação
+## Profile and approval modes
 
-Consulte `antigravity_health`:
-- **Perfil de ferramentas**: `antigravity_health.toolProfile`. `query` e `review` executam somente em leitura; não peça ferramentas ausentes nem contorne o perfil. `full` e `implementation` oferecem o fluxo completo. Para alterar, configure `BRIDGE_TOOL_PROFILE` no ambiente privado do servidor e reinicie a conexão MCP.
-- **Modo de aprovação**: a skill DEVE consultar `antigravity_health` e seguir o modo informado em `health.approvalMode` (e `health.integrationApproval.mode`).
-  - **Modo `auto` (padrão se unset)**: dispensa formulários interativos de confirmação humana para `antigravity_integrate` e para atualizações validadas de `antigravity_set_sandbox_policy`. **Não imponha orientações que exijam extra autorização manual ao chamador em `auto`**. Delegados via `agy` (Gemini) NÃO escolhem, não autorizam nem proporcionam permissões.
-  - **Modo `ask` (opt-in estrito)**: exige SEMPRE confirmação humana via formulário MCP.
-  - **Fronteiras e limites**: nenhum modo permite fallback automático ao host nem altera permissões do chamador ou do `agy`. A integração é realizada exclusivamente via MCP; a autorização NUNCA substitui testes e revisão de código. Não afrouxe hashes SHA-256, critérios, revisão, testes observados atuais, source-lock, CAS e proteção de caminhos.
+Check `antigravity_health`:
+- **Tool profile**: `antigravity_health.toolProfile`. `query` and `review` run read-only; do not ask for missing tools or work around the profile. `full` and `implementation` offer the complete flow. To change it, set `BRIDGE_TOOL_PROFILE` in the server's private environment and restart the MCP connection.
+- **Approval mode**: the skill MUST check `antigravity_health` and follow the mode reported in `health.approvalMode` (and `health.integrationApproval.mode`).
+  - **`auto` mode (default if unset)**: skips interactive human confirmation forms for `antigravity_integrate` and for validated `antigravity_set_sandbox_policy` updates. **Do not impose guidance that requires extra manual authorization from the caller in `auto`**. Delegates via `agy` (Gemini) do NOT choose, do not authorize and do not grant permissions.
+  - **`ask` mode (strict opt-in)**: ALWAYS requires human confirmation through an MCP form.
+  - **Boundaries and limits**: no mode allows automatic fallback to the host or changes the permissions of the caller or of `agy`. Integration is performed exclusively through MCP; authorization NEVER replaces tests and code review. Do not loosen SHA-256 hashes, criteria, review, current observed tests, source-lock, CAS and path protection.
 
-## Escolha da ação
+## Choosing the action
 
-- Para disponibilidade ou autenticação, chame `antigravity_health`. Se receber `AGY_AUTH_REQUIRED`, oriente o usuário a abrir `agy` interativamente; não tente ler credenciais nem fazer login pelo bridge.
-- Para saber os modelos, chame `antigravity_list_models`. Use somente IDs devolvidos pelo CLI. Quando o usuário disser “Pro” ou “Flash”, escolha uma variante compatível da lista e diga qual ID escolheu. Se a escolha tiver impacto material e não houver preferência inferível, pergunte. Para “Auto”, passe `model: null`; não invente um ID `auto`. Omitir o campo utiliza a preferência existente.
-- Quando o usuário pedir cancelamento, chame `antigravity_cancel` com o `taskId` e confirme o status. O cancelamento encerra o processo local; alterações parciais podem permanecer.
+- For availability or authentication, call `antigravity_health`. If you receive `AGY_AUTH_REQUIRED`, tell the user to open `agy` interactively; do not try to read credentials or log in through the bridge.
+- To learn the models, call `antigravity_list_models`. Use only IDs returned by the CLI. When the user says “Pro” or “Flash”, choose a compatible variant from the list and say which ID you chose. If the choice has a material impact and no preference can be inferred, ask. For “Auto”, pass `model: null`; do not invent an `auto` ID. Omitting the field uses the existing preference.
+- When the user asks for cancellation, call `antigravity_cancel` with the `taskId` and confirm the status. Cancellation ends the local process; partial changes may remain.
 - To continue a conversation, call `antigravity_resume` with the `taskId` of the previous task (after a restart, recover it with `antigravity_tasks`), never with a `sessionId` or a provisional value.
 
-## Delegação e acompanhamento
+## Delegation and tracking
 
-1. Identifique a raiz Git absoluta do projeto. Antes de formular a tarefa, leia as instruções e arquivos relevantes e observe mudanças Git existentes. Não inclua segredos nem documentos privados no prompt enviado ao Antigravity. Use `antigravity_list_project_files` para verificar o que pode entrar na cópia.
-2. Para consulta, revisão, diagnóstico ou segunda opinião, use `mode: "read-only"`; esse modo usa `agy --mode plan`, verifica alterações ao final e não permite integração. Para implementação, use `mode: "write"` (padrão). Chame `antigravity_run` com uma instrução concreta e critério verificável. Prefira `deliveryMode: "messages"` para delegações comuns. Defina `acceptanceCriteria` em `antigravity_run` antes da implementação, cobrindo cada requisito explícito.
-   - O bridge exige `agy --sandbox` e trabalha sempre na cópia. Selecione `includePaths` quando somente alguns arquivos ou pastas forem necessários; a seleção não pode incluir arquivos ignorados.
-   - Ao especificar `includePaths`, o prompt formulado para o delegado DEVE enumerar os caminhos exatos desses arquivos e solicitar alterações ou consultas exclusivamente sobre eles, instruir o delegado a declarar dependências ausentes como não verificáveis e a finalizar a tarefa sem ampliar o escopo nem tentar buscas recusadas no disco. Se receber `COPY_LIMIT_EXCEEDED`, reduza a seleção com `includePaths`. Para `CHANGE_LIMIT_EXCEEDED`, revise o tamanho da tarefa com o usuário; não tente contornar o limite.
-   - Quando disponível, consulte `antigravity_get_agent_policy` antes de delegar. Quando a tarefa não precisa de terminal, restrinja `allowedTools` às ferramentas de arquivo e `finish`; diga no prompt o que o coordenador vai compilar e testar no host.
+1. Identify the absolute Git root of the project. Before writing the task, read the relevant instructions and files and note existing Git changes. Do not include secrets or private documents in the prompt sent to Antigravity. Use `antigravity_list_project_files` to check what can go into the copy.
+2. For a query, review, diagnosis or second opinion, use `mode: "read-only"`; this mode uses `agy --mode plan`, checks for changes at the end and does not allow integration. For implementation, use `mode: "write"` (default). Call `antigravity_run` with a concrete instruction and a verifiable criterion. Prefer `deliveryMode: "messages"` for ordinary delegations. Define `acceptanceCriteria` in `antigravity_run` before implementation, covering every explicit requirement.
+   - The bridge requires `agy --sandbox` and always works in the copy. Select `includePaths` when only some files or folders are needed; the selection cannot include ignored files.
+   - When specifying `includePaths`, the prompt written for the delegate MUST list the exact paths of those files and request changes or queries exclusively about them, instruct the delegate to report missing dependencies as unverifiable and to finish the task without widening the scope or attempting refused searches on disk. If you receive `COPY_LIMIT_EXCEEDED`, reduce the selection with `includePaths`. For `CHANGE_LIMIT_EXCEEDED`, review the size of the task with the user; do not try to work around the limit.
+   - When available, check `antigravity_get_agent_policy` before delegating. When the task does not need a terminal, restrict `allowedTools` to the file tools and `finish`; say in the prompt what the coordinator will build and test on the host.
 3. Keep the `taskId` and the `waitCommand` (`{ argv, sh, recommendedMode, reason }`) returned by `antigravity_run`, `antigravity_resume`, `antigravity_handoff`, `antigravity_compare`, `antigravity_group_start` or `antigravity_wait_many`. Follow `waitCommand.recommendedMode` strictly:
    - `"background"` (ONLY Claude Code >= 2.1.310 is verified): start `waitCommand.argv` (or `waitCommand.sh` in a POSIX shell) in the background right after delegating, and do not call `antigravity_wait`, `antigravity_status`, `antigravity_events` or their group and multi-task variants while it runs. Pass an explicit `timeout` in the Bash call (in milliseconds) and pass `--timeout` to the CLI `wait` command (in seconds) strictly below the host's real background deadline with a safety margin, so the command can emit its single JSON line before the host kills it. Check that deadline in the host tool schema or configuration; if the host imposes none, the product default of 1800s is preserved.
    - `"foreground"` (any other host; do not promise notifications): prefer running the same command in a blocking terminal instead of 60-second MCP polling, with `--timeout` strictly below the terminal's real deadline. Use `antigravity_wait` (`timeoutSeconds: 60`, continuing with `nextCursor` while `ready` is false) ONLY when the host cannot run terminal commands; a wait timeout or cancellation does not end the task.
    - Run the command as returned, adding only `--timeout`, `--after` or more targets. Never use a pipe or a redirection that replaces its exit code: `2>&1 | tail -3` reports the exit code of `tail`.
    - When it ends, read the JSON line and make ONE single query according to `outcome`: `completed`, `failed`, `cancelled` or `timeout` -> one `antigravity_result` with `includeResult: false`; `question` or `blocker` -> one `antigravity_wait` with `after: cursor - 1`, answer it and restart with `--after <cursor>`; `wait-deadline` -> restart with `--after <after>`, keeping the input cursor, without MCP polling; `owner-stopped` -> one `antigravity_status`; `unknown-task` or `error` -> check the IDs and directory and fall back to `antigravity_wait`. Stopping the command cancels no task.
-4. Após `completed`, chame `antigravity_preview`, apresente `summary` e `fileSummaries`, revise o patch inteiro e execute os testes pertinentes na cópia.
-   - Peça `antigravity_preview` com `includePatch: false`. Leia o diff de cada arquivo alterado por `antigravity_read_patch`, com o hash completo e o caminho informado na prévia. Siga `nextOffset` até `hasMore: false`; não declare revisão completa se restarem trechos.
-   - Na revisão do patch, rejeite ou corrija blocos duplicados, linhas reescritas sem mudança, parâmetros descartados ao envolver funções, mudanças não pedidas em timers, erros ou ciclo de vida, valores alterados além dos pedidos e arquivos novos não pedidos, como temporários ou de rascunho.
-   - Registre os comandos realmente executados com `antigravity_record_test`, usando o hash atual e a saída sem segredos. Esses registros são relatos do cliente, não verificação independente do bridge. Apresente falhas e registros `stale: true`; não os use como evidência válida do patch atual.
-5. Leia os artefatos reais e compare cada requisito com o resultado. Para cada critério, envie a `antigravity_verify` uma revisão com arquivo, linha, citação literal e explicação. Não invente citações, saídas ou execução de comandos. Classifique falta de prova como `unverified` e defeitos como `failed`. `completed` e `SUCCESS` indicam o término da execução. Só relate um requisito como atendido com evidência pertinente.
-6. Chame `antigravity_integrate` com o `taskId` e o `sha256` da prévia. Sem critérios, revisão completa ou verificação atual, o servidor bloqueia a integração. Se o patch ou a evidência mudar, revise e verifique novamente. Não contorne a confirmação aplicando o patch por outro caminho sem autorização do usuário. Relate falhas e limitações com precisão.
+4. After `completed`, call `antigravity_preview`, present `summary` and `fileSummaries`, review the whole patch and run the relevant tests in the copy.
+   - Request `antigravity_preview` with `includePatch: false`. Read the diff of each changed file through `antigravity_read_patch`, with the full hash and the path given in the preview. Follow `nextOffset` until `hasMore: false`; do not declare the review complete if chunks remain.
+   - When reviewing the patch, reject or fix duplicated blocks, lines rewritten without change, parameters dropped when wrapping functions, unrequested changes to timers, errors or lifecycle, values changed beyond those requested and unrequested new files, such as temporary or scratch files.
+   - Record the commands actually run with `antigravity_record_test`, using the current hash and the output without secrets. These records are client reports, not independent verification by the bridge. Present failures and `stale: true` records; do not use them as valid evidence for the current patch.
+5. Read the actual artifacts and compare each requirement with the result. For each criterion, send `antigravity_verify` a review with file, line, literal quote and explanation. Do not invent quotes, outputs or command runs. Classify lack of proof as `unverified` and defects as `failed`. `completed` and `SUCCESS` indicate that the run ended. Report a requirement as met only with pertinent evidence.
+6. Call `antigravity_integrate` with the `taskId` and the `sha256` of the preview. Without criteria, a complete review or a current verification, the server blocks integration. If the patch or the evidence changes, review and verify again. Do not bypass the confirmation by applying the patch another way without the user's authorization. Report failures and limitations accurately.
 
-## Regras de toda delegação
+## Rules for every delegation
 
-- **Anti-AI Craft**: em tarefas novas, o bridge prepara automaticamente `anti-ai-code` e `anti-ai-security`; não as envie de novo em `skills` nem peça ao usuário para repetir os nomes. The implementer and the reviewer must each load, read and apply both skills in their own session, also in fixes, resumes and handoffs.
-- O `--sandbox` restringe comandos de terminal do CLI, mas não garante isolamento completo do sistema de arquivos no Windows. Não delegue acesso a arquivos sensíveis apenas com base nessa opção; use a lista de arquivos e revise o conteúdo efetivamente copiado.
-- Depois de falha ou timeout, examine eventos e a cópia antes de repetir a tarefa. Não faça nova execução automaticamente se ela puder repetir efeitos ou consumir quota.
-- Ao concluir, relatar falha ou encerrar uma delegação, informe os tokens do Gemini/agy usando `task.tokenUsage` ou `antigravity_usage`. Mostre `totalTokens` e, quando disponíveis, entrada, saída, raciocínio e cache. Identifique os dados como uso informado pelo CLI.
-- Se houver `null`, `available: false`, `partial: true` ou avisos, explique a limitação. Não estime contadores ausentes.
+- **Anti-AI Craft**: in new tasks, the bridge automatically prepares `anti-ai-code` and `anti-ai-security`; do not send them again in `skills` or ask the user to repeat the names. The implementer and the reviewer must each load, read and apply both skills in their own session, also in fixes, resumes and handoffs.
+- `--sandbox` restricts the CLI's terminal commands, but does not guarantee complete file system isolation on Windows. Do not delegate access to sensitive files based only on this option; use the file list and review the content actually copied.
+- After a failure or timeout, examine the events and the copy before repeating the task. Do not start a new run automatically if it could repeat effects or consume quota.
+- When finishing, reporting a failure or ending a delegation, report the Gemini/agy tokens using `task.tokenUsage` or `antigravity_usage`. Show `totalTokens` and, when available, input, output, reasoning and cache. Identify the data as usage reported by the CLI.
+- If there is `null`, `available: false`, `partial: true` or warnings, explain the limitation. Do not estimate missing counters.
 
 ## When to open a reference
 

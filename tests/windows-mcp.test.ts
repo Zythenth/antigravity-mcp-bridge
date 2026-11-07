@@ -47,11 +47,11 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
     assert.equal(request.params.mode, 'form');
     if (request.params.mode !== 'form') throw new Error('Unexpected elicitation mode');
     assert.equal(request.params.requestedSchema.properties.confirm?.default, false);
-    assert.match(request.params.message, /Política anterior/);
-    assert.match(request.params.message, /Proposta normalizada/);
-    assert.match(request.params.message, /confirmação humana autoriza apenas este teto global/);
-    assert.match(request.params.message, /agente que chama o MCP seleciona concessões menores por teste/);
-    assert.match(request.params.message, /Gemini delegado não pode autorizá-las nem alterá-las/);
+    assert.match(request.params.message, /Previous policy/);
+    assert.match(request.params.message, /Normalized proposal/);
+    assert.match(request.params.message, /Human confirmation authorizes only this global ceiling/);
+    assert.match(request.params.message, /agent calling the MCP selects narrower grants per test/);
+    assert.match(request.params.message, /delegated Gemini cannot authorize or change them/);
     return action === 'accept' ? { action, content: { confirm: confirmation } } : { action };
   });
   const call = async (name: string, args: Record<string, unknown> = {}) => {

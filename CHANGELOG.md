@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The `antigravity` skill (core, the 14 references, and `agents/openai.yaml`) and the confirmation forms the server shows for sandbox policy updates and integration are now in English. Each rule keeps its scope, conditions, exceptions, and numbers; tool names, parameters, schemas, error codes, validation, and behavior do not change, and `tools/list` stays identical. The core remains within the 12,000-byte limit (11,715 bytes with CRLF line endings).
+
 - `npm test` and the CI shards now run with their own temporary directory, removed at the end, and no longer accumulate `agy-*` folders in the system temporary directory. The folder of an interrupted run is removed by a later run, after the owning process ends and the folder has gone one hour without changes.
 
 - Line-ending restoration no longer fails when a file unrelated to the task, such as another program's temporary file, disappears from the copy between listing and reading. Other read errors still abort the operation.

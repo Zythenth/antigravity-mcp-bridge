@@ -47,12 +47,12 @@ function sandboxPolicyConfirmation(previous: SandboxPolicySnapshot, proposed: Sa
   const describe = (snapshot: SandboxPolicySnapshot) => JSON.stringify({ version: snapshot.version, sha256: snapshot.sha256,
     readRoots: snapshot.policy.readRoots, writeRoots: snapshot.policy.writeRoots, network: snapshot.policy.network,
     childProcesses: snapshot.policy.childProcesses, maxOutputChars: snapshot.policy.maxOutputChars });
-  return 'Atualizar o teto global do sandbox para testes Windows LPAC?\n' +
-    'Política anterior (versão e digest): ' + describe(previous) + '\n' +
-    'Proposta normalizada (versão e digest): ' + describe(proposed) + '\n' +
-    'A confirmação humana autoriza apenas este teto global; o agente que chama o MCP seleciona concessões menores por teste e o Gemini delegado não pode autorizá-las nem alterá-las.\n' +
-    'Rede habilitada concede internet e conexões de LAN de entrada e saída ao processo LPAC. localhost continua sujeito às restrições do sistema operacional. ' +
-    'Processos-filho e o limite de saída acima serão aplicados como teto. Confirme apenas os caminhos canônicos, capacidades e limite de saída revisados.';
+  return 'Update the global sandbox ceiling for Windows LPAC tests?\n' +
+    'Previous policy (version and digest): ' + describe(previous) + '\n' +
+    'Normalized proposal (version and digest): ' + describe(proposed) + '\n' +
+    'Human confirmation authorizes only this global ceiling; the agent calling the MCP selects narrower grants per test and the delegated Gemini cannot authorize or change them.\n' +
+    'Enabled network grants internet access and inbound and outbound LAN connections to the LPAC process. localhost remains subject to the operating system restrictions. ' +
+    'Child processes and the output limit above will be applied as a ceiling. Confirm only the reviewed canonical paths, capabilities and output limit.';
 }
 
 // The SDK formats unknown-tool and validation errors before the bridge wrapper, so error results are redacted at the transport boundary.
@@ -194,7 +194,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
       throw new BridgeError('APPROVAL_UNAVAILABLE', 'The MCP client must support form elicitation to update the sandbox policy');
     }
     const answer = await server.server.elicitInput({ mode: 'form', message: sandboxPolicyConfirmation(previous, proposed),
-      requestedSchema: { type: 'object', properties: { confirm: { type: 'boolean', title: 'Confirmo esta política de sandbox', default: false } }, required: ['confirm'] },
+      requestedSchema: { type: 'object', properties: { confirm: { type: 'boolean', title: 'I confirm this sandbox policy', default: false } }, required: ['confirm'] },
     }, { timeout: 300000 }).catch(() => {
       throw new BridgeError('APPROVAL_FAILED', 'Sandbox policy confirmation failed or timed out; no changes were applied');
     });
@@ -415,11 +415,11 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     if (!server.server.getClientCapabilities()?.elicitation?.form) {
       throw new BridgeError('APPROVAL_UNAVAILABLE', 'The MCP client must support form elicitation to confirm integration');
     }
-    const files = preview.fileSummaries.map(file => `${file.status} ${JSON.stringify(file.path)} (${file.binary ? 'binário' : '+' + file.insertions + ' -' + file.deletions})`).join('\n');
+    const files = preview.fileSummaries.map(file => `${file.status} ${JSON.stringify(file.path)} (${file.binary ? 'binary' : '+' + file.insertions + ' -' + file.deletions})`).join('\n');
     const answer = await server.server.elicitInput({ mode: 'form',
-      message: `Aplicar ${preview.summary.filesChanged} arquivo(s) ao projeto original?\nOrigem: ${JSON.stringify(preview.sourceDirectory)}\nTarefa: ${taskId}\nSHA-256 revisado: ${preview.sha256}\n${files}\nA integração modifica o original. Confirme apenas após revisar o patch e os testes.`,
+      message: `Apply ${preview.summary.filesChanged} file(s) to the original project?\nSource: ${JSON.stringify(preview.sourceDirectory)}\nTask: ${taskId}\nReviewed SHA-256: ${preview.sha256}\n${files}\nIntegration modifies the original. Confirm only after reviewing the patch and the tests.`,
       requestedSchema: { type: 'object', properties: {
-        confirm: { type: 'boolean', title: 'Confirmo a integração deste patch', default: false },
+        confirm: { type: 'boolean', title: 'I confirm the integration of this patch', default: false },
       }, required: ['confirm'] },
     }, { timeout: 300000 }).catch(() => {
       throw new BridgeError('APPROVAL_FAILED', 'Client confirmation failed or timed out; no changes were applied');

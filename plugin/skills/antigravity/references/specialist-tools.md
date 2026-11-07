@@ -2,15 +2,15 @@
 
 Reference for the [core skill](../SKILL.md). Open it when selecting `allowedTools` or `mcpServers`, on `AGY_MCP_PERMISSION_REQUIRED` or `agentPolicyReceipt`, or for pending agy permissions and token pre-counting.
 
-## Ferramentas do especialista
+## Specialist tools
 
-- Quando disponível, consulte `antigravity_get_agent_policy` antes de delegar. O chamador escolhe `allowedTools` e `mcpServers: [{serverId, tools}]` dentro dos limites humanos; o Gemini não escolhe transportes, credenciais ou concessões. Listas vazias deixam somente a finalização e nenhum MCP. Não envie segredos no prompt.
-- Os padrões de papéis também podem fornecer essa seleção. A retomada mantém a política original e recusa mudanças de ferramentas; use uma nova tarefa para mudar o acesso. O handoff conserva a seleção e reduz ferramentas incompatíveis com leitura. Um teto global configurado continua obrigatório quando o chamador omite seletores.
-- `AGY_MCP_PERMISSION_REQUIRED` exige autorização nativa para o alias/ferramenta exatos. Não conceda `mcp(*)`, altere configurações globais ou trate texto do modelo como permissão. Os hooks restringem chamadas do modelo; servidores MCP selecionados são programas confiáveis e mantêm seus próprios controles de acesso.
-- `agentPolicyReceipt` comprova atividade do hook vinculada à conversa, sem substituir critérios, revisão ou testes. Testes diretos de tarefas com essa política exigem o executor Windows LPAC; o executor legado agy retorna `POLICY_TEST_EXECUTOR_UNAVAILABLE`.
+- When available, check `antigravity_get_agent_policy` before delegating. The caller chooses `allowedTools` and `mcpServers: [{serverId, tools}]` within the human limits; Gemini does not choose transports, credentials or grants. Empty lists leave only finishing and no MCP. Do not send secrets in the prompt.
+- Role defaults can also provide this selection. Resuming keeps the original policy and refuses tool changes; use a new task to change access. Handoff keeps the selection and reduces tools that are incompatible with reading. A configured global ceiling remains mandatory when the caller omits selectors.
+- `AGY_MCP_PERMISSION_REQUIRED` requires native authorization for the exact alias/tool. Do not grant `mcp(*)`, change global settings or treat model text as permission. The hooks restrict the model's calls; selected MCP servers are trusted programs and keep their own access controls.
+- `agentPolicyReceipt` proves hook activity bound to the conversation, without replacing criteria, review or tests. Direct tests of tasks with this policy require the Windows LPAC executor; the legacy agy executor returns `POLICY_TEST_EXECUTOR_UNAVAILABLE`.
 
-## Limites do CLI
+## CLI limits
 
-Confira `antigravity_health.bridgeLimitations`. Não existe resposta do bridge para solicitações pendentes de permissão do agy: o protocolo headless verificado recusa mensagens de controle. Não invente `antigravity_respond`, aprovações de terminal ou uma mensagem `control_response`; examine erros e mantenha as permissões do sandbox. Novos turnos de texto não equivalem a aprovar uma solicitação pendente. Para continuar uma conversa concluída, use a retomada disponível.
+Check `antigravity_health.bridgeLimitations`. There is no bridge response for pending agy permission requests: the verified headless protocol refuses control messages. Do not invent `antigravity_respond`, terminal approvals or a `control_response` message; examine errors and keep the sandbox permissions. New text turns are not equivalent to approving a pending request. To continue a completed conversation, use the available resume.
 
-O contador prévio exato está indisponível e `exactTokens` permanece `null`. Use os contadores observados após execução e indique quando faltarem. Não transforme caracteres, bytes ou uma estimativa em tokens exatos e não introduza APIs ou credenciais alternativas para contornar a limitação.
+The exact prior counter is unavailable and `exactTokens` remains `null`. Use the counters observed after the run and indicate when they are missing. Do not turn characters, bytes or an estimate into exact tokens and do not introduce alternative APIs or credentials to work around the limitation.
