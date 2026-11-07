@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Every MCP tool now takes its title and behavior hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) from one table in `src/tool-annotations.ts`, with one row per tool, instead of two generic sets with scattered exceptions. The hints now follow what each tool does in the code:
+  - `antigravity_health`, `antigravity_list_models`, and `antigravity_set_model` query agy and are marked `openWorldHint: true`; `antigravity_set_sandbox_policy`, `antigravity_memory_write`, `antigravity_memory_remove`, `antigravity_group_create`, and `antigravity_group_cancel` run locally and are marked `openWorldHint: false`;
+  - `antigravity_group_create` and `antigravity_group_cancel` only record or stop work and are no longer marked destructive;
+  - `antigravity_send_message` is now marked destructive and not idempotent: the continuation it starts can, at the retention limit, discard the oldest finished task and its copy, as `antigravity_run`, `antigravity_resume`, `antigravity_handoff`, `antigravity_compare`, and `antigravity_group_start` already could, and a message still queued is dispatched again on a repeated call;
+  - `antigravity_context`, `antigravity_comparison`, `antigravity_preview`, `antigravity_read_patch`, `antigravity_read_artifact`, and `antigravity_wait` are no longer marked read-only or idempotent, and they, `antigravity_verify`, and `antigravity_record_test` are now marked destructive and open-world: when one of them releases a finished copy, it dispatches a caller message still queued for that copy, which starts agy and can, at the retention limit, discard the oldest finished task and its copy, and a repeated call retries a dispatch that is still queued. For the same reason, `antigravity_integrate` keeps `openWorldHint: true` and is not idempotent: a refused integration also releases the copy;
+  - `antigravity_workflow_result`, which pauses the group when a retained checkpoint is no longer valid, is no longer marked read-only;
+  - read-only tools may still record that a task whose owner process already ended was interrupted, as every state load does, including startup, and the first memory query creates the empty private memory directory;
+  - every tool now declares `idempotentHint`.
+
+  Tool names, titles, descriptions, schemas, validation, profiles, and behavior do not change; apart from `annotations`, `tools/list` stays identical in the four profiles. In the `full` profile, 23 tools are read-only and 27 write. A test fails when a registered tool has no row in the table or the table lists a tool the server does not register.
+
 - The `antigravity` skill (core, the 14 references, and `agents/openai.yaml`) and the confirmation forms the server shows for sandbox policy updates and integration are now in English. Each rule keeps its scope, conditions, exceptions, and numbers; tool names, parameters, schemas, error codes, validation, and behavior do not change, and `tools/list` stays identical. The core remains within the 12,000-byte limit (11,715 bytes with CRLF line endings).
 
 - `npm test` and the CI shards now run with their own temporary directory, removed at the end, and no longer accumulate `agy-*` folders in the system temporary directory. The folder of an interrupted run is removed by a later run, after the owning process ends and the folder has gone one hour without changes.

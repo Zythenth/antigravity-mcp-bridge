@@ -12,6 +12,7 @@ import { criteriaSchema, reviewSchema } from './verification.js';
 import { testCommandSchema } from './native-tests.js';
 import { outputSchemas } from './output-schemas.js';
 import { toolEnabled } from './tool-profiles.js';
+import { toolAnnotationRow, toolAnnotations } from './tool-annotations.js';
 import { decisionsSchema } from './handoff.js';
 import { comparisonModelsSchema } from './comparison.js';
 import { sandboxPolicySchema, sandboxSelectionInputSchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
@@ -86,10 +87,12 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   const instructions = 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with antigravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with antigravity_test and inspect receipts, exit codes and stale evidence. ' +
     approvalInstructions;
   const server = new McpServer({ name: 'antigravity-mcp-bridge', version: '0.9.0' }, { instructions });
-  // Intercept tool registration so state-dependent tools immediately refuse when BRIDGE_STATE_DIRECTORY is invalid/degraded.
+  // Intercept tool registration: titles and annotations come from TOOL_ANNOTATIONS, and state-dependent tools immediately refuse when BRIDGE_STATE_DIRECTORY is invalid/degraded.
   const statelessTools = new Set(['antigravity_health', 'antigravity_list_models', 'antigravity_roles']);
   const originalRegisterTool = server.registerTool.bind(server);
   server.registerTool = ((name: string, ...args: unknown[]) => {
+    const row = toolAnnotationRow(name);
+    args[0] = { ...(args[0] as Record<string, unknown>), title: row.title, annotations: toolAnnotations(name) };
     if (!statelessTools.has(name)) {
       const handlerIndex = args.length - 1;
       const handler = args[handlerIndex];
@@ -105,8 +108,6 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     }
     return (originalRegisterTool as (...toolArgs: unknown[]) => unknown)(name, ...args);
   }) as typeof server.registerTool;
-  const readOnly = { readOnlyHint: true, openWorldHint: false, destructiveHint: false };
-  const action = { readOnlyHint: false, openWorldHint: true, destructiveHint: true };
   const configuredRoleSchema = z.enum(tasks.roles().map(role => role.name) as [string, ...string[]]);
   const waitCommand = (args: readonly string[] = []) =>
     options.waitCommand
@@ -120,8 +121,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_health')) server.registerTool('antigravity_health', {
     outputSchema: outputSchemas.antigravity_health,
-    title: 'Check Antigravity CLI', description: 'Inspect installed agy version, authentication and supported capabilities.',
-    inputSchema: {}, annotations: readOnly,
+    description: 'Inspect installed agy version, authentication and supported capabilities.',
+    inputSchema: {},
   }, safe(async () => {
     const hasElicitation = Boolean(server.server.getClientCapabilities()?.elicitation?.form);
     const integrateEnabled = toolEnabled(tasks.toolProfile, 'antigravity_integrate');
@@ -151,44 +152,44 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_list_models')) server.registerTool('antigravity_list_models', {
     outputSchema: outputSchemas.antigravity_list_models,
-    title: 'List Antigravity models', description: 'List model IDs actually returned by agy models for this account.',
-    inputSchema: {}, annotations: readOnly,
+    description: 'List model IDs actually returned by agy models for this account.',
+    inputSchema: {},
   }, safe(async () => ({ models: await adapter.listModels() })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_get_model')) server.registerTool('antigravity_get_model', {
     outputSchema: outputSchemas.antigravity_get_model,
-    title: 'Get selected model', description: 'Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.',
-    inputSchema: {}, annotations: readOnly,
+    description: 'Return the default model selected for subsequent bridge tasks. Null means agy chooses its own default.',
+    inputSchema: {},
   }, safe(() => ({ model: tasks.getModel() ?? null })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_get_sandbox_policy')) server.registerTool('antigravity_get_sandbox_policy', {
     outputSchema: outputSchemas.antigravity_get_sandbox_policy,
-    title: 'Get Windows test sandbox policy', description: 'Read the normalized global ceiling for bridge-owned Windows LPAC test selections.',
-    inputSchema: {}, annotations: readOnly,
+    description: 'Read the normalized global ceiling for bridge-owned Windows LPAC test selections.',
+    inputSchema: {},
   }, safe(() => tasks.getSandboxPolicy()));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_usage')) server.registerTool('antigravity_usage', {
     outputSchema: outputSchemas.antigravity_usage,
-    title: 'Read observed token usage', description: 'Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.',
-    inputSchema: { taskId: z.string().uuid().optional(), sessionId: z.string().min(1).max(128).optional(), model: z.string().min(1).max(128).optional() }, annotations: readOnly,
+    description: 'Consolidate final CLI usage by retained task, session and requested model. Resumed task counters are session deltas, not repeated cumulative totals. Missing counters stay null. This does not report account quota or billing; disclose partial or unavailable usage to the user.',
+    inputSchema: { taskId: z.string().uuid().optional(), sessionId: z.string().min(1).max(128).optional(), model: z.string().min(1).max(128).optional() },
   }, async filters => safe(() => tasks.usage(filters))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_list_project_files')) server.registerTool('antigravity_list_project_files', {
     outputSchema: outputSchemas.antigravity_list_project_files,
-    title: 'List files eligible for a project copy', description: 'List tracked and untracked files excluding Git ignore, local exclude matches, and the active secret policy.',
-    inputSchema: { workingDirectory: z.string().min(1) }, annotations: readOnly,
+    description: 'List tracked and untracked files excluding Git ignore, local exclude matches, and the active secret policy.',
+    inputSchema: { workingDirectory: z.string().min(1) },
   }, async ({ workingDirectory }) => safe(async () => ({ files: await tasks.listProjectFiles(workingDirectory) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_set_model')) server.registerTool('antigravity_set_model', {
     outputSchema: outputSchemas.antigravity_set_model,
-    title: 'Select Antigravity model', description: 'Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.',
-    inputSchema: { model: z.string().min(1).max(128).nullable() }, annotations: { ...readOnly, readOnlyHint: false },
+    description: 'Persist an exact model ID from agy models as the bridge default. Null persists Auto (agy default), overriding BRIDGE_DEFAULT_MODEL. Does not alter agy global settings.',
+    inputSchema: { model: z.string().min(1).max(128).nullable() },
   }, async ({ model }) => safe(async () => ({ model: await tasks.setModel(model) }))());
 
   if (tasks.toolProfile === 'full' || tasks.toolProfile === 'implementation') server.registerTool('antigravity_set_sandbox_policy', {
     outputSchema: outputSchemas.antigravity_set_sandbox_policy,
-    title: 'Set Windows test sandbox policy', description: 'Propose a normalized global ceiling for bridge-owned Windows LPAC tests. In automatic mode (default), validated proposals are applied automatically. With BRIDGE_APPROVAL_MODE=ask, a human must confirm the exact prior and proposed digests through an MCP form.',
-    inputSchema: { policy: sandboxPolicySchema, expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
+    description: 'Propose a normalized global ceiling for bridge-owned Windows LPAC tests. In automatic mode (default), validated proposals are applied automatically. With BRIDGE_APPROVAL_MODE=ask, a human must confirm the exact prior and proposed digests through an MCP form.',
+    inputSchema: { policy: sandboxPolicySchema, expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) },
   }, async ({ policy, expectedSha256 }) => safe(() => tasks.setSandboxPolicy(policy, expectedSha256, tasks.approvalMode === 'auto' ? undefined : async (previous, proposed) => {
     if (!server.server.getClientCapabilities()?.elicitation?.form) {
       throw new BridgeError('APPROVAL_UNAVAILABLE', 'The MCP client must support form elicitation to update the sandbox policy');
@@ -202,88 +203,88 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_roles')) server.registerTool('antigravity_roles', {
-    outputSchema: outputSchemas.antigravity_roles, title: 'List configured task roles',
+    outputSchema: outputSchemas.antigravity_roles,
     description: 'List built-in and custom role names, base contracts and descriptions. Custom roles are configured in BRIDGE_CUSTOM_ROLES; instructions are snapshotted per task and inherited by resume. Planning/review bases remain read-only with existing structured reports.',
-    inputSchema: {}, annotations: readOnly,
+    inputSchema: {},
   }, safe(() => ({ roles: tasks.roles() })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_get_agent_policy')) server.registerTool('antigravity_get_agent_policy', {
-    outputSchema: outputSchemas.antigravity_get_agent_policy, title: 'List delegated tool ceilings',
+    outputSchema: outputSchemas.antigravity_get_agent_policy,
     description: 'Read human-configured native tool ceilings and trusted MCP IDs/tools. Select allowedTools and mcpServers per task; credentials and transports are private. MCP also requires a native agy allow-rule for the exact server/tool. The bridge does not grant it or modify global settings.',
-    inputSchema: {}, annotations: readOnly,
+    inputSchema: {},
   }, safe(() => tasks.agentPolicyCatalog()));
 
   const memoryInput = { workingDirectory: z.string().min(1), specialist: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/) };
   const memoryHash = z.string().regex(/^[a-f0-9]{64}$/);
   if (toolEnabled(tasks.toolProfile, 'antigravity_memory_list')) server.registerTool('antigravity_memory_list', {
-    outputSchema: outputSchemas.antigravity_memory_list, title: 'List private project memory',
+    outputSchema: outputSchemas.antigravity_memory_list,
     description: 'List private specialist memory metadata and limits for this exact Git root. No stored text is returned or imported automatically.',
-    inputSchema: { workingDirectory: memoryInput.workingDirectory }, annotations: readOnly,
+    inputSchema: { workingDirectory: memoryInput.workingDirectory },
   }, async ({ workingDirectory }) => safe(() => tasks.listMemory(workingDirectory))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_memory_read')) server.registerTool('antigravity_memory_read', {
-    outputSchema: outputSchemas.antigravity_memory_read, title: 'Read private memory in chunks',
+    outputSchema: outputSchemas.antigravity_memory_read,
     description: 'Read the selected memory version as revisable data. Use its sha256 from memory_list for every chunk; contentSha256 identifies text only.',
-    inputSchema: { ...memoryInput, expectedSha256: memoryHash, offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(2).max(50000).optional() }, annotations: readOnly,
+    inputSchema: { ...memoryInput, expectedSha256: memoryHash, offset: z.number().int().nonnegative().optional(), limit: z.number().int().min(2).max(50000).optional() },
   }, async ({ workingDirectory, specialist, expectedSha256, offset, limit }) => safe(() => tasks.readMemory(workingDirectory, specialist, expectedSha256, offset, limit))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_memory_write')) server.registerTool('antigravity_memory_write', {
-    outputSchema: outputSchemas.antigravity_memory_write, title: 'Write reviewed private memory',
+    outputSchema: outputSchemas.antigravity_memory_write,
     description: 'Store caller-reviewed memory outside the project. Null expectedSha256 creates only; replacing existing content requires its current hash. Does not send text to agy.',
-    inputSchema: { ...memoryInput, text: z.string().min(1).max(1024 * 1024), expectedSha256: memoryHash.nullable() }, annotations: action,
+    inputSchema: { ...memoryInput, text: z.string().min(1).max(1024 * 1024), expectedSha256: memoryHash.nullable() },
   }, async ({ workingDirectory, specialist, text, expectedSha256 }) => safe(() => tasks.writeMemory(workingDirectory, specialist, text, expectedSha256))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_memory_remove')) server.registerTool('antigravity_memory_remove', {
-    outputSchema: outputSchemas.antigravity_memory_remove, title: 'Remove private memory',
+    outputSchema: outputSchemas.antigravity_memory_remove,
     description: 'Remove exactly the reviewed memory version. Existing task snapshots remain immutable until their retained task state is removed.',
-    inputSchema: { ...memoryInput, expectedSha256: memoryHash }, annotations: action,
+    inputSchema: { ...memoryInput, expectedSha256: memoryHash },
   }, async ({ workingDirectory, specialist, expectedSha256 }) => safe(() => tasks.removeMemory(workingDirectory, specialist, expectedSha256))());
 
   const groupIdInput = { groupId: z.string().uuid() };
   if (toolEnabled(tasks.toolProfile, 'antigravity_workflow_result')) server.registerTool('antigravity_workflow_result', {
-    outputSchema: outputSchemas.antigravity_workflow_result, title: 'Read the validated workflow synthesis',
+    outputSchema: outputSchemas.antigravity_workflow_result,
     description: 'Revalidate retained workflow checkpoints and return only the final public summary and hashed result reference. Intermediate outputs remain private. Completion does not authorize integration.',
-    inputSchema: groupIdInput, annotations: readOnly,
+    inputSchema: groupIdInput,
   }, async ({ groupId }) => safe(() => tasks.groups.workflowResult(groupId))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_peer_receipts')) server.registerTool('antigravity_peer_receipts', {
-    outputSchema: outputSchemas.antigravity_peer_receipts, title: 'Inspect compact peer delivery receipts',
+    outputSchema: outputSchemas.antigravity_peer_receipts,
     description: 'Read a bounded snapshot page of public agy peer-message delivery metadata and hashes. Bodies stay in private state. queued waits for a turn; sent means a continuation was accepted, not that the model read or approved anything. Re-read a page to inspect changed receipt states.',
-    inputSchema: { ...groupIdInput, after: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(), limit: z.number().int().min(1).max(20).optional() }, annotations: readOnly,
+    inputSchema: { ...groupIdInput, after: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(), limit: z.number().int().min(1).max(20).optional() },
   }, async ({ groupId, after, limit }) => safe(() => tasks.groups.peerReceipts(groupId, after, limit))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_create')) server.registerTool('antigravity_group_create', {
-    outputSchema: outputSchemas.antigravity_group_create, title: 'Create a dependency group',
+    outputSchema: outputSchemas.antigravity_group_create,
     description: 'Persist a bounded group with configured specialist owners and dependencies. Use a stable client-generated UUID; repeating the same definition returns the existing group, a different definition is rejected. No model starts until group_start.',
-    inputSchema: { ...groupIdInput, definition: groupDefinitionSchema }, annotations: action,
+    inputSchema: { ...groupIdInput, definition: groupDefinitionSchema },
   }, async ({ groupId, definition }) => safe(async () => ({ group: await tasks.groups.create(groupId, definition) }))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_start')) server.registerTool('antigravity_group_start', {
-    outputSchema: outputSchemas.antigravity_group_start, title: 'Start or resume a dependency group',
+    outputSchema: outputSchemas.antigravity_group_start,
     description: 'Start pending nodes whose prerequisites completed. Bind to the saved definition hash. Explicit resume recovers accepted task IDs and never repeats terminal nodes. Interrupted provider tasks remain failed; no automatic provider replay.',
-    inputSchema: { ...groupIdInput, expectedDefinitionSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
+    inputSchema: { ...groupIdInput, expectedDefinitionSha256: z.string().regex(/^[a-f0-9]{64}$/) },
   }, async ({ groupId, expectedDefinitionSha256 }) => safe(() => {
     const group = tasks.groups.start(groupId, expectedDefinitionSha256);
     return { group, ...waitCommand(['--group', group.groupId]) };
   })());
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_status')) server.registerTool('antigravity_group_status', {
-    outputSchema: outputSchemas.antigravity_group_status, title: 'Inspect group state',
+    outputSchema: outputSchemas.antigravity_group_status,
     description: 'Return node owners, dependencies, statuses and task references without task prompts, file histories or intermediate results. Group completion is execution state, not patch verification.',
-    inputSchema: groupIdInput, annotations: readOnly,
+    inputSchema: groupIdInput,
   }, async ({ groupId }) => safe(() => ({ group: tasks.groups.status(groupId) }))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_groups')) server.registerTool('antigravity_groups', {
-    outputSchema: outputSchemas.antigravity_groups, title: 'List retained groups',
+    outputSchema: outputSchemas.antigravity_groups,
     description: 'List retained group metadata. Group definitions and task prompts stay in private server state.',
-    inputSchema: {}, annotations: readOnly,
+    inputSchema: {},
   }, safe(() => ({ groups: tasks.groups.list() })));
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_wait')) server.registerTool('antigravity_group_wait', {
-    outputSchema: outputSchemas.antigravity_group_wait, title: 'Wait for compact group progress',
+    outputSchema: outputSchemas.antigravity_group_wait,
     description: 'Wait up to60 seconds for public messages or group completion. At most4 messages total, one per task; return per-task cursors and truncation indicators. Waiting cancellation leaves tasks running. No raw tool history.',
-    inputSchema: { ...groupIdInput, cursors: waitCursorsSchema.optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() }, annotations: readOnly,
+    inputSchema: { ...groupIdInput, cursors: waitCursorsSchema.optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() },
   }, async ({ groupId, cursors, timeoutSeconds }, extra) => safe(() => tasks.groups.wait(groupId, cursors, timeoutSeconds, extra.signal))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_group_cancel')) server.registerTool('antigravity_group_cancel', {
-    outputSchema: outputSchemas.antigravity_group_cancel, title: 'Cancel a dependency group',
+    outputSchema: outputSchemas.antigravity_group_cancel,
     description: 'Stop future nodes and cancel tasks in the coordinating server. Partial copies remain for inspection. Other live servers retain ownership of their tasks.',
-    inputSchema: groupIdInput, annotations: action,
+    inputSchema: groupIdInput,
   }, async ({ groupId }) => safe(async () => ({ group: await tasks.groups.cancel(groupId) }))());
   if (toolEnabled(tasks.toolProfile, 'antigravity_wait_many')) server.registerTool('antigravity_wait_many', {
-    outputSchema: outputSchemas.antigravity_wait_many, title: 'Wait for several tasks',
+    outputSchema: outputSchemas.antigravity_wait_many,
     description: 'Wait jointly for1..32 retained task IDs with independent message cursors. Returns at most4 public messages total, no tool history. Missing tasks are explicit per-target errors. ready means all targets ended, not that they succeeded.',
-    inputSchema: { targets: waitTargetsSchema, timeoutSeconds: z.number().int().min(1).max(60).optional() }, annotations: readOnly,
+    inputSchema: { targets: waitTargetsSchema, timeoutSeconds: z.number().int().min(1).max(60).optional() },
   }, async ({ targets, timeoutSeconds }, extra) => safe(async () => {
     const result = await tasks.waitMany(targets, timeoutSeconds, extra.signal);
     const waitArgs = result.tasks.filter(task => !task.error).map(task => `${task.taskId}:${task.nextCursor}`);
@@ -312,8 +313,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   };
   if (toolEnabled(tasks.toolProfile, 'antigravity_run')) server.registerTool('antigravity_run', {
     outputSchema: outputSchemas.antigravity_run,
-    title: 'Run Antigravity task', description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
-    inputSchema: runSchema, annotations: action,
+    description: 'Copy non-ignored project files to a temporary directory and run agy --sandbox there. includePaths narrows copied files or folders. Returns a taskId; source is unchanged.',
+    inputSchema: runSchema,
   }, async args => safe(async () => {
     const task = await tasks.run(args);
     return { task: clientTask(task), ...waitCommand([task.taskId]) };
@@ -321,26 +322,26 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_resume')) server.registerTool('antigravity_resume', {
     outputSchema: outputSchemas.antigravity_resume,
-    title: 'Resume Antigravity conversation', description: 'Continue a completed session in its existing isolated copy. Pass exactly one: taskId (preferred) or a sessionId obtained from antigravity_status. A task that is unknown, running, failed (except TEST_FAILED), integrated or from another project is refused before anything starts.',
-    inputSchema: { ...runSchema, taskId: z.string().uuid().optional(), sessionId: z.string().min(1).max(128).optional() }, annotations: action,
+    description: 'Continue a completed session in its existing isolated copy. Pass exactly one: taskId (preferred) or a sessionId obtained from antigravity_status. A task that is unknown, running, failed (except TEST_FAILED), integrated or from another project is refused before anything starts.',
+    inputSchema: { ...runSchema, taskId: z.string().uuid().optional(), sessionId: z.string().min(1).max(128).optional() },
   }, async ({ taskId, ...args }) => safe(async () => {
     const task = await tasks.resume(args, taskId);
     return { task: clientTask(task), ...waitCommand([task.taskId]) };
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_context')) server.registerTool('antigravity_context', {
-    outputSchema: outputSchemas.antigravity_context, title: 'Inspect role handoff context',
+    outputSchema: outputSchemas.antigravity_context,
     description: 'Inspect the current tree hash, structured report, criteria and inherited decisions of a completed task before transferring it to another role. Reports and decisions remain claims; a hash proves content identity only.',
-    inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
+    inputSchema: { taskId: z.string().uuid() },
   }, async ({ taskId }) => safe(() => tasks.context(taskId))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_handoff')) server.registerTool('antigravity_handoff', {
-    outputSchema: outputSchemas.antigravity_handoff, title: 'Transfer work to another role',
+    outputSchema: outputSchemas.antigravity_handoff,
     description: 'Start a new conversation in an independent copy of a completed task, carrying its structured report, decisions, criteria and test provenance. Bind to the treeSha256 from context. Reviewers inspect modified files without altering the implementation copy. Verification and human integration approval remain required.',
     inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
       memory: memorySelectionSchema.optional(), allowedTools: nativeToolsSchema.optional(), mcpServers: mcpSelectionSchema.optional(),
       prompt: z.string().min(1), role: configuredRoleSchema, effort: effortSchema.optional(), model: z.string().min(1).max(128).nullable().optional(), decisions: decisionsSchema.optional(),
-      timeoutSeconds: z.number().int().min(1).max(86400).optional() }, annotations: action,
+      timeoutSeconds: z.number().int().min(1).max(86400).optional() },
   }, async ({ sourceTaskId, ...args }) => safe(async () => {
     const source = tasks.status(sourceTaskId);
     const task = await tasks.run({ ...args, contextTaskId: sourceTaskId, workingDirectory: source.workingDirectory });
@@ -348,11 +349,10 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
   })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_compare')) server.registerTool('antigravity_compare', {
-    outputSchema: outputSchemas.antigravity_compare, title: 'Request independent model opinions',
+    outputSchema: outputSchemas.antigravity_compare,
     description: 'Start read-only reviewer tasks with 2 to 4 distinct agy model IDs against independent copies of the same hashed context. Each model consumes quota. Returns task IDs and comparison ID; inspect start errors and wait for each task before synthesizing.',
     inputSchema: { sourceTaskId: z.string().uuid(), expectedContextSha256: z.string().regex(/^[a-f0-9]{64}$/),
       models: comparisonModelsSchema, prompt: z.string().min(1), timeoutSeconds: z.number().int().min(1).max(86400).optional() },
-    annotations: action,
   }, async ({ sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds }) =>
     safe(async () => {
       const result = await tasks.compare(sourceTaskId, expectedContextSha256, models, prompt, timeoutSeconds);
@@ -360,57 +360,56 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     })());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_comparison')) server.registerTool('antigravity_comparison', {
-    outputSchema: outputSchemas.antigravity_comparison, title: 'Compare model review evidence',
+    outputSchema: outputSchemas.antigravity_comparison,
     description: 'Read retained comparison opinions, per-model failures, token usage and findings grouped by exact file/line/quote. Distinguish identical findings, different interpretations and findings not reported by every model. Missing or failed opinions are not agreement. Check contextStale, complete and unverified fields; Codex must inspect and synthesize the evidence. No integration is performed.',
-    inputSchema: { comparisonId: z.string().uuid() }, annotations: readOnly,
+    inputSchema: { comparisonId: z.string().uuid() },
   }, async ({ comparisonId }) => safe(() => tasks.comparison(comparisonId))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_preview')) server.registerTool('antigravity_preview', {
     outputSchema: outputSchemas.antigravity_preview,
-    title: 'Preview isolated changes', description: 'Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.',
-    inputSchema: { taskId: z.string().uuid(), includePatch: z.boolean().optional() }, annotations: readOnly,
+    description: 'Return A/M/D files, per-file line statistics, totals, binary markers, patch, SHA-256 and client-reported test evidence with stale markers. Requires a finished task.',
+    inputSchema: { taskId: z.string().uuid(), includePatch: z.boolean().optional() },
   }, async ({ taskId, includePatch }) => safe(() => tasks.preview(taskId, includePatch))());
 
   const chunkInput = { offset: z.number().int().min(0).optional(), limit: z.number().int().min(2).max(50000).optional() };
   if (toolEnabled(tasks.toolProfile, 'antigravity_read_patch')) server.registerTool('antigravity_read_patch', {
     outputSchema: outputSchemas.antigravity_read_patch,
-    title: 'Read patch by file or chunk', description: 'Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.',
-    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), path: z.string().min(1).max(1000).optional(), ...chunkInput }, annotations: readOnly,
+    description: 'Read at most 50000 UTF-16 units of the current patch, optionally selecting a changed path. Bind every read to the full preview hash. Follow nextOffset until hasMore is false. Use preview with includePatch false for metadata.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), path: z.string().min(1).max(1000).optional(), ...chunkInput },
   }, async ({ taskId, expectedSha256, path, offset, limit }) => safe(() => tasks.readPatch(taskId, expectedSha256, path, offset, limit))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_read_result')) server.registerTool('antigravity_read_result', {
     outputSchema: outputSchemas.antigravity_read_result,
-    title: 'Read result in chunks', description: 'Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.',
-    inputSchema: { taskId: z.string().uuid(), expectedContentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput }, annotations: readOnly,
+    description: 'Read the final CLI result serialized as JSON in bounded chunks. Returns ready false while active. Keep contentSha256 for subsequent requests and reconstruct the JSON by concatenating text.',
+    inputSchema: { taskId: z.string().uuid(), expectedContentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
   }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks.readResult(taskId, offset, limit, expectedContentSha256))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_verify')) server.registerTool('antigravity_verify', {
     outputSchema: outputSchemas.antigravity_verify,
-    title: 'Verify task acceptance criteria', description: 'Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.',
-    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() }, annotations: { ...readOnly, readOnlyHint: false },
+    description: 'Check actual artifacts and ground Codex review quotes in file lines. Requires criteria defined before the task. A CLI SUCCESS or unsupported claim is not verification; client review remains client-reported.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), reviews: reviewSchema.optional() },
   }, async ({ taskId, expectedSha256, reviews }) => safe(() => tasks.verify(taskId, expectedSha256, reviews))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_test')) server.registerTool('antigravity_test', {
     outputSchema: outputSchemas.antigravity_test,
-    title: 'Run tests in the bridge sandbox', description: 'Start an asynchronous exact-command test. Windows defaults to the bridge-owned LPAC executor; an explicit legacy agy backend keeps its existing native sandbox flow. Within a human-authorized global ceiling, the MCP caller chooses the narrower test selection; delegated Gemini cannot authorize or change it. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. Use the returned taskId for events, result, review and integration.',
+    description: 'Start an asynchronous exact-command test. Windows defaults to the bridge-owned LPAC executor; an explicit legacy agy backend keeps its existing native sandbox flow. Within a human-authorized global ceiling, the MCP caller chooses the narrower test selection; delegated Gemini cannot authorize or change it. Captures actual output, exit status and file fingerprints. Optionally permits up to three repair retries. Use the returned taskId for events, result, review and integration.',
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), command: testCommandSchema,
       retries: z.number().int().min(0).max(3).optional(), timeoutSeconds: z.number().int().min(1).max(86400).optional(),
-      sandbox: sandboxSelectionInputSchema.optional() }, annotations: action,
+      sandbox: sandboxSelectionInputSchema.optional() },
   }, async ({ taskId, expectedSha256, command, retries, timeoutSeconds, sandbox }) => safe(async () =>
     ({ task: clientTask(await tasks.startTests(taskId, expectedSha256, command, retries, timeoutSeconds, sandbox)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_record_test')) server.registerTool('antigravity_record_test', {
     outputSchema: outputSchemas.antigravity_record_test,
-    title: 'Record review test evidence', description: 'Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.',
+    description: 'Record a test already executed by the client in the isolated copy. Bind command, exit code and output to the reviewed patch. These are client-reported results; the bridge does not execute or independently verify the command. Do not include secrets in output.',
     inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/), command: z.string().min(1).max(1000),
       exitCode: z.number().int().min(0).max(255), output: z.string().max(4000).optional() },
-    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
   }, async ({ taskId, expectedSha256, command, exitCode, output }) => safe(() => tasks.recordTest(taskId, expectedSha256, command, exitCode, output))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_integrate')) server.registerTool('antigravity_integrate', {
     outputSchema: outputSchemas.antigravity_integrate,
-    title: 'Integrate reviewed changes', description: 'Apply a currently verified patch bound to its preview SHA-256. In automatic mode (default), verified integration is authorized automatically. With BRIDGE_APPROVAL_MODE=ask, an MCP confirmation form is always required even for previously authorized or remembered roots. Caller text or tool arguments cannot grant authorization.',
-    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) }, annotations: action,
+    description: 'Apply a currently verified patch bound to its preview SHA-256. In automatic mode (default), verified integration is authorized automatically. With BRIDGE_APPROVAL_MODE=ask, an MCP confirmation form is always required even for previously authorized or remembered roots. Caller text or tool arguments cannot grant authorization.',
+    inputSchema: { taskId: z.string().uuid(), expectedSha256: z.string().regex(/^[a-f0-9]{64}$/) },
   }, async ({ taskId, expectedSha256 }) => safe(() => tasks.integrate(taskId, expectedSha256, tasks.approvalMode === 'auto' ? undefined : async preview => {
     if (!server.server.getClientCapabilities()?.elicitation?.form) {
       throw new BridgeError('APPROVAL_UNAVAILABLE', 'The MCP client must support form elicitation to confirm integration');
@@ -429,54 +428,50 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_discard')) server.registerTool('antigravity_discard', {
     outputSchema: outputSchemas.antigravity_discard,
-    title: 'Discard an isolated copy', description: 'Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.',
-    inputSchema: { taskId: z.string().uuid() }, annotations: { ...action, openWorldHint: false },
+    description: 'Delete the copy and baseline of a finished task, including resumed tasks sharing that copy. Active copies are refused. The source project is preserved.',
+    inputSchema: { taskId: z.string().uuid() },
   }, async ({ taskId }) => safe(async () => ({ task: clientTask(await tasks.discard(taskId)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_cleanup')) server.registerTool('antigravity_cleanup', {
     outputSchema: outputSchemas.antigravity_cleanup,
-    title: 'Clean expired isolated copies', description: 'Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.',
-    inputSchema: {}, annotations: { ...action, openWorldHint: false },
+    description: 'Remove finished copies older than COPY_RETENTION_HOURS. Active copies are preserved.',
+    inputSchema: {},
   }, safe(() => tasks.cleanup()));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_send_message')) server.registerTool('antigravity_send_message', {
     outputSchema: outputSchemas.antigravity_send_message,
-    title: 'Send a caller message to an agy session', description: 'Queue bounded caller text for the retained conversation. A running turn finishes first; then the bridge starts an official session continuation. Sent means the bridge accepted that new task, not proof the model read it. Cannot approve permissions or integration.',
+    description: 'Queue bounded caller text for the retained conversation. A running turn finishes first; then the bridge starts an official session continuation. Sent means the bridge accepted that new task, not proof the model read it. Cannot approve permissions or integration.',
     inputSchema: { taskId: z.string().uuid(), messageId: z.string().uuid(), text: z.string().min(1).max(2000) },
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   }, async ({ taskId, messageId, text }) => safe(() => tasks.sendMessage(taskId, messageId, text))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_set_delivery_mode')) server.registerTool('antigravity_set_delivery_mode', {
     outputSchema: outputSchemas.antigravity_set_delivery_mode,
-    title: 'Choose delivery to the caller', description: 'Select compact public messages or legacy full events. This changes local task metadata, not agy permissions. Cursors belong to their delivery mode; restart after zero when switching.',
+    description: 'Select compact public messages or legacy full events. This changes local task metadata, not agy permissions. Cursors belong to their delivery mode; restart after zero when switching.',
     inputSchema: { taskId: z.string().uuid(), deliveryMode: deliveryModeSchema },
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   }, async ({ taskId, deliveryMode }) => safe(() => tasks.setDeliveryMode(taskId, deliveryMode))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_status')) server.registerTool('antigravity_status', {
     outputSchema: outputSchemas.antigravity_status,
-    title: 'Get Antigravity task status', description: 'Return task metadata, status, process ID and isolated copy path when available.',
-    inputSchema: { taskId: z.string().uuid() }, annotations: readOnly,
+    description: 'Return task metadata, status, process ID and isolated copy path when available.',
+    inputSchema: { taskId: z.string().uuid() },
   }, async ({ taskId }) => safe(() => ({ task: clientTask(tasks.status(taskId)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_tasks')) server.registerTool('antigravity_tasks', {
     outputSchema: outputSchemas.antigravity_tasks,
-    title: 'List persisted tasks', description: 'Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.',
-    inputSchema: {}, annotations: readOnly,
+    description: 'Recover task IDs and metadata from local bridge state, including tasks from earlier server processes.',
+    inputSchema: {},
   }, safe(() => ({ tasks: tasks.list().map(task => { const delivered = clientTask(task); if ('prompt' in delivered) { const { prompt: _prompt, ...metadata } = delivered; return metadata; } return delivered; }) })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_events')) server.registerTool('antigravity_events', {
     outputSchema: outputSchemas.antigravity_events,
-    title: 'Read Antigravity events', description: 'Read live normalized agy events after a sequence cursor. Includes original agy event payloads.',
+    description: 'Read live normalized agy events after a sequence cursor. Includes original agy event payloads.',
     inputSchema: { taskId: z.string().uuid(), after: z.number().int().min(0).optional(), limit: z.number().int().min(1).max(1000).optional() },
-    annotations: readOnly,
   }, async ({ taskId, after, limit }) => safe(() => tasks.readEvents(taskId, after, limit))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_wait')) server.registerTool('antigravity_wait', {
     outputSchema: outputSchemas.antigravity_wait,
-    title: 'Wait for real task progress', description: 'Wait up to 60 seconds. In messages mode, return early on a compact public question/blocker and exclude raw events/progress notifications. In legacy events mode, retain observed event progress and bounded history. Carry cursorMode from the previous response to reset safely after a delivery change. A wait timeout/cancellation leaves the task running; disclose truncated history.',
+    description: 'Wait up to 60 seconds. In messages mode, return early on a compact public question/blocker and exclude raw events/progress notifications. In legacy events mode, retain observed event progress and bounded history. Carry cursorMode from the previous response to reset safely after a delivery change. A wait timeout/cancellation leaves the task running; disclose truncated history.',
     inputSchema: { taskId: z.string().uuid(), cursorMode: deliveryModeSchema.optional(), after: z.number().int().min(0).optional(), timeoutSeconds: z.number().int().min(1).max(60).optional() },
-    annotations: readOnly,
   }, async ({ taskId, after, timeoutSeconds, cursorMode }, extra) => safe(() => tasks.wait(taskId, after, timeoutSeconds, extra.signal,
     extra._meta?.progressToken === undefined ? undefined : async event => {
       await extra.sendNotification({ method: 'notifications/progress', params: {
@@ -486,8 +481,8 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_result')) server.registerTool('antigravity_result', {
     outputSchema: outputSchemas.antigravity_result,
-    title: 'Get Antigravity result', description: 'Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.',
-    inputSchema: { taskId: z.string().uuid(), includeResult: z.boolean().optional() }, annotations: readOnly,
+    description: 'Return terminal result, usage and error once the task finishes. Use antigravity_preview for the patch.',
+    inputSchema: { taskId: z.string().uuid(), includeResult: z.boolean().optional() },
   }, async ({ taskId, includeResult }) => safe(() => {
     const result = tasks.result(taskId);
     if (includeResult !== false && result.task.deliveryMode !== 'messages') return { ...result, task: clientTask(result.task) };
@@ -501,35 +496,30 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_cancel')) server.registerTool('antigravity_cancel', {
     outputSchema: outputSchemas.antigravity_cancel,
-    title: 'Cancel Antigravity task', description: 'Cancel a queued task or terminate its local agy process.',
-    inputSchema: { taskId: z.string().uuid() }, annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+    description: 'Cancel a queued task or terminate its local agy process.',
+    inputSchema: { taskId: z.string().uuid() },
   }, async ({ taskId }) => safe(async () => ({ task: clientTask(await tasks.cancel(taskId)) }))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_sessions')) server.registerTool('antigravity_sessions', {
     outputSchema: outputSchemas.antigravity_sessions,
-    title: 'List known Antigravity sessions', description: 'List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.',
-    inputSchema: {}, annotations: readOnly,
+    description: 'List conversation IDs recovered from local persisted tasks. agy does not advertise a session-list command.',
+    inputSchema: {},
   }, safe(() => ({ sessions: tasks.sessions(), scope: 'local bridge state' })));
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_read_structured_result')) server.registerTool('antigravity_read_structured_result', {
     outputSchema: outputSchemas.antigravity_read_structured_result,
-    title: 'Read structured result in chunks',
     description: 'Read the independently validated structured result JSON in bounded chunks. Completed tasks only. Bind reads to contentSha256 and follow nextOffset until hasMore is false.',
     inputSchema: { taskId: z.string().uuid(), expectedContentSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(), ...chunkInput },
-    annotations: readOnly,
   }, async ({ taskId, offset, limit, expectedContentSha256 }) => safe(() => tasks.readStructuredResult(taskId, offset, limit, expectedContentSha256))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_artifacts')) server.registerTool('antigravity_artifacts', {
     outputSchema: outputSchemas.antigravity_artifacts,
-    title: 'List recorded task artifacts',
     description: 'List artifacts recorded for a completed task with their SHA-256 and byte sizes.',
     inputSchema: { taskId: z.string().uuid() },
-    annotations: readOnly,
   }, async ({ taskId }) => safe(() => tasks.listArtifacts(taskId))());
 
   if (toolEnabled(tasks.toolProfile, 'antigravity_read_artifact')) server.registerTool('antigravity_read_artifact', {
     outputSchema: outputSchemas.antigravity_read_artifact,
-    title: 'Read artifact in bounded chunks',
     description: 'Read recorded artifact bytes encoded as base64 in bounded chunks. Bound reads to the recorded artifact SHA-256.',
     inputSchema: {
       taskId: z.string().uuid(),
@@ -538,7 +528,6 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
       offset: z.number().int().min(0).optional(),
       limit: z.number().int().min(1).max(65536).optional(),
     },
-    annotations: readOnly,
   }, async ({ taskId, path, expectedSha256, offset, limit }) => safe(() => tasks.readArtifact(taskId, path, expectedSha256, offset, limit))());
 
   const connect = server.connect.bind(server);
