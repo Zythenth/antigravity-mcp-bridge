@@ -5,13 +5,14 @@ import { createMcpServer } from './mcp-server.js';
 import { TaskManager } from './task-manager.js';
 import { portableNodeStatus, preparePortableNodeRuntime } from './portable-node.js';
 import { runWaitCommand, waitCommandArgv } from './wait-command.js';
+import { runPermissionsCommand } from './permissions-command.js';
 
 const command = process.argv.slice(2);
 
 async function runtimeCommand(): Promise<boolean> {
   if (command.length === 0) return false;
   if (command.length !== 1 || (command[0] !== '--prepare-windows-runtime' && command[0] !== '--windows-runtime-status')) {
-    throw new Error('Expected exactly one startup command: --prepare-windows-runtime, --windows-runtime-status, or wait <taskId>');
+    throw new Error('Expected exactly one startup command: --prepare-windows-runtime, --windows-runtime-status, wait <taskId>, or permissions --host <host>');
   }
   const config = loadConfig();
   if (command[0] === '--windows-runtime-status') {
@@ -31,6 +32,8 @@ async function runtimeCommand(): Promise<boolean> {
 
 if (command[0] === 'wait') {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, line => process.stdout.write(line + '\n'));
+} else if (command[0] === 'permissions') {
+  process.exitCode = runPermissionsCommand(command.slice(1), text => process.stdout.write(text), text => process.stderr.write(text));
 } else if (!await runtimeCommand()) {
   const config = loadConfig();
   const adapter = new CliAdapter(config);

@@ -55973,13 +55973,178 @@ ${redacted}`;
   }
 };
 
+// dist/src/permissions-command.js
+var PERMISSION_HOSTS = ["claude-code", "codex"];
+var PERMISSION_PRESETS = ["connector", "delegation"];
+var DELEGATION_ASK_TOOLS = /* @__PURE__ */ new Set([
+  "antigravity_integrate",
+  "antigravity_discard",
+  "antigravity_cleanup",
+  "antigravity_memory_remove",
+  "antigravity_set_sandbox_policy",
+  "antigravity_cancel",
+  "antigravity_group_cancel"
+]);
+function permissionPlan(preset, profile, deny) {
+  const plan = { allow: [], ask: [], deny: [] };
+  const denySet = new Set(deny);
+  for (const name of Object.keys(TOOL_ANNOTATIONS)) {
+    if (!toolEnabled(profile, name)) {
+      continue;
+    }
+    if (denySet.has(name)) {
+      plan.deny.push(name);
+    } else if (preset === "connector") {
+      if (TOOL_ANNOTATIONS[name].readOnlyHint) {
+        plan.allow.push(name);
+      } else {
+        plan.ask.push(name);
+      }
+    } else if (DELEGATION_ASK_TOOLS.has(name)) {
+      plan.ask.push(name);
+    } else {
+      plan.allow.push(name);
+    }
+  }
+  return plan;
+}
+function renderClaudeCode(plan, serverName) {
+  return JSON.stringify({
+    permissions: {
+      allow: plan.allow.map((tool) => `mcp__${serverName}__${tool}`),
+      ask: plan.ask.map((tool) => `mcp__${serverName}__${tool}`),
+      deny: plan.deny.map((tool) => `mcp__${serverName}__${tool}`)
+    }
+  }, null, 2) + "\n";
+}
+function renderCodex(plan, serverName) {
+  const blocks = [];
+  if (plan.deny.length > 0) {
+    const disabled = plan.deny.map((tool) => JSON.stringify(tool)).join(", ");
+    blocks.push(`[mcp_servers.${serverName}]
+disabled_tools = [${disabled}]`);
+  }
+  const allowSet = new Set(plan.allow);
+  const askSet = new Set(plan.ask);
+  for (const tool of Object.keys(TOOL_ANNOTATIONS)) {
+    if (allowSet.has(tool)) {
+      blocks.push(`[mcp_servers.${serverName}.tools.${tool}]
+approval_mode = "approve"`);
+    } else if (askSet.has(tool)) {
+      blocks.push(`[mcp_servers.${serverName}.tools.${tool}]
+approval_mode = "prompt"`);
+    }
+  }
+  return blocks.join("\n\n") + "\n";
+}
+var SERVER_NAME_REGEX = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+function runPermissionsCommand(args, write, writeError) {
+  function refuse(message) {
+    writeError(`antigravity-mcp-bridge permissions: ${message}
+`);
+    return 2;
+  }
+  const singularOptions = {
+    "--host": void 0,
+    "--preset": void 0,
+    "--profile": void 0,
+    "--server-name": void 0
+  };
+  const denyRaw = [];
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === "--help" || arg === "-h") {
+      if (args.length === 1) {
+        write("Usage: antigravity-mcp-bridge permissions --host <claude-code|codex> [options]\n\nPrints a host permission block generated from the tool annotations table.\nThis command only prints to stdout and never writes any file.\n\nOptions:\n  --host <claude-code|codex>                     Target host format (required)\n  --preset <connector|delegation>                Permission preset (default: connector)\n  --profile <full|query|review|implementation>   Tool profile (default: full)\n  --server-name <name>                           MCP server name (default: antigravity)\n  --deny <tool>                                  Deny a tool (repeatable)\n  -h, --help                                     Show this help message\n");
+        return 0;
+      }
+      return refuse("Option --help cannot be combined with other arguments");
+    }
+    if (Object.hasOwn(singularOptions, arg)) {
+      if (singularOptions[arg] !== void 0) {
+        return refuse(`Option ${arg} cannot be specified more than once`);
+      }
+      i++;
+      if (i >= args.length) {
+        return refuse(`Option ${arg} requires a value`);
+      }
+      singularOptions[arg] = args[i];
+    } else if (arg === "--deny") {
+      i++;
+      if (i >= args.length) {
+        return refuse("Option --deny requires a value");
+      }
+      denyRaw.push(args[i]);
+    } else if (arg.startsWith("-")) {
+      return refuse(`Unknown option: ${arg}`);
+    } else {
+      return refuse(`Unexpected positional argument: ${arg}`);
+    }
+    i++;
+  }
+  const host = singularOptions["--host"];
+  if (host === void 0) {
+    return refuse("Missing required option --host");
+  }
+  if (!PERMISSION_HOSTS.includes(host)) {
+    return refuse(`Invalid host: ${host}. Expected one of: ${PERMISSION_HOSTS.join(", ")}`);
+  }
+  const effectiveHost = host;
+  const preset = singularOptions["--preset"];
+  if (preset !== void 0 && !PERMISSION_PRESETS.includes(preset)) {
+    return refuse(`Invalid preset: ${preset}. Expected one of: ${PERMISSION_PRESETS.join(", ")}`);
+  }
+  const effectivePreset = preset ?? "connector";
+  const profile = singularOptions["--profile"];
+  const effectiveProfileString = profile ?? "full";
+  const profileParsed = toolProfileSchema.safeParse(effectiveProfileString);
+  if (!profileParsed.success) {
+    return refuse(`Invalid profile: ${effectiveProfileString}. Expected one of: full, query, review, implementation`);
+  }
+  const effectiveProfile = profileParsed.data;
+  const serverName = singularOptions["--server-name"];
+  const effectiveServerName = serverName ?? "antigravity";
+  if (!SERVER_NAME_REGEX.test(effectiveServerName)) {
+    return refuse(`Invalid server name: ${effectiveServerName}. Must match ${SERVER_NAME_REGEX}`);
+  }
+  const expectedPrefix = `mcp__${effectiveServerName}__`;
+  const dedupedDenyTools = [];
+  const seenDeny = /* @__PURE__ */ new Set();
+  for (const raw of denyRaw) {
+    let toolName = raw;
+    if (raw.startsWith("mcp__")) {
+      if (!raw.startsWith(expectedPrefix)) {
+        const match = raw.match(/^(mcp__.*?__)/);
+        const prefixFound = match ? match[1] : raw;
+        return refuse(`Invalid deny prefix: found "${prefixFound}", expected "${expectedPrefix}"`);
+      }
+      toolName = raw.slice(expectedPrefix.length);
+    }
+    if (!Object.hasOwn(TOOL_ANNOTATIONS, toolName)) {
+      return refuse(`Unknown tool "${toolName}"`);
+    }
+    if (!toolEnabled(effectiveProfile, toolName)) {
+      return refuse(`Tool "${toolName}" is not available in the "${effectiveProfile}" profile`);
+    }
+    if (!seenDeny.has(toolName)) {
+      seenDeny.add(toolName);
+      dedupedDenyTools.push(toolName);
+    }
+  }
+  const plan = permissionPlan(effectivePreset, effectiveProfile, dedupedDenyTools);
+  const rendered = effectiveHost === "claude-code" ? renderClaudeCode(plan, effectiveServerName) : renderCodex(plan, effectiveServerName);
+  write(rendered);
+  return 0;
+}
+
 // dist/src/index.js
 var command = process.argv.slice(2);
 async function runtimeCommand() {
   if (command.length === 0)
     return false;
   if (command.length !== 1 || command[0] !== "--prepare-windows-runtime" && command[0] !== "--windows-runtime-status") {
-    throw new Error("Expected exactly one startup command: --prepare-windows-runtime, --windows-runtime-status, or wait <taskId>");
+    throw new Error("Expected exactly one startup command: --prepare-windows-runtime, --windows-runtime-status, wait <taskId>, or permissions --host <host>");
   }
   const config2 = loadConfig();
   if (command[0] === "--windows-runtime-status") {
@@ -55998,6 +56163,8 @@ async function runtimeCommand() {
 }
 if (command[0] === "wait") {
   process.exitCode = await runWaitCommand(command.slice(1), process.env, (line) => process.stdout.write(line + "\n"));
+} else if (command[0] === "permissions") {
+  process.exitCode = runPermissionsCommand(command.slice(1), (text) => process.stdout.write(text), (text) => process.stderr.write(text));
 } else if (!await runtimeCommand()) {
   let reportMaintenance2 = function(problem) {
     if (problem !== void 0)

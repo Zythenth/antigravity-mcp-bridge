@@ -85,6 +85,15 @@ function checkRuntimeStatus(command, args, label) {
   console.log(`${label}: read-only runtime status passed`);
 }
 
+function checkPermissionsCommand(bin) {
+  const output = execFileSync(process.execPath, [bin, 'permissions', '--host', 'claude-code', '--preset', 'delegation'], { cwd: directory, encoding: 'utf8' });
+  const permissions = JSON.parse(output).permissions;
+  assert.equal(permissions.allow.length, 43);
+  assert.equal(permissions.ask.length, 7);
+  assert.equal(permissions.deny.length, 0);
+  assert.ok(permissions.ask.includes('mcp__antigravity__antigravity_integrate'));
+}
+
 try {
   const packed = JSON.parse(execFileSync(process.execPath, [npmCli, 'pack', '--ignore-scripts', '--json', '--pack-destination', directory], { encoding: 'utf8' }))[0];
   assert.deepEqual(packed.files.map(file => file.path).sort(), expectedFiles);
@@ -108,6 +117,7 @@ try {
   const bin = path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs');
   assert.ok((await readFile(bin, 'utf8')).startsWith('#!/usr/bin/env node\n'));
   checkRuntimeStatus(process.execPath, [bin], 'tarball');
+  checkPermissionsCommand(bin);
   await check(process.execPath, [bin], 'tarball');
   await check(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--offline', '--yes', '--ignore-scripts', '--cache', path.join(directory, 'cache'), '--package', archive, 'antigravity-mcp-bridge'], 'npx');
   await checkAgedState(bin, directory);

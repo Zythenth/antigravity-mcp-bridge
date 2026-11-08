@@ -250,6 +250,24 @@ Nenhum modo introduz fallback automático para execução no host, nem altera as
 
 `antigravity_health.integrationApproval.preauthorizedProjectCount` informa a quantidade de raízes configuradas ou lembradas legadas; no modo `ask`, todas as integrações continuam exigindo confirmação humana independente desse total.
 
+## Host permissions
+
+`antigravity-mcp-bridge permissions` prints a permission block for the MCP host, generated from the tool annotation table; it only prints to stdout and never writes any file, so the user reviews and pastes it.
+
+1. Print the block (from the npm package, or from a source build):
+
+   ```powershell
+   npx antigravity-mcp-bridge permissions --host claude-code
+   node .\dist\src\index.js permissions --host claude-code --preset delegation
+   ```
+
+2. Choose the preset: `connector` (default) allows the tools whose `readOnlyHint` is true and asks before every other tool; `delegation` allows the delegation flow and asks only before the tools listed in `DELEGATION_ASK_TOOLS` in the code (`antigravity_integrate`, `antigravity_discard`, `antigravity_cleanup`, `antigravity_memory_remove`, `antigravity_set_sandbox_policy`, `antigravity_cancel`, and `antigravity_group_cancel`). `--profile` must match the server's `BRIDGE_TOOL_PROFILE` (default `full`), so only registered tools are listed, and `--server-name` must match the name the server was registered with (default `antigravity`), because rules use `mcp__<server>__<tool>`.
+3. Block tools with `--deny <tool>` (repeatable; bare tool name or `mcp__<server>__<tool>`); a wrong prefix, an unknown tool or a tool outside the profile is refused with an error and exit code 2, and nothing is printed to stdout.
+4. Claude Code: merge the `allow`, `ask` and `deny` arrays of the printed `permissions` object into the `permissions` of a Claude Code settings file (`~/.claude/settings.json`, `.claude/settings.json` or `.claude/settings.local.json`), keeping existing rules, then start a new session. To try the rules first, save the printed block to a separate file and start `claude --settings <file>`.
+5. Codex: `--host codex` prints TOML: one `[mcp_servers.<server>.tools.<tool>]` table per tool with `approval_mode = "approve"` (allowed) or `approval_mode = "prompt"` (ask), and denied tools in `disabled_tools` under `[mcp_servers.<server>]`. Add it to the existing server entry in `~/.codex/config.toml` (if the entry already has `disabled_tools`, merge the lists instead of adding a second key). Limitation: these keys were checked against the Codex configuration schema, but how each `approval_mode` behaves in a Codex session has not been verified here; Codex ignores unknown keys, so check the result with `codex mcp get <server> --json`.
+
+> **Note:** host approval adds to the bridge's own approval (`BRIDGE_APPROVAL_MODE`) and does not replace it. Allowing `antigravity_integrate` in the host does not skip the confirmation form in `ask` mode, and `auto` mode does not remove a host `ask` rule; every verification, test and review requirement of the bridge still applies.
+
 ## Anti-AI Craft incluído
 
 O pacote traz um snapshot verificado do [Anti-AI Craft](https://github.com/Zythenth/anti-ai-craft) com seis skills. Em toda tarefa nova, `anti-ai-code` e `anti-ai-security` são preparadas na cópia como skills permanentes e o Gemini é instruído a lê-las antes de trabalhar. `anti-ai-design`, `anti-ai-design-flow`, `anti-ai-audit` e `anti-ai-remediate` aparecem apenas como catálogo (nome, descrição e caminho, até 8 KiB); seus corpos, referências e imagens ficam fora do prompt e são lidos sob demanda, somente leitura, a partir de uma cópia privada por revisão em `<estado>/anti-ai-craft/`, adicionada ao CLI com `--add-dir`. Sob política de ferramentas, os hooks permitem apenas leitura nessa raiz. A seleção situacional é uma política desta integração: o Gemini escolhe pela pertinência da tarefa, sem exigir o nome literal da skill.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The new read-only `permissions` subcommand prints Claude Code `permissions.allow`/`ask`/`deny` rules (`mcp__<server>__<tool>`) or Codex per-tool `approval_mode` and `disabled_tools` TOML, generated from the tool annotation table, with `connector` and `delegation` presets, `--profile`, `--server-name` (default `antigravity`) and repeatable `--deny`; it never writes files; invalid input exits with code 2. In the `full` profile, `connector` allows 23 and asks 27, `delegation` allows 43 and asks 7. Tools, schemas, annotations and server behavior do not change.
+
 - Every MCP tool now takes its title and behavior hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) from one table in `src/tool-annotations.ts`, with one row per tool, instead of two generic sets with scattered exceptions. The hints now follow what each tool does in the code:
   - `antigravity_health`, `antigravity_list_models`, and `antigravity_set_model` query agy and are marked `openWorldHint: true`; `antigravity_set_sandbox_policy`, `antigravity_memory_write`, `antigravity_memory_remove`, `antigravity_group_create`, and `antigravity_group_cancel` run locally and are marked `openWorldHint: false`;
   - `antigravity_group_create` and `antigravity_group_cancel` only record or stop work and are no longer marked destructive;
