@@ -50,7 +50,7 @@ const MAX_BUFFERED_RESPONSE_STEPS = 16;
 const MAX_RESPONSE_STEPS = 1000;
 const MAX_HELD_RESPONSE_LINES = 100;
 const RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5_000_000 };
-const RESUME_GUIDANCE = 'Pass the taskId of the task to continue, or a sessionId obtained from antigravity_status';
+const RESUME_GUIDANCE = 'Pass the taskId of the task to continue, or a sessionId obtained from black_gravity_status';
 const RESUME_REFUSED = `Resume requires a completed, non-integrated task in this project. ${RESUME_GUIDANCE}`;
 
 export interface MaintenanceIssue { operation: 'copy-cleanup'; code: string; since: string; failures: number }
@@ -118,7 +118,7 @@ export class TaskManager {
   }
   assertStateDirectoryUsable(): void {
     if (this.degraded) {
-      throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+      throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
     }
   }
   private memoryStore?: ProjectMemoryStore;
@@ -1121,7 +1121,7 @@ export class TaskManager {
         since: new Date(now).toISOString(),
         failures: 1,
       };
-      return `Copy cleanup failed (${code}); the server keeps running and retries every minute. See maintenanceIssues in antigravity_health.`;
+      return `Copy cleanup failed (${code}); the server keeps running and retries every minute. See maintenanceIssues in black_gravity_health.`;
     }
   }
 
@@ -2230,7 +2230,7 @@ export class TaskManager {
     const accumulated = (task.publicResponses.get(index) ?? '') + delta;
     task.publicResponses.set(index, accumulated);
     // Envelopes are routed while the turn streams; captureMessages redacts each decoded body, after deltas are rejoined.
-    if (accumulated.includes('</antigravity-')) this.captureMessages(task, accumulated, String(index));
+    if (accumulated.includes('</black-gravity-')) this.captureMessages(task, accumulated, String(index));
   }
 
   private captureMessages(task: InternalTask, text: string, step: string, final = false): void {
@@ -2288,8 +2288,8 @@ export class TaskManager {
     if (status !== 'completed') this.failPendingInbox(task.project?.copyDirectory, task, status === 'cancelled' ? 'cancelled' : 'failed', code ?? 'TASK_NOT_COMPLETED');
     const output = task.record.result as { response?: unknown; structured_output?: { summary?: unknown } } | undefined;
     const reported = typeof output?.structured_output?.summary === 'string' ? output.structured_output.summary : typeof output?.response === 'string' && output.response.trim() ? output.response : task.record.report?.data.summary;
-    const hasPeerEnvelope = typeof reported === 'string' && reported.includes('<antigravity-peer-message>');
-    const text = hasPeerEnvelope ? 'Peer messages retained by the coordinator; inspect the referenced result for the final response.' : typeof reported === 'string' && reported.trim() ? reported.replace(/<antigravity-message>[\s\S]*?<\/antigravity-message>/g, '').trim() || 'Execution ended; inspect the referenced result.' : 'Execution ended with status ' + status + '; inspect the current verification and tests.';
+    const hasPeerEnvelope = typeof reported === 'string' && reported.includes('<black-gravity-peer-message>');
+    const text = hasPeerEnvelope ? 'Peer messages retained by the coordinator; inspect the referenced result for the final response.' : typeof reported === 'string' && reported.trim() ? reported.replace(/<black-gravity-message>[\s\S]*?<\/black-gravity-message>/g, '').trim() || 'Execution ended; inspect the referenced result.' : 'Execution ended with status ' + status + '; inspect the current verification and tests.';
     const source = !hasPeerEnvelope && status === 'completed' && typeof reported === 'string' && task.record.usageProvenance !== 'local-executor' ? 'agy-reported' : 'bridge';
     appendMessage(task.record, status === 'completed' ? 'final' : 'error', source,
       status === 'completed' ? text : (task.record.error?.code ?? status) + ': ' + (task.record.error?.message ?? text), resultReference(task.record));

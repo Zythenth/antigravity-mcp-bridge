@@ -8,8 +8,8 @@ export const MAX_PEER_ROUTES = 128;
 export const MAX_PEER_SCAN_CHARS = 1_000_000;
 export const MAX_PEER_PAYLOAD_CHARS = 4096;
 export const MAX_PEER_MESSAGES = 20;
-export const PEER_MESSAGE_OPEN_TAG = '<antigravity-peer-message>';
-export const PEER_MESSAGE_CLOSE_TAG = '</antigravity-peer-message>';
+export const PEER_MESSAGE_OPEN_TAG = '<black-gravity-peer-message>';
+export const PEER_MESSAGE_CLOSE_TAG = '</black-gravity-peer-message>';
 
 export const nodeKeySchema = z
   .string()

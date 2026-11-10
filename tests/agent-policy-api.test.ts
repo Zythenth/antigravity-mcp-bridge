@@ -38,7 +38,7 @@ test('resolved policy persistence rejects mutation and read-only writes, with co
   assert.equal(resolvedAgentPolicySchema.safeParse({ ...p, nativeTools: ['write_to_file', 'finish'] }).success, false);
   assert.equal(resolvedAgentPolicySchema.safeParse({ ...p, sha256: '0'.repeat(64) }).success, false);
   const t = { taskId: 'bcc7086b-f674-4b2d-825c-ff39c5635453', prompt: 'fixture', workingDirectory: path.resolve('project'), status: 'queued' as const, createdAt: new Date().toISOString(), agentPolicy: p, deliveryMode: 'messages' as const };
-  assert.deepEqual(compactTask(t).agentPolicy, p); assert.deepEqual(successOutputSchemas.antigravity_run.parse({ task: compactTask(t) }).task.agentPolicy, p);
+  assert.deepEqual(compactTask(t).agentPolicy, p); assert.deepEqual(successOutputSchemas.black_gravity_run.parse({ task: compactTask(t) }).task.agentPolicy, p);
 });
 test('profile selectors snapshot defaults while explicit empty lists replace them', () => {
   const definition = { name: 'fixture', baseRole: 'implementer' as const, instruction: 'Inspect the fixture.', defaults: { allowedTools: ['view_file' as const], mcpServers: [{ serverId: 'fixture', tools: ['echo'] }] } };
@@ -54,7 +54,7 @@ test('catalog discovery returns IDs and ceilings without credentials or transpor
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MCP_CATALOG: JSON.stringify(catalog), BRIDGE_STATE_DIRECTORY: directory, BRIDGE_TEST_EXECUTOR: 'agy' });
   const tasks = new TaskManager(new CliAdapter(config), config);
   try {
-    const result = successOutputSchemas.antigravity_get_agent_policy.parse(tasks.agentPolicyCatalog());
+    const result = successOutputSchemas.black_gravity_get_agent_policy.parse(tasks.agentPolicyCatalog());
     assert.equal(result.mcpServers[0]!.nativeServerName, 'bridge-policy-probe');
     assert.equal(JSON.stringify(result).includes('synthetic-secret'), false); assert.equal(JSON.stringify(result).includes('private-service'), false);
   } finally { await tasks.shutdown(); assert.equal(path.dirname(directory), path.resolve(os.tmpdir())); await rm(directory, { recursive: true, force: true }); }

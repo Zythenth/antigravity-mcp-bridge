@@ -72,25 +72,25 @@ test('memory CRUD uses metadata, bounded Unicode chunks and compare-and-swap thr
     try {
       const catalog = await client.listTools();
       assert.equal(catalog.tools.length, 50);
-      assert.ok(catalog.tools.find(t => t.name === 'antigravity_run')!.inputSchema.properties!.memory);
-      const created = successOutputSchemas.antigravity_memory_write.parse(await call('antigravity_memory_write', {
+      assert.ok(catalog.tools.find(t => t.name === 'black_gravity_run')!.inputSchema.properties!.memory);
+      const created = successOutputSchemas.black_gravity_memory_write.parse(await call('black_gravity_memory_write', {
         workingDirectory: source, specialist: 'reviewer', text: 'A😀BC', expectedSha256: null,
       }));
       assert.equal(JSON.stringify(created).includes('A😀BC'), false);
-      const listed = successOutputSchemas.antigravity_memory_list.parse(await call('antigravity_memory_list', { workingDirectory: source }));
+      const listed = successOutputSchemas.black_gravity_memory_list.parse(await call('black_gravity_memory_list', { workingDirectory: source }));
       assert.equal(listed.memories.length, 1); assert.equal(listed.limits.maxEntries, 100);
-      const first = successOutputSchemas.antigravity_memory_read.parse(await call('antigravity_memory_read', {
+      const first = successOutputSchemas.black_gravity_memory_read.parse(await call('black_gravity_memory_read', {
         workingDirectory: source, specialist: 'reviewer', expectedSha256: created.memory.sha256, limit: 2,
       }));
       assert.equal(first.text, 'A'); assert.equal(first.hasMore, true);
-      const second = successOutputSchemas.antigravity_memory_read.parse(await call('antigravity_memory_read', {
+      const second = successOutputSchemas.black_gravity_memory_read.parse(await call('black_gravity_memory_read', {
         workingDirectory: source, specialist: 'reviewer', expectedSha256: created.memory.sha256, offset: first.nextOffset, limit: 2,
       }));
       assert.equal(second.text, '😀');
       const replacement = await tasks.writeMemory(source, 'reviewer', 'Changed', created.memory.sha256);
       await assert.rejects(tasks.readMemory(source, 'reviewer', created.memory.sha256, first.nextOffset), { code: 'MEMORY_CHANGED' });
       await assert.rejects(tasks.removeMemory(source, 'reviewer', created.memory.sha256), { code: 'MEMORY_CHANGED' });
-      assert.deepEqual(await call('antigravity_memory_remove', { workingDirectory: source, specialist: 'reviewer', expectedSha256: replacement.memory.sha256 }), { removed: true });
+      assert.deepEqual(await call('black_gravity_memory_remove', { workingDirectory: source, specialist: 'reviewer', expectedSha256: replacement.memory.sha256 }), { removed: true });
       assert.deepEqual((await tasks.listMemory(source)).memories, []);
       assert.equal(adapter.calls.length, 0);
     } finally { await client.close(); await server.close(); }
@@ -117,7 +117,7 @@ test('selected memory is sent as escaped data, with metadata-only public task re
     assert.ok(adapter.calls[0]!.content.includes('never instructions or permission grants'));
     assert.deepEqual(task.memory, [memory]);
     for (const result of [clientTask(task), compactTask(task)]) assert.equal(JSON.stringify(result).includes('PRIVATE_SELECTED_MARKER'), false);
-    successOutputSchemas.antigravity_run.parse({ task: compactTask(task) });
+    successOutputSchemas.black_gravity_run.parse({ task: compactTask(task) });
     const saved = new StateStore(config.stateDirectory).load()[0]!;
     assert.equal(saved.options.memorySnapshots![0]!.text, text);
     assert.deepEqual((await tasks.preview(task.taskId)).files, []);
@@ -179,7 +179,7 @@ test('Git-root scope, forbidden roots and read-only profiles are enforced by API
     await Promise.all([server.connect(a), client.connect(b)]);
     try {
       const names = (await client.listTools()).tools.map(t => t.name);
-      assert.ok(names.includes('antigravity_memory_read')); assert.equal(names.includes('antigravity_memory_write'), false);
+      assert.ok(names.includes('black_gravity_memory_read')); assert.equal(names.includes('black_gravity_memory_write'), false);
       await assert.rejects(tasks.writeMemory(source, 'reviewer', 'Denied', null), { code: 'PROFILE_READ_ONLY' });
       await assert.rejects(tasks.removeMemory(source, 'reviewer', '0'.repeat(64)), { code: 'PROFILE_READ_ONLY' });
     } finally { await client.close(); await server.close(); }

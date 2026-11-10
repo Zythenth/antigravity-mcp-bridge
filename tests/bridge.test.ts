@@ -268,7 +268,7 @@ test('a bypass request cannot be erased by another sandbox error or a subsequent
 test('native test receipts require the exact tool command and reject malformed or duplicate receipts', () => {
   const nonce = 'd16a1fe6-5488-4c44-89a3-2972d0e4d9b1';
   const receipt = Buffer.from(JSON.stringify({ nonce, exitCode: 0, beforeSha256: 'a'.repeat(64), afterSha256: 'a'.repeat(64), truncated: false })).toString('base64');
-  const output = 'observed output\nAGY_BRIDGE_TEST:' + nonce + ':' + receipt;
+  const output = 'observed output\nBLACK_GRAVITY_TEST:' + nonce + ':' + receipt;
   const step = { step_index: 1, state: 'DONE', step_type: 'tool', tool_name: 'run_command', tool_info: { parameters: { CommandLine: 'exact command' }, output } };
   assert.equal(readNativeReceipt(step, { nonce, commandLine: 'exact command' })?.receipt.exitCode, 0);
   assert.equal(readNativeReceipt({ ...step, tool_info: { ...step.tool_info, parameters: { CommandLine: 'exact command', BypassSandbox: true } } }, { nonce, commandLine: 'exact command' }), undefined);
@@ -325,7 +325,7 @@ test('sandbox diagnostics distinguish access failures, setup and denied bypass w
   assert.equal(readNativeSandboxError({ ...step, tool_info: { ...step.tool_info, parameters: { CommandLine: expected.commandLine, BypassSandbox: true } } }, expected)?.code, 'AGY_SANDBOX_BYPASS_REQUESTED');
   assert.equal(readNativeSandboxError({ ...step, tool_info: { ...step.tool_info, output: 'ordinary command error' } }, expected), undefined);
   const receipt = Buffer.from(JSON.stringify({ nonce: expected.nonce, exitCode: 0, truncated: false })).toString('base64');
-  const loggedText = 'granting access to C:: Access is denied.\nAGY_BRIDGE_TEST:' + expected.nonce + ':' + receipt;
+  const loggedText = 'granting access to C:: Access is denied.\nBLACK_GRAVITY_TEST:' + expected.nonce + ':' + receipt;
   assert.equal(readNativeSandboxError({ ...step, tool_info: { ...step.tool_info, output: loggedText } }, expected), undefined);
 });
 
@@ -591,7 +591,7 @@ test('resume refuses invalid selectors before any process, task or copy', async 
     const copiesBefore = new Set(await copies());
     await assert.rejects(tasks.resume(options, taskId), (error: Error & { code?: string }) => {
       assert.equal(error.code, 'INVALID_SESSION');
-      assert.ok(error.message.includes('taskId') && error.message.includes('antigravity_status'), error.message);
+      assert.ok(error.message.includes('taskId') && error.message.includes('black_gravity_status'), error.message);
       for (const value of hidden) assert.ok(!error.message.includes(value), error.message);
       return true;
     });

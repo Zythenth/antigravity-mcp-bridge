@@ -17,7 +17,7 @@ import { clientTask } from '../src/messages.js';
 import { waitForTask } from './wait-for-task.js';
 
 const question = { kind: 'question', text: 'Which public fixture should be used?' };
-const envelope = '<antigravity-message>' + JSON.stringify(question) + '</antigravity-message>';
+const envelope = '<black-gravity-message>' + JSON.stringify(question) + '</black-gravity-message>';
 class ControlledAdapter extends CliAdapter {
   constructor(config: Config) { super(config); }
   override async listModels() { return []; }

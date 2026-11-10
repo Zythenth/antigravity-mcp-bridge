@@ -23,17 +23,17 @@ try {
   await client.connect(transport);
   const listed = await client.listTools();
   const names = listed.tools.map(tool => tool.name);
-  for (const name of ['antigravity_health', 'antigravity_list_models', 'antigravity_run', 'antigravity_events', 'antigravity_result', 'antigravity_preview', 'antigravity_integrate', 'antigravity_cancel']) {
+  for (const name of ['black_gravity_health', 'black_gravity_list_models', 'black_gravity_run', 'black_gravity_events', 'black_gravity_result', 'black_gravity_preview', 'black_gravity_integrate', 'black_gravity_cancel']) {
     if (!names.includes(name)) throw new Error(`Missing MCP tool ${name}`);
   }
   console.log(`MCP_TOOLS=${names.length}`);
-  const health = await client.callTool({ name: 'antigravity_health', arguments: {} });
+  const health = await client.callTool({ name: 'black_gravity_health', arguments: {} });
   if (health.isError) throw new Error(JSON.stringify(health.structuredContent));
   console.log(`HEALTH=${JSON.stringify(health.structuredContent)}`);
-  const models = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+  const models = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
   if (models.isError) throw new Error(JSON.stringify(models.structuredContent));
   console.log(`MODEL_COUNT=${models.structuredContent.models.length}`);
-  const run = await client.callTool({ name: 'antigravity_run', arguments: {
+  const run = await client.callTool({ name: 'black_gravity_run', arguments: {
     prompt: 'Create a file named AGY_BRIDGE_TEST.md in the current directory containing exactly this sentence: Antigravity MCP bridge test successful. Do not change other files.',
     workingDirectory: directory, timeoutSeconds: 180,
     acceptanceCriteria: [{ id: 'created', description: 'Create the requested file with the exact sentence', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'Antigravity MCP bridge test successful.' } }],
@@ -44,12 +44,12 @@ try {
   let cursor = 0, eventCount = 0, sawLive = false, final;
   const deadline = Date.now() + 200000;
   while (Date.now() < deadline) {
-    const events = await client.callTool({ name: 'antigravity_events', arguments: { taskId, after: cursor } });
+    const events = await client.callTool({ name: 'black_gravity_events', arguments: { taskId, after: cursor } });
     if (events.isError) throw new Error(JSON.stringify(events.structuredContent));
     const payload = events.structuredContent;
     eventCount += payload.events.length;
     cursor = payload.nextCursor;
-    const result = await client.callTool({ name: 'antigravity_result', arguments: { taskId } });
+    const result = await client.callTool({ name: 'black_gravity_result', arguments: { taskId } });
     if (result.isError) throw new Error(JSON.stringify(result.structuredContent));
     if (!result.structuredContent.ready && payload.events.some(event => event.type === 'agent.started' || event.type === 'step.update' || event.type === 'response.chunk')) sawLive = true;
     if (result.structuredContent.ready) { final = result.structuredContent.task; break; }
@@ -62,13 +62,13 @@ try {
   if (final.status !== 'completed') throw new Error(JSON.stringify(final.error || final.result || final));
   try { await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8'); throw new Error('Source was modified before integration'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
-  const preview = await client.callTool({ name: 'antigravity_preview', arguments: { taskId } });
+  const preview = await client.callTool({ name: 'black_gravity_preview', arguments: { taskId } });
   if (preview.isError || !preview.structuredContent.files.some(file => file.path === 'AGY_BRIDGE_TEST.md')) throw new Error(JSON.stringify(preview.structuredContent));
   const quote = await readFile(path.join(final.copyDirectory, 'AGY_BRIDGE_TEST.md'), 'utf8');
-  const verification = await client.callTool({ name: 'antigravity_verify', arguments: { taskId, expectedSha256: preview.structuredContent.sha256,
+  const verification = await client.callTool({ name: 'black_gravity_verify', arguments: { taskId, expectedSha256: preview.structuredContent.sha256,
     reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'Fixture content inspected independently' }] } });
   if (verification.isError || verification.structuredContent.status !== 'passed') throw new Error(JSON.stringify(verification.structuredContent));
-  const integrated = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.structuredContent.sha256 } });
+  const integrated = await client.callTool({ name: 'black_gravity_integrate', arguments: { taskId, expectedSha256: preview.structuredContent.sha256 } });
   if (integrated.isError) throw new Error(JSON.stringify(integrated.structuredContent));
   const contents = await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8');
   console.log(`FILE=${contents.trim()}`);
@@ -77,8 +77,8 @@ try {
   console.error(error);
   process.exitCode = 1;
 } finally {
-  if (taskId) await client.callTool({ name: 'antigravity_cancel', arguments: { taskId } }).catch(() => {});
-  if (taskId) await client.callTool({ name: 'antigravity_discard', arguments: { taskId } }).catch(() => {});
+  if (taskId) await client.callTool({ name: 'black_gravity_cancel', arguments: { taskId } }).catch(() => {});
+  if (taskId) await client.callTool({ name: 'black_gravity_discard', arguments: { taskId } }).catch(() => {});
   await client.close().catch(() => {});
   await rm(directory, { recursive: true, force: true });
 }

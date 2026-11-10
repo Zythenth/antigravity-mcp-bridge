@@ -158,30 +158,30 @@ test('Real server startup over stdio enters degraded mode on relative BRIDGE_STA
     client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     const health = healthResult.structuredContent as Record<string, unknown>;
     assert.deepEqual(health.configurationIssues, [
       { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'not-absolute' },
     ]);
     assert.equal(health.waitCommand, undefined);
 
-    const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+    const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
     assert.equal(cleanupResult.isError, true);
     assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-    const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+    const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
     assert.equal(policyResult.isError, true);
     assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-    const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+    const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
     assert.equal(tasksResult.isError, true);
     assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-    const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+    const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
     assert.equal(rolesResult.isError, undefined);
     assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-    const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+    const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
     assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
     await client.close();
@@ -239,30 +239,30 @@ test('Real server startup over stdio or TaskManager handles NUL byte in BRIDGE_S
         client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
         await client.connect(transport);
 
-        const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+        const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
         const health = healthResult.structuredContent as Record<string, unknown>;
         assert.deepEqual(health.configurationIssues, [
           { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'invalid-entry' },
         ]);
         assert.equal(health.waitCommand, undefined);
 
-        const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+        const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
         assert.equal(cleanupResult.isError, true);
         assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-        const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+        const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
         assert.equal(policyResult.isError, true);
         assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-        const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+        const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
         assert.equal(tasksResult.isError, true);
         assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-        const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+        const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
         assert.equal(rolesResult.isError, undefined);
         assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-        const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+        const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
         assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
       } finally {
         if (client) await client.close();
@@ -327,30 +327,30 @@ test('Real server startup over stdio enters degraded mode on link BRIDGE_STATE_D
     client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     const health = healthResult.structuredContent as Record<string, unknown>;
     assert.deepEqual(health.configurationIssues, [
       { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'link' },
     ]);
     assert.equal(health.waitCommand, undefined);
 
-    const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+    const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
     assert.equal(cleanupResult.isError, true);
     assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-    const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+    const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
     assert.equal(policyResult.isError, true);
     assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-    const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+    const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
     assert.equal(tasksResult.isError, true);
     assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-    const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+    const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
     assert.equal(rolesResult.isError, undefined);
     assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-    const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+    const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
     assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
     await client.close();
@@ -397,30 +397,30 @@ test('Real server startup over stdio and wait command enter degraded mode on exi
     client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     const health = healthResult.structuredContent as Record<string, unknown>;
     assert.deepEqual(health.configurationIssues, [
       { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'not-directory' },
     ]);
     assert.equal(health.waitCommand, undefined);
 
-    const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+    const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
     assert.equal(cleanupResult.isError, true);
     assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-    const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+    const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
     assert.equal(policyResult.isError, true);
     assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-    const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+    const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
     assert.equal(tasksResult.isError, true);
     assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-    const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+    const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
     assert.equal(rolesResult.isError, undefined);
     assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-    const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+    const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
     assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
     await client.close();
@@ -687,7 +687,7 @@ test('Normal server startup leaves no probe file in state directory', async () =
     client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     assert.equal(healthResult.isError, undefined);
 
     await client.close();
@@ -802,30 +802,30 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'invalid-entry' },
       ]);
       assert.equal(health.waitCommand, undefined);
 
-      const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+      const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
       assert.equal(cleanupResult.isError, true);
       assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-      const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+      const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
       assert.equal(policyResult.isError, true);
       assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-      const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+      const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
       assert.equal(tasksResult.isError, true);
       assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-      const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+      const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
       assert.equal(rolesResult.isError, undefined);
       assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-      const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+      const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
       assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
       await client.close();
@@ -876,30 +876,30 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'invalid-entry' },
       ]);
       assert.equal(health.waitCommand, undefined);
 
-      const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+      const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
       assert.equal(cleanupResult.isError, true);
       assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-      const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+      const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
       assert.equal(policyResult.isError, true);
       assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-      const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+      const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
       assert.equal(tasksResult.isError, true);
       assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-      const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+      const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
       assert.equal(rolesResult.isError, undefined);
       assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-      const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+      const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
       assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
       await client.close();
@@ -952,30 +952,30 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'invalid-entry' },
       ]);
       assert.equal(health.waitCommand, undefined);
 
-      const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+      const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
       assert.equal(cleanupResult.isError, true);
       assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-      const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+      const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
       assert.equal(policyResult.isError, true);
       assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-      const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+      const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
       assert.equal(tasksResult.isError, true);
       assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-      const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+      const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
       assert.equal(rolesResult.isError, undefined);
       assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-      const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+      const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
       assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
       await client.close();
@@ -1054,30 +1054,30 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'unusable' },
       ]);
       assert.equal(health.waitCommand, undefined);
 
-      const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+      const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
       assert.equal(cleanupResult.isError, true);
       assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-      const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+      const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
       assert.equal(policyResult.isError, true);
       assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-      const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+      const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
       assert.equal(tasksResult.isError, true);
       assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-      const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+      const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
       assert.equal(rolesResult.isError, undefined);
       assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-      const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+      const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
       assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
       await client.close();
@@ -1137,30 +1137,30 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'unusable' },
       ]);
       assert.equal(health.waitCommand, undefined);
 
-      const cleanupResult = await client.callTool({ name: 'antigravity_cleanup', arguments: {} });
+      const cleanupResult = await client.callTool({ name: 'black_gravity_cleanup', arguments: {} });
       assert.equal(cleanupResult.isError, true);
       assert.match(JSON.stringify(cleanupResult), /INVALID_STATE_DIRECTORY/);
 
-      const policyResult = await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} });
+      const policyResult = await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} });
       assert.equal(policyResult.isError, true);
       assert.match(JSON.stringify(policyResult), /INVALID_STATE_DIRECTORY/);
 
-      const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+      const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
       assert.equal(tasksResult.isError, true);
       assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-      const rolesResult = await client.callTool({ name: 'antigravity_roles', arguments: {} });
+      const rolesResult = await client.callTool({ name: 'black_gravity_roles', arguments: {} });
       assert.equal(rolesResult.isError, undefined);
       assert.ok(Array.isArray((rolesResult.structuredContent as Record<string, unknown>).roles));
 
-      const modelsResult = await client.callTool({ name: 'antigravity_list_models', arguments: {} });
+      const modelsResult = await client.callTool({ name: 'black_gravity_list_models', arguments: {} });
       assert.equal(JSON.stringify(modelsResult).includes('INVALID_STATE_DIRECTORY'), false);
 
       await client.close();
@@ -1242,18 +1242,18 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'unusable' },
       ]);
       assert.equal(health.waitCommand, undefined);
 
-      const tasksResult = await client.callTool({ name: 'antigravity_tasks', arguments: {} });
+      const tasksResult = await client.callTool({ name: 'black_gravity_tasks', arguments: {} });
       assert.equal(tasksResult.isError, true);
       assert.match(JSON.stringify(tasksResult), /INVALID_STATE_DIRECTORY/);
 
-      const eventsResult = await client.callTool({ name: 'antigravity_events', arguments: { taskId } });
+      const eventsResult = await client.callTool({ name: 'black_gravity_events', arguments: { taskId } });
       assert.equal(eventsResult.isError, true);
       assert.match(JSON.stringify(eventsResult), /INVALID_STATE_DIRECTORY/);
 
@@ -1311,7 +1311,7 @@ if (process.platform === 'win32') {
       client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
       await client.connect(transport);
 
-      const healthResult = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthResult = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       const health = healthResult.structuredContent as Record<string, unknown>;
       assert.deepEqual(health.configurationIssues, [
         { variable: 'BRIDGE_STATE_DIRECTORY', reason: 'unusable' },

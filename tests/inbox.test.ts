@@ -234,12 +234,12 @@ test('wait exposes pending input and accepted continuation in the strict MCP con
     const pending = await f.tasks.wait(id, 0, 1, undefined, undefined, 'messages');
     assert.equal(pending.continuationPending, true);
     assert.equal(pending.continuationTaskId, undefined);
-    assert.equal(successOutputSchemas.antigravity_wait.safeParse(pending).success, true);
+    assert.equal(successOutputSchemas.black_gravity_wait.safeParse(pending).success, true);
     f.adapter.releaseFirst!();
     await until(() => Boolean(f.tasks.status(id).continuationTaskId));
     const linked = await f.tasks.wait(id, 0, 1, undefined, undefined, 'messages');
     assert.ok(linked.continuationTaskId);
-    assert.equal(successOutputSchemas.antigravity_wait.safeParse(linked).success, true);
+    assert.equal(successOutputSchemas.black_gravity_wait.safeParse(linked).success, true);
   } finally { await f.close(); }
 });
 

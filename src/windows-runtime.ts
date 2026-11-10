@@ -539,7 +539,7 @@ async function portableNodeForHostRuntime(file: string, selection: WindowsRuntim
   if (major !== 24) fail('PORTABLE_NODE_HOST_UNSUPPORTED', 'Portable Node substitution requires the bridge host Node.js major version to be 24');
   const cacheDirectory = selection.portableNodeCacheDirectory;
   if (selection.portableNodeCacheDirectoryInvalid || !cacheDirectory) {
-    fail('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    fail('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
   }
   return resolvePortableNodeRuntime(cacheDirectory);
 }

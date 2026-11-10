@@ -3,18 +3,18 @@ import { z } from 'zod';
 export const toolProfileSchema = z.enum(['full', 'query', 'review', 'implementation']);
 export type ToolProfile = z.infer<typeof toolProfileSchema>;
 const queryTools = new Set([
-  'antigravity_workflow_result', 'antigravity_peer_receipts', 'antigravity_wait_many', 'antigravity_group_status', 'antigravity_groups', 'antigravity_group_wait', 'antigravity_group_cancel',
-  'antigravity_memory_list', 'antigravity_memory_read',
-  'antigravity_health', 'antigravity_get_agent_policy', 'antigravity_list_models', 'antigravity_get_model', 'antigravity_usage',
-  'antigravity_list_project_files', 'antigravity_run', 'antigravity_resume', 'antigravity_status',
-  'antigravity_tasks', 'antigravity_events', 'antigravity_result', 'antigravity_read_result',
-  'antigravity_cancel', 'antigravity_sessions', 'antigravity_wait', 'antigravity_context', 'antigravity_handoff',
-  'antigravity_compare', 'antigravity_comparison',
-  'antigravity_roles', 'antigravity_get_sandbox_policy', 'antigravity_set_delivery_mode',
-  'antigravity_send_message',
-  'antigravity_read_structured_result', 'antigravity_artifacts', 'antigravity_read_artifact',
+  'black_gravity_workflow_result', 'black_gravity_peer_receipts', 'black_gravity_wait_many', 'black_gravity_group_status', 'black_gravity_groups', 'black_gravity_group_wait', 'black_gravity_group_cancel',
+  'black_gravity_memory_list', 'black_gravity_memory_read',
+  'black_gravity_health', 'black_gravity_get_agent_policy', 'black_gravity_list_models', 'black_gravity_get_model', 'black_gravity_usage',
+  'black_gravity_list_project_files', 'black_gravity_run', 'black_gravity_resume', 'black_gravity_status',
+  'black_gravity_tasks', 'black_gravity_events', 'black_gravity_result', 'black_gravity_read_result',
+  'black_gravity_cancel', 'black_gravity_sessions', 'black_gravity_wait', 'black_gravity_context', 'black_gravity_handoff',
+  'black_gravity_compare', 'black_gravity_comparison',
+  'black_gravity_roles', 'black_gravity_get_sandbox_policy', 'black_gravity_set_delivery_mode',
+  'black_gravity_send_message',
+  'black_gravity_read_structured_result', 'black_gravity_artifacts', 'black_gravity_read_artifact',
 ]);
-const reviewTools = new Set([...queryTools, 'antigravity_preview', 'antigravity_read_patch', 'antigravity_verify']);
+const reviewTools = new Set([...queryTools, 'black_gravity_preview', 'black_gravity_read_patch', 'black_gravity_verify']);
 
 export function toolEnabled(profile: ToolProfile, name: string): boolean {
   if (profile === 'full' || profile === 'implementation') return true;

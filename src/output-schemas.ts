@@ -95,21 +95,21 @@ const usageRow = z.object({ taskId: id, sessionId: z.string().nullable(), model:
 const sandboxPolicySnapshot = z.object({ version: z.literal(1), policy: sandboxPolicySchema, sha256: hash }).strict();
 
 export const successOutputSchemas = {
-  antigravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32), waitCommand: waitCommandSchema.optional() }).strict(),
-  antigravity_workflow_result: z.object({ groupId: id, finalNode: z.string(), taskId: id, outputSha256: hash, summary: z.string().max(2000).optional(),
-    reference: z.object({ tool: z.literal('antigravity_read_result'), taskId: id, contentSha256: hash }).strict() }).strict(),
-  antigravity_peer_receipts: peerReceiptsPageSchema,
-  antigravity_group_create: z.object({ group: groupSummarySchema }).strict(),
-  antigravity_group_start: z.object({ group: groupSummarySchema, waitCommand: waitCommandSchema.optional() }).strict(),
-  antigravity_group_status: z.object({ group: groupSummarySchema }).strict(),
-  antigravity_groups: z.object({ groups: z.array(groupSummarySchema).max(100) }).strict(),
-  antigravity_group_wait: z.object({ group: groupSummarySchema, ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
-  antigravity_group_cancel: z.object({ group: groupSummarySchema }).strict(),
-  antigravity_memory_list: z.object({ memories: z.array(memorySummarySchema), limits: z.object({ maxEntries: count, maxBytes: count, maxEntryBytes: count }).strict() }).strict(),
-  antigravity_memory_read: z.object({ memory: memorySummarySchema, ...chunkShape }).strict(),
-  antigravity_memory_write: z.object({ memory: memorySummarySchema }).strict(),
-  antigravity_memory_remove: z.object({ removed: z.literal(true) }).strict(),
-  antigravity_health: z.object({
+  black_gravity_wait_many: z.object({ ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32), waitCommand: waitCommandSchema.optional() }).strict(),
+  black_gravity_workflow_result: z.object({ groupId: id, finalNode: z.string(), taskId: id, outputSha256: hash, summary: z.string().max(2000).optional(),
+    reference: z.object({ tool: z.literal('black_gravity_read_result'), taskId: id, contentSha256: hash }).strict() }).strict(),
+  black_gravity_peer_receipts: peerReceiptsPageSchema,
+  black_gravity_group_create: z.object({ group: groupSummarySchema }).strict(),
+  black_gravity_group_start: z.object({ group: groupSummarySchema, waitCommand: waitCommandSchema.optional() }).strict(),
+  black_gravity_group_status: z.object({ group: groupSummarySchema }).strict(),
+  black_gravity_groups: z.object({ groups: z.array(groupSummarySchema).max(100) }).strict(),
+  black_gravity_group_wait: z.object({ group: groupSummarySchema, ready: z.boolean(), timedOut: z.boolean(), hasMoreMessages: z.boolean(), tasks: z.array(jointWaitTaskSchema).max(32) }).strict(),
+  black_gravity_group_cancel: z.object({ group: groupSummarySchema }).strict(),
+  black_gravity_memory_list: z.object({ memories: z.array(memorySummarySchema), limits: z.object({ maxEntries: count, maxBytes: count, maxEntryBytes: count }).strict() }).strict(),
+  black_gravity_memory_read: z.object({ memory: memorySummarySchema, ...chunkShape }).strict(),
+  black_gravity_memory_write: z.object({ memory: memorySummarySchema }).strict(),
+  black_gravity_memory_remove: z.object({ removed: z.literal(true) }).strict(),
+  black_gravity_health: z.object({
     toolProfile: toolProfileSchema.optional(),
     approvalMode: z.enum(['auto', 'ask']).optional(),
     configurationIssues: z.array(z.object({ variable: z.string(), index: count.optional(), reason: z.enum(['invalid-json', 'not-a-list', 'too-many-entries', 'not-a-string', 'not-absolute', 'not-found', 'access-denied', 'not-a-directory', 'volume-root', 'unresolvable', 'not-an-object', 'legacy-format', 'invalid-format', 'invalid-name', 'forbidden-name', 'invalid-pattern', 'invalid-entry', 'duplicate', 'too-large', 'unsafe-file', 'link', 'not-directory', 'unusable']) }).strict()).optional(),
@@ -133,11 +133,11 @@ export const successOutputSchemas = {
       nodeVersion: z.string(), libuvVersion: z.string(), sha256: hash.nullable(), error: z.object({ code: z.string(), message: z.string() }).strict().optional() }).strict().optional(),
     waitCommand: waitCommandSchema.optional(),
   }).strict(),
-  antigravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
-  antigravity_get_agent_policy: z.object({ allowedTools: nativeToolsSchema, mcpServers: z.array(z.object({ id: z.string(), description: z.string().nullable(), nativeServerName: z.string(), tools: z.array(mcpCatalogToolSchema) }).strict()).max(20) }).strict(),
-  antigravity_get_model: z.object({ model: z.string().nullable() }).strict(),
-  antigravity_get_sandbox_policy: sandboxPolicySnapshot,
-  antigravity_roles: z.object({ roles: z.array(z.object({ name: roleSchema, baseRole: builtinRoleSchema,
+  black_gravity_list_models: z.object({ models: z.array(z.object({ id: z.string(), name: z.string() }).strict()) }).strict(),
+  black_gravity_get_agent_policy: z.object({ allowedTools: nativeToolsSchema, mcpServers: z.array(z.object({ id: z.string(), description: z.string().nullable(), nativeServerName: z.string(), tools: z.array(mcpCatalogToolSchema) }).strict()).max(20) }).strict(),
+  black_gravity_get_model: z.object({ model: z.string().nullable() }).strict(),
+  black_gravity_get_sandbox_policy: sandboxPolicySnapshot,
+  black_gravity_roles: z.object({ roles: z.array(z.object({ name: roleSchema, baseRole: builtinRoleSchema,
     description: z.string().nullable(), custom: z.boolean(), instructionChars: count,
     defaultModel: z.string().nullable().optional(), defaultEffort: effortSchema.optional(),
     defaultTimeoutSeconds: z.number().int().min(1).max(86400).optional(), defaultDeliveryMode: deliveryModeSchema.optional(),
@@ -146,57 +146,57 @@ export const successOutputSchemas = {
     defaultMemory: z.lazy(() => memorySelectionSchema).optional(),
     defaultAllowedTools: nativeToolsSchema.optional(), defaultMcpServers: mcpSelectionSchema.optional(),
     outputSchemaSha256: hash.optional() }).strict()) }).strict(),
-  antigravity_set_model: z.object({ model: z.string().nullable() }).strict(),
-  antigravity_set_sandbox_policy: sandboxPolicySnapshot,
-  antigravity_usage: z.object({
+  black_gravity_set_model: z.object({ model: z.string().nullable() }).strict(),
+  black_gravity_set_sandbox_policy: sandboxPolicySnapshot,
+  black_gravity_usage: z.object({
     scope: z.literal('retained-tasks'), taskCount: count, measuredTaskCount: count, counters: usageCountersSchema, byTask: z.array(usageRow),
     byModel: z.array(z.object({ model: z.string().nullable(), taskCount: count, counters: usageCountersSchema }).strict()),
     bySession: z.array(z.object({ sessionId: z.string(), taskCount: count, counters: usageCountersSchema, observedCumulative: usageCountersSchema.nullable() }).strict()),
   }).strict(),
-  antigravity_list_project_files: z.object({ files: z.array(z.string()) }).strict(),
-  antigravity_run: startedTask,
-  antigravity_resume: startedTask,
-  antigravity_handoff: startedTask,
-  antigravity_context: z.object({ taskId: id, treeSha256: hash, role: roleSchema, report: report.nullable(), handoff: handoffSchema.nullable(),
+  black_gravity_list_project_files: z.object({ files: z.array(z.string()) }).strict(),
+  black_gravity_run: startedTask,
+  black_gravity_resume: startedTask,
+  black_gravity_handoff: startedTask,
+  black_gravity_context: z.object({ taskId: id, treeSha256: hash, role: roleSchema, report: report.nullable(), handoff: handoffSchema.nullable(),
     acceptanceCriteria: z.array(criterionSchema), includedFiles: z.array(z.string()) }).strict(),
-  antigravity_compare: z.object({ comparisonId: id, taskIds: z.array(id), models: comparisonSchema.shape.models,
+  black_gravity_compare: z.object({ comparisonId: id, taskIds: z.array(id), models: comparisonSchema.shape.models,
     startErrors: comparisonSchema.shape.startErrors, waitCommand: waitCommandSchema.optional() }).strict(),
-  antigravity_comparison: comparisonSchema.extend({
+  black_gravity_comparison: comparisonSchema.extend({
     ready: z.boolean(), complete: z.boolean(), missingModels: z.array(z.string()), contextStale: z.boolean(),
     opinions: z.array(z.object({ taskId: id, model: z.string(), status, contextMatches: z.boolean().nullable(), report: report.nullable(),
       error: z.object({ code: z.string(), message: z.string() }).strict().nullable(), tokenUsage: tokenUsage.optional() }).strict()),
     findings: z.array(comparisonFindingSchema), warnings: z.array(z.string()),
   }).strict(),
-  antigravity_preview: z.object({
+  black_gravity_preview: z.object({
     ...previewShape, patch: z.string().optional(), patchLength: count,
     tests: z.array(testEvidenceSchema.extend({ stale: z.boolean() })),
     verification: verification.extend({ stale: z.boolean() }).nullable(),
   }).strict(),
-  antigravity_read_patch: z.object({ taskId: id, sha256: hash, path: z.string().nullable(), ...chunkShape }).strict(),
-  antigravity_read_result: z.object({
+  black_gravity_read_patch: z.object({ taskId: id, sha256: hash, path: z.string().nullable(), ...chunkShape }).strict(),
+  black_gravity_read_result: z.object({
     ready: z.boolean(), taskId: id, status,
     text: z.string().optional(), offset: count.optional(), length: count.optional(), totalLength: count.optional(),
     nextOffset: count.optional(), hasMore: z.boolean().optional(), contentSha256: hash.optional(), offsetUnit: z.literal('utf16-code-units').optional(),
   }).strict().refine(value => !value.ready || Object.keys(chunkShape).every(key => value[key as keyof typeof value] !== undefined), 'Ready results require all chunk fields')
     .meta({ allOf: [{ if: { properties: { ready: { const: true } }, required: ['ready'] }, then: { required: Object.keys(chunkShape) } }] }),
-  antigravity_verify: verification,
-  antigravity_test: task,
-  antigravity_record_test: testEvidenceSchema,
-  antigravity_integrate: z.object({ ...previewShape, restoredByteOrderMarks: z.array(z.string()).optional(), leftoverFiles: z.array(z.string()).optional() }).strict(),
-  antigravity_discard: task,
-  antigravity_cleanup: z.object({ discardedTaskIds: z.array(id) }).strict(),
-  antigravity_status: task,
-  antigravity_tasks: z.object({ tasks: z.array(taskRecordSchema) }).strict(),
-  antigravity_events: z.object({
+  black_gravity_verify: verification,
+  black_gravity_test: task,
+  black_gravity_record_test: testEvidenceSchema,
+  black_gravity_integrate: z.object({ ...previewShape, restoredByteOrderMarks: z.array(z.string()).optional(), leftoverFiles: z.array(z.string()).optional() }).strict(),
+  black_gravity_discard: task,
+  black_gravity_cleanup: z.object({ discardedTaskIds: z.array(id) }).strict(),
+  black_gravity_status: task,
+  black_gravity_tasks: z.object({ tasks: z.array(taskRecordSchema) }).strict(),
+  black_gravity_events: z.object({
     events: z.array(z.object({ taskId: id, sequence: z.number().int().positive(), timestamp, type: z.string(), data: z.unknown(), raw: z.unknown().optional() }).strict()),
     nextCursor: count, oldestAvailable: z.number().int().positive(), truncated: z.boolean(),
   }).strict(),
-  antigravity_result: z.object({
+  black_gravity_result: z.object({
     task: taskRecordSchema, ready: z.boolean(), resultAvailable: z.boolean().optional(), reportAvailable: z.boolean().optional(), includedFileCount: count.optional(),
     handoffAvailable: z.boolean().optional(), roleDefinitionAvailable: z.boolean().optional(),
     structuredResultAvailable: z.boolean().optional(), artifactCount: count.optional(),
   }).strict(),
-  antigravity_wait: z.object({
+  black_gravity_wait: z.object({
     taskId: id, status, ready: z.boolean(), timedOut: z.boolean(), tokenUsage: tokenUsage.optional(),
     deliveryMode: deliveryModeSchema.optional(), cursorReset: z.boolean().optional(), messages: z.array(bridgeMessageSchema).max(50).optional(),
     events: z.array(z.object({ taskId: id, sequence: z.number().int().positive(), timestamp, type: z.string(), data: z.unknown(), raw: z.unknown().optional() }).strict()).optional(),
@@ -205,10 +205,10 @@ export const successOutputSchemas = {
   }).strict().refine(value => value.deliveryMode === 'messages' ? Array.isArray(value.messages) && value.events === undefined : Array.isArray(value.events) && value.messages === undefined, 'Delivery mode must match its payload')
     .meta({ anyOf: [{ properties: { deliveryMode: { const: 'messages' } }, required: ['deliveryMode', 'messages'], not: { required: ['events'] } },
       { properties: { deliveryMode: { const: 'events' } }, required: ['events'], not: { required: ['messages'] } }] }),
-  antigravity_set_delivery_mode: z.object({ taskId: id, deliveryMode: deliveryModeSchema }).strict(),
-  antigravity_cancel: task,
-  antigravity_sessions: z.object({ sessions: z.array(z.object({ sessionId: z.string(), taskIds: z.array(id) }).strict()), scope: z.literal('local bridge state') }).strict(),
-  antigravity_send_message: z.object({
+  black_gravity_set_delivery_mode: z.object({ taskId: id, deliveryMode: deliveryModeSchema }).strict(),
+  black_gravity_cancel: task,
+  black_gravity_sessions: z.object({ sessions: z.array(z.object({ sessionId: z.string(), taskIds: z.array(id) }).strict()), scope: z.literal('local bridge state') }).strict(),
+  black_gravity_send_message: z.object({
     receipt: z.object({
       messageId: id,
       taskId: id,
@@ -217,10 +217,10 @@ export const successOutputSchemas = {
       error: z.object({ code: z.string(), message: z.string() }).strict().optional(),
     }).strict(),
   }).strict(),
-  antigravity_read_structured_result: z.object({
+  black_gravity_read_structured_result: z.object({
     taskId: id, ...chunkShape,
   }).strict(),
-  antigravity_artifacts: z.object({
+  black_gravity_artifacts: z.object({
     taskId: id,
     artifacts: z.array(z.object({
       path: z.string(),
@@ -228,7 +228,7 @@ export const successOutputSchemas = {
       bytes: count,
     }).strict()),
   }).strict(),
-  antigravity_read_artifact: z.object({
+  black_gravity_read_artifact: z.object({
     taskId: id,
     path: z.string(),
     sha256: hash,

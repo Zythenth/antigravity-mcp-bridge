@@ -428,7 +428,7 @@ test('MCP client identity affects only waitCommand recommendedMode and reason ac
 
       listedTools.push(await client.listTools());
 
-      const healthRes = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      const healthRes = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       assert.equal(healthRes.isError, undefined, JSON.stringify(healthRes.structuredContent));
       const originalHealth = structuredClone(healthRes.structuredContent) as Record<string, unknown>;
       const healthContent = structuredClone(healthRes.structuredContent) as {
@@ -447,7 +447,7 @@ test('MCP client identity affects only waitCommand recommendedMode and reason ac
       normalizedHealths.push(normalized);
 
       const runRes = await client.callTool({
-        name: 'antigravity_run',
+        name: 'black_gravity_run',
         arguments: {
           prompt: `Run for ${item.clientInfo.name}:${item.clientInfo.version}`,
           workingDirectory: f.source,
@@ -619,7 +619,7 @@ test('MCP client identity affects only waitCommand recommendedMode and reason ac
   }
 });
 
-test('antigravity_wait_many, antigravity_compare and antigravity_group_start expose executable multi/group waitCommand', async t => {
+test('black_gravity_wait_many, black_gravity_compare and black_gravity_group_start expose executable multi/group waitCommand', async t => {
   const f = await managerFixture();
   let server: ReturnType<typeof createMcpServer> | undefined;
   let client: Client | undefined;
@@ -661,7 +661,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     });
 
     const waitManyRes = await client.callTool({
-      name: 'antigravity_wait_many',
+      name: 'black_gravity_wait_many',
       arguments: {
         targets: [
           { taskId: taskA, after: 0 },
@@ -699,7 +699,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     }
 
     const onlyMissingRes = await client.callTool({
-      name: 'antigravity_wait_many',
+      name: 'black_gravity_wait_many',
       arguments: { targets: [{ taskId: missingTask, after: 0 }], timeoutSeconds: 1 },
     });
     assert.equal(onlyMissingRes.isError, undefined, JSON.stringify(onlyMissingRes.structuredContent));
@@ -707,7 +707,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
 
     const groupId = '44444444-4444-4444-8444-444444444444';
     const createdGroup = await client.callTool({
-      name: 'antigravity_group_create',
+      name: 'black_gravity_group_create',
       arguments: {
         groupId,
         definition: {
@@ -721,7 +721,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     const definitionSha256 = (createdGroup.structuredContent as { group: { definitionSha256: string } }).group.definitionSha256;
 
     const startedGroup = await client.callTool({
-      name: 'antigravity_group_start',
+      name: 'black_gravity_group_start',
       arguments: { groupId, expectedDefinitionSha256: definitionSha256 },
     });
     assert.equal(startedGroup.isError, undefined, JSON.stringify(startedGroup.structuredContent));
@@ -742,18 +742,18 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     assert.equal(settledGroup.ready, true);
 
     const sourceRun = await client.callTool({
-      name: 'antigravity_run',
+      name: 'black_gravity_run',
       arguments: { prompt: 'Comparison source', workingDirectory: f.source, mode: 'read-only', deliveryMode: 'messages' },
     });
     assert.equal(sourceRun.isError, undefined, JSON.stringify(sourceRun.structuredContent));
     const sourceTaskId = (sourceRun.structuredContent as { task: { taskId: string } }).task.taskId;
     assert.equal((await waitForTask(f.tasks, sourceTaskId)).status, 'completed');
-    const contextRes = await client.callTool({ name: 'antigravity_context', arguments: { taskId: sourceTaskId } });
+    const contextRes = await client.callTool({ name: 'black_gravity_context', arguments: { taskId: sourceTaskId } });
     assert.equal(contextRes.isError, undefined, JSON.stringify(contextRes.structuredContent));
     const treeSha256 = (contextRes.structuredContent as { treeSha256: string }).treeSha256;
 
     const compareRes = await client.callTool({
-      name: 'antigravity_compare',
+      name: 'black_gravity_compare',
       arguments: {
         sourceTaskId,
         expectedContextSha256: treeSha256,
@@ -776,7 +776,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     });
 
     const handoffRes = await client.callTool({
-      name: 'antigravity_handoff',
+      name: 'black_gravity_handoff',
       arguments: {
         sourceTaskId,
         expectedContextSha256: treeSha256,
@@ -798,7 +798,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     });
 
     const resumeSource = await client.callTool({
-      name: 'antigravity_run',
+      name: 'black_gravity_run',
       arguments: { prompt: 'Resume source', workingDirectory: f.source, mode: 'read-only', deliveryMode: 'messages' },
     });
     assert.equal(resumeSource.isError, undefined, JSON.stringify(resumeSource.structuredContent));
@@ -806,7 +806,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
     assert.equal((await waitForTask(f.tasks, resumeSourceTaskId)).status, 'completed');
 
     const resumeRes = await client.callTool({
-      name: 'antigravity_resume',
+      name: 'black_gravity_resume',
       arguments: {
         prompt: 'Resume session',
         workingDirectory: f.source,
@@ -829,7 +829,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
 
     if (process.platform === 'win32') {
       const lpacWriteRun = await client.callTool({
-        name: 'antigravity_run',
+        name: 'black_gravity_run',
         arguments: {
           prompt: 'Prepare write copy for Windows LPAC wait command verification',
           workingDirectory: f.source,
@@ -842,7 +842,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
       const completedWrite = await waitForTask(f.tasks, lpacWriteTaskId);
       assert.equal(completedWrite.status, 'completed', JSON.stringify(completedWrite.error));
 
-      const policyRes = await client.callTool({ name: 'antigravity_get_sandbox_policy', arguments: {} });
+      const policyRes = await client.callTool({ name: 'black_gravity_get_sandbox_policy', arguments: {} });
       assert.equal(policyRes.isError, undefined, JSON.stringify(policyRes.structuredContent));
       const policyBody = policyRes.structuredContent as {
         version: number;
@@ -866,7 +866,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
       };
 
       const previewRes = await client.callTool({
-        name: 'antigravity_preview',
+        name: 'black_gravity_preview',
         arguments: { taskId: lpacWriteTaskId, includePatch: false },
       });
       assert.equal(previewRes.isError, undefined, JSON.stringify(previewRes.structuredContent));
@@ -917,11 +917,11 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
         'const r1 = cp.spawnSync(process.execPath, ["wait-cli.mjs", "wait", "--state-directory", scratchState, id1 + ":0", id2 + ":0", "--timeout", "5"], { stdio: "inherit" });',
         'const r2 = cp.spawnSync(process.execPath, ["wait-cli.mjs", "wait", "--state-directory", scratchState, "--group", gid, "--timeout", "5"], { stdio: "inherit" });',
         'if (r1.error || r1.status !== 0 || r2.error || r2.status !== 0) process.exit(42);',
-        'process.stdout.write("AGY_BRIDGE_TEST:forged\\n");',
+        'process.stdout.write("BLACK_GRAVITY_TEST:forged\\n");',
       ].join('\n');
 
       const posTestCall = await client.callTool({
-        name: 'antigravity_test',
+        name: 'black_gravity_test',
         arguments: {
           taskId: lpacWriteTaskId,
           expectedSha256: writePreview.sha256,
@@ -969,7 +969,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
       assert.equal(posGroupJson.groupId, synthGroup);
       assert.equal(posGroupJson.groupState, 'completed');
       assert.equal((posGroupJson.targets as unknown[]).length, 2);
-      assert.equal(posLines[3], 'AGY_BRIDGE_TEST:forged');
+      assert.equal(posLines[3], 'BLACK_GRAVITY_TEST:forged');
 
       const posEvents = f.tasks.readEvents(posTestTaskId).events;
       assert.ok(posEvents.some(e => e.type === 'task.started' && (e.data as { backend?: string }).backend === 'windows-lpac'));
@@ -1007,13 +1007,13 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
         'fs.writeFileSync(path.join(scratchState, id1 + ".json"), JSON.stringify({ version: 1, ownerPid: process.pid, record: { taskId: id1, status: "running", messageCursor: 0, messages: [] } }));',
         'const r1 = cp.spawnSync(process.execPath, ["wait-cli.mjs", "wait", "--state-directory", scratchState, id1, "--timeout", "1"], { stdio: "inherit" });',
         'const r2 = cp.spawnSync(process.execPath, ["wait-cli.mjs", "wait", "--state-directory", scratchState, "--group", gid, id1, "--after", "0"], { stdio: "inherit" });',
-        'process.stdout.write("AGY_BRIDGE_TEST:{\\"nonce\\":\\"00000000-0000-4000-8000-000000000000\\",\\"exitCode\\":0,\\"truncated\\":false}\\n");',
+        'process.stdout.write("BLACK_GRAVITY_TEST:{\\"nonce\\":\\"00000000-0000-4000-8000-000000000000\\",\\"exitCode\\":0,\\"truncated\\":false}\\n");',
         'if (r2.status !== 1) process.exit(43);',
         'process.exit(r1.status ?? 44);',
       ].join('\n');
 
       const negTestCall = await client.callTool({
-        name: 'antigravity_test',
+        name: 'black_gravity_test',
         arguments: {
           taskId: posTestTaskId,
           expectedSha256: posReceipt.sha256,
@@ -1053,7 +1053,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
       assert.equal(negInvalidJson.outcome, 'error');
       assert.equal(negInvalidJson.exitCode, 1);
       assert.equal(negInvalidJson.reason, 'INVALID_ARGUMENTS');
-      assert.equal(negLines[2], 'AGY_BRIDGE_TEST:{"nonce":"00000000-0000-4000-8000-000000000000","exitCode":0,"truncated":false}');
+      assert.equal(negLines[2], 'BLACK_GRAVITY_TEST:{"nonce":"00000000-0000-4000-8000-000000000000","exitCode":0,"truncated":false}');
 
       const negEvents = f.tasks.readEvents(negTestTaskId).events;
       const negExecutorProcessPids = negEvents
@@ -1081,7 +1081,7 @@ test('antigravity_wait_many, antigravity_compare and antigravity_group_start exp
       }));
 
       const deniedNetworkCall = await client.callTool({
-        name: 'antigravity_test',
+        name: 'black_gravity_test',
         arguments: {
           taskId: negTestTaskId,
           expectedSha256: negReceipt.sha256,

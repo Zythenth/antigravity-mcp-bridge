@@ -92,9 +92,9 @@ test('7. extractPeerMessages parses valid public envelopes and ignores surroundi
   const id1 = randomUUID();
   const id2 = randomUUID();
   const text = `Log preamble
-<antigravity-peer-message>{"messageId":"${id1}","toNode":"beta","text":"Hello beta"}</antigravity-peer-message>
+<black-gravity-peer-message>{"messageId":"${id1}","toNode":"beta","text":"Hello beta"}</black-gravity-peer-message>
 Intermediate text
-<antigravity-peer-message>{"messageId":"${id2}","toNode":"gamma","text":"Review requested"}</antigravity-peer-message>
+<black-gravity-peer-message>{"messageId":"${id2}","toNode":"gamma","text":"Review requested"}</black-gravity-peer-message>
 Trailing commentary`;
 
   const result = extractPeerMessages(text);
@@ -122,8 +122,8 @@ test('8. peer message text preserves bytes but rejects all-whitespace, empty, an
   assert.equal(peerMessageInputSchema.safeParse({ messageId: id, toNode: 'beta', text: '' }).success, false);
   assert.equal(peerMessageInputSchema.safeParse({ messageId: id, toNode: 'beta', text: 'hello\0world' }).success, false);
 
-  const envWhitespace = `<antigravity-peer-message>{"messageId":"${id}","toNode":"beta","text":"   "}</antigravity-peer-message>`;
-  const envNul = `<antigravity-peer-message>{"messageId":"${id}","toNode":"beta","text":"nul\\u0000byte"}</antigravity-peer-message>`;
+  const envWhitespace = `<black-gravity-peer-message>{"messageId":"${id}","toNode":"beta","text":"   "}</black-gravity-peer-message>`;
+  const envNul = `<black-gravity-peer-message>{"messageId":"${id}","toNode":"beta","text":"nul\\u0000byte"}</black-gravity-peer-message>`;
   assert.deepEqual(extractPeerMessages(envWhitespace).messages, []);
   assert.deepEqual(extractPeerMessages(envNul).messages, []);
 });
@@ -137,7 +137,7 @@ test('9. envelope body exceeding 4096 units is ignored while compliant payload i
   });
   assert.ok(oversizedPayload.length > MAX_PEER_PAYLOAD_CHARS);
 
-  const textOversized = `<antigravity-peer-message>${oversizedPayload}</antigravity-peer-message>`;
+  const textOversized = `<black-gravity-peer-message>${oversizedPayload}</black-gravity-peer-message>`;
   assert.deepEqual(extractPeerMessages(textOversized).messages, []);
 
   const validPayload = JSON.stringify({
@@ -145,7 +145,7 @@ test('9. envelope body exceeding 4096 units is ignored while compliant payload i
     toNode: 'beta',
     text: 'acceptable length',
   });
-  const textValid = `<antigravity-peer-message>${validPayload}</antigravity-peer-message>`;
+  const textValid = `<black-gravity-peer-message>${validPayload}</black-gravity-peer-message>`;
   const result = extractPeerMessages(textValid);
   assert.equal(result.messages.length, 1);
   assert.equal(result.truncated, false);
@@ -154,8 +154,8 @@ test('9. envelope body exceeding 4096 units is ignored while compliant payload i
 test('10. scan limit caps inspection at 1,000,000 UTF-16 units and marks result truncated', () => {
   const id1 = randomUUID();
   const id2 = randomUUID();
-  const earlyEnv = `<antigravity-peer-message>{"messageId":"${id1}","toNode":"beta","text":"early"}</antigravity-peer-message>`;
-  const lateEnv = `<antigravity-peer-message>{"messageId":"${id2}","toNode":"gamma","text":"late"}</antigravity-peer-message>`;
+  const earlyEnv = `<black-gravity-peer-message>{"messageId":"${id1}","toNode":"beta","text":"early"}</black-gravity-peer-message>`;
+  const lateEnv = `<black-gravity-peer-message>{"messageId":"${id2}","toNode":"gamma","text":"late"}</black-gravity-peer-message>`;
 
   const filler = 'a'.repeat(MAX_PEER_SCAN_CHARS);
   const oversizedText = earlyEnv + filler + lateEnv;
@@ -168,7 +168,7 @@ test('10. scan limit caps inspection at 1,000,000 UTF-16 units and marks result 
 
 test('11. count limit caps at 20 messages and marks truncated when more valid messages exist', () => {
   const makeEnv = (num: number) =>
-    `<antigravity-peer-message>{"messageId":"${randomUUID()}","toNode":"beta","text":"msg ${num}"}</antigravity-peer-message>`;
+    `<black-gravity-peer-message>{"messageId":"${randomUUID()}","toNode":"beta","text":"msg ${num}"}</black-gravity-peer-message>`;
 
   const exact20 = Array.from({ length: 20 }, (_, i) => makeEnv(i)).join('\n');
   const res20 = extractPeerMessages(exact20);
@@ -184,11 +184,11 @@ test('11. count limit caps at 20 messages and marks truncated when more valid me
 test('12. malformed envelopes and unknown fields are ignored while repeated IDs are preserved', () => {
   const sharedId = randomUUID();
   const text = `
-<antigravity-peer-message>{not valid json}</antigravity-peer-message>
-<antigravity-peer-message>{"messageId":"${randomUUID()}","toNode":"beta","text":"ok","unknownField":123}</antigravity-peer-message>
-<antigravity-peer-message>unclosed tag
-<antigravity-peer-message>{"messageId":"${sharedId}","toNode":"beta","text":"first copy"}</antigravity-peer-message>
-<antigravity-peer-message>{"messageId":"${sharedId}","toNode":"beta","text":"second copy"}</antigravity-peer-message>
+<black-gravity-peer-message>{not valid json}</black-gravity-peer-message>
+<black-gravity-peer-message>{"messageId":"${randomUUID()}","toNode":"beta","text":"ok","unknownField":123}</black-gravity-peer-message>
+<black-gravity-peer-message>unclosed tag
+<black-gravity-peer-message>{"messageId":"${sharedId}","toNode":"beta","text":"first copy"}</black-gravity-peer-message>
+<black-gravity-peer-message>{"messageId":"${sharedId}","toNode":"beta","text":"second copy"}</black-gravity-peer-message>
 `;
 
   const result = extractPeerMessages(text);
@@ -201,7 +201,7 @@ test('12. malformed envelopes and unknown fields are ignored while repeated IDs 
 });
 
 test('nested malformed opening tags do not repeatedly rescan the same closing range', () => {
-  const open = '<antigravity-peer-message>', close = '</antigravity-peer-message>';
+  const open = '<black-gravity-peer-message>', close = '</black-gravity-peer-message>';
   const text = open.repeat(1000) + JSON.stringify({ messageId: randomUUID(), toNode: 'beta', text: 'bounded' }) + close;
   const original = String.prototype.indexOf; let scanned = 0;
   try {
@@ -215,8 +215,8 @@ test('nested malformed opening tags do not repeatedly rescan the same closing ra
   assert.ok(scanned <= text.length * 3, 'Parser repeatedly rescanned the same input range');
 });
 test('literal envelope tags within JSON message text preserve the message', () => {
-  const message = { messageId: randomUUID(), toNode: 'beta', text: 'Example <antigravity-peer-message>body</antigravity-peer-message>' };
-  const text = '<antigravity-peer-message>' + JSON.stringify(message) + '</antigravity-peer-message>';
+  const message = { messageId: randomUUID(), toNode: 'beta', text: 'Example <black-gravity-peer-message>body</black-gravity-peer-message>' };
+  const text = '<black-gravity-peer-message>' + JSON.stringify(message) + '</black-gravity-peer-message>';
   assert.deepEqual(extractPeerMessages(text).messages, [message]);
 });
 

@@ -631,7 +631,7 @@ async function acquirePreparationLock(root: string, descriptor: AvailablePortabl
 export async function preparePortableNodeRuntime(options: PortableNodePreparationOptions): Promise<ResolvedPortableNodeRuntime> {
   const cacheDirectory = options.cacheDirectory;
   if (options.cacheDirectoryInvalid || !cacheDirectory) {
-    fail('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    fail('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
   }
   if (process.platform !== 'win32' || process.arch !== 'x64') fail('WINDOWS_RUNTIME_UNSUPPORTED', 'Portable Node preparation is only available on Windows x64');
   const descriptor = requireDescriptor(options.descriptor ?? portableNodeDescriptor);
@@ -680,7 +680,7 @@ export async function portableNodeStatus(requestedMode: WindowsNodeRuntime, cach
   const base = { requestedMode, supported: process.platform === 'win32' && process.arch === 'x64', ready: false, buildId: descriptor.buildId,
     nodeVersion: descriptor.nodeVersion, libuvVersion: descriptor.libuvVersion, sha256: descriptor.available ? descriptor.assets.node.sha256 : null };
   if (options?.cacheDirectoryInvalid || !cacheDirectory) {
-    return { ...base, error: { code: 'INVALID_CONFIGURATION', message: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.' } };
+    return { ...base, error: { code: 'INVALID_CONFIGURATION', message: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.' } };
   }
   if (!base.supported) return { ...base, error: { code: 'WINDOWS_RUNTIME_UNSUPPORTED', message: 'Portable Node is only supported on Windows x64' } };
   try {

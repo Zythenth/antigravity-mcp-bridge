@@ -83,7 +83,7 @@ test('specialist defaults reach copy selection, skills, adapter and validated re
     assert.equal(adapter.calls[0]!.model, 'model-a'); assert.deepEqual(current.structuredResult?.value, { marker: 'profile-result' });
     assert.deepEqual(tasks.listArtifacts(current.taskId).artifacts.map(item => item.path), ['chosen.txt']);
     assert.equal(compactTask(current).effort, 'high');
-    const listing = successOutputSchemas.antigravity_roles.parse({ roles: tasks.roles() });
+    const listing = successOutputSchemas.black_gravity_roles.parse({ roles: tasks.roles() });
     assert.equal(listing.roles.find(item => item.name === 'specialist')?.defaultEffort, 'high');
     assert.equal(JSON.stringify(listing).includes('Read the selected file.'), false);
   });

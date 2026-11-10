@@ -29,10 +29,10 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
     return result.structuredContent as Record<string, any>;
   };
   return { client, source, call, async close() {
-    for (const task of (await call('antigravity_tasks')).tasks) {
-      if (!(await call('antigravity_result', { taskId: task.taskId })).ready) {
-        await call('antigravity_cancel', { taskId: task.taskId });
-        await call('antigravity_wait', { taskId: task.taskId, timeoutSeconds: 60 });
+    for (const task of (await call('black_gravity_tasks')).tasks) {
+      if (!(await call('black_gravity_result', { taskId: task.taskId })).ready) {
+        await call('black_gravity_cancel', { taskId: task.taskId });
+        await call('black_gravity_wait', { taskId: task.taskId, timeoutSeconds: 60 });
       }
     }
     await client.close();
@@ -46,7 +46,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
 async function waitUntilReady(client: Client, taskId: string, timeoutMs = 180_000): Promise<Record<string, any>> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const response = await client.callTool({ name: 'antigravity_wait', arguments: { taskId, timeoutSeconds: 10 } });
+    const response = await client.callTool({ name: 'black_gravity_wait', arguments: { taskId, timeoutSeconds: 10 } });
     assert.equal(response.isError, undefined, JSON.stringify(response.structuredContent));
     const waited = response.structuredContent as Record<string, any>;
     if (waited.ready) return waited;
@@ -61,24 +61,24 @@ test('tool profiles reduce the MCP catalog and reject writes in query/review', a
     try {
       const names = (await f.client.listTools()).tools.map(tool => tool.name);
       assert.equal(names.length, count, profile);
-      const health = await f.call('antigravity_health');
+      const health = await f.call('black_gravity_health');
       assert.equal(health.toolProfile, profile);
       assert.equal(health.bridgeLimitations.interactiveReplies.available, false);
       assert.equal(health.bridgeLimitations.preflightTokenCount.available, false);
       assert.equal(health.bridgeLimitations.preflightTokenCount.exactTokens, null);
-      assert.ok(names.includes('antigravity_get_sandbox_policy'));
+      assert.ok(names.includes('black_gravity_get_sandbox_policy'));
       if (profile === 'query' || profile === 'review') {
-        assert.ok(!names.includes('antigravity_integrate'));
-        assert.ok(!names.includes('antigravity_test'));
-        assert.ok(!names.includes('antigravity_set_sandbox_policy'));
-        const disabled = await f.client.callTool({ name: 'antigravity_set_model', arguments: { model: null } });
+        assert.ok(!names.includes('black_gravity_integrate'));
+        assert.ok(!names.includes('black_gravity_test'));
+        assert.ok(!names.includes('black_gravity_set_sandbox_policy'));
+        const disabled = await f.client.callTool({ name: 'black_gravity_set_model', arguments: { model: null } });
         assert.equal(disabled.isError, true);
-        const write = await f.client.callTool({ name: 'antigravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, mode: 'write' } });
+        const write = await f.client.callTool({ name: 'black_gravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, mode: 'write' } });
         assert.equal((write.structuredContent as any).error.code, 'PROFILE_READ_ONLY');
-        const run = await f.call('antigravity_run', { prompt: 'slow:test', workingDirectory: f.source });
+        const run = await f.call('black_gravity_run', { prompt: 'slow:test', workingDirectory: f.source });
         assert.equal(run.task.mode, 'read-only');
       }
-      else assert.ok(names.includes('antigravity_set_sandbox_policy'));
+      else assert.ok(names.includes('black_gravity_set_sandbox_policy'));
     } finally { await f.close(); }
   }
 });
@@ -100,17 +100,17 @@ test('custom roles inherit read-only contracts and freeze instructions across co
   const f = await fixture('full', false, { BRIDGE_CUSTOM_ROLES: JSON.stringify([role]) });
   let other: Client | undefined;
   try {
-    const roles = await f.call('antigravity_roles');
+    const roles = await f.call('black_gravity_roles');
     assert.equal(roles.roles.length, 4);
     assert.equal(roles.roles.at(-1).instructionChars, role.instruction.length);
     assert.equal(roles.roles.at(-1).custom, true);
-    const tool = (await f.client.listTools()).tools.find(tool => tool.name === 'antigravity_run');
+    const tool = (await f.client.listTools()).tools.find(tool => tool.name === 'black_gravity_run');
     assert.ok((tool?.inputSchema.properties?.role as { enum?: string[] }).enum?.includes(role.name));
-    const forbidden = await f.client.callTool({ name: 'antigravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, role: role.name, mode: 'write' } });
+    const forbidden = await f.client.callTool({ name: 'black_gravity_run', arguments: { prompt: 'write:test', workingDirectory: f.source, role: role.name, mode: 'write' } });
     assert.equal((forbidden.structuredContent as any).error.code, 'INVALID_ROLE');
-    const run = await f.call('antigravity_run', { prompt: 'review:test', workingDirectory: f.source, role: role.name });
+    const run = await f.call('black_gravity_run', { prompt: 'review:test', workingDirectory: f.source, role: role.name });
     assert.equal((await waitUntilReady(f.client, run.task.taskId)).status, 'completed');
-    const finished = (await f.call('antigravity_result', { taskId: run.task.taskId })).task;
+    const finished = (await f.call('black_gravity_result', { taskId: run.task.taskId })).task;
     assert.equal(finished.mode, 'read-only');
     assert.equal(finished.report.role, 'reviewer');
     assert.equal(finished.report.citationsChecked, true);
@@ -120,7 +120,7 @@ test('custom roles inherit read-only contracts and freeze instructions across co
       args: [fileURLToPath(new URL('./mcp-fixture.js', import.meta.url))],
       env: { ...process.env as Record<string, string>, BRIDGE_TOOL_PROFILE: 'full', BRIDGE_CUSTOM_ROLES: '[]',
         BRIDGE_STATE_DIRECTORY: path.join(path.dirname(f.source), 'state') }, stderr: 'pipe' }));
-    const resumed = await other.callTool({ name: 'antigravity_resume', arguments: { sessionId: finished.sessionId, prompt: 'review:test', workingDirectory: f.source } });
+    const resumed = await other.callTool({ name: 'black_gravity_resume', arguments: { sessionId: finished.sessionId, prompt: 'review:test', workingDirectory: f.source } });
     assert.equal(resumed.isError, undefined, JSON.stringify(resumed.structuredContent));
     const resumedTask = (resumed.structuredContent as any).task;
     assert.deepEqual(resumedTask.roleDefinition, role);
@@ -129,25 +129,25 @@ test('custom roles inherit read-only contracts and freeze instructions across co
   } finally { await other?.close(); await f.close(); }
 });
 
-test('antigravity_resume accepts exactly one of taskId or sessionId through MCP', async () => {
+test('black_gravity_resume accepts exactly one of taskId or sessionId through MCP', async () => {
   const f = await fixture();
   try {
     const { tools } = await f.client.listTools();
-    const resumeTool = tools.find(tool => tool.name === 'antigravity_resume')!;
+    const resumeTool = tools.find(tool => tool.name === 'black_gravity_resume')!;
     assert.ok(resumeTool.inputSchema.properties?.taskId);
     assert.ok(resumeTool.inputSchema.properties?.sessionId);
     assert.deepEqual([...(resumeTool.inputSchema.required ?? [])].sort(), ['prompt', 'workingDirectory']);
     assert.match(resumeTool.description ?? '', /taskId \(preferred\)/);
-    assert.equal(tools.find(tool => tool.name === 'antigravity_run')!.inputSchema.properties?.taskId, undefined);
+    assert.equal(tools.find(tool => tool.name === 'black_gravity_run')!.inputSchema.properties?.taskId, undefined);
 
-    const started = await f.call('antigravity_run', { prompt: 'write:test', workingDirectory: f.source });
+    const started = await f.call('black_gravity_run', { prompt: 'write:test', workingDirectory: f.source });
     const taskId = started.task.taskId as string;
     assert.equal((await waitUntilReady(f.client, taskId)).status, 'completed');
-    const original = (await f.call('antigravity_status', { taskId })).task;
+    const original = (await f.call('black_gravity_status', { taskId })).task;
     const resumeWith = async (selector: Record<string, unknown>) => {
-      const resumed = await f.call('antigravity_resume', { prompt: 'consult:resume', workingDirectory: f.source, ...selector });
+      const resumed = await f.call('black_gravity_resume', { prompt: 'consult:resume', workingDirectory: f.source, ...selector });
       assert.equal((await waitUntilReady(f.client, resumed.task.taskId)).status, 'completed');
-      return (await f.call('antigravity_status', { taskId: resumed.task.taskId })).task;
+      return (await f.call('black_gravity_status', { taskId: resumed.task.taskId })).task;
     };
     const byTask = await resumeWith({ taskId });
     assert.equal(byTask.sessionId, original.sessionId);
@@ -156,15 +156,15 @@ test('antigravity_resume accepts exactly one of taskId or sessionId through MCP'
     assert.equal(bySession.sessionId, original.sessionId);
     assert.equal(bySession.copyDirectory, original.copyDirectory);
 
-    const before = (await f.call('antigravity_tasks')).tasks.length;
+    const before = (await f.call('black_gravity_tasks')).tasks.length;
     for (const selector of [{}, { taskId, sessionId: original.sessionId }, { taskId: '00000000-0000-4000-8000-000000000000' }]) {
-      const refused = await f.client.callTool({ name: 'antigravity_resume', arguments: { prompt: 'consult:refused', workingDirectory: f.source, ...selector } });
+      const refused = await f.client.callTool({ name: 'black_gravity_resume', arguments: { prompt: 'consult:refused', workingDirectory: f.source, ...selector } });
       assert.equal(refused.isError, true);
       const { error } = refused.structuredContent as { error: { code: string; message: string } };
       assert.equal(error.code, 'INVALID_SESSION');
-      assert.match(error.message, /taskId.*antigravity_status/);
+      assert.match(error.message, /taskId.*black_gravity_status/);
     }
-    assert.equal((await f.call('antigravity_tasks')).tasks.length, before);
+    assert.equal((await f.call('black_gravity_tasks')).tasks.length, before);
   } finally { await f.close(); }
 });
 
@@ -172,57 +172,57 @@ test('role handoff transfers plans, criteria and decisions to independent copies
   const f = await fixture('full', true);
   try {
     const criteria = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }];
-    const plan = await f.call('antigravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source, acceptanceCriteria: criteria });
+    const plan = await f.call('black_gravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source, acceptanceCriteria: criteria });
     await waitUntilReady(f.client, plan.task.taskId);
-    const planContext = await f.call('antigravity_context', { taskId: plan.task.taskId });
-    const run = await f.call('antigravity_handoff', { sourceTaskId: plan.task.taskId, expectedContextSha256: planContext.treeSha256,
+    const planContext = await f.call('black_gravity_context', { taskId: plan.task.taskId });
+    const run = await f.call('black_gravity_handoff', { sourceTaskId: plan.task.taskId, expectedContextSha256: planContext.treeSha256,
       role: 'implementer', prompt: 'write:test', decisions: ['Keep the existing source file'] });
     const implemented = await waitUntilReady(f.client, run.task.taskId);
     assert.equal(implemented.status, 'completed');
-    const implementation = (await f.call('antigravity_result', { taskId: run.task.taskId })).task;
+    const implementation = (await f.call('black_gravity_result', { taskId: run.task.taskId })).task;
     assert.deepEqual(implementation.acceptanceCriteria, criteria);
     assert.deepEqual(implementation.handoff.reports[0].data, planContext.report.data);
     assert.ok(implementation.result.response.includes('Keep the existing source file'));
-    assert.notEqual(implementation.copyDirectory, (await f.call('antigravity_status', { taskId: plan.task.taskId })).task.copyDirectory);
-    const context = await f.call('antigravity_context', { taskId: run.task.taskId });
-    const review = await f.call('antigravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
+    assert.notEqual(implementation.copyDirectory, (await f.call('black_gravity_status', { taskId: plan.task.taskId })).task.copyDirectory);
+    const context = await f.call('black_gravity_context', { taskId: run.task.taskId });
+    const review = await f.call('black_gravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'review:test' });
     assert.equal((await waitUntilReady(f.client, review.task.taskId)).status, 'completed');
-    const reviewed = (await f.call('antigravity_result', { taskId: review.task.taskId })).task;
+    const reviewed = (await f.call('black_gravity_result', { taskId: review.task.taskId })).task;
     assert.equal(reviewed.report.citationsChecked, true);
     assert.deepEqual(reviewed.handoff.decisions.items, ['Keep the existing source file']);
     assert.equal(await readFile(path.join(reviewed.copyDirectory, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
-    assert.equal((await f.call('antigravity_preview', { taskId: run.task.taskId })).summary.added, 1);
+    assert.equal((await f.call('black_gravity_preview', { taskId: run.task.taskId })).summary.added, 1);
     await assert.rejects(readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
-    const malicious = await f.call('antigravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
+    const malicious = await f.call('black_gravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'write-many:test' });
     const violation = await waitUntilReady(f.client, malicious.task.taskId);
     assert.equal(violation.status, 'failed');
-    assert.equal((await f.call('antigravity_result', { taskId: malicious.task.taskId })).task.error.code, 'READ_ONLY_VIOLATION');
-    assert.equal((await f.call('antigravity_preview', { taskId: run.task.taskId })).summary.added, 1);
+    assert.equal((await f.call('black_gravity_result', { taskId: malicious.task.taskId })).task.error.code, 'READ_ONLY_VIOLATION');
+    assert.equal((await f.call('black_gravity_preview', { taskId: run.task.taskId })).summary.added, 1);
     await writeFile(path.join(implementation.copyDirectory, 'source.txt'), 'changed');
-    const stale = await f.client.callTool({ name: 'antigravity_handoff', arguments: { sourceTaskId: run.task.taskId,
+    const stale = await f.client.callTool({ name: 'black_gravity_handoff', arguments: { sourceTaskId: run.task.taskId,
       expectedContextSha256: context.treeSha256, role: 'reviewer', prompt: 'review:test' } });
     assert.equal((stale.structuredContent as any).error.code, 'CONTEXT_CHANGED');
     await writeFile(path.join(implementation.copyDirectory, '.gitignore'), 'source.txt\n');
-    const changedSelection = await f.client.callTool({ name: 'antigravity_context', arguments: { taskId: run.task.taskId } });
+    const changedSelection = await f.client.callTool({ name: 'black_gravity_context', arguments: { taskId: run.task.taskId } });
     assert.equal((changedSelection.structuredContent as any).error.code, 'CONTEXT_CHANGED');
-    const excluded = await f.client.callTool({ name: 'antigravity_handoff', arguments: { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
+    const excluded = await f.client.callTool({ name: 'black_gravity_handoff', arguments: { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'review:test' } });
     assert.equal((excluded.structuredContent as any).error.code, 'CONTEXT_CHANGED');
     assert.equal(await readFile(path.join(implementation.copyDirectory, 'source.txt'), 'utf8'), 'changed');
-    const reviewContext = await f.call('antigravity_context', { taskId: review.task.taskId });
-    const fixed = await f.call('antigravity_handoff', { sourceTaskId: review.task.taskId, expectedContextSha256: reviewContext.treeSha256,
+    const reviewContext = await f.call('black_gravity_context', { taskId: review.task.taskId });
+    const fixed = await f.call('black_gravity_handoff', { sourceTaskId: review.task.taskId, expectedContextSha256: reviewContext.treeSha256,
       role: 'implementer', prompt: 'split:test' });
     assert.equal((await waitUntilReady(f.client, fixed.task.taskId)).status, 'completed');
-    const fixedTask = (await f.call('antigravity_result', { taskId: fixed.task.taskId })).task;
+    const fixedTask = (await f.call('black_gravity_result', { taskId: fixed.task.taskId })).task;
     assert.deepEqual(fixedTask.handoff.reports.map((report: any) => report.role), ['planner', 'reviewer']);
-    const preview = await f.call('antigravity_preview', { taskId: fixed.task.taskId });
-    const verified = await f.call('antigravity_verify', { taskId: fixed.task.taskId, expectedSha256: preview.sha256, reviews: [{
+    const preview = await f.call('black_gravity_preview', { taskId: fixed.task.taskId });
+    const verified = await f.call('black_gravity_verify', { taskId: fixed.task.taskId, expectedSha256: preview.sha256, reviews: [{
       criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Checked the inherited artifact',
     }] });
     assert.equal(verified.status, 'passed');
-    await f.call('antigravity_integrate', { taskId: fixed.task.taskId, expectedSha256: preview.sha256 });
+    await f.call('black_gravity_integrate', { taskId: fixed.task.taskId, expectedSha256: preview.sha256 });
     assert.equal(await readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally { await f.close(); }
 });
@@ -230,32 +230,32 @@ test('role handoff transfers plans, criteria and decisions to independent copies
 test('model comparison preserves distinct opinions, failures and stale evidence', async () => {
   const f = await fixture('full', false, { MAX_CONCURRENT_TASKS: '2' });
   try {
-    const source = await f.call('antigravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source });
+    const source = await f.call('black_gravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source });
     await waitUntilReady(f.client, source.task.taskId);
-    const context = await f.call('antigravity_context', { taskId: source.task.taskId });
+    const context = await f.call('black_gravity_context', { taskId: source.task.taskId });
     const args = { sourceTaskId: source.task.taskId, expectedContextSha256: context.treeSha256, models: ['mock-pro', 'mock-flash'], prompt: 'comparison:test' };
-    const unavailable = await f.client.callTool({ name: 'antigravity_compare', arguments: { ...args, models: ['mock-pro', 'unknown'] } });
+    const unavailable = await f.client.callTool({ name: 'black_gravity_compare', arguments: { ...args, models: ['mock-pro', 'unknown'] } });
     assert.equal((unavailable.structuredContent as any).error.code, 'MODEL_NOT_AVAILABLE');
-    assert.equal((await f.call('antigravity_tasks')).tasks.length, 1);
-    const duplicate = await f.client.callTool({ name: 'antigravity_compare', arguments: { ...args, models: ['mock-pro', 'mock-pro'] } });
+    assert.equal((await f.call('black_gravity_tasks')).tasks.length, 1);
+    const duplicate = await f.client.callTool({ name: 'black_gravity_compare', arguments: { ...args, models: ['mock-pro', 'mock-pro'] } });
     assert.equal(duplicate.isError, true);
-    const started = await f.call('antigravity_compare', args);
+    const started = await f.call('black_gravity_compare', args);
     assert.equal(started.taskIds.length, 2);
     for (const taskId of started.taskIds) await waitUntilReady(f.client, taskId);
-    const comparison = await f.call('antigravity_comparison', { comparisonId: started.comparisonId });
+    const comparison = await f.call('black_gravity_comparison', { comparisonId: started.comparisonId });
     assert.equal(comparison.complete, true);
     assert.equal(comparison.contextStale, false);
     assert.equal(comparison.findings[0].agreement, 'different');
     assert.deepEqual(comparison.opinions.map((opinion: any) => opinion.model), ['mock-pro', 'mock-flash']);
-    const member = (await f.call('antigravity_result', { taskId: started.taskIds[0] })).task;
+    const member = (await f.call('black_gravity_result', { taskId: started.taskIds[0] })).task;
     await writeFile(path.join(member.copyDirectory, 'source.txt'), 'changed');
-    const stale = await f.call('antigravity_comparison', { comparisonId: started.comparisonId });
+    const stale = await f.call('black_gravity_comparison', { comparisonId: started.comparisonId });
     assert.equal(stale.complete, false);
     assert.equal(stale.contextStale, true);
     assert.equal(stale.findings[0].agreement, 'not-reported-by-all');
-    const failed = await f.call('antigravity_compare', { ...args, prompt: 'fabricated-review:test' });
+    const failed = await f.call('black_gravity_compare', { ...args, prompt: 'fabricated-review:test' });
     for (const taskId of failed.taskIds) await waitUntilReady(f.client, taskId);
-    const failure = await f.call('antigravity_comparison', { comparisonId: failed.comparisonId });
+    const failure = await f.call('black_gravity_comparison', { comparisonId: failed.comparisonId });
     assert.equal(failure.ready, true);
     assert.equal(failure.complete, false);
     assert.ok(failure.opinions.every((opinion: any) => opinion.error.code === 'ROLE_OUTPUT_INVALID'));
@@ -266,11 +266,11 @@ test('model comparison preserves distinct opinions, failures and stale evidence'
 test('wait sends event-based MCP progress and timeouts/cancellation preserve execution', async () => {
   const f = await fixture();
   try {
-    const run = await f.call('antigravity_run', { prompt: 'split:test', workingDirectory: f.source, mode: 'read-only' });
+    const run = await f.call('black_gravity_run', { prompt: 'split:test', workingDirectory: f.source, mode: 'read-only' });
     const progress: Array<{ progress: number; message?: string; total?: number }> = [];
     const waitWithProgress = () => {
       progress.length = 0;
-      return f.client.callTool({ name: 'antigravity_wait', arguments: { taskId: run.task.taskId, timeoutSeconds: 10 } },
+      return f.client.callTool({ name: 'black_gravity_wait', arguments: { taskId: run.task.taskId, timeoutSeconds: 10 } },
         undefined, { onprogress: update => progress.push(update) });
     };
     const deadline = Date.now() + 180_000;
@@ -284,18 +284,18 @@ test('wait sends event-based MCP progress and timeouts/cancellation preserve exe
     assert.ok(progress.some(update => update.message?.endsWith('tool.completed')));
     assert.deepEqual(progress.map(update => update.progress), done.events.map((event: any) => event.sequence));
     assert.ok(progress.every(update => update.total === undefined));
-    const continued = await f.call('antigravity_wait', { taskId: run.task.taskId, after: done.nextCursor });
+    const continued = await f.call('black_gravity_wait', { taskId: run.task.taskId, after: done.nextCursor });
     assert.deepEqual(continued.events, []);
-    const slow = await f.call('antigravity_run', { prompt: 'cancel:test', workingDirectory: f.source, timeoutSeconds: 60 });
-    const timed = await f.call('antigravity_wait', { taskId: slow.task.taskId, timeoutSeconds: 1 });
+    const slow = await f.call('black_gravity_run', { prompt: 'cancel:test', workingDirectory: f.source, timeoutSeconds: 60 });
+    const timed = await f.call('black_gravity_wait', { taskId: slow.task.taskId, timeoutSeconds: 1 });
     assert.equal(timed.timedOut, true);
     assert.equal(timed.ready, false);
     const controller = new AbortController();
-    const pending = f.client.callTool({ name: 'antigravity_wait', arguments: { taskId: slow.task.taskId } }, undefined, { signal: controller.signal });
+    const pending = f.client.callTool({ name: 'black_gravity_wait', arguments: { taskId: slow.task.taskId } }, undefined, { signal: controller.signal });
     setTimeout(() => controller.abort(), 30);
     await assert.rejects(pending);
-    assert.equal((await f.call('antigravity_result', { taskId: slow.task.taskId })).ready, false);
-    await f.call('antigravity_cancel', { taskId: slow.task.taskId });
+    assert.equal((await f.call('black_gravity_result', { taskId: slow.task.taskId })).ready, false);
+    await f.call('black_gravity_cancel', { taskId: slow.task.taskId });
     assert.equal((await waitUntilReady(f.client, slow.task.taskId)).status, 'cancelled');
   } finally { await f.close(); }
 });

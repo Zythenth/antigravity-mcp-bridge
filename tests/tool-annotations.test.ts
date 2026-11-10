@@ -27,9 +27,9 @@ async function listTools(profile: ToolProfile) {
 }
 
 test('the annotation table refuses tools without a row', () => {
-  assert.throws(() => toolAnnotationRow('antigravity_missing'), /has no row/);
+  assert.throws(() => toolAnnotationRow('black_gravity_missing'), /has no row/);
   assert.throws(() => toolAnnotationRow('toString'), /has no row/);
-  assert.deepEqual(Object.keys(toolAnnotations('antigravity_health')).sort(), ['destructiveHint', 'idempotentHint', 'openWorldHint', 'readOnlyHint']);
+  assert.deepEqual(Object.keys(toolAnnotations('black_gravity_health')).sort(), ['destructiveHint', 'idempotentHint', 'openWorldHint', 'readOnlyHint']);
 });
 
 test('tools/list publishes exactly one table row per registered tool in every profile', async () => {

@@ -9,13 +9,13 @@ export type PermissionPreset = (typeof PERMISSION_PRESETS)[number];
 
 // The delegation preset asks before tools that change the original project, delete copies or memory, change the sandbox policy, or stop work; every other tool acts only on the copy or the bridge state.
 export const DELEGATION_ASK_TOOLS: ReadonlySet<string> = new Set([
-  'antigravity_integrate',
-  'antigravity_discard',
-  'antigravity_cleanup',
-  'antigravity_memory_remove',
-  'antigravity_set_sandbox_policy',
-  'antigravity_cancel',
-  'antigravity_group_cancel',
+  'black_gravity_integrate',
+  'black_gravity_discard',
+  'black_gravity_cleanup',
+  'black_gravity_memory_remove',
+  'black_gravity_set_sandbox_policy',
+  'black_gravity_cancel',
+  'black_gravity_group_cancel',
 ]);
 
 export interface PermissionPlan {
@@ -100,7 +100,7 @@ export function runPermissionsCommand(
   writeError: (text: string) => void,
 ): number {
   function refuse(message: string): number {
-    writeError(`antigravity-mcp-bridge permissions: ${message}\n`);
+    writeError(`black-gravity permissions: ${message}\n`);
     return 2;
   }
 
@@ -119,14 +119,14 @@ export function runPermissionsCommand(
     if (arg === '--help' || arg === '-h') {
       if (args.length === 1) {
         write(
-          'Usage: antigravity-mcp-bridge permissions --host <claude-code|codex> [options]\n\n' +
+          'Usage: black-gravity permissions --host <claude-code|codex> [options]\n\n' +
           'Prints a host permission block generated from the tool annotations table.\n' +
           'This command only prints to stdout and never writes any file.\n\n' +
           'Options:\n' +
           '  --host <claude-code|codex>                     Target host format (required)\n' +
           '  --preset <connector|delegation>                Permission preset (default: connector)\n' +
           '  --profile <full|query|review|implementation>   Tool profile (default: full)\n' +
-          '  --server-name <name>                           MCP server name (default: antigravity)\n' +
+          '  --server-name <name>                           MCP server name (default: black-gravity)\n' +
           '  --deny <tool>                                  Deny a tool (repeatable)\n' +
           '  -h, --help                                     Show this help message\n',
         );
@@ -183,7 +183,7 @@ export function runPermissionsCommand(
   const effectiveProfile: ToolProfile = profileParsed.data;
 
   const serverName = singularOptions['--server-name'];
-  const effectiveServerName = serverName ?? 'antigravity';
+  const effectiveServerName = serverName ?? 'black-gravity';
   if (!SERVER_NAME_REGEX.test(effectiveServerName)) {
     return refuse(`Invalid server name: ${effectiveServerName}. Must match ${SERVER_NAME_REGEX}`);
   }

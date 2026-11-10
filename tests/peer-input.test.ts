@@ -59,7 +59,7 @@ async function until(predicate: () => boolean) {
 import { clientTask, readMessages } from '../src/messages.js';
 import { taskPrompt } from '../src/cli-adapter.js';
 
-const envelope = (input: unknown) => '<antigravity-peer-message>' + JSON.stringify(input) + '</antigravity-peer-message>';
+const envelope = (input: unknown) => '<black-gravity-peer-message>' + JSON.stringify(input) + '</black-gravity-peer-message>';
 test('only public response envelopes become bounded private requests; chunks and final duplicates are stable', async () => {
   await fixture(async ({ source, tasks, adapter, config }) => {
     const { groupId, definitionSha256 } = await captureAdmission(source, tasks, config);
@@ -67,7 +67,7 @@ test('only public response envelopes become bounded private requests; chunks and
     const task = await tasks.runInGroup({ workingDirectory: source, prompt: 'Read source', mode: 'read-only', deliveryMode: 'messages',
       peerContext: { groupId, nodeKey: 'a', targets: ['b'] } }, { groupId, nodeKey: 'a', owner: 'implementer', definitionSha256 });
     await until(() => adapter.calls.length === 1);
-    const input = { messageId, toNode: 'b', text: 'PEER_PRIVATE_BODY Example </antigravity-peer-message>' }, text = envelope(input);
+    const input = { messageId, toNode: 'b', text: 'PEER_PRIVATE_BODY Example </black-gravity-peer-message>' }, text = envelope(input);
     const call = adapter.calls[0]!;
     call.emit({ event: 'step_update', step_update: { step_type: 'tool_result', text_delta: envelope({ ...input, text: 'TOOL_NOT_PEER' }), step_index: 1 } });
     call.emit({ event: 'step_update', step_update: { step_type: 'agent_response', text_delta: text.slice(0, 50), step_index: 2 } });
@@ -256,11 +256,11 @@ test('receipt MCP contract is available in all four profiles with no peer body o
       await Promise.all([server.connect(a),client.connect(b)]);
       try {
         const names = (await client.listTools()).tools.map(tool => tool.name);
-        assert.equal(names.length, count, profile); assert.ok(names.includes('antigravity_peer_receipts'));
-        assert.equal(names.includes('antigravity_group_create'), profile === 'full' || profile === 'implementation');
-        const result = await client.callTool({ name: 'antigravity_peer_receipts', arguments: { groupId: group.groupId, limit: 20 } });
+        assert.equal(names.length, count, profile); assert.ok(names.includes('black_gravity_peer_receipts'));
+        assert.equal(names.includes('black_gravity_group_create'), profile === 'full' || profile === 'implementation');
+        const result = await client.callTool({ name: 'black_gravity_peer_receipts', arguments: { groupId: group.groupId, limit: 20 } });
         assert.equal(result.isError, undefined);
-        assert.deepEqual(successOutputSchemas.antigravity_peer_receipts.parse(result.structuredContent), { receipts: [], nextCursor: 0, hasMore: false });
+        assert.deepEqual(successOutputSchemas.black_gravity_peer_receipts.parse(result.structuredContent), { receipts: [], nextCursor: 0, hasMore: false });
         assert.equal(adapter.calls.length, 0);
       } finally { await client.close(); await server.close(); }
     });

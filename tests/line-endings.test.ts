@@ -621,7 +621,7 @@ test('a new UTF-16 file is flagged in the preview instead of passing as a silent
     assert.equal(warnings.length, 2, JSON.stringify(warnings));
     assert.ok(warnings[0]!.startsWith('out-be.txt: new UTF-16BE text file'), JSON.stringify(warnings));
     assert.ok(warnings[1]!.startsWith('out.txt: new UTF-16LE text file'), JSON.stringify(warnings));
-    assert.deepEqual(successOutputSchemas.antigravity_preview.parse(preview).encodingWarnings, preview.encodingWarnings);
+    assert.deepEqual(successOutputSchemas.black_gravity_preview.parse(preview).encodingWarnings, preview.encodingWarnings);
   });
 });
 

@@ -35,10 +35,10 @@ The `group-<UUID>.json` records keep definitions, prompts, owners, dependencies,
 
 ## Removal
 
-`antigravity_discard` removes the copy and the baseline, including resumed tasks that share those directories. It preserves the local task records, results, and events. Local removal does not delete histories kept by Google, the CLI, or the MCP client.
+`black_gravity_discard` removes the copy and the baseline, including resumed tasks that share those directories. It preserves the local task records, results, and events. Local removal does not delete histories kept by Google, the CLI, or the MCP client.
 
-`antigravity_memory_remove` deletes the current version of an entry given its hash. Snapshots already associated with tasks remain in the respective records, and local removal does not delete content already sent to the CLI or to Google.
+`black_gravity_memory_remove` deletes the current version of an entry given its hash. Snapshots already associated with tasks remain in the respective records, and local removal does not delete content already sent to the CLI or to Google.
 
 To delete persisted records, stop the bridge servers using the state directory and remove the JSON files of the desired tasks, or the entire state directory. This loses the IDs and the ability to recover those sessions through the bridge. Discard the copies before removing the records to avoid leaving temporary directories without a reference.
 
-Before sending a task, check `antigravity_list_project_files`, select only the necessary paths, and exclude confidential documents and credentials through local Git rules. Do not include secrets in the prompt, in recorded test outputs, or in public problem reports.
+Before sending a task, check `black_gravity_list_project_files`, select only the necessary paths, and exclude confidential documents and credentials through local Git rules. Do not include secrets in the prompt, in recorded test outputs, or in public problem reports.

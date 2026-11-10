@@ -221,34 +221,34 @@ describe('Task results and artifacts runtime', () => {
     const toolList = await client.listTools();
     const names = toolList.tools.map(t => t.name);
     assert.equal(names.length, 50);
-    assert.ok(names.includes('antigravity_read_structured_result'));
-    assert.ok(names.includes('antigravity_artifacts'));
-    assert.ok(names.includes('antigravity_read_artifact'));
+    assert.ok(names.includes('black_gravity_read_structured_result'));
+    assert.ok(names.includes('black_gravity_artifacts'));
+    assert.ok(names.includes('black_gravity_read_artifact'));
 
     const completed = tasks.list().find(t => t.status === 'completed' && t.structuredResult)!;
     const artTask = tasks.list().find(t => t.status === 'completed' && t.artifacts?.length)!;
     const artRef = artTask.artifacts![0]!;
 
-    const artsRes = await client.callTool({ name: 'antigravity_artifacts', arguments: { taskId: artTask.taskId } });
+    const artsRes = await client.callTool({ name: 'black_gravity_artifacts', arguments: { taskId: artTask.taskId } });
     assert.equal(artsRes.isError, undefined);
-    const parsedArts = successOutputSchemas.antigravity_artifacts.parse(artsRes.structuredContent);
+    const parsedArts = successOutputSchemas.black_gravity_artifacts.parse(artsRes.structuredContent);
     assert.equal(parsedArts.artifacts.length, 1);
 
     const readArtRes = await client.callTool({
-      name: 'antigravity_read_artifact',
+      name: 'black_gravity_read_artifact',
       arguments: { taskId: artTask.taskId, path: 'artifact.txt', expectedSha256: artRef.sha256 },
     });
     assert.equal(readArtRes.isError, undefined);
-    const parsedArtChunk = successOutputSchemas.antigravity_read_artifact.parse(readArtRes.structuredContent);
+    const parsedArtChunk = successOutputSchemas.black_gravity_read_artifact.parse(readArtRes.structuredContent);
     assert.equal(Buffer.from(parsedArtChunk.content, 'base64').toString('utf8'), 'hello world');
 
-    const srRes = await client.callTool({ name: 'antigravity_read_structured_result', arguments: { taskId: completed.taskId } });
+    const srRes = await client.callTool({ name: 'black_gravity_read_structured_result', arguments: { taskId: completed.taskId } });
     assert.equal(srRes.isError, undefined);
-    const parsedSr = successOutputSchemas.antigravity_read_structured_result.parse(srRes.structuredContent);
+    const parsedSr = successOutputSchemas.black_gravity_read_structured_result.parse(srRes.structuredContent);
     assert.equal(parsedSr.text, '{"count":7}');
 
-    const incRes = await client.callTool({ name: 'antigravity_result', arguments: { taskId: completed.taskId, includeResult: false } });
-    const parsedInc = successOutputSchemas.antigravity_result.parse(incRes.structuredContent);
+    const incRes = await client.callTool({ name: 'black_gravity_result', arguments: { taskId: completed.taskId, includeResult: false } });
+    const parsedInc = successOutputSchemas.black_gravity_result.parse(incRes.structuredContent);
     assert.equal(parsedInc.structuredResultAvailable, true);
     assert.equal(parsedInc.task.structuredResult, undefined);
 

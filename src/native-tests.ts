@@ -40,7 +40,7 @@ async function nativeRunner(load: NodeJS.Require, settings: TestCommand & { nonc
   let output = '';
   try {
     if (paths.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== '') throw new Error('Test working directory differs from the copy');
-    gitDirectory = fs.mkdtempSync(paths.join(process.cwd(), '.agy-test-snapshot-'));
+    gitDirectory = fs.mkdtempSync(paths.join(process.cwd(), '.black-gravity-test-snapshot-'));
     processes.execFileSync('git', ['-c', 'init.templateDir=', 'init', '--bare', '--quiet', gitDirectory]);
     fs.mkdirSync(paths.join(gitDirectory, 'info'), { recursive: true });
     fs.appendFileSync(paths.join(gitDirectory, 'info', 'exclude'), '\n/' + settings.file + '\n/' + paths.basename(gitDirectory) + '/\n');
@@ -91,17 +91,17 @@ async function nativeRunner(load: NodeJS.Require, settings: TestCommand & { nonc
   } catch (error) { receipt.error = error instanceof Error ? error.message : String(error); }
   finally {
     if (gitDirectory) {
-      if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(process.cwd()) || !paths.basename(gitDirectory).startsWith('.agy-test-snapshot-') || fs.lstatSync(gitDirectory).isSymbolicLink()) throw new Error('Unsafe snapshot cleanup path');
+      if (paths.dirname(paths.resolve(gitDirectory)) !== paths.resolve(process.cwd()) || !paths.basename(gitDirectory).startsWith('.black-gravity-test-snapshot-') || fs.lstatSync(gitDirectory).isSymbolicLink()) throw new Error('Unsafe snapshot cleanup path');
       fs.rmSync(gitDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }
-  process.stdout.write(output + '\nAGY_BRIDGE_TEST:' + settings.nonce + ':' + Buffer.from(JSON.stringify(receipt)).toString('base64') + '\n');
+  process.stdout.write(output + '\nBLACK_GRAVITY_TEST:' + settings.nonce + ':' + Buffer.from(JSON.stringify(receipt)).toString('base64') + '\n');
 }
 
 export async function prepareNativeTest(project: ProjectCopy, request: NativeTestRequest, settings: { timeoutSeconds: number; maxCopyFiles: number; maxCopyBytes: number }) {
   testCommandSchema.parse({ executable: request.executable, args: request.args });
   const nonce = randomUUID();
-  const file = '.agy-bridge-test-' + nonce + '.cjs';
+  const file = '.black-gravity-test-' + nonce + '.cjs';
   const absolute = path.join(project.copyDirectory, file);
   const script = '(' + nativeRunner.toString() + ')(require, ' + JSON.stringify({ executable: request.executable, args: request.args, nonce, file, copyDirectory: project.copyDirectory, ...settings }) + ');';
   const hash = createHash('sha256').update(script).digest('hex');
@@ -138,7 +138,7 @@ export function readNativeReceipt(step: Record<string, unknown>, expected: { non
   const info = step.tool_info as { parameters?: { CommandLine?: unknown; BypassSandbox?: unknown }; output?: unknown } | undefined;
   if (info?.parameters?.CommandLine !== expected.commandLine || typeof info.output !== 'string') return;
   if (info.parameters.BypassSandbox !== undefined && info.parameters.BypassSandbox !== false) return;
-  const prefix = 'AGY_BRIDGE_TEST:' + expected.nonce + ':';
+  const prefix = 'BLACK_GRAVITY_TEST:' + expected.nonce + ':';
   const lines = info.output.split(/\r?\n/).filter(line => line.startsWith(prefix));
   if (lines.length !== 1) return;
   try {

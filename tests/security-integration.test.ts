@@ -212,7 +212,7 @@ test('Custom exclusion and exception in TaskManager and MCP agree with copy elig
   await client.connect(clientTransport);
   try {
     const mcpResult = await client.callTool({
-      name: 'antigravity_list_project_files',
+      name: 'black_gravity_list_project_files',
       arguments: { workingDirectory: repoDir },
     });
     assert.equal(mcpResult.isError, undefined);

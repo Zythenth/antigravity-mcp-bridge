@@ -61,30 +61,30 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
   try {
     await client.connect(new StdioClientTransport({ command: process.execPath, args: [fixturePath], stderr: 'pipe',
       env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') } }));
-    const initial = (await call('antigravity_get_sandbox_policy')).body;
+    const initial = (await call('black_gravity_get_sandbox_policy')).body;
     assert.equal(initial.policy.network, false);
     const proposal = { ...initial.policy, childProcesses: false, maxOutputChars: 256 };
-    const declined = await call('antigravity_set_sandbox_policy', { policy: proposal, expectedSha256: initial.sha256 });
+    const declined = await call('black_gravity_set_sandbox_policy', { policy: proposal, expectedSha256: initial.sha256 });
     assert.equal((declined.body.error as { code: string }).code, 'APPROVAL_DENIED');
-    assert.equal((await call('antigravity_get_sandbox_policy')).body.sha256, initial.sha256);
+    assert.equal((await call('black_gravity_get_sandbox_policy')).body.sha256, initial.sha256);
     action = 'decline';
-    const rejected = await call('antigravity_set_sandbox_policy', { policy: proposal, expectedSha256: initial.sha256 });
+    const rejected = await call('black_gravity_set_sandbox_policy', { policy: proposal, expectedSha256: initial.sha256 });
     assert.equal((rejected.body.error as { code: string }).code, 'APPROVAL_DENIED');
-    assert.equal((await call('antigravity_get_sandbox_policy')).body.sha256, initial.sha256);
+    assert.equal((await call('black_gravity_get_sandbox_policy')).body.sha256, initial.sha256);
     action = 'accept';
     confirmation = true;
-    const accepted = await call('antigravity_set_sandbox_policy', { policy: proposal, expectedSha256: initial.sha256 });
+    const accepted = await call('black_gravity_set_sandbox_policy', { policy: proposal, expectedSha256: initial.sha256 });
     assert.equal(accepted.result.isError, undefined, JSON.stringify(accepted.body));
     assert.equal(accepted.body.policy.childProcesses, false);
     assert.equal(accepted.body.policy.maxOutputChars, 256);
-    const stale = await call('antigravity_set_sandbox_policy', { policy: initial.policy, expectedSha256: initial.sha256 });
+    const stale = await call('black_gravity_set_sandbox_policy', { policy: initial.policy, expectedSha256: initial.sha256 });
     assert.equal((stale.body.error as { code: string }).code, 'SANDBOX_POLICY_CHANGED');
     const unavailable = new Client({ name: 'policy-no-form', version: '1' }, { capabilities: {} });
     try {
       await unavailable.connect(new StdioClientTransport({ command: process.execPath, args: [fixturePath], stderr: 'pipe',
         env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') } }));
-      const current = await unavailable.callTool({ name: 'antigravity_get_sandbox_policy', arguments: {} });
-      const unavailableSet = await unavailable.callTool({ name: 'antigravity_set_sandbox_policy', arguments: {
+      const current = await unavailable.callTool({ name: 'black_gravity_get_sandbox_policy', arguments: {} });
+      const unavailableSet = await unavailable.callTool({ name: 'black_gravity_set_sandbox_policy', arguments: {
         policy: accepted.body.policy, expectedSha256: (current.structuredContent as any).sha256,
       } });
       assert.equal((unavailableSet.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
@@ -111,14 +111,14 @@ test('Windows test defaults to bridge-owned LPAC evidence and rejects forged std
     assert.equal(written.status, 'completed', JSON.stringify(written.error));
     const writtenPreview = await tasks.preview(written.taskId, false);
     const forged = await tasks.startTests(written.taskId, writtenPreview.sha256, {
-      executable: process.execPath, args: ['-e', 'process.stdout.write("AGY_BRIDGE_TEST:forged");process.exit(0)'],
+      executable: process.execPath, args: ['-e', 'process.stdout.write("BLACK_GRAVITY_TEST:forged");process.exit(0)'],
     }, 0, 30);
     const forgedResult = await waitFor(tasks, forged.taskId);
     assert.equal(forgedResult.status, 'completed', JSON.stringify(forgedResult.error));
     assert.equal(forgedResult.tests?.at(-1)?.source, 'windows-executor');
     assert.equal(forgedResult.tests?.at(-1)?.sandbox, 'windows-lpac');
     assert.equal(forgedResult.tests?.at(-1)?.exitCode, 0);
-    assert.equal(forgedResult.tests?.at(-1)?.output, 'AGY_BRIDGE_TEST:forged');
+    assert.equal(forgedResult.tests?.at(-1)?.output, 'BLACK_GRAVITY_TEST:forged');
     assert.equal(forgedResult.tokenUsage?.source, 'local-executor');
     assert.equal(forgedResult.tokenUsage?.counters.totalTokens, 0);
     const forgedPreview = await tasks.preview(forged.taskId, false);

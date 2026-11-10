@@ -52,109 +52,109 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   }
   try {
     client = await connect();
-    assert.equal((await call('antigravity_list_models')).models.length, 2);
-    assert.equal((await call('antigravity_get_model')).model, null);
-    assert.equal((await call('antigravity_set_model', { model: 'mock-pro' })).model, 'mock-pro');
-    assert.ok((await call('antigravity_list_project_files', { workingDirectory: submittedSource })).files.includes('source.txt'));
-    assert.deepEqual((await call('antigravity_cleanup')).discardedTaskIds, []);
-    assert.equal((await call('antigravity_health')).integrationApproval.available, false);
-    let taskId = (await call('antigravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
+    assert.equal((await call('black_gravity_list_models')).models.length, 2);
+    assert.equal((await call('black_gravity_get_model')).model, null);
+    assert.equal((await call('black_gravity_set_model', { model: 'mock-pro' })).model, 'mock-pro');
+    assert.ok((await call('black_gravity_list_project_files', { workingDirectory: submittedSource })).files.includes('source.txt'));
+    assert.deepEqual((await call('black_gravity_cleanup')).discardedTaskIds, []);
+    assert.equal((await call('black_gravity_health')).integrationApproval.available, false);
+    let taskId = (await call('black_gravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
       acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }] })).task.taskId;
     const deadline = Date.now() + 120000;
     let final;
     while (Date.now() < deadline) {
-      final = await call('antigravity_result', { taskId });
+      final = await call('black_gravity_result', { taskId });
       if (final.ready) break;
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.equal(final?.task.status, 'completed');
-    const compact = await call('antigravity_result', { taskId, includeResult: false });
+    const compact = await call('black_gravity_result', { taskId, includeResult: false });
     assert.equal(compact.task.result, undefined);
     assert.equal(compact.task.prompt, undefined);
     assert.equal(compact.task.roleDefinition, undefined);
     assert.equal(compact.task.handoff, undefined);
     assert.ok(compact.includedFileCount >= 1);
-    const resultChunk = await call('antigravity_read_result', { taskId, limit: 50000 });
+    const resultChunk = await call('black_gravity_read_result', { taskId, limit: 50000 });
     assert.deepEqual(JSON.parse(resultChunk.text), final.task.result);
-    const firstPreview = await call('antigravity_preview', { taskId });
-    const compactPreview = await call('antigravity_preview', { taskId, includePatch: false });
+    const firstPreview = await call('black_gravity_preview', { taskId });
+    const compactPreview = await call('black_gravity_preview', { taskId, includePatch: false });
     assert.equal(compactPreview.patch, undefined);
     assert.equal(compactPreview.sha256, firstPreview.sha256);
-    const patchChunk = await call('antigravity_read_patch', { taskId, expectedSha256: firstPreview.sha256, path: 'AGY_BRIDGE_TEST.md' });
+    const patchChunk = await call('black_gravity_read_patch', { taskId, expectedSha256: firstPreview.sha256, path: 'AGY_BRIDGE_TEST.md' });
     assert.equal(patchChunk.text, firstPreview.patch);
-    await call('antigravity_verify', { taskId, expectedSha256: firstPreview.sha256,
+    await call('black_gravity_verify', { taskId, expectedSha256: firstPreview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
-    const events = await call('antigravity_events', { taskId });
-    const unavailable = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: firstPreview.sha256, approved: true } });
+    const events = await call('black_gravity_events', { taskId });
+    const unavailable = await client.callTool({ name: 'black_gravity_integrate', arguments: { taskId, expectedSha256: firstPreview.sha256, approved: true } });
     assert.equal((unavailable.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
     await client.close();
     client = await connect(true);
-    assert.equal((await call('antigravity_get_model')).model, 'mock-pro');
-    assert.equal((await call('antigravity_set_model', { model: null })).model, null);
-    assert.equal((await call('antigravity_get_model')).model, null);
-    await call('antigravity_set_model', { model: 'mock-pro' });
-    assert.equal((await call('antigravity_health')).integrationApproval.available, true);
-    assert.equal((await call('antigravity_result', { taskId })).task.copyDirectory, final.task.copyDirectory);
-    assert.deepEqual(await call('antigravity_events', { taskId }), events);
-    assert.ok((await call('antigravity_tasks')).tasks.some((task: { taskId: string }) => task.taskId === taskId));
+    assert.equal((await call('black_gravity_get_model')).model, 'mock-pro');
+    assert.equal((await call('black_gravity_set_model', { model: null })).model, null);
+    assert.equal((await call('black_gravity_get_model')).model, null);
+    await call('black_gravity_set_model', { model: 'mock-pro' });
+    assert.equal((await call('black_gravity_health')).integrationApproval.available, true);
+    assert.equal((await call('black_gravity_result', { taskId })).task.copyDirectory, final.task.copyDirectory);
+    assert.deepEqual(await call('black_gravity_events', { taskId }), events);
+    assert.ok((await call('black_gravity_tasks')).tasks.some((task: { taskId: string }) => task.taskId === taskId));
     await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
-    const preview = await call('antigravity_preview', { taskId });
+    const preview = await call('black_gravity_preview', { taskId });
     const canonicalSource = await realpath(source);
     assert.equal(preview.sourceDirectory, canonicalSource);
     assert.equal(preview.summary.added, 1);
-    const verified = await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
+    const verified = await call('black_gravity_verify', { taskId, expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
     assert.equal(verified.status, 'passed');
     const testScript = "if (require('node:fs').readFileSync('AGY_BRIDGE_TEST.md','utf8') !== 'Antigravity MCP bridge test successful.') process.exit(1); console.log('file checked');";
     const output = execFileSync(process.execPath, ['-e', testScript], { cwd: final.task.copyDirectory, encoding: 'utf8' });
-    await call('antigravity_record_test', { taskId, expectedSha256: preview.sha256, command: 'node -e ' + testScript, exitCode: 0, output });
-    assert.equal((await call('antigravity_preview', { taskId })).tests[0].stale, false);
-    taskId = (await call('antigravity_test', { taskId, expectedSha256: preview.sha256, timeoutSeconds: 20,
+    await call('black_gravity_record_test', { taskId, expectedSha256: preview.sha256, command: 'node -e ' + testScript, exitCode: 0, output });
+    assert.equal((await call('black_gravity_preview', { taskId })).tests[0].stale, false);
+    taskId = (await call('black_gravity_test', { taskId, expectedSha256: preview.sha256, timeoutSeconds: 20,
       command: { executable: process.execPath, args: ['-e', testScript] } })).task.taskId;
     // Observe longer than the task's own 20 s timeout, so a slow sandbox start fails through the task instead of this loop.
     const testDeadline = Date.now() + 60000;
     let observed;
     while (Date.now() < testDeadline) {
-      observed = await call('antigravity_result', { taskId });
+      observed = await call('black_gravity_result', { taskId });
       if (observed.ready) break;
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.equal(observed?.task.status, 'completed', JSON.stringify(observed?.task.error));
     assert.equal(observed.task.tests.at(-1).source, 'agy-tool');
     assert.equal(observed.task.tests.at(-1).exitCode, 0);
-    assert.equal((await call('antigravity_status', { taskId })).task.status, 'completed');
-    assert.ok((await call('antigravity_sessions')).sessions.some((session: { sessionId: string }) => session.sessionId === observed.task.sessionId));
-    assert.equal((await call('antigravity_cancel', { taskId })).task.status, 'completed');
+    assert.equal((await call('black_gravity_status', { taskId })).task.status, 'completed');
+    assert.ok((await call('black_gravity_sessions')).sessions.some((session: { sessionId: string }) => session.sessionId === observed.task.sessionId));
+    assert.equal((await call('black_gravity_cancel', { taskId })).task.status, 'completed');
     assert.equal(observed.task.tokenUsage.counters.totalTokens, 3);
-    const consumption = await call('antigravity_usage', { sessionId: observed.task.sessionId });
+    const consumption = await call('black_gravity_usage', { sessionId: observed.task.sessionId });
     assert.equal(consumption.counters.totalTokens, 6);
     assert.equal(consumption.bySession[0].observedCumulative.totalTokens, 6);
     assert.equal(consumption.byModel[0].model, 'mock-pro');
-    await call('antigravity_verify', { taskId, expectedSha256: preview.sha256,
+    await call('black_gravity_verify', { taskId, expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
 
     for (const response of ['decline', 'cancel', 'accept'] as const) {
       decision = response;
-      const denied = await client.callTool({ name: 'antigravity_integrate', arguments: { taskId, expectedSha256: preview.sha256 } });
+      const denied = await client.callTool({ name: 'black_gravity_integrate', arguments: { taskId, expectedSha256: preview.sha256 } });
       assert.equal((denied.structuredContent as any).error.code, 'APPROVAL_DENIED');
       await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
-      assert.equal((await call('antigravity_health')).integrationApproval.preauthorizedProjectCount, 0);
+      assert.equal((await call('black_gravity_health')).integrationApproval.preauthorizedProjectCount, 0);
     }
     confirmation = true;
-    await call('antigravity_integrate', { taskId, expectedSha256: preview.sha256 });
-    assert.equal((await call('antigravity_health')).integrationApproval.preauthorizedProjectCount, 0);
+    await call('black_gravity_integrate', { taskId, expectedSha256: preview.sha256 });
+    assert.equal((await call('black_gravity_health')).integrationApproval.preauthorizedProjectCount, 0);
     assert.equal(confirmations.length, 4);
     assert.ok(confirmations.every(message => message.includes(preview.sha256) && message.includes(JSON.stringify(canonicalSource))));
     assert.equal(await readFile(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
-    await call('antigravity_discard', { taskId });
+    await call('black_gravity_discard', { taskId });
     await assert.rejects(readFile(path.join(final.task.copyDirectory, 'source.txt')), { code: 'ENOENT' });
     await client.close();
     client = await connect();
-    const approval = (await call('antigravity_health')).integrationApproval;
+    const approval = (await call('black_gravity_health')).integrationApproval;
     assert.equal(approval.available, false);
     assert.equal(approval.preauthorizedProjectCount, 0);
 
-    assert.equal((await call('antigravity_health')).integrationApproval.available, false);
+    assert.equal((await call('black_gravity_health')).integrationApproval.available, false);
   } finally {
     await client?.close();
     assert.equal(path.dirname(dir), os.tmpdir());

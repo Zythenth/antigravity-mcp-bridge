@@ -89,7 +89,7 @@ test('server workflow passes validated JSON privately and returns only final syn
     adapter.calls[1]!.finish('Public response', { summary: 'Final public synthesis' });
     await until(() => tasks.groups.status(group.groupId).state === 'completed');
     const result = await tasks.groups.workflowResult(group.groupId);
-    assert.equal(result.summary, 'Final public synthesis'); assert.equal(result.reference.tool, 'antigravity_read_result');
+    assert.equal(result.summary, 'Final public synthesis'); assert.equal(result.reference.tool, 'black_gravity_read_result');
     assert.equal(JSON.stringify(result).includes('PRIVATE_INTERMEDIATE_VALUE'), false);
     assert.equal(new GroupStore(config.stateDirectory).read(group.groupId).nodes.first!.checkpoint!.phase, 'validated');
     tasks.groups.start(group.groupId, group.definitionSha256); await delay(150); assert.equal(adapter.calls.length, 2);

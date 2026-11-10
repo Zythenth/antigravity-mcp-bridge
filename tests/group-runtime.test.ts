@@ -85,13 +85,13 @@ test('group MCP preserves owners, waits for every prerequisite and returns compa
     try {
       assert.equal((await client.listTools()).tools.length, 50);
       const groupId = randomUUID(), input = definition(source);
-      const created = successOutputSchemas.antigravity_group_create.parse(await call('antigravity_group_create', { groupId, definition: input })).group;
+      const created = successOutputSchemas.black_gravity_group_create.parse(await call('black_gravity_group_create', { groupId, definition: input })).group;
       assert.equal(JSON.stringify(created).includes('PRIVATE_JOB_PROMPT_A'), false);
       assert.equal(JSON.stringify(created).includes('PRIVATE_PROFILE_INSTRUCTION'), false); assert.equal(adapter.calls.length, 0);
       assert.deepEqual(await tasks.groups.create(groupId, input), created);
       await assert.rejects(tasks.groups.create(groupId, { ...input, title: 'Different' }), { code: 'GROUP_CONFLICT' });
       assert.throws(() => tasks.groups.start(groupId, '0'.repeat(64)), { code: 'GROUP_CHANGED' });
-      await call('antigravity_group_start', { groupId, expectedDefinitionSha256: created.definitionSha256 });
+      await call('black_gravity_group_start', { groupId, expectedDefinitionSha256: created.definitionSha256 });
       tasks.groups.start(groupId, created.definitionSha256); await until(() => adapter.calls.length === 2);
       assert.deepEqual(adapter.calls.map(call => call.key).sort(), ['a','b']);
       const firstRoot = adapter.calls.find(call => call.key === 'a')!, secondRoot = adapter.calls.find(call => call.key === 'b')!;
@@ -100,13 +100,13 @@ test('group MCP preserves owners, waits for every prerequisite and returns compa
       firstRoot.finish(); await delay(150); assert.equal(adapter.calls.length, 2);
       secondRoot.finish(); await until(() => adapter.calls.length === 3); adapter.calls[2]!.finish();
       await until(() => tasks.groups.status(groupId).state === 'completed');
-      const waited = successOutputSchemas.antigravity_group_wait.parse(await call('antigravity_group_wait', { groupId, timeoutSeconds: 1 }));
+      const waited = successOutputSchemas.black_gravity_group_wait.parse(await call('black_gravity_group_wait', { groupId, timeoutSeconds: 1 }));
       assert.equal(waited.ready, true); assert.equal(waited.tasks.length, 3);
       assert.ok(waited.tasks.reduce((count, task) => count + task.messages.length, 0) <= 4);
       assert.equal(JSON.stringify(waited).includes('PRIVATE_JOB_PROMPT_A'), false);
       assert.equal(JSON.stringify(waited).includes('tool.started'), false);
       assert.ok(tasks.list().every(task => task.group?.groupId === groupId));
-      await call('antigravity_group_start', { groupId, expectedDefinitionSha256: created.definitionSha256 }); assert.equal(adapter.calls.length, 3);
+      await call('black_gravity_group_start', { groupId, expectedDefinitionSha256: created.definitionSha256 }); assert.equal(adapter.calls.length, 3);
     } finally { await client.close(); await server.close(); }
   });
 });
@@ -163,7 +163,7 @@ test('an unexpected coordination error pauses with a sanitized cause and never c
     assert.equal(record.error!.code, 'GROUP_COORDINATION_FAILED');
     assert.equal(record.error!.message, 'Coordination stopped; inspect existing tasks before explicitly resuming');
     assert.deepEqual(record.error!.cause, { errorClass: 'Error', code: 'EPERM', syscall: 'lstat', frame: 'GroupManager.advance' });
-    assert.deepEqual(successOutputSchemas.antigravity_group_status.parse({ group: status }).group.error, record.error);
+    assert.deepEqual(successOutputSchemas.black_gravity_group_status.parse({ group: status }).group.error, record.error);
     const serialized = JSON.stringify(record) + JSON.stringify(status);
     assert.equal(serialized.includes('PRIVATE_CAUSE_PATH'), false); assert.equal(serialized.includes('operation not permitted'), false); assert.equal(serialized.includes('PRIVATE_TASK_CONTENT'), false);
     const pauses = lines.filter(line => line.startsWith('Group coordination paused: '));
@@ -184,7 +184,7 @@ test('a paused group record without a recorded cause loads unchanged and is not 
     const file = path.join(realpathSync.native(config.stateDirectory), 'group-' + group.groupId + '.json'), bytes = await readFile(file), before = (await stat(file)).mtimeMs;
     const reloaded = new TaskManager(adapter, config); managers.push(reloaded);
     const status = reloaded.groups.status(group.groupId);
-    assert.deepEqual(successOutputSchemas.antigravity_group_status.parse({ group: status }).group.error, error);
+    assert.deepEqual(successOutputSchemas.black_gravity_group_status.parse({ group: status }).group.error, error);
     assert.equal('cause' in status.error!, false); assert.deepEqual(store.read(group.groupId).error, error);
     await delay(300);
     assert.deepEqual(await readFile(file), bytes); assert.equal((await stat(file)).mtimeMs, before); assert.equal(adapter.calls.length, 0);
@@ -206,7 +206,7 @@ test('joint wait bounds messages, preserves independent cursors and cancels only
     for (let index = 0; index < 6; index++) runs.push(await tasks.run({ prompt: 'Inspect.', workingDirectory: source, mode: 'read-only', deliveryMode: 'messages' }));
     for (let index = 0; index < 6; index++) { await until(() => adapter.calls.length > index); adapter.calls[index]!.finish(); }
     await until(() => tasks.list().every(task => task.status === 'completed'));
-    const first = successOutputSchemas.antigravity_wait_many.parse(await tasks.waitMany(runs.map(task => ({ taskId: task.taskId })), 1));
+    const first = successOutputSchemas.black_gravity_wait_many.parse(await tasks.waitMany(runs.map(task => ({ taskId: task.taskId })), 1));
     assert.equal(first.ready, true); assert.equal(first.hasMoreMessages, true); assert.equal(first.tasks.reduce((count, task) => count + task.messages.length, 0), 4);
     const second = await tasks.waitMany(first.tasks.map(task => ({ taskId: task.taskId, after: task.nextCursor })), 1);
     assert.equal(second.tasks.reduce((count, task) => count + task.messages.length, 0), 2); assert.equal(second.hasMoreMessages, false);

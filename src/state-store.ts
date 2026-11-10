@@ -9,7 +9,7 @@ import os from 'node:os';
 import { z } from 'zod';
 import { stagedExecutionPolicySchema } from './execution-policy.js';
 import { resolvedAgentPolicySchema, nativeToolsSchema, mcpSelectionSchema } from './agent-policy.js';
-import { bridgeMessageSchema, deliveryModeSchema } from './messages.js';
+import { deliveryModeSchema, persistedBridgeMessageSchema } from './messages.js';
 import { stagedSkillsSchema } from './skills.js';
 import { BridgeError, type RunOptions, type TaskRecord } from './types.js';
 import type { ProjectCopy } from './isolation.js';
@@ -40,7 +40,7 @@ const snapshotSchema = z.object({
     mode: z.enum(['write', 'read-only']).optional(), integratedAt: z.string().datetime().optional(), discardedAt: z.string().datetime().optional(),
     usageIsResume: z.boolean().optional(), usageBaseline: usageCountersSchema.optional(),
     lastObservedCliUsage: usageCountersSchema.optional(), usageProvenance: z.literal('local-executor').optional(),
-    deliveryMode: deliveryModeSchema.optional(), messages: z.array(bridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    deliveryMode: deliveryModeSchema.optional(), messages: z.array(persistedBridgeMessageSchema).max(100).optional(), messageCursor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     effort: effortSchema.optional(), roleDefinition: roleDefinitionSchema.optional(), providedSkills: stagedSkillsSchema.optional(),
     agentPolicyReceipt: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/), decisionCount: z.number().int().nonnegative(), deniedCount: z.number().int().nonnegative() }).strict().optional(),
     peerRequests: z.array(z.lazy(() => peerMessageInputSchema)).max(20).optional(),

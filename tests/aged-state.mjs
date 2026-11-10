@@ -15,7 +15,7 @@ import { TaskManager } from '../dist/src/task-manager.js';
 const clock = fileURLToPath(new URL('./clock-offset.mjs', import.meta.url));
 const clockURL = pathToFileURL(clock).href;
 const fixture = fileURLToPath(new URL('./aged-state-fixture.mjs', import.meta.url));
-const warningLine = /^Copy cleanup failed \(STATE_BUSY\); the server keeps running and retries every minute\. See maintenanceIssues in antigravity_health\.$/m;
+const warningLine = /^Copy cleanup failed \(STATE_BUSY\); the server keeps running and retries every minute\. See maintenanceIssues in black_gravity_health\.$/m;
 
 async function exists(target) {
   try { await access(target); return true; }
@@ -96,15 +96,15 @@ export async function checkAgedState(bin, root) {
     assert.equal(retainedList.length, 1);
     return { expired: expired.tasks, groupId: expired.groupId, retained: retainedList[0] };
   }, async ({ client, getStderr, expired, groupId, retained }) => {
-    const health = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const health = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     assert.equal(health.isError, undefined, JSON.stringify(health.structuredContent));
     assert.deepEqual(health.structuredContent.maintenanceIssues ?? [], []);
     for (const task of expired) await assert.rejects(access(task.copyDirectory), { code: 'ENOENT' });
     assert.equal(await readFile(path.join(retained.copyDirectory, 'source.txt'), 'utf8'), 'source');
-    const status = await client.callTool({ name: 'antigravity_status', arguments: { taskId: retained.taskId } });
+    const status = await client.callTool({ name: 'black_gravity_status', arguments: { taskId: retained.taskId } });
     assert.equal(status.isError, undefined, JSON.stringify(status.structuredContent));
     assert.equal(status.structuredContent.task.discardedAt, undefined);
-    const group = await client.callTool({ name: 'antigravity_group_status', arguments: { groupId } });
+    const group = await client.callTool({ name: 'black_gravity_group_status', arguments: { groupId } });
     assert.equal(group.isError, undefined, JSON.stringify(group.structuredContent));
     assert.equal(group.structuredContent.group.state, 'completed');
     assert.ok(!getStderr().includes('Copy cleanup failed'), getStderr());
@@ -124,7 +124,7 @@ export async function checkFailedCleanup(bin, root) {
     setLockFile(lockFile);
     return { expired, retained: retainedList[0], lockFile };
   }, async ({ client, state, getStderr, expired, retained, lockFile }) => {
-    const health = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const health = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     assert.equal(health.isError, undefined, JSON.stringify(health.structuredContent));
     const since = health.structuredContent.maintenanceIssues?.[0]?.since;
     assert.equal(typeof since, 'string');
@@ -139,9 +139,9 @@ export async function checkFailedCleanup(bin, root) {
       assert.ok(!initialStderr.includes(dir), `stderr leaked path: ${dir}`);
     }
     for (const call of [
-      { name: 'antigravity_tasks', arguments: {} },
-      { name: 'antigravity_status', arguments: { taskId: expired.taskId } },
-      { name: 'antigravity_groups', arguments: {} },
+      { name: 'black_gravity_tasks', arguments: {} },
+      { name: 'black_gravity_status', arguments: { taskId: expired.taskId } },
+      { name: 'black_gravity_groups', arguments: {} },
     ]) {
       const response = await client.callTool(call);
       assert.equal(response.isError, undefined, JSON.stringify(response.structuredContent));
@@ -153,7 +153,7 @@ export async function checkFailedCleanup(bin, root) {
     let currentHealth;
     while (Date.now() < deadline) {
       await delay(1000);
-      currentHealth = await client.callTool({ name: 'antigravity_health', arguments: {} });
+      currentHealth = await client.callTool({ name: 'black_gravity_health', arguments: {} });
       assert.equal(currentHealth.isError, undefined, JSON.stringify(currentHealth.structuredContent));
       if (!currentHealth.structuredContent.maintenanceIssues?.length) break;
     }

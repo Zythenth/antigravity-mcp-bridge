@@ -37,7 +37,7 @@ process.stdin.once('data', () => {
   } else if (scenario === 'escaped-message') {
     // The JSON escape hides the token from text redaction until the envelope body is decoded.
     const body = JSON.stringify({ kind: 'question', text: 'use ' + token }).replace('gh', '\\u0067h');
-    delta(1, '<antigravity-message>' + body + '</antigravity-message>\n');
+    delta(1, '<black-gravity-message>' + body + '</black-gravity-message>\n');
   } else if (scenario === 'headless-key') {
     const end = ['-----END', 'PRIVATE KEY-----'].join(' ');
     delta(1, 'intro\nMIIEheadlessaaaaaaaaaa\nMIIEheadlessbbbbbbbbbb\n');
@@ -63,7 +63,7 @@ process.stdin.once('data', () => {
     delta(1, 'Diagnostic before failure ' + token);
     return exitAfterFlush(1);
   } else if (scenario === 'message-tail') {
-    delta(1, '<antigravity-message>{"kind":"question","text":"Which branch?"}</antigravity-message>');
+    delta(1, '<black-gravity-message>{"kind":"question","text":"Which branch?"}</black-gravity-message>');
   }
   if (scenario) {
     emit({ event: 'result', result: { status: 'SUCCESS', response: 'done' } });

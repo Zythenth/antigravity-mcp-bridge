@@ -199,33 +199,33 @@ test('automatic mode integrates and updates sandbox policy without forms or elic
       env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'auto', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state') },
       stderr: 'pipe',
     }));
-    const health = await call('antigravity_health');
+    const health = await call('black_gravity_health');
     assert.equal(health.approvalMode, 'auto');
     assert.equal(health.integrationApproval.mode, 'auto');
     assert.equal(health.integrationApproval.method, 'automatic');
     assert.equal(health.integrationApproval.available, true);
 
-    const initialPolicy = await call('antigravity_get_sandbox_policy');
-    const updatedPolicy = await call('antigravity_set_sandbox_policy', {
+    const initialPolicy = await call('black_gravity_get_sandbox_policy');
+    const updatedPolicy = await call('black_gravity_set_sandbox_policy', {
       policy: { ...initialPolicy.policy, childProcesses: false, maxOutputChars: 512 },
       expectedSha256: initialPolicy.sha256,
     });
     assert.equal(updatedPolicy.policy.childProcesses, false);
     assert.equal(updatedPolicy.policy.maxOutputChars, 512);
 
-    const run = await call('antigravity_run', {
+    const run = await call('black_gravity_run', {
       prompt: 'write:test',
       workingDirectory: source,
       acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
     });
-    await waitFor(async () => (await call('antigravity_result', { taskId: run.task.taskId })).ready === true, async () => { const { ready, status } = await call('antigravity_result', { taskId: run.task.taskId }); return { ready, status }; });
-    const preview = await call('antigravity_preview', { taskId: run.task.taskId });
-    await call('antigravity_verify', {
+    await waitFor(async () => (await call('black_gravity_result', { taskId: run.task.taskId })).ready === true, async () => { const { ready, status } = await call('black_gravity_result', { taskId: run.task.taskId }); return { ready, status }; });
+    const preview = await call('black_gravity_preview', { taskId: run.task.taskId });
+    await call('black_gravity_verify', {
       taskId: run.task.taskId,
       expectedSha256: preview.sha256,
       reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
     });
-    const integrated = await call('antigravity_integrate', { taskId: run.task.taskId, expectedSha256: preview.sha256 });
+    const integrated = await call('black_gravity_integrate', { taskId: run.task.taskId, expectedSha256: preview.sha256 });
     assert.equal(integrated.summary.added, 1);
     assert.equal(readFileSync(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally {
@@ -338,30 +338,30 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       env: { ...process.env as Record<string, string>, BRIDGE_APPROVAL_MODE: 'ask', BRIDGE_TOOL_PROFILE: 'full', BRIDGE_STATE_DIRECTORY: path.join(mcpDir, 'state') },
       stderr: 'pipe',
     }));
-    const health = (await unavailableClient.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const health = (await unavailableClient.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.equal(health.approvalMode, 'ask');
     assert.equal(health.integrationApproval.mode, 'ask');
     assert.equal(health.integrationApproval.preauthorizedProjectCount, 1);
 
-    const getPolicy = (await unavailableClient.callTool({ name: 'antigravity_get_sandbox_policy', arguments: {} })).structuredContent as any;
+    const getPolicy = (await unavailableClient.callTool({ name: 'black_gravity_get_sandbox_policy', arguments: {} })).structuredContent as any;
     const policyDenied = await unavailableClient.callTool({
-      name: 'antigravity_set_sandbox_policy',
+      name: 'black_gravity_set_sandbox_policy',
       arguments: { policy: { ...getPolicy.policy, childProcesses: false }, expectedSha256: getPolicy.sha256 },
     });
     assert.equal((policyDenied.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
 
     const run = (await unavailableClient.callTool({
-      name: 'antigravity_run',
+      name: 'black_gravity_run',
       arguments: {
         prompt: 'write:test',
         workingDirectory: mcpSource,
         acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
       },
     })).structuredContent as any;
-    await waitFor(async () => ((await unavailableClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await unavailableClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
-    const preview = (await unavailableClient.callTool({ name: 'antigravity_preview', arguments: { taskId: run.task.taskId } })).structuredContent as any;
+    await waitFor(async () => ((await unavailableClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await unavailableClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
+    const preview = (await unavailableClient.callTool({ name: 'black_gravity_preview', arguments: { taskId: run.task.taskId } })).structuredContent as any;
     await unavailableClient.callTool({
-      name: 'antigravity_verify',
+      name: 'black_gravity_verify',
       arguments: {
         taskId: run.task.taskId,
         expectedSha256: preview.sha256,
@@ -371,7 +371,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
 
     // Even with remembered root in state, calling integrate on client without elicitation fails with APPROVAL_UNAVAILABLE in ask mode
     const integrateDenied = await unavailableClient.callTool({
-      name: 'antigravity_integrate',
+      name: 'black_gravity_integrate',
       arguments: { taskId: run.task.taskId, expectedSha256: preview.sha256 },
     });
     assert.equal((integrateDenied.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
@@ -398,17 +398,17 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
   }));
   try {
     const run = (await elicitationClient.callTool({
-      name: 'antigravity_run',
+      name: 'black_gravity_run',
       arguments: {
         prompt: 'write:test',
         workingDirectory: mcpSource,
         acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
       },
     })).structuredContent as any;
-    await waitFor(async () => ((await elicitationClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await elicitationClient.callTool({ name: 'antigravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
-    const preview = (await elicitationClient.callTool({ name: 'antigravity_preview', arguments: { taskId: run.task.taskId } })).structuredContent as any;
+    await waitFor(async () => ((await elicitationClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await elicitationClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
+    const preview = (await elicitationClient.callTool({ name: 'black_gravity_preview', arguments: { taskId: run.task.taskId } })).structuredContent as any;
     await elicitationClient.callTool({
-      name: 'antigravity_verify',
+      name: 'black_gravity_verify',
       arguments: {
         taskId: run.task.taskId,
         expectedSha256: preview.sha256,
@@ -417,7 +417,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
     });
 
     const deniedRes = await elicitationClient.callTool({
-      name: 'antigravity_integrate',
+      name: 'black_gravity_integrate',
       arguments: { taskId: run.task.taskId, expectedSha256: preview.sha256 },
     });
     assert.equal((deniedRes.structuredContent as any).error.code, 'APPROVAL_DENIED');
@@ -425,7 +425,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
     formAction = 'accept';
     formConfirm = true;
     const acceptRes = (await elicitationClient.callTool({
-      name: 'antigravity_integrate',
+      name: 'black_gravity_integrate',
       arguments: { taskId: run.task.taskId, expectedSha256: preview.sha256 },
     })).structuredContent as any;
     assert.equal(acceptRes.summary.added, 1);
@@ -581,14 +581,14 @@ test('loadConfig tolerates invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS and co
   assert.ok(singleWarning);
   assert.equal(singleWarning?.includes('\n'), false);
   assert.equal(singleWarning?.includes('{'), false);
-  assert.equal(singleWarning, 'Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in antigravity_health.');
+  assert.equal(singleWarning, 'Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in black_gravity_health.');
 
   const sampleIssues = [
     { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', index: 0, reason: 'not-found' as const },
     { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', reason: 'invalid-json' as const },
   ];
   const warning = configurationWarning(sampleIssues);
-  assert.equal(warning, 'Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS[0] not-found, BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in antigravity_health.');
+  assert.equal(warning, 'Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS[0] not-found, BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS invalid-json. See configurationIssues in black_gravity_health.');
   assert.equal(warning?.includes('\n'), false);
 });
 
@@ -668,13 +668,13 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
     client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const health1 = (await client.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const health1 = (await client.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.deepEqual(health1.configurationIssues, [
       { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', index: 0, reason: 'not-found' },
     ]);
     assert.equal(health1.integrationApproval.preauthorizedProjectCount, 1);
 
-    const health2 = (await client.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const health2 = (await client.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.deepEqual(health2.configurationIssues, [
       { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', index: 0, reason: 'not-found' },
     ]);
@@ -707,7 +707,7 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
     client2 = new Client({ name: 'test-client-malformed', version: '1.0.0' }, { capabilities: {} });
     await client2.connect(transport2);
 
-    const healthMalformed = (await client2.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const healthMalformed = (await client2.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.deepEqual(healthMalformed.configurationIssues, [
       { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', reason: 'invalid-json' },
     ]);
@@ -744,7 +744,7 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
     client3 = new Client({ name: 'test-client-all-invalid', version: '1.0.0' }, { capabilities: {} });
     await client3.connect(transport3);
 
-    const healthAll = (await client3.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const healthAll = (await client3.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.deepEqual(healthAll.configurationIssues, [
       { variable: 'BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS', index: 0, reason: 'not-found' },
       { variable: 'BRIDGE_ALLOWED_ENV_VARS', index: 0, reason: 'forbidden-name' },
@@ -807,7 +807,7 @@ test('server startup handles unreadable BRIDGE_ALLOWED_AGY_TOOLS, invalid BRIDGE
     client = new Client({ name: 'test-startup-coverage', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const health = (await client.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const health = (await client.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.deepEqual(health.configurationIssues, [
       { variable: 'BRIDGE_ALLOWED_AGY_TOOLS', reason: 'invalid-json' },
       { variable: 'BRIDGE_SECRET_EXCLUSIONS', index: 0, reason: 'invalid-pattern' },
@@ -826,7 +826,7 @@ test('server startup handles unreadable BRIDGE_ALLOWED_AGY_TOOLS, invalid BRIDGE
       assert.equal(JSON.stringify(health).includes(marker), false, `health must not leak ${marker}`);
     }
 
-    const agentPolicyResult = (await client.callTool({ name: 'antigravity_get_agent_policy', arguments: {} })).structuredContent as any;
+    const agentPolicyResult = (await client.callTool({ name: 'black_gravity_get_agent_policy', arguments: {} })).structuredContent as any;
     assert.deepEqual(agentPolicyResult.allowedTools, []);
     for (const marker of [sensitiveToolsMarker, sensitiveExclusionsMarker, sensitiveForbiddenMarker]) {
       assert.equal(JSON.stringify(agentPolicyResult).includes(marker), false);
@@ -835,7 +835,7 @@ test('server startup handles unreadable BRIDGE_ALLOWED_AGY_TOOLS, invalid BRIDGE
     assert.deepEqual(effectivePolicy.nativeTools, ['finish']);
 
     const listFilesResult = await client.callTool({
-      name: 'antigravity_list_project_files',
+      name: 'black_gravity_list_project_files',
       arguments: { workingDirectory: tmpDir },
     }) as any;
     assert.equal(listFilesResult.isError, true);
@@ -843,7 +843,7 @@ test('server startup handles unreadable BRIDGE_ALLOWED_AGY_TOOLS, invalid BRIDGE
     assert.equal(listFilesContent.error.code, 'INVALID_CONFIGURATION');
 
     const runResult = await client.callTool({
-      name: 'antigravity_run',
+      name: 'black_gravity_run',
       arguments: { prompt: 'do work', workingDirectory: tmpDir },
     }) as any;
     assert.equal(runResult.isError, true);
@@ -1253,7 +1253,7 @@ test('rememberIntegrationRoot refuses to overwrite invalid integration-approvals
   }
 });
 
-test('antigravity_health continues to respond when integration-approvals.json is invalid and lists the problem', () => {
+test('black_gravity_health continues to respond when integration-approvals.json is invalid and lists the problem', () => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-health-invalid-file-'));
   try {
     const file = path.join(directory, 'integration-approvals.json');
@@ -1596,7 +1596,7 @@ test('server startup tolerates invalid craft, node cache, and agy path without l
     client = new Client({ name: 'test-startup-tolerant-paths', version: '1.0.0' }, { capabilities: {} });
     await client.connect(transport);
 
-    const health = (await client.callTool({ name: 'antigravity_health', arguments: {} })).structuredContent as any;
+    const health = (await client.callTool({ name: 'black_gravity_health', arguments: {} })).structuredContent as any;
     assert.deepEqual(health.configurationIssues, [
       { variable: 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY', reason: 'not-absolute' },
       { variable: 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY', reason: 'not-absolute' },

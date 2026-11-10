@@ -652,7 +652,7 @@ test('MCP server exposes exact build waitCommand in health and run', async () =>
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
-    const healthRes = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const healthRes = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     assert.equal(healthRes.isError, undefined, JSON.stringify(healthRes.structuredContent));
     const healthContent = healthRes.structuredContent as { waitCommand: { argv: string[]; sh: string } };
     const expectedPrefix = [process.execPath, entry, 'wait', '--state-directory', f.config.stateDirectory];
@@ -660,7 +660,7 @@ test('MCP server exposes exact build waitCommand in health and run', async () =>
     assert.equal(healthContent.waitCommand.sh, shellCommand(expectedPrefix));
 
     const runRes = await client.callTool({
-      name: 'antigravity_run',
+      name: 'black_gravity_run',
       arguments: {
         prompt: 'MCP waitCommand execution test',
         workingDirectory: f.source,

@@ -45,7 +45,7 @@ test('native runner works when the ambient temp directory is unavailable and kee
     assert.equal(observed?.output, 'original');
     assert.equal(observed?.receipt.beforeSha256, observed?.receipt.afterSha256);
     assert.equal(observed?.receipt.afterSha256, await fingerprintProjectCopy(project));
-    assert.ok(!(await readdir(project.copyDirectory)).some(file => file.startsWith('.agy-test-snapshot-')));
+    assert.ok(!(await readdir(project.copyDirectory)).some(file => file.startsWith('.black-gravity-test-snapshot-')));
   } finally {
     await native?.cleanup();
     if (project) await discardProjectCopy(project);

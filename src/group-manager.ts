@@ -333,7 +333,7 @@ export class GroupManager {
       const summary = typeof value === 'string' ? value : value && typeof value === 'object' && typeof (value as { summary?: unknown }).summary === 'string' ? (value as { summary: string }).summary : undefined;
       return { groupId: record.groupId, finalNode: record.definition.workflow.finalNode, taskId: input.taskId, outputSha256: input.outputSha256,
         ...(summary ? { summary: summary.slice(0, 2000) } : {}),
-        reference: { tool: 'antigravity_read_result' as const, taskId: task.taskId, contentSha256: createHash('sha256').update(JSON.stringify(task.result ?? null)).digest('hex') } };
+        reference: { tool: 'black_gravity_read_result' as const, taskId: task.taskId, contentSha256: createHash('sha256').update(JSON.stringify(task.result ?? null)).digest('hex') } };
     } finally { registry?.(); release(); }
   }
 

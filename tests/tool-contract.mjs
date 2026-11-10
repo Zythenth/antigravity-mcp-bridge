@@ -24,7 +24,7 @@ async function settle(client, taskId) {
   const deadline = Date.now() + 120000;
   while (Date.now() < deadline) {
     const res = await client.request(
-      { method: 'tools/call', params: { name: 'antigravity_status', arguments: { taskId } } },
+      { method: 'tools/call', params: { name: 'black_gravity_status', arguments: { taskId } } },
       CallToolResultSchema,
     );
     const task = res.structuredContent?.task;
@@ -57,25 +57,25 @@ export function assertCoverage(toolNames, caseNames) {
 }
 
 export const toolCases = [
-  { name: 'antigravity_health', args: () => ({}) },
-  { name: 'antigravity_list_models', args: () => ({}) },
-  { name: 'antigravity_get_model', args: () => ({}) },
-  { name: 'antigravity_set_model', args: () => ({ model: null }) },
-  { name: 'antigravity_get_sandbox_policy', args: () => ({}), check: async (result, c) => { c.policy = result; } },
-  { name: 'antigravity_set_sandbox_policy', args: c => ({ policy: c.policy.policy, expectedSha256: c.policy.sha256 }) },
-  { name: 'antigravity_roles', args: () => ({}) },
-  { name: 'antigravity_get_agent_policy', args: () => ({}) },
-  { name: 'antigravity_list_project_files', args: c => ({ workingDirectory: c.source }) },
-  { name: 'antigravity_memory_list', args: c => ({ workingDirectory: c.source }) },
+  { name: 'black_gravity_health', args: () => ({}) },
+  { name: 'black_gravity_list_models', args: () => ({}) },
+  { name: 'black_gravity_get_model', args: () => ({}) },
+  { name: 'black_gravity_set_model', args: () => ({ model: null }) },
+  { name: 'black_gravity_get_sandbox_policy', args: () => ({}), check: async (result, c) => { c.policy = result; } },
+  { name: 'black_gravity_set_sandbox_policy', args: c => ({ policy: c.policy.policy, expectedSha256: c.policy.sha256 }) },
+  { name: 'black_gravity_roles', args: () => ({}) },
+  { name: 'black_gravity_get_agent_policy', args: () => ({}) },
+  { name: 'black_gravity_list_project_files', args: c => ({ workingDirectory: c.source }) },
+  { name: 'black_gravity_memory_list', args: c => ({ workingDirectory: c.source }) },
   {
-    name: 'antigravity_memory_write',
+    name: 'black_gravity_memory_write',
     args: c => ({ workingDirectory: c.source, specialist: 'contract', text: 'Contract note.', expectedSha256: null }),
     check: async (result, c) => { c.memory = result.memory.sha256; },
   },
-  { name: 'antigravity_memory_read', args: c => ({ workingDirectory: c.source, specialist: 'contract', expectedSha256: c.memory }) },
-  { name: 'antigravity_memory_remove', args: c => ({ workingDirectory: c.source, specialist: 'contract', expectedSha256: c.memory }) },
+  { name: 'black_gravity_memory_read', args: c => ({ workingDirectory: c.source, specialist: 'contract', expectedSha256: c.memory }) },
+  { name: 'black_gravity_memory_remove', args: c => ({ workingDirectory: c.source, specialist: 'contract', expectedSha256: c.memory }) },
   {
-    name: 'antigravity_run',
+    name: 'black_gravity_run',
     args: c => ({
       prompt: 'write:contract',
       workingDirectory: c.source,
@@ -91,35 +91,35 @@ export const toolCases = [
     check: async (result, c) => { c.task = result.task.taskId; },
   },
   {
-    name: 'antigravity_wait',
+    name: 'black_gravity_wait',
     args: c => ({ taskId: c.task, timeoutSeconds: 30 }),
     check: async (result, c) => {
       const task = await settle(c.client, c.task);
-      assert.equal(task.status, 'completed', `[${c.scenario}] antigravity_wait: ${JSON.stringify(task.error)}`);
+      assert.equal(task.status, 'completed', `[${c.scenario}] black_gravity_wait: ${JSON.stringify(task.error)}`);
       c.session = task.sessionId;
     },
   },
-  { name: 'antigravity_events', args: c => ({ taskId: c.task }) },
-  { name: 'antigravity_result', args: c => ({ taskId: c.task, includeResult: false }) },
-  { name: 'antigravity_read_result', args: c => ({ taskId: c.task }) },
-  { name: 'antigravity_status', args: c => ({ taskId: c.task }) },
-  { name: 'antigravity_tasks', args: () => ({}) },
-  { name: 'antigravity_sessions', args: () => ({}) },
+  { name: 'black_gravity_events', args: c => ({ taskId: c.task }) },
+  { name: 'black_gravity_result', args: c => ({ taskId: c.task, includeResult: false }) },
+  { name: 'black_gravity_read_result', args: c => ({ taskId: c.task }) },
+  { name: 'black_gravity_status', args: c => ({ taskId: c.task }) },
+  { name: 'black_gravity_tasks', args: () => ({}) },
+  { name: 'black_gravity_sessions', args: () => ({}) },
   {
-    name: 'antigravity_artifacts',
+    name: 'black_gravity_artifacts',
     args: c => ({ taskId: c.task }),
     check: async (result, c) => {
       c.artifact = result.artifacts[0];
-      assert.equal(c.artifact?.path, 'AGY_BRIDGE_TEST.md', `[${c.scenario}] antigravity_artifacts: artifact path mismatch`);
+      assert.equal(c.artifact?.path, 'AGY_BRIDGE_TEST.md', `[${c.scenario}] black_gravity_artifacts: artifact path mismatch`);
     },
   },
-  { name: 'antigravity_read_artifact', args: c => ({ taskId: c.task, path: c.artifact.path, expectedSha256: c.artifact.sha256 }) },
-  { name: 'antigravity_read_structured_result', args: c => ({ taskId: c.task }), error: 'STRUCTURED_RESULT_NOT_AVAILABLE' },
-  { name: 'antigravity_preview', args: c => ({ taskId: c.task, includePatch: false }), check: async (result, c) => { c.sha = result.sha256; } },
-  { name: 'antigravity_read_patch', args: c => ({ taskId: c.task, expectedSha256: c.sha }) },
-  { name: 'antigravity_record_test', args: c => ({ taskId: c.task, expectedSha256: c.sha, command: 'node --version', exitCode: 0, output: 'v24' }) },
+  { name: 'black_gravity_read_artifact', args: c => ({ taskId: c.task, path: c.artifact.path, expectedSha256: c.artifact.sha256 }) },
+  { name: 'black_gravity_read_structured_result', args: c => ({ taskId: c.task }), error: 'STRUCTURED_RESULT_NOT_AVAILABLE' },
+  { name: 'black_gravity_preview', args: c => ({ taskId: c.task, includePatch: false }), check: async (result, c) => { c.sha = result.sha256; } },
+  { name: 'black_gravity_read_patch', args: c => ({ taskId: c.task, expectedSha256: c.sha }) },
+  { name: 'black_gravity_record_test', args: c => ({ taskId: c.task, expectedSha256: c.sha, command: 'node --version', exitCode: 0, output: 'v24' }) },
   {
-    name: 'antigravity_test',
+    name: 'black_gravity_test',
     args: c => ({
       taskId: c.task,
       expectedSha256: c.sha,
@@ -129,31 +129,31 @@ export const toolCases = [
     check: async (result, c) => {
       c.testTask = result.task.taskId;
       const task = await settle(c.client, c.testTask);
-      assert.equal(task.status, 'completed', `[${c.scenario}] antigravity_test: ${JSON.stringify(task.error)}`);
-      assert.equal(task.tests?.at(-1)?.source, 'agy-tool', `[${c.scenario}] antigravity_test: test source mismatch`);
-      assert.equal(task.tests?.at(-1)?.exitCode, 0, `[${c.scenario}] antigravity_test: test exit code mismatch`);
+      assert.equal(task.status, 'completed', `[${c.scenario}] black_gravity_test: ${JSON.stringify(task.error)}`);
+      assert.equal(task.tests?.at(-1)?.source, 'agy-tool', `[${c.scenario}] black_gravity_test: test source mismatch`);
+      assert.equal(task.tests?.at(-1)?.exitCode, 0, `[${c.scenario}] black_gravity_test: test exit code mismatch`);
     },
   },
   {
-    name: 'antigravity_verify',
+    name: 'black_gravity_verify',
     args: c => ({ taskId: c.testTask, expectedSha256: c.sha, reviews }),
     check: async (result, c) => {
-      assert.equal(result.status, 'passed', `[${c.scenario}] antigravity_verify: status mismatch`);
+      assert.equal(result.status, 'passed', `[${c.scenario}] black_gravity_verify: status mismatch`);
     },
   },
-  { name: 'antigravity_context', args: c => ({ taskId: c.task }), check: async (result, c) => { c.context = result.treeSha256; } },
+  { name: 'black_gravity_context', args: c => ({ taskId: c.task }), check: async (result, c) => { c.context = result.treeSha256; } },
   {
-    name: 'antigravity_handoff',
+    name: 'black_gravity_handoff',
     args: c => ({ sourceTaskId: c.task, expectedContextSha256: c.context, prompt: 'Review the contract file.', role: 'reviewer' }),
     check: async (result, c) => { await settle(c.client, result.task.taskId); },
   },
   {
-    name: 'antigravity_compare',
+    name: 'black_gravity_compare',
     args: c => ({ sourceTaskId: c.task, expectedContextSha256: c.context, models: ['mock-pro', 'mock-flash'], prompt: 'Compare the contract file.' }),
     check: async (result, c) => { c.comparison = result; },
   },
   {
-    name: 'antigravity_wait_many',
+    name: 'black_gravity_wait_many',
     args: c => ({ targets: c.comparison.taskIds.map(taskId => ({ taskId })), timeoutSeconds: 30 }),
     check: async (result, c) => {
       for (const taskId of c.comparison.taskIds) {
@@ -161,30 +161,30 @@ export const toolCases = [
       }
     },
   },
-  { name: 'antigravity_comparison', args: c => ({ comparisonId: c.comparison.comparisonId }) },
+  { name: 'black_gravity_comparison', args: c => ({ comparisonId: c.comparison.comparisonId }) },
   {
-    name: 'antigravity_resume',
+    name: 'black_gravity_resume',
     args: c => ({ prompt: 'Continue the review.', workingDirectory: c.source, sessionId: c.session }),
     check: async (result, c) => {
       await settle(c.client, result.task.taskId);
       const byTask = await c.client.request(
-        { method: 'tools/call', params: { name: 'antigravity_resume', arguments: { prompt: 'Continue the review.', workingDirectory: c.source, taskId: result.task.taskId } } },
+        { method: 'tools/call', params: { name: 'black_gravity_resume', arguments: { prompt: 'Continue the review.', workingDirectory: c.source, taskId: result.task.taskId } } },
         CallToolResultSchema,
       );
-      assert.equal(!byTask.isError, true, `[${c.scenario}] antigravity_resume by taskId: ${JSON.stringify(byTask.structuredContent?.error)}`);
-      const { valid, errorMessage } = c.validators.get('antigravity_resume')(byTask.structuredContent);
-      assert.equal(valid, true, `[${c.scenario}] antigravity_resume by taskId: ${errorMessage}`);
-      assert.equal(byTask.structuredContent.task.sessionId, result.task.sessionId, `[${c.scenario}] antigravity_resume by taskId: session mismatch`);
-      assert.ok(byTask.structuredContent.waitCommand.argv.includes(byTask.structuredContent.task.taskId), `[${c.scenario}] antigravity_resume by taskId: waitCommand mismatch`);
+      assert.equal(!byTask.isError, true, `[${c.scenario}] black_gravity_resume by taskId: ${JSON.stringify(byTask.structuredContent?.error)}`);
+      const { valid, errorMessage } = c.validators.get('black_gravity_resume')(byTask.structuredContent);
+      assert.equal(valid, true, `[${c.scenario}] black_gravity_resume by taskId: ${errorMessage}`);
+      assert.equal(byTask.structuredContent.task.sessionId, result.task.sessionId, `[${c.scenario}] black_gravity_resume by taskId: session mismatch`);
+      assert.ok(byTask.structuredContent.waitCommand.argv.includes(byTask.structuredContent.task.taskId), `[${c.scenario}] black_gravity_resume by taskId: waitCommand mismatch`);
       await settle(c.client, byTask.structuredContent.task.taskId);
     },
   },
-  { name: 'antigravity_set_delivery_mode', args: c => ({ taskId: c.task, deliveryMode: 'messages' }) },
-  { name: 'antigravity_send_message', args: c => ({ taskId: c.task, messageId: randomUUID(), text: 'Contract message.' }) },
-  { name: 'antigravity_integrate', args: c => ({ taskId: c.testTask, expectedSha256: c.sha }) },
-  { name: 'antigravity_cancel', args: c => ({ taskId: c.task }) },
+  { name: 'black_gravity_set_delivery_mode', args: c => ({ taskId: c.task, deliveryMode: 'messages' }) },
+  { name: 'black_gravity_send_message', args: c => ({ taskId: c.task, messageId: randomUUID(), text: 'Contract message.' }) },
+  { name: 'black_gravity_integrate', args: c => ({ taskId: c.testTask, expectedSha256: c.sha }) },
+  { name: 'black_gravity_cancel', args: c => ({ taskId: c.task }) },
   {
-    name: 'antigravity_group_create',
+    name: 'black_gravity_group_create',
     args: c => ({
       groupId: (c.group = randomUUID()),
       definition: {
@@ -195,29 +195,29 @@ export const toolCases = [
     }),
     check: async (result, c) => { c.groupSha = result.group.definitionSha256; },
   },
-  { name: 'antigravity_group_start', args: c => ({ groupId: c.group, expectedDefinitionSha256: c.groupSha }) },
-  { name: 'antigravity_group_status', args: c => ({ groupId: c.group }) },
-  { name: 'antigravity_groups', args: () => ({}) },
-  { name: 'antigravity_group_wait', args: c => ({ groupId: c.group, timeoutSeconds: 30 }) },
-  { name: 'antigravity_peer_receipts', args: c => ({ groupId: c.group }) },
-  { name: 'antigravity_workflow_result', args: c => ({ groupId: c.group }), error: 'WORKFLOW_NOT_READY' },
-  { name: 'antigravity_group_cancel', args: c => ({ groupId: c.group }) },
-  { name: 'antigravity_discard', args: c => ({ taskId: c.task }) },
-  { name: 'antigravity_cleanup', args: () => ({}) },
-  { name: 'antigravity_usage', args: () => ({}) },
+  { name: 'black_gravity_group_start', args: c => ({ groupId: c.group, expectedDefinitionSha256: c.groupSha }) },
+  { name: 'black_gravity_group_status', args: c => ({ groupId: c.group }) },
+  { name: 'black_gravity_groups', args: () => ({}) },
+  { name: 'black_gravity_group_wait', args: c => ({ groupId: c.group, timeoutSeconds: 30 }) },
+  { name: 'black_gravity_peer_receipts', args: c => ({ groupId: c.group }) },
+  { name: 'black_gravity_workflow_result', args: c => ({ groupId: c.group }), error: 'WORKFLOW_NOT_READY' },
+  { name: 'black_gravity_group_cancel', args: c => ({ groupId: c.group }) },
+  { name: 'black_gravity_discard', args: c => ({ taskId: c.task }) },
+  { name: 'black_gravity_cleanup', args: () => ({}) },
+  { name: 'black_gravity_usage', args: () => ({}) },
 ];
 
 export async function checkToolContracts(bin, root) {
   const caseNames = toolCases.map(toolCase => toolCase.name);
-  assert.throws(() => assertCoverage([...caseNames, 'antigravity_extra_tool'], caseNames), /antigravity_extra_tool/);
-  assert.throws(() => assertCoverage(caseNames, [...caseNames, 'antigravity_orphan_case']), /antigravity_orphan_case/);
+  assert.throws(() => assertCoverage([...caseNames, 'black_gravity_extra_tool'], caseNames), /black_gravity_extra_tool/);
+  assert.throws(() => assertCoverage(caseNames, [...caseNames, 'black_gravity_orphan_case']), /black_gravity_orphan_case/);
   for (const name of [
-    'antigravity_group_cancel',
-    'antigravity_group_status',
-    'antigravity_groups',
-    'antigravity_send_message',
-    'antigravity_set_delivery_mode',
-    'antigravity_workflow_result',
+    'black_gravity_group_cancel',
+    'black_gravity_group_status',
+    'black_gravity_groups',
+    'black_gravity_send_message',
+    'black_gravity_set_delivery_mode',
+    'black_gravity_workflow_result',
   ]) {
     assert.ok(caseNames.includes(name), `Missing case for ${name}`);
   }

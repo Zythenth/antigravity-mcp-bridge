@@ -39,7 +39,7 @@ async function check(command, args, label) {
     assert.ok(tools.tools.every(tool => !tool.name.includes('panel')));
     assert.equal(client.getServerCapabilities()?.resources, undefined);
     assert.ok(tools.tools.every(tool => tool.outputSchema?.type === 'object'));
-    const health = await client.callTool({ name: 'antigravity_health', arguments: {} });
+    const health = await client.callTool({ name: 'black_gravity_health', arguments: {} });
     assert.equal(health.isError, undefined, JSON.stringify(health.structuredContent));
     assert.equal(health.structuredContent.installed, false);
     assert.equal(typeof health.structuredContent.error, 'string');
@@ -53,7 +53,7 @@ async function check(command, args, label) {
     });
     assert.equal(waitResult.status, 7, waitResult.stderr);
     assert.equal(JSON.parse(waitResult.stdout.trim()).outcome, 'unknown-task');
-    const auto = await client.callTool({ name: 'antigravity_set_model', arguments: { model: null } });
+    const auto = await client.callTool({ name: 'black_gravity_set_model', arguments: { model: null } });
     assert.equal(auto.isError, undefined, JSON.stringify(auto.structuredContent));
     assert.equal(auto.structuredContent.model, null);
     console.log(`${label}: MCP startup, version, ${tools.tools.length} contracts, health, waitCommand and Auto passed`);
@@ -91,7 +91,7 @@ function checkPermissionsCommand(bin) {
   assert.equal(permissions.allow.length, 43);
   assert.equal(permissions.ask.length, 7);
   assert.equal(permissions.deny.length, 0);
-  assert.ok(permissions.ask.includes('mcp__antigravity__antigravity_integrate'));
+  assert.ok(permissions.ask.includes('mcp__black-gravity__black_gravity_integrate'));
 }
 
 try {

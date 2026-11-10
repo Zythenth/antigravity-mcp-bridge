@@ -623,7 +623,7 @@ test('BRIDGE_SECRET_EXCLUSIONS: failure modes report issues, mark exclusions unu
           assert.ok(err instanceof BridgeError, `${c.name} must throw BridgeError`);
           assert.equal(err.code, 'INVALID_CONFIGURATION');
           assert.ok(err.message.includes('BRIDGE_SECRET_EXCLUSIONS'));
-          assert.ok(err.message.includes('antigravity_health'));
+          assert.ok(err.message.includes('black_gravity_health'));
           assert.equal(err.message.includes(c.raw), false, 'Error message must never echo configured value');
           return true;
         }
@@ -685,7 +685,7 @@ test('BRIDGE_SECRET_EXCLUSIONS: failure modes report issues, mark exclusions unu
           assert.ok(err instanceof BridgeError, `${c.name} preflight must throw BridgeError`);
           assert.equal(err.code, 'INVALID_CONFIGURATION');
           assert.ok(err.message.includes('BRIDGE_SECRET_EXCLUSIONS'));
-          assert.ok(err.message.includes('antigravity_health'));
+          assert.ok(err.message.includes('black_gravity_health'));
           assert.equal(err.message.includes(c.raw), false, 'Error message must never echo configured value');
           return true;
         }
@@ -742,7 +742,7 @@ test('BRIDGE_SECRET_EXCLUSIONS: failure modes report issues, mark exclusions unu
           assert.ok(err instanceof BridgeError);
           assert.equal(err.code, 'INVALID_CONFIGURATION');
           assert.ok(err.message.includes('BRIDGE_SECRET_EXCLUSIONS'));
-          assert.ok(err.message.includes('antigravity_health'));
+          assert.ok(err.message.includes('black_gravity_health'));
           return true;
         }
       );
@@ -829,7 +829,7 @@ test('FORBIDDEN_DIRECTORIES: relative or NUL entries report issues, mark unusabl
           assert.ok(err instanceof BridgeError);
           assert.equal(err.code, 'INVALID_CONFIGURATION');
           assert.ok(err.message.includes('FORBIDDEN_DIRECTORIES'));
-          assert.ok(err.message.includes('antigravity_health'));
+          assert.ok(err.message.includes('black_gravity_health'));
           assert.equal(err.message.includes('relative-bad'), false, 'Error message must not echo relative entry');
           return true;
         }
@@ -886,7 +886,7 @@ test('FORBIDDEN_DIRECTORIES: relative or NUL entries report issues, mark unusabl
           assert.ok(err instanceof BridgeError);
           assert.equal(err.code, 'INVALID_CONFIGURATION');
           assert.ok(err.message.includes('FORBIDDEN_DIRECTORIES'));
-          assert.ok(err.message.includes('antigravity_health'));
+          assert.ok(err.message.includes('black_gravity_health'));
           assert.equal(err.message.includes(sensitive), false, 'Error message must not echo sensitive entry');
           return true;
         }

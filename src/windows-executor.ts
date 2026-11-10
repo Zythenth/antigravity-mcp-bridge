@@ -402,7 +402,7 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
   };
   if ((runtimeSelection.mode ?? 'system') === 'portable') {
     if (runtimeSelection.portableNodeCacheDirectoryInvalid || !runtimeSelection.portableNodeCacheDirectory) {
-      throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+      throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
     }
   }
   const stateDirectory = path.resolve(options.stateDirectory ?? path.join(os.homedir(), '.antigravity-mcp-bridge'));

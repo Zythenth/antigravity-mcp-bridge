@@ -391,37 +391,37 @@ function readSecretExclusionsConfig(value: string | undefined): {
 
 export function assertSecretExclusionsUsable(limits: ProjectLimits): void {
   if (limits.secretExclusionsInvalid) {
-    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_SECRET_EXCLUSIONS is invalid. See configurationIssues in antigravity_health.');
+    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_SECRET_EXCLUSIONS is invalid. See configurationIssues in black_gravity_health.');
   }
 }
 
 export function assertForbiddenDirectoriesUsable(config: Pick<Config, 'forbiddenDirectoriesInvalid'>): void {
   if (config.forbiddenDirectoriesInvalid) {
-    throw new BridgeError('INVALID_CONFIGURATION', 'FORBIDDEN_DIRECTORIES is invalid. See configurationIssues in antigravity_health.');
+    throw new BridgeError('INVALID_CONFIGURATION', 'FORBIDDEN_DIRECTORIES is invalid. See configurationIssues in black_gravity_health.');
   }
 }
 
 export function assertAntiAiCraftDirectoryUsable(config: Pick<Config, 'antiAiCraftDirectoryInvalid'>): void {
   if (config.antiAiCraftDirectoryInvalid) {
-    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_ANTI_AI_CRAFT_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
   }
 }
 
 export function assertWindowsNodeCacheDirectoryUsable(config: Pick<Config, 'windowsNodeCacheDirectoryInvalid'>): void {
   if (config.windowsNodeCacheDirectoryInvalid) {
-    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
   }
 }
 
 export function assertAgyPathUsable(config: Pick<Config, 'agyPathInvalid'>): void {
   if (config.agyPathInvalid) {
-    throw new BridgeError('INVALID_CONFIGURATION', 'AGY_PATH is invalid. See configurationIssues in antigravity_health.');
+    throw new BridgeError('INVALID_CONFIGURATION', 'AGY_PATH is invalid. See configurationIssues in black_gravity_health.');
   }
 }
 
 export function assertStateDirectoryUsable(config: Pick<Config, 'stateDirectoryInvalid'>): void {
   if (config.stateDirectoryInvalid) {
-    throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in antigravity_health.');
+    throw new BridgeError('INVALID_STATE_DIRECTORY', 'BRIDGE_STATE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
   }
 }
 
@@ -682,5 +682,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 export function configurationWarning(issues: readonly ConfigurationIssue[]): string | undefined {
   if (issues.length === 0) return undefined;
   const formatted = issues.map(issue => `${issue.variable}${issue.index !== undefined ? `[${issue.index}]` : ''} ${issue.reason}`).join(', ');
-  return `Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): ${formatted}. See configurationIssues in antigravity_health.`;
+  return `Invalid configuration entries were ignored or made the affected feature unavailable (nothing was granted from them): ${formatted}. See configurationIssues in black_gravity_health.`;
 }

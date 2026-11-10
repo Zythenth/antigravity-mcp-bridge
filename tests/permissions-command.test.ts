@@ -31,7 +31,7 @@ function assertRefusal(args: readonly string[], messageMatch?: string | RegExp):
   const { exitCode, stdout, stderr } = runPermissions(args);
   assert.equal(exitCode, 2);
   assert.equal(stdout, '');
-  assert.ok(stderr.startsWith('antigravity-mcp-bridge permissions: '));
+  assert.ok(stderr.startsWith('black-gravity permissions: '));
   if (typeof messageMatch === 'string') {
     assert.ok(stderr.includes(messageMatch));
   } else if (messageMatch instanceof RegExp) {
@@ -73,11 +73,11 @@ for (const preset of PERMISSION_PRESETS) {
       assert.equal(ask.length, expectedAsk);
 
       const enabledTools = Object.keys(TOOL_ANNOTATIONS).filter(t => toolEnabled(profile, t));
-      const expectedPrefixed = enabledTools.map(t => `mcp__antigravity__${t}`);
+      const expectedPrefixed = enabledTools.map(t => `mcp__black-gravity__${t}`);
 
       const all = [...allow, ...ask, ...deny];
       for (const entry of all) {
-        assert.match(entry, /^mcp__antigravity__[A-Za-z0-9_-]+$/);
+        assert.match(entry, /^mcp__black-gravity__[A-Za-z0-9_-]+$/);
       }
       assert.equal(new Set(all).size, all.length);
 
@@ -89,11 +89,11 @@ for (const preset of PERMISSION_PRESETS) {
       assert.deepEqual(ask, expectedPrefixed.filter(t => ask.includes(t)));
 
       if (preset === 'connector') {
-        const allowedTools = allow.map(t => t.slice('mcp__antigravity__'.length));
+        const allowedTools = allow.map(t => t.slice('mcp__black-gravity__'.length));
         const expectedReadOnly = enabledTools.filter(t => TOOL_ANNOTATIONS[t]!.readOnlyHint);
         assert.deepEqual(allowedTools, expectedReadOnly);
       } else {
-        const askTools = ask.map(t => t.slice('mcp__antigravity__'.length));
+        const askTools = ask.map(t => t.slice('mcp__black-gravity__'.length));
         const expectedDelegationAsk = enabledTools.filter(t => DELEGATION_ASK_TOOLS.has(t));
         assert.deepEqual(askTools, expectedDelegationAsk);
       }
@@ -110,7 +110,7 @@ for (const preset of PERMISSION_PRESETS) {
       const toolModes = new Map<string, string>();
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
-        const headerMatch = line.match(/^\[mcp_servers\.antigravity\.tools\.([A-Za-z0-9_-]+)\]$/);
+        const headerMatch = line.match(/^\[mcp_servers\.black-gravity\.tools\.([A-Za-z0-9_-]+)\]$/);
         if (headerMatch) {
           const tool = headerMatch[1]!;
           const nextLine = lines[i + 1];
@@ -132,7 +132,7 @@ for (const preset of PERMISSION_PRESETS) {
           assert.equal(toolModes.get(tool), expectedMode, tool);
         } else {
           assert.ok(!toolModes.has(tool), `Unexpected header for disabled tool ${tool}`);
-          assert.ok(!stdout.includes(`[mcp_servers.antigravity.tools.${tool}]`));
+          assert.ok(!stdout.includes(`[mcp_servers.black-gravity.tools.${tool}]`));
         }
       }
 
@@ -145,13 +145,13 @@ for (const preset of PERMISSION_PRESETS) {
   }
 }
 
-test('--server-name changes prefix and default is antigravity', () => {
+test('--server-name changes prefix and default is black-gravity', () => {
   const defaultClaude = runPermissions(['--host', 'claude-code']);
   assert.equal(defaultClaude.exitCode, 0);
   assert.equal(defaultClaude.stderr, '');
   const parsedDefaultClaude = JSON.parse(defaultClaude.stdout);
-  assert.ok(parsedDefaultClaude.permissions.allow.every((t: string) => t.startsWith('mcp__antigravity__')));
-  assert.ok(parsedDefaultClaude.permissions.ask.every((t: string) => t.startsWith('mcp__antigravity__')));
+  assert.ok(parsedDefaultClaude.permissions.allow.every((t: string) => t.startsWith('mcp__black-gravity__')));
+  assert.ok(parsedDefaultClaude.permissions.ask.every((t: string) => t.startsWith('mcp__black-gravity__')));
 
   const customClaude = runPermissions(['--host', 'claude-code', '--server-name', 'ag']);
   assert.equal(customClaude.exitCode, 0);
@@ -159,59 +159,59 @@ test('--server-name changes prefix and default is antigravity', () => {
   const parsedCustomClaude = JSON.parse(customClaude.stdout);
   assert.ok(parsedCustomClaude.permissions.allow.every((t: string) => t.startsWith('mcp__ag__')));
   assert.ok(parsedCustomClaude.permissions.ask.every((t: string) => t.startsWith('mcp__ag__')));
-  assert.ok(!customClaude.stdout.includes('mcp__antigravity__'));
+  assert.ok(!customClaude.stdout.includes('mcp__black-gravity__'));
 
   const defaultCodex = runPermissions(['--host', 'codex']);
   assert.equal(defaultCodex.exitCode, 0);
   assert.equal(defaultCodex.stderr, '');
-  assert.ok(defaultCodex.stdout.includes('[mcp_servers.antigravity.tools.'));
+  assert.ok(defaultCodex.stdout.includes('[mcp_servers.black-gravity.tools.'));
   assert.ok(!defaultCodex.stdout.includes('[mcp_servers.ag.tools.'));
 
   const customCodex = runPermissions(['--host', 'codex', '--server-name', 'ag']);
   assert.equal(customCodex.exitCode, 0);
   assert.equal(customCodex.stderr, '');
   assert.ok(customCodex.stdout.includes('[mcp_servers.ag.tools.'));
-  assert.ok(!customCodex.stdout.includes('[mcp_servers.antigravity.tools.'));
+  assert.ok(!customCodex.stdout.includes('[mcp_servers.black-gravity.tools.'));
 });
 
 test('--deny is repeatable, accepts bare and prefixed names, dedupes, and updates allow/ask/codex disabled_tools', () => {
   const claudeResult = runPermissions([
     '--host', 'claude-code',
-    '--deny', 'antigravity_cancel',
-    '--deny', 'mcp__antigravity__antigravity_run',
-    '--deny', 'antigravity_cancel',
+    '--deny', 'black_gravity_cancel',
+    '--deny', 'mcp__black-gravity__black_gravity_run',
+    '--deny', 'black_gravity_cancel',
   ]);
   assert.equal(claudeResult.exitCode, 0);
   assert.equal(claudeResult.stderr, '');
   const parsedClaude = JSON.parse(claudeResult.stdout);
   assert.deepEqual(parsedClaude.permissions.deny, [
-    'mcp__antigravity__antigravity_run',
-    'mcp__antigravity__antigravity_cancel',
+    'mcp__black-gravity__black_gravity_run',
+    'mcp__black-gravity__black_gravity_cancel',
   ]);
-  assert.ok(!parsedClaude.permissions.allow.includes('mcp__antigravity__antigravity_cancel'));
-  assert.ok(!parsedClaude.permissions.allow.includes('mcp__antigravity__antigravity_run'));
-  assert.ok(!parsedClaude.permissions.ask.includes('mcp__antigravity__antigravity_cancel'));
-  assert.ok(!parsedClaude.permissions.ask.includes('mcp__antigravity__antigravity_run'));
+  assert.ok(!parsedClaude.permissions.allow.includes('mcp__black-gravity__black_gravity_cancel'));
+  assert.ok(!parsedClaude.permissions.allow.includes('mcp__black-gravity__black_gravity_run'));
+  assert.ok(!parsedClaude.permissions.ask.includes('mcp__black-gravity__black_gravity_cancel'));
+  assert.ok(!parsedClaude.permissions.ask.includes('mcp__black-gravity__black_gravity_run'));
 
   const codexResult = runPermissions([
     '--host', 'codex',
-    '--deny', 'antigravity_cancel',
-    '--deny', 'mcp__antigravity__antigravity_run',
-    '--deny', 'antigravity_cancel',
+    '--deny', 'black_gravity_cancel',
+    '--deny', 'mcp__black-gravity__black_gravity_run',
+    '--deny', 'black_gravity_cancel',
   ]);
   assert.equal(codexResult.exitCode, 0);
   assert.equal(codexResult.stderr, '');
-  assert.ok(codexResult.stdout.includes('[mcp_servers.antigravity]\ndisabled_tools = ["antigravity_run", "antigravity_cancel"]'));
-  assert.ok(!codexResult.stdout.includes('[mcp_servers.antigravity.tools.antigravity_cancel]'));
-  assert.ok(!codexResult.stdout.includes('[mcp_servers.antigravity.tools.antigravity_run]'));
+  assert.ok(codexResult.stdout.includes('[mcp_servers.black-gravity]\ndisabled_tools = ["black_gravity_run", "black_gravity_cancel"]'));
+  assert.ok(!codexResult.stdout.includes('[mcp_servers.black-gravity.tools.black_gravity_cancel]'));
+  assert.ok(!codexResult.stdout.includes('[mcp_servers.black-gravity.tools.black_gravity_run]'));
 });
 
 test('refusals for invalid arguments', () => {
-  assertRefusal(['--host', 'claude-code', '--deny', 'mcp__other__antigravity_run'], 'expected "mcp__antigravity__"');
-  assertRefusal(['--host', 'claude-code', '--server-name', 'ag', '--deny', 'mcp__antigravity__antigravity_run'], 'expected "mcp__ag__"');
+  assertRefusal(['--host', 'claude-code', '--deny', 'mcp__other__black_gravity_run'], 'expected "mcp__black-gravity__"');
+  assertRefusal(['--host', 'claude-code', '--server-name', 'ag', '--deny', 'mcp__black-gravity__black_gravity_run'], 'expected "mcp__ag__"');
   assertRefusal(['--host', 'claude-code', '--deny', 'toString'], 'Unknown tool "toString"');
-  assertRefusal(['--host', 'claude-code', '--deny', 'antigravity_nope'], 'Unknown tool "antigravity_nope"');
-  assertRefusal(['--host', 'claude-code', '--profile', 'query', '--deny', 'antigravity_integrate'], 'is not available in the "query" profile');
+  assertRefusal(['--host', 'claude-code', '--deny', 'black_gravity_nope'], 'Unknown tool "black_gravity_nope"');
+  assertRefusal(['--host', 'claude-code', '--profile', 'query', '--deny', 'black_gravity_integrate'], 'is not available in the "query" profile');
   assertRefusal(['--host', 'claude-code', '--deny'], 'Option --deny requires a value');
   assertRefusal([], 'Missing required option --host');
   assertRefusal(['--host', 'invalid-host'], 'Invalid host: invalid-host');
@@ -225,8 +225,8 @@ test('refusals for invalid arguments', () => {
   assertRefusal(['--host', 'claude-code', '--unknown-flag'], 'Unknown option: --unknown-flag');
   assertRefusal(['--host', 'claude-code', 'extra-arg'], 'Unexpected positional argument: extra-arg');
   assertRefusal(['--host', 'claude-code', '--deny', 'unknown_tool', '--help'], 'Option --help cannot be combined with other arguments');
-  assertRefusal(['--host', 'claude-code', '--deny', 'mcp__other__antigravity_run', '--help'], 'Option --help cannot be combined with other arguments');
-  assertRefusal(['--host', 'claude-code', '--profile', 'query', '--deny', 'antigravity_integrate', '-h'], 'Option --help cannot be combined with other arguments');
+  assertRefusal(['--host', 'claude-code', '--deny', 'mcp__other__black_gravity_run', '--help'], 'Option --help cannot be combined with other arguments');
+  assertRefusal(['--host', 'claude-code', '--profile', 'query', '--deny', 'black_gravity_integrate', '-h'], 'Option --help cannot be combined with other arguments');
   assertRefusal(['--help', '--host', 'claude-code'], 'Option --help cannot be combined with other arguments');
 });
 
@@ -235,28 +235,28 @@ test('--help exits 0 and prints usage to stdout', () => {
     const { exitCode, stdout, stderr } = runPermissions([flag]);
     assert.equal(exitCode, 0);
     assert.equal(stderr, '');
-    assert.ok(stdout.startsWith('Usage: antigravity-mcp-bridge permissions'));
+    assert.ok(stdout.startsWith('Usage: black-gravity permissions'));
     assert.ok(stdout.includes('--host <claude-code|codex>'));
     assert.ok(stdout.includes('--preset <connector|delegation>'));
   }
 });
 
 test('--deny removes a tool that the preset would allow', () => {
-  const claudeResult = runPermissions(['--host', 'claude-code', '--deny', 'antigravity_health']);
+  const claudeResult = runPermissions(['--host', 'claude-code', '--deny', 'black_gravity_health']);
   assert.equal(claudeResult.exitCode, 0);
   assert.equal(claudeResult.stderr, '');
   const parsedClaude = JSON.parse(claudeResult.stdout);
   const { allow, ask, deny } = parsedClaude.permissions;
-  assert.deepEqual(deny, ['mcp__antigravity__antigravity_health']);
-  assert.ok(!allow.includes('mcp__antigravity__antigravity_health'));
-  assert.ok(!ask.includes('mcp__antigravity__antigravity_health'));
+  assert.deepEqual(deny, ['mcp__black-gravity__black_gravity_health']);
+  assert.ok(!allow.includes('mcp__black-gravity__black_gravity_health'));
+  assert.ok(!ask.includes('mcp__black-gravity__black_gravity_health'));
   assert.equal(allow.length, 22);
 
-  const codexResult = runPermissions(['--host', 'codex', '--deny', 'antigravity_health']);
+  const codexResult = runPermissions(['--host', 'codex', '--deny', 'black_gravity_health']);
   assert.equal(codexResult.exitCode, 0);
   assert.equal(codexResult.stderr, '');
-  assert.ok(codexResult.stdout.includes('disabled_tools = ["antigravity_health"]'));
-  assert.ok(!codexResult.stdout.includes('[mcp_servers.antigravity.tools.antigravity_health]'));
+  assert.ok(codexResult.stdout.includes('disabled_tools = ["black_gravity_health"]'));
+  assert.ok(!codexResult.stdout.includes('[mcp_servers.black-gravity.tools.black_gravity_health]'));
 });
 
 test('end-to-end CLI execution through entrypoint', async () => {
@@ -274,7 +274,7 @@ test('end-to-end CLI execution through entrypoint', async () => {
       SystemRoot: process.env.SystemRoot,
     };
 
-    const result = spawnSync(process.execPath, [entry, 'permissions', '--host', 'claude-code', '--deny', 'antigravity_cancel'], {
+    const result = spawnSync(process.execPath, [entry, 'permissions', '--host', 'claude-code', '--deny', 'black_gravity_cancel'], {
       cwd: tempDir,
       env,
       encoding: 'utf8',
@@ -282,9 +282,9 @@ test('end-to-end CLI execution through entrypoint', async () => {
     assert.equal(result.status, 0);
     assert.equal(result.stderr, '');
     const parsed = JSON.parse(result.stdout);
-    assert.deepEqual(parsed.permissions.deny, ['mcp__antigravity__antigravity_cancel']);
-    assert.ok(!parsed.permissions.allow.includes('mcp__antigravity__antigravity_cancel'));
-    assert.ok(!parsed.permissions.ask.includes('mcp__antigravity__antigravity_cancel'));
+    assert.deepEqual(parsed.permissions.deny, ['mcp__black-gravity__black_gravity_cancel']);
+    assert.ok(!parsed.permissions.allow.includes('mcp__black-gravity__black_gravity_cancel'));
+    assert.ok(!parsed.permissions.ask.includes('mcp__black-gravity__black_gravity_cancel'));
 
     const entries = await readdir(tempDir, { recursive: true });
     assert.equal(entries.length, 0);
@@ -296,7 +296,7 @@ test('end-to-end CLI execution through entrypoint', async () => {
     });
     assert.equal(refusal.status, 2);
     assert.equal(refusal.stdout, '');
-    assert.match(refusal.stderr, /^antigravity-mcp-bridge permissions: /);
+    assert.match(refusal.stderr, /^black-gravity permissions: /);
 
     const entriesAfter = await readdir(tempDir, { recursive: true });
     assert.equal(entriesAfter.length, 0);

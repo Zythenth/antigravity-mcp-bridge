@@ -30,7 +30,7 @@ async function wait(taskId) {
   const deadline = Date.now() + 200000;
   let final;
   while (Date.now() < deadline) {
-    final = await call('antigravity_result', { taskId });
+    final = await call('black_gravity_result', { taskId });
     if (final.ready) return final.task;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
@@ -44,12 +44,12 @@ try {
        ...(process.env.BRIDGE_TEST_EXECUTOR ? { BRIDGE_TEST_EXECUTOR: process.env.BRIDGE_TEST_EXECUTOR } : {}),
        ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
        ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) }, stderr: 'pipe' }));
-  const first = await call('antigravity_run', { prompt: 'Do not change files. Reply ready for a test command.', workingDirectory: source, timeoutSeconds: 60,
+  const first = await call('black_gravity_run', { prompt: 'Do not change files. Reply ready for a test command.', workingDirectory: source, timeoutSeconds: 60,
     acceptanceCriteria: [{ id: 'source', description: 'Keep the source file', check: { kind: 'file-contains', path: 'source.txt', text: 'original' } }] });
   firstId = first.task.taskId;
   const finished = await wait(firstId);
   if (finished.status !== 'completed') throw Error(JSON.stringify({ error: finished.error, initialTokenUsage: finished.tokenUsage }));
-  const preview = await call('antigravity_preview', { taskId: firstId });
+  const preview = await call('black_gravity_preview', { taskId: firstId });
   const runtimeLookup = windowsLpac ?
     'const cp=require("node:child_process");const lookup=cp.spawnSync(process.execPath,["--version"],{encoding:"utf8"});' +
     'if(lookup.status!==0){console.error(lookup.stderr||lookup.stdout);process.exit(11)}' +
@@ -65,7 +65,7 @@ try {
     "try{fs.readFileSync(marker);process.exit(9)}catch(error){if(!denied.has(error.code))throw error}" +
     "try{fs.writeFileSync(marker,'changed');process.exit(10)}catch(error){if(!denied.has(error.code))throw error}" +
     "console.log('native executor ran; outside read and write denied');";
-  const tested = await call('antigravity_test', { taskId: firstId, expectedSha256: preview.sha256, timeoutSeconds: 120,
+  const tested = await call('black_gravity_test', { taskId: firstId, expectedSha256: preview.sha256, timeoutSeconds: 120,
     command: { executable: process.execPath, args: ['-e', testScript] } });
   testId = tested.task.taskId;
   const final = await wait(testId);
@@ -74,11 +74,11 @@ try {
   if (final.status !== 'completed' || evidence?.source !== expectedEvidence.source || evidence?.sandbox !== expectedEvidence.sandbox || evidence.exitCode !== 0 || !evidence.output.includes('native executor ran') ||
        (portableRuntime && !evidence?.portableNode) ||
        (windowsLpac && (localUsage?.source !== 'local-executor' || Object.values(localUsage.counters || {}).some(value => value !== 0)))) {
-    const events = await call('antigravity_events', { taskId: testId });
+    const events = await call('black_gravity_events', { taskId: testId });
     throw Error(JSON.stringify({ error: final.error, result: final.result, evidence, initialTokenUsage: finished.tokenUsage, tokenUsage: final.tokenUsage, sessionUsage: final.usage,
       diagnostics: events.events.filter(event => !['copy.ready', 'copy.created', 'task.queued'].includes(event.type)) }));
   }
-  const after = await call('antigravity_preview', { taskId: testId });
+  const after = await call('black_gravity_preview', { taskId: testId });
   if (after.tests.at(-1).stale || after.sha256 !== preview.sha256) throw Error('Native test evidence or patch changed');
   if (await readFile(path.join(source, 'source.txt'), 'utf8') !== 'original') throw Error('Original source changed');
   if (await readFile(markerPath, 'utf8') !== markerContent) throw Error('Host marker changed');
@@ -87,8 +87,8 @@ try {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 } finally {
-  for (const taskId of [testId, firstId].filter(Boolean)) await call('antigravity_cancel', { taskId }).catch(() => {});
-  for (const taskId of [testId, firstId].filter(Boolean)) await call('antigravity_discard', { taskId }).catch(() => {});
+  for (const taskId of [testId, firstId].filter(Boolean)) await call('black_gravity_cancel', { taskId }).catch(() => {});
+  for (const taskId of [testId, firstId].filter(Boolean)) await call('black_gravity_discard', { taskId }).catch(() => {});
   await client.close();
   if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('agy-native-integration-')) throw Error('Unsafe test cleanup path');
   await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

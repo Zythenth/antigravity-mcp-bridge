@@ -9,12 +9,21 @@ export const MAX_TASK_MESSAGES = 100;
 export const agentMessageInputSchema = z.object({
   kind: z.enum(['message', 'question', 'blocker']), text: z.string().min(1).max(MAX_MESSAGE_CHARS),
 }).strict();
-export const bridgeMessageSchema = z.object({
+const RESULT_READER = 'black_gravity_read_result';
+const messageFields = {
   messageId: z.string().uuid(), taskId: z.string().uuid(), sequence: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   timestamp: z.string().datetime(), source: z.enum(['agy-reported', 'bridge']),
   kind: z.enum(['message', 'question', 'blocker', 'final', 'error']),
   text: z.string().min(1).max(MAX_MESSAGE_CHARS), model: z.string().nullable(),
-  reference: z.object({ tool: z.literal('antigravity_read_result'), taskId: z.string().uuid(), contentSha256: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
+};
+const referenceFields = { taskId: z.string().uuid(), contentSha256: z.string().regex(/^[a-f0-9]{64}$/) };
+export const bridgeMessageSchema = z.object({
+  ...messageFields, reference: z.object({ tool: z.literal(RESULT_READER), ...referenceFields }).strict().optional(),
+}).strict();
+// Tasks persisted before the tools were renamed name the earlier reader; they load under the current name.
+export const persistedBridgeMessageSchema = z.object({
+  ...messageFields,
+  reference: z.object({ tool: z.enum([RESULT_READER, 'antigravity_read_result']).transform((): typeof RESULT_READER => RESULT_READER), ...referenceFields }).strict().optional(),
 }).strict();
 export type BridgeMessage = z.infer<typeof bridgeMessageSchema>;
 export interface MessageLog { messages?: BridgeMessage[]; messageCursor?: number }
@@ -41,7 +50,7 @@ export function readMessages(record: MessageLog, after = 0, limit = 25) {
 export function extractAgentMessages(text: string): z.infer<typeof agentMessageInputSchema>[] {
   const messages: z.infer<typeof agentMessageInputSchema>[] = [];
   const bounded = text.slice(0, 1024 * 1024);
-  for (const match of bounded.matchAll(/<antigravity-message>([\s\S]*?)<\/antigravity-message>/g)) {
+  for (const match of bounded.matchAll(/<black-gravity-message>([\s\S]*?)<\/black-gravity-message>/g)) {
     if (messages.length >= 1001) break;
     if (match[1]!.length > 4096) continue;
     try { const parsed = agentMessageInputSchema.safeParse(JSON.parse(match[1]!)); if (parsed.success) messages.push(parsed.data); }
@@ -58,7 +67,7 @@ export function clientTask(task: TaskRecord): TaskRecord | CompactTask {
 }
 
 export function resultReference(record: Pick<TaskRecord, 'taskId' | 'result'>): BridgeMessage['reference'] {
-  return { tool: 'antigravity_read_result', taskId: record.taskId,
+  return { tool: RESULT_READER, taskId: record.taskId,
     contentSha256: createHash('sha256').update(JSON.stringify(record.result ?? null)).digest('hex') };
 }
 
