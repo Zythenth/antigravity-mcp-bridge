@@ -1,6 +1,6 @@
 # Privacy and storage
 
-This policy describes the data handled by Antigravity MCP Bridge. The bridge is an independent local program; it does not operate a data collection service.
+This policy describes the data handled by Black Gravity (formerly Antigravity MCP Bridge). The bridge is an independent local program; it does not operate a data collection service.
 
 ## Data used
 

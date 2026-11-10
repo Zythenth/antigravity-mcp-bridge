@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "antigravity": {
+    "black-gravity": {
       "command": "node",
       "args": [
         "./server.mjs"

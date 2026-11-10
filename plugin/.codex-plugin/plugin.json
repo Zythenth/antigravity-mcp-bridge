@@ -1,16 +1,16 @@
 {
-  "name": "antigravity",
+  "name": "black-gravity",
   "version": "0.9.0",
-  "description": "Delegate coding tasks to Google Antigravity through the official agy CLI.",
+  "description": "Black Gravity is an independent local bridge that delegates coding tasks to Google Antigravity through the official agy CLI.",
   "author": {
     "name": "Zythenth"
   },
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Antigravity",
+    "displayName": "Black Gravity",
     "shortDescription": "Delegate tasks to agy and follow their execution.",
-    "longDescription": "Use the official Antigravity CLI through Codex to choose models, run tasks, and review events and results.",
+    "longDescription": "Use Black Gravity in Codex to delegate tasks to the official Google Antigravity CLI (agy), choose models, run tasks, and review events and results. Black Gravity is independent and not affiliated with Google.",
     "developerName": "Zythenth",
     "category": "Productivity",
     "capabilities": [
@@ -18,7 +18,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use Antigravity to implement this task and review the result."
+      "Use Black Gravity to delegate this task to Google Antigravity and review the result."
     ]
   }
 }

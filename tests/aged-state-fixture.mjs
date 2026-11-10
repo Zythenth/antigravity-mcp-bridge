@@ -14,7 +14,7 @@ import { TaskManager } from '../dist/src/task-manager.js';
 
 const [root, stateDirectory, taskCountArg, withGroupArg] = process.argv.slice(2);
 // The native resolver expands Windows short names, as fs/promises realpath does for the package root.
-const isPackageRoot = dir => path.basename(dir).startsWith('agy-package-test-') && path.relative(fs.realpathSync.native(os.tmpdir()), path.dirname(dir)) === '';
+const isPackageRoot = dir => path.basename(dir).startsWith('black-gravity-package-test-') && path.relative(fs.realpathSync.native(os.tmpdir()), path.dirname(dir)) === '';
 if (!root || !path.isAbsolute(root) || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw Error('Expected named temporary fixture root');
 const realRoot = fs.realpathSync.native(root);
 if (!isPackageRoot(realRoot) && !isPackageRoot(path.dirname(realRoot))) throw Error('Expected named temporary fixture root');

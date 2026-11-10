@@ -1,6 +1,6 @@
-# Antigravity MCP Bridge
+# Black Gravity
 
-Servidor MCP local para delegar tarefas de programação ao Google Antigravity por meio do CLI oficial `agy`. O Codex pode iniciar tarefas, acompanhar eventos, consultar resultados e cancelar processos. O projeto é independente e não é afiliado ao Google ou à OpenAI.
+Black Gravity é um servidor MCP local para delegar tarefas de programação ao Google Antigravity por meio do CLI oficial `agy`. O Codex pode iniciar tarefas, acompanhar eventos, consultar resultados e cancelar processos. O projeto é independente e não é afiliado ao Google ou à OpenAI. Até a 0.9.0, o projeto se chamava Antigravity MCP Bridge e era distribuído como `antigravity-mcp-bridge`.
 
 ```text
 Codex -- MCP stdio --> bridge -- subprocesso --> agy oficial --> Antigravity
@@ -28,6 +28,8 @@ Alterações textuais com bytes não-UTF-8 falham com `UNSUPPORTED_PATCH_ENCODIN
 
 Os exemplos de instalação selecionam a **0.9.0**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída.
 
+No código-fonte atual, o pacote, o executável, o plugin, o catálogo e a skill já se chamam `black-gravity`. A 0.9.0 publicada no npm continua com o nome `antigravity-mcp-bridge`, por isso os exemplos com `npx` usam esse nome. Os nomes das ferramentas MCP (`antigravity_*`), o diretório de estado padrão e os endereços do repositório ainda não mudaram.
+
 A 0.9.0 inclui o Anti-AI Craft com as skills de código e segurança sempre carregadas e as demais sob demanda, redação de erros, frames, deltas, mensagens e estado antes da persistência, recusa de credenciais em entradas operacionais, confirmação do encerramento dos processos de cada execução, regras de delegação com restauração do fim de linha original nas prévias, sanitização única do estado salvo por versões anteriores e cancelamento efetivo de testes Windows recém-enfileirados.
 
 A 0.8.0 acrescenta workflows no servidor, checkpoints, hooks de validação, memória privada, perfis completos, seleção de MCPs e ferramentas por tarefa, responsáveis e dependências, mensagens entre nós, espera conjunta, resultados JSON, artefatos com hashes e orçamento por consumo observado.
@@ -47,7 +49,7 @@ Para iniciar o servidor pelo pacote npm 0.9.0, configure seu cliente MCP com:
 ```json
 {
   "mcpServers": {
-    "antigravity": {
+    "black-gravity": {
       "command": "npx",
       "args": ["--yes", "antigravity-mcp-bridge@0.9.0"]
     }
@@ -55,7 +57,7 @@ Para iniciar o servidor pelo pacote npm 0.9.0, configure seu cliente MCP com:
 }
 ```
 
-No Windows, clientes que exigem o nome completo do comando podem usar `npx.cmd`. O executável inicia o servidor em stdio; não é um comando interativo. O pacote contém o servidor compilado e os avisos das dependências incluídas. Node.js 24, Git e o `agy` autenticado continuam necessários. Para validar uma versão ainda não publicada, use `npm run build:plugin`, `npm pack` e o tarball local com `npx --yes --package <caminho-do-tarball> antigravity-mcp-bridge`.
+No Windows, clientes que exigem o nome completo do comando podem usar `npx.cmd`. O executável inicia o servidor em stdio; não é um comando interativo. O pacote contém o servidor compilado e os avisos das dependências incluídas. Node.js 24, Git e o `agy` autenticado continuam necessários. Para validar uma versão ainda não publicada, use `npm run build:plugin`, `npm pack` e o tarball local com `npx --yes --package <caminho-do-tarball> black-gravity`.
 
 ### Instalação pelo código-fonte
 
@@ -107,10 +109,19 @@ O repositório contém um catálogo em `.agents/plugins/marketplace.json` e o pl
 
 ```powershell
 codex plugin marketplace add Zythenth/antigravity-mcp-bridge
-codex plugin add antigravity@antigravity-mcp-bridge
+codex plugin add black-gravity@black-gravity
 ```
 
-Para atualizar, execute `codex plugin marketplace upgrade antigravity-mcp-bridge` e `codex plugin add antigravity@antigravity-mcp-bridge`. Abra uma **nova conversa** depois da instalação ou atualização. Peça, por exemplo: “Use `$antigravity` para implementar esta mudança e revisar o resultado.” A skill orienta a escolha de modelos, o acompanhamento da tarefa e a revisão final. Sessões já abertas não recarregam as ferramentas do plugin. Se o aplicativo não encontrar `agy`, configure `AGY_PATH` no ambiente em que o Codex é iniciado.
+Para atualizar, execute `codex plugin marketplace upgrade black-gravity` e `codex plugin add black-gravity@black-gravity`. Abra uma **nova conversa** depois da instalação ou atualização. Peça, por exemplo: “Use `$black-gravity` para implementar esta mudança e revisar o resultado.” A skill orienta a escolha de modelos, o acompanhamento da tarefa e a revisão final. Sessões já abertas não recarregam as ferramentas do plugin. Se o aplicativo não encontrar `agy`, configure `AGY_PATH` no ambiente em que o Codex é iniciado.
+
+Instalações feitas com o nome antigo registraram o catálogo como `antigravity-mcp-bridge` e o plugin como `antigravity`, e o `upgrade` não troca esse registro. Para migrar, remova os dois e adicione o catálogo de novo:
+
+```powershell
+codex plugin remove antigravity@antigravity-mcp-bridge
+codex plugin marketplace remove antigravity-mcp-bridge
+codex plugin marketplace add Zythenth/antigravity-mcp-bridge
+codex plugin add black-gravity@black-gravity
+```
 
 O [guia oficial de plugins](https://developers.openai.com/plugins/build/plugins) explica o formato do catálogo e outras opções de instalação.
 
@@ -120,7 +131,7 @@ Para usar o bridge sem a skill do plugin, compile o projeto e registre o servido
 
 ```powershell
 $server = (Resolve-Path .\dist\src\index.js).Path
-codex mcp add antigravity -- node $server
+codex mcp add black-gravity -- node $server
 ```
 
 Há também um [exemplo de configuração TOML](codex-mcp-example.toml). Use **uma** forma de registro por vez para evitar ferramentas duplicadas.

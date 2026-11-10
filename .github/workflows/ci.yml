@@ -48,20 +48,20 @@ jobs:
       - if: runner.os == 'Windows'
         run: node plugin/server.mjs --prepare-windows-runtime
         env:
-          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/black-gravity-node-cache
       - if: runner.os == 'Windows' && matrix.shard == 1
         run: node --test --test-name-pattern="Windows executor stages real Git inside LPAC" dist/tests/windows-executor.test.js
         env:
           BRIDGE_WINDOWS_NODE_RUNTIME: portable
-          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/black-gravity-node-cache
       - if: runner.os == 'Windows'
         run: node scripts/test-shard.mjs ${{ matrix.shard }} ${{ matrix.shards }}
         env:
           BRIDGE_WINDOWS_NODE_RUNTIME: portable
-          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/black-gravity-node-cache
       - if: runner.os != 'Windows'
         run: node scripts/test-shard.mjs ${{ matrix.shard }} ${{ matrix.shards }}
       - if: matrix.shard == 1
         run: npm run test:package
         env:
-          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/antigravity-node-cache
+          BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: ${{ runner.temp }}/black-gravity-node-cache

@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const CORE_LIMIT_BYTES = 12_000;
-const shippedSkill = fileURLToPath(new URL('../../plugin/skills/antigravity/', import.meta.url));
+const shippedSkill = fileURLToPath(new URL('../../plugin/skills/black-gravity/', import.meta.url));
 
 async function inspectSkillLayout(root: string): Promise<string[]> {
   const problems: string[] = [];

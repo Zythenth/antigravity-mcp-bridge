@@ -15,12 +15,12 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 const craft = JSON.parse(await readFile('plugin/anti-ai-craft/manifest.json', 'utf8'));
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw Error('Run with npm run test:package');
-const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-package-test-')));
+const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'black-gravity-package-test-')));
 const expectedFiles = [
-  'package.json', 'bin/antigravity-mcp-bridge.mjs', 'plugin/server.mjs',
+  'package.json', 'bin/black-gravity.mjs', 'plugin/server.mjs',
   'plugin/.codex-plugin/plugin.json', 'plugin/.mcp.json',
-  'plugin/skills/antigravity/SKILL.md', 'plugin/skills/antigravity/agents/openai.yaml',
-  ...['approval-modes', 'copy-and-execution', 'groups', 'models', 'private-memory', 'provided-skills', 'review-and-integration', 'roles', 'session-control', 'specialist-tools', 'token-usage', 'waiting', 'windows-sandbox', 'workflows'].map(name => `plugin/skills/antigravity/references/${name}.md`),
+  'plugin/skills/black-gravity/SKILL.md', 'plugin/skills/black-gravity/agents/openai.yaml',
+  ...['approval-modes', 'copy-and-execution', 'groups', 'models', 'private-memory', 'provided-skills', 'review-and-integration', 'roles', 'session-control', 'specialist-tools', 'token-usage', 'waiting', 'windows-sandbox', 'workflows'].map(name => `plugin/skills/black-gravity/references/${name}.md`),
   'LICENSE', 'README.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
   'plugin/anti-ai-craft/manifest.json', ...craft.files.map(file => 'plugin/anti-ai-craft/' + file.path),
 ].sort();
@@ -45,7 +45,7 @@ async function check(command, args, label) {
     assert.equal(typeof health.structuredContent.error, 'string');
     const argv = health.structuredContent.waitCommand.argv;
     assert.deepEqual(argv.slice(2), ['wait', '--state-directory', path.join(directory, 'state-' + label)]);
-    if (label === 'tarball') assert.equal(argv[1], path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs'));
+    if (label === 'tarball') assert.equal(argv[1], path.join(directory, 'package/bin/black-gravity.mjs'));
     const waitResult = spawnSync(argv[0], [...argv.slice(1), randomUUID()], {
       cwd: directory,
       encoding: 'utf8',
@@ -96,6 +96,7 @@ function checkPermissionsCommand(bin) {
 
 try {
   const packed = JSON.parse(execFileSync(process.execPath, [npmCli, 'pack', '--ignore-scripts', '--json', '--pack-destination', directory], { encoding: 'utf8' }))[0];
+  assert.equal(packed.name, 'black-gravity');
   assert.deepEqual(packed.files.map(file => file.path).sort(), expectedFiles);
   assert.equal(packed.version, manifest.version);
   assert.equal(packed.bundled.length, 0);
@@ -105,26 +106,27 @@ try {
   assert.deepEqual(archivedFiles, expectedFiles.map(file => 'package/' + file).sort());
   execFileSync('tar', ['-xf', archive, '-C', directory]);
   const packagedManifest = JSON.parse(await readFile(path.join(directory, 'package/package.json'), 'utf8'));
+  assert.equal(packagedManifest.name, 'black-gravity');
   assert.equal(packagedManifest.private, undefined);
   assert.deepEqual(packagedManifest.dependencies ?? {}, {});
-  assert.equal(packagedManifest.bin['antigravity-mcp-bridge'], 'bin/antigravity-mcp-bridge.mjs');
+  assert.deepEqual(packagedManifest.bin, { 'black-gravity': 'bin/black-gravity.mjs' });
   assert.equal(JSON.parse(await readFile(path.join(directory, 'package/plugin/.codex-plugin/plugin.json'), 'utf8')).version, manifest.version);
   assert.equal((await verifyCraftSnapshot(path.join(directory, 'package/plugin/anti-ai-craft'))).manifest.revision, craft.revision);
-  const packagedSkill = await readFile(path.join(directory, 'package/plugin/skills/antigravity/SKILL.md'));
+  const packagedSkill = await readFile(path.join(directory, 'package/plugin/skills/black-gravity/SKILL.md'));
   assert.ok(packagedSkill.length <= 12000, `Skill core has ${packagedSkill.length} bytes; the limit is 12000`);
-  const linkedReferences = [...packagedSkill.toString('utf8').matchAll(/\]\((references\/[^)]+\.md)\)/g)].map(match => `plugin/skills/antigravity/${match[1]}`).sort();
-  assert.deepEqual(linkedReferences, expectedFiles.filter(file => file.startsWith('plugin/skills/antigravity/references/')));
-  const bin = path.join(directory, 'package/bin/antigravity-mcp-bridge.mjs');
+  const linkedReferences = [...packagedSkill.toString('utf8').matchAll(/\]\((references\/[^)]+\.md)\)/g)].map(match => `plugin/skills/black-gravity/${match[1]}`).sort();
+  assert.deepEqual(linkedReferences, expectedFiles.filter(file => file.startsWith('plugin/skills/black-gravity/references/')));
+  const bin = path.join(directory, 'package/bin/black-gravity.mjs');
   assert.ok((await readFile(bin, 'utf8')).startsWith('#!/usr/bin/env node\n'));
   checkRuntimeStatus(process.execPath, [bin], 'tarball');
   checkPermissionsCommand(bin);
   await check(process.execPath, [bin], 'tarball');
-  await check(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--offline', '--yes', '--ignore-scripts', '--cache', path.join(directory, 'cache'), '--package', archive, 'antigravity-mcp-bridge'], 'npx');
+  await check(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--offline', '--yes', '--ignore-scripts', '--cache', path.join(directory, 'cache'), '--package', archive, 'black-gravity'], 'npx');
   await checkAgedState(bin, directory);
   await checkFailedCleanup(bin, directory);
   await checkToolContracts(bin, directory);
   console.log(`Package ${manifest.version}: exact ${expectedFiles.length}-file allowlist passed; no runtime dependency installation`);
 } finally {
-  if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('agy-package-test-')) throw Error('Unsafe package-test cleanup path');
+  if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('black-gravity-package-test-')) throw Error('Unsafe package-test cleanup path');
   await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

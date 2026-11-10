@@ -1,9 +1,9 @@
 ---
-name: antigravity
-description: Use when the user asks to delegate programming to Google Antigravity or agy, query its models, track a task, resume it or cancel it. Do not trigger for ordinary programming without a delegation request.
+name: black-gravity
+description: Use when the user asks to delegate programming to Google Antigravity or agy through the Black Gravity bridge, query its models, track a task, resume it or cancel it. Do not trigger for ordinary programming without a delegation request.
 ---
 
-# Antigravity
+# Black Gravity
 
 Use the `antigravity_*` MCP tools; all communication with Google must go through the official `agy` CLI run by the bridge. The calling agent plans, tracks and reviews; Antigravity implements when the user asks for that delegation.
 

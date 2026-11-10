@@ -1,4 +1,0 @@
-interface:
-  display_name: "Antigravity"
-  short_description: "Delegate tasks to agy and track the results"
-  default_prompt: "Use $antigravity to implement this task and review the result."

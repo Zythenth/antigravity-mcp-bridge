@@ -1,11 +1,11 @@
 {
-  "name": "antigravity-mcp-bridge",
+  "name": "black-gravity",
   "interface": {
-    "displayName": "Antigravity MCP Bridge"
+    "displayName": "Black Gravity"
   },
   "plugins": [
     {
-      "name": "antigravity",
+      "name": "black-gravity",
       "source": {
         "source": "local",
         "path": "./plugin"
