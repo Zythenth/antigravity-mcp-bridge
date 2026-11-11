@@ -10,13 +10,90 @@ Black Gravity é um servidor MCP local que delega tarefas de programação ao Go
 
 ## Instalação
 
-### Instalar o plugin do Codex
+Use um só método de registro por harness para não duplicar ferramentas. Os comandos rodam na raiz do repositório. Um harness é **Suportado** quando o próprio comando dele registrou o build deste repositório e o listou, sem chamar modelo. O que não foi executado assim fica como **Não verificado**.
 
-Execute os comandos com o CLI do Codex e abra uma nova conversa.
+| Harness | Estado | O que foi conferido |
+|---|---|---|
+| Plugin do Codex | Suportado | Listado por `codex plugin list` e `codex mcp list` (Codex CLI 0.163.0, Windows) |
+| Codex, somente MCP | Suportado | Listado por `codex mcp list` (mesma versão) |
+| Claude Code, somente MCP | Suportado | Exibido como Connected por `claude mcp list` (Claude Code 2.1.319, Windows) |
+| Plugin do Claude Code com skill | Planejado | Ainda não disponível |
+| Claude Desktop | Não verificado | A configuração abaixo não foi executada; não há comando de listagem nem configuração isolada |
+| agy | Não verificado | `agy mcp list` existe, mas o agy não documenta como isolar a configuração |
+| Outros clientes MCP (stdio) | Parcial | O servidor respondeu `initialize` e `tools/list` com 50 ferramentas; nenhum outro cliente foi testado |
+| Comandos para Linux e macOS | Não verificado | Sem máquina de teste |
+
+### Plugin do Codex
+
+**Suportado.** Execute os comandos com o CLI do Codex e abra uma nova conversa.
 
 ```powershell
 codex plugin marketplace add Zythenth/black-gravity
 codex plugin add black-gravity@black-gravity
+```
+
+### Codex, somente MCP
+
+**Suportado.**
+
+```powershell
+$server = (Resolve-Path .\plugin\server.mjs).Path
+codex mcp add black-gravity -- node $server
+codex mcp list
+```
+
+### Claude Code, somente MCP
+
+**Suportado.**
+
+```powershell
+$server = (Resolve-Path .\plugin\server.mjs).Path
+claude mcp add --scope user black-gravity -- node $server
+claude mcp list
+```
+
+### Plugin do Claude Code com skill
+
+**Planejado.** Ainda não há plugin para o Claude Code. Use o registro somente MCP acima.
+
+### Claude Desktop
+
+**Não verificado.** Adicione o servidor a `claude_desktop_config.json` com o caminho absoluto de `plugin/server.mjs` e reinicie o aplicativo.
+
+```json
+{
+  "mcpServers": {
+    "black-gravity": {
+      "command": "node",
+      "args": ["<absolute path to plugin/server.mjs>"]
+    }
+  }
+}
+```
+
+### agy
+
+**Não verificado.**
+
+```powershell
+$server = (Resolve-Path .\plugin\server.mjs).Path
+agy mcp add black-gravity -- node $server
+agy mcp list
+```
+
+### Outros clientes MCP
+
+**Parcial.** Só o lado do servidor foi conferido. Inicie `node <absolute path to plugin/server.mjs>` como servidor stdio. O processo reserva o stdout para o JSON-RPC.
+
+### Linux e macOS
+
+**Não verificado.** Estes comandos são os mesmos registros, sem a sintaxe do PowerShell.
+
+```bash
+server="$PWD/plugin/server.mjs"
+codex mcp add black-gravity -- node "$server"
+claude mcp add --scope user black-gravity -- node "$server"
+agy mcp add black-gravity -- node "$server"
 ```
 
 ### Compilar a partir do código-fonte
