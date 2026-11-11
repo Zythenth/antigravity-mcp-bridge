@@ -28,8 +28,8 @@ async function exists(target) {
 // The fixture and the server must resolve the same temporary directory, which the SDK does not pass on Linux.
 export const temporaryEnv = Object.fromEntries(['TEMP', 'TMP', 'TMPDIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]));
 
-function fixtureEnv(offsetMs) {
-  const env = { ...temporaryEnv, BRIDGE_TEST_CLOCK_OFFSET_MS: String(offsetMs) };
+function fixtureEnv(offsetMs, caseRoot) {
+  const env = { ...temporaryEnv, BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(caseRoot, 'windows-node-cache'), BRIDGE_TEST_CLOCK_OFFSET_MS: String(offsetMs) };
   for (const key of ['PATH', 'PATHEXT', 'SystemRoot', 'HOME', 'USERPROFILE']) {
     if (process.env[key]) env[key] = process.env[key];
   }
@@ -40,7 +40,7 @@ function runFixture(caseRoot, state, taskCount, withGroup, offsetMs) {
   const output = execFileSync(process.execPath, ['--import', clockURL, fixture, caseRoot, state, String(taskCount), String(withGroup)], {
     cwd: caseRoot,
     encoding: 'utf8',
-    env: fixtureEnv(offsetMs),
+    env: fixtureEnv(offsetMs, caseRoot),
   });
   return JSON.parse(output.trim());
 }
@@ -62,7 +62,7 @@ export async function withAgedServer(bin, root, name, prepare, verify, server = 
       args: ['--import', clockURL, ...(server.args ?? []), bin],
       cwd: root,
       stderr: 'pipe',
-      env: { ...temporaryEnv, AGY_PATH: path.join(root, 'missing-agy'), BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_CLOCK_OFFSET_MS: String(200 * 3600000), ...(server.env ?? {}) },
+      env: { ...temporaryEnv, AGY_PATH: path.join(root, 'missing-agy'), BRIDGE_STATE_DIRECTORY: state, BRIDGE_TEST_CLOCK_OFFSET_MS: String(200 * 3600000), BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(caseRoot, 'windows-node-cache'), ...(server.env ?? {}) },
     });
     transport.stderr.on('data', chunk => { stderr += String(chunk); });
     await client.connect(transport);
@@ -75,7 +75,7 @@ export async function withAgedServer(bin, root, name, prepare, verify, server = 
     await client.close().catch(() => {});
     // Copies live outside the fixture root, so they are recovered from its state even when the fixture failed midway.
     if (await exists(state)) {
-      const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '30', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state });
+      const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '30', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: state, BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(caseRoot, 'windows-node-cache') });
       const manager = new TaskManager(new CliAdapter(config), config), remaining = [];
       try {
         for (const task of manager.list()) if (task.copyDirectory && await exists(task.copyDirectory)) await manager.discard(task.taskId).catch(() => {});

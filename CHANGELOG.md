@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Documentation: the README now explains how to recover from a migration gate left behind by a server that died (`~/.black-gravity.migrating.takeover`): stop every client that starts the server, confirm that no bridge process and no process with the PID recorded in the file is running, remove only that file, and restart. It also states that the default portable-runtime cache is `~/.black-gravity/windows-runtimes`, set only by `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` and not by `BRIDGE_STATE_DIRECTORY`, and what the migration does with the previous cache. When `black-gravity` is published to npm, the previous package will be deprecated, not unpublished, with `npm deprecate antigravity-mcp-bridge@"<=0.9.0" "antigravity-mcp-bridge was renamed to black-gravity. Install black-gravity instead; migration notes: https://github.com/Zythenth/black-gravity/blob/main/CHANGELOG.md"`. Behavior does not change.
+- The English and Brazilian Portuguese READMEs now share a short installation and first-use guide. Technical reference material moved to public documentation, and both editions use the animated Black Gravity logo.
+
+- Documentation: the [task management guide](documentation/task-management.md#events-sessions-and-cancellation) explains how to recover from a migration gate left behind by a server that died (`~/.black-gravity.migrating.takeover`): stop every client that starts the server, confirm that no bridge process and no process with the PID recorded in the file is running, remove only that file, and restart. The [Windows runtime guide](documentation/windows-runtime.md#portable-node-runtime) states that the default portable-runtime cache is `~/.black-gravity/windows-runtimes`, set only by `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` and not by `BRIDGE_STATE_DIRECTORY`, and what the migration does with the previous cache. When `black-gravity` is published to npm, the previous package will be deprecated, not unpublished, with `npm deprecate antigravity-mcp-bridge@"<=0.9.0" "antigravity-mcp-bridge was renamed to black-gravity. Install black-gravity instead; migration notes: https://github.com/Zythenth/black-gravity/blob/main/CHANGELOG.md"`. Behavior does not change.
 
 - The GitHub repository is renamed from `Zythenth/antigravity-mcp-bridge` to `Zythenth/black-gravity`; GitHub redirects the old address for Git, the API and release downloads. The repository, homepage and issue addresses in `package.json`, the clone, plugin catalog, runtime Release and security advisory addresses in the documentation, and the portable Node runtime descriptor (`releaseRepository` and the asset URLs of the `runtime-node-v24.21.0-lpac1-win-x64` Release, which the strict origin check compares) now use the new address. The Release, its assets, sizes and pinned SHA-256 hashes do not change, and `build.json` inside the immutable Release still records the previous repository name as its provenance. The published npm package 0.9.0 keeps its metadata.
 
@@ -80,6 +82,8 @@
 
 ## 0.9.0
 
+Release highlights include the bundled Anti-AI Craft snapshot, with permanent code and security skills and the remaining skills on demand. The release redacts errors, frames, deltas, messages and state before persistence, rejects credential formats in operational inputs, confirms process termination, restores original line endings before preview, sanitizes older saved state once and cancels newly queued Windows tests before execution.
+
 - State saved by earlier versions is now sanitized only once per file version and kept in a sanitized copy in `sanitized/`, inside the state directory; later loads and queries reuse that copy, and the original file is not rewritten. Previously, each startup and each status query redid the sanitization of all old snapshots, which could delay server startup by minutes. An invalid copy is discarded and rebuilt, and a change in the original file invalidates the previous copy.
 
 - Canceling a Windows test right after queuing it now prevents its execution. Previously, a task already dispatched but still marked as queued was reported as canceled while the execution continued, started the process, and ended later; now the cancellation uses the termination signal and the execution stops before starting.
@@ -140,6 +144,8 @@
 
 ## 0.8.0
 
+Release highlights include server-side workflows, checkpoints, validation hooks, private memory, full specialist profiles, per-task MCP and tool selection, owners and dependencies, messages between nodes, joint waits, JSON results, hashed artifacts and budgets based on observed usage.
+
 - Workflows with private JSON intermediates, final synthesis, explicit file inheritance, verifiable checkpoints, and resuming without repeating completed work.
 - Per-step hooks for real criteria, grounded review, and observed tests, blocking pending or invalid evidence.
 - Per-group budget with observed counters, session differences, and blocking of new calls when data is missing or the ceiling is reached.
@@ -159,6 +165,8 @@
 
 ## 0.7.1
 
+This release keeps compact delivery, session messages, selected skills, concurrency and prior integration authorization, alongside the Windows fixes below.
+
 - Removes the MCP Apps panel and its appearance features, keeping compact delivery, per-session messages, selected skills, concurrency, and prior integration authorization.
 - Normalizes authorized roots with the native Windows resolver, including 8.3 aliases.
 
@@ -177,6 +185,8 @@
 - Limited retries for transient Windows locks in atomic state writes, without removing the last valid state as an alternative.
 
 ## 0.6.1
+
+This version includes the bridge's Windows test executor, MCP-managed sandbox permissions and the optional portable Node runtime for LPAC. Prepare the runtime explicitly from its immutable release before selecting portable mode.
 
 - Exact preservation of the existing DACL when granting and removing temporary permissions of the Windows LPAC executor.
 - Refusal of symbolic links and junctions in the final component of the Windows executable path.
@@ -203,6 +213,8 @@
 - Regression with real PowerShell and native integration using the SDK's default environment, including executable resolution and denied external access.
 
 ## 0.5.1
+
+This version includes tool profiles, waits with progress, handoffs between roles, model comparisons and custom roles.
 
 - Task observation margin in tests widened from 5 to 30 seconds for copy preparation on Windows runners, preserving the concurrency, retention, approval, and execution timeout assertions.
 

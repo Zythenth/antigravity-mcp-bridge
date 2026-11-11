@@ -10,7 +10,18 @@
       "pattern": "plugin/anti-ai-craft/skills/anti-ai-design/references/visual-library/LICENSES/**",
       "category": "third-party-license",
       "reason": "Third-party license texts, kept verbatim."
+    },
+    {
+      "pattern": "assets/brand/build_logo.py",
+      "category": "language-fixture",
+      "reason": "The generator embeds the original SVG template verbatim, including comments, to preserve byte-identical output."
     }
   ],
-  "terms": []
+  "terms": [
+    {
+      "term": "Português",
+      "category": "portuguese-edition",
+      "reason": "Language switcher label in the English README."
+    }
+  ]
 }

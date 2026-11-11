@@ -16,19 +16,20 @@ const craft = JSON.parse(await readFile('plugin/anti-ai-craft/manifest.json', 'u
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw Error('Run with npm run test:package');
 const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'black-gravity-package-test-')));
+const cacheEnv = { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(directory, 'windows-node-cache') };
 const expectedFiles = [
   'package.json', 'bin/black-gravity.mjs', 'plugin/server.mjs',
   'plugin/.codex-plugin/plugin.json', 'plugin/.mcp.json',
   'plugin/skills/black-gravity/SKILL.md', 'plugin/skills/black-gravity/agents/openai.yaml',
   ...['approval-modes', 'copy-and-execution', 'groups', 'models', 'private-memory', 'provided-skills', 'review-and-integration', 'roles', 'session-control', 'specialist-tools', 'token-usage', 'waiting', 'windows-sandbox', 'workflows'].map(name => `plugin/skills/black-gravity/references/${name}.md`),
-  'LICENSE', 'README.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
+  'LICENSE', 'README.md', 'README.pt-BR.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
   'plugin/anti-ai-craft/manifest.json', ...craft.files.map(file => 'plugin/anti-ai-craft/' + file.path),
 ].sort();
 
 async function check(command, args, label) {
   const client = new Client({ name: 'package-test', version: '1' });
   const transport = new StdioClientTransport({ command, args, cwd: directory, stderr: 'pipe',
-    env: { AGY_PATH: path.join(directory, 'missing-agy'), BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-' + label) } });
+    env: { ...cacheEnv, AGY_PATH: path.join(directory, 'missing-agy'), BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-' + label) } });
   let diagnostics = '';
   transport.stderr.on('data', chunk => { diagnostics = (diagnostics + String(chunk)).slice(-4000); });
   try {
@@ -49,7 +50,7 @@ async function check(command, args, label) {
     const waitResult = spawnSync(argv[0], [...argv.slice(1), randomUUID()], {
       cwd: directory,
       encoding: 'utf8',
-      env: { AGY_PATH: path.join(directory, 'missing-agy') },
+      env: { ...cacheEnv, AGY_PATH: path.join(directory, 'missing-agy') },
     });
     assert.equal(waitResult.status, 7, waitResult.stderr);
     assert.equal(JSON.parse(waitResult.stdout.trim()).outcome, 'unknown-task');
@@ -65,7 +66,7 @@ async function check(command, args, label) {
 function checkRuntimeStatus(command, args, label) {
   const output = execFileSync(command, [...args, '--windows-runtime-status'], {
     cwd: directory,
-    env: { AGY_PATH: path.join(directory, 'missing-agy'), BRIDGE_STATE_DIRECTORY: path.join(directory, 'status-' + label) },
+    env: { ...cacheEnv, AGY_PATH: path.join(directory, 'missing-agy'), BRIDGE_STATE_DIRECTORY: path.join(directory, 'status-' + label) },
     encoding: 'utf8',
   });
   const status = JSON.parse(output);
