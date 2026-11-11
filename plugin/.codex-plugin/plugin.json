@@ -13,6 +13,12 @@
     "longDescription": "Use Black Gravity in Codex to delegate tasks to the official Google Antigravity CLI (agy), choose models, run tasks, and review events and results. Black Gravity is independent and not affiliated with Google.",
     "developerName": "Zythenth",
     "category": "Productivity",
+    "composerIcon": "./assets/icon.png",
+    "composerIconDark": "./assets/icon-dark.png",
+    "logo": "./assets/logo.png",
+    "logoDark": "./assets/logo-dark.png",
+    "brandColor": "#7C5CFF",
+    "brandColorDark": "#B39DFF",
     "capabilities": [
       "Read",
       "Write"

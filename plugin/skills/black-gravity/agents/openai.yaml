@@ -1,4 +1,6 @@
 interface:
   display_name: "Black Gravity"
   short_description: "Delegate tasks to agy and track the results"
+  icon_small: "./assets/icon-small.png"
+  icon_large: "./assets/icon-large.png"
   default_prompt: "Use $black-gravity to delegate this task to Google Antigravity and review the result."

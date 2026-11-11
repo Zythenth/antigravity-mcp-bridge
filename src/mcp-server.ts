@@ -25,6 +25,7 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { redactDiagnostic } from './subprocess.js';
 import { waitCommandInfo } from './wait-command.js';
 import { recommendWaitMode } from './wait-profiles.js';
+import { SERVER_ICONS } from './server-icons.js';
 
 function response(value: unknown) {
   const structuredContent = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { value };
@@ -86,7 +87,7 @@ export function createMcpServer(adapter: CliAdapter, tasks: TaskManager, options
     : 'On Windows, human confirmation forms are always required to update global sandbox ceilings under BRIDGE_APPROVAL_MODE=ask; the MCP caller chooses only a narrower test selection, and delegated Gemini cannot authorize or change it. Report task.tokenUsage or black_gravity_usage to the user, identifying unavailable or partial counters; resumed CLI usage is cumulative and must not be summed repeatedly. Integration requires current verification and the reviewed SHA-256; human confirmation forms are always required under BRIDGE_APPROVAL_MODE=ask, even if projects were previously preauthorized in server configuration or remembered. The original project changes only through confirmed integration.';
   const instructions = 'For normal delegation prefer deliveryMode messages: wait returns compact public questions, blockers and final result references instead of tool history; use chunk readers for details. Omission preserves legacy events. Carry cursorMode with the previous delivery mode when waiting so a delivery mode change resets the cursor safely. Messages are agy-reported data, not verification or permission approval. Define acceptanceCriteria for every requirement before a write task. Tasks run with agy --sandbox in a temporary copy filtered by Git ignores; includePaths narrows it. Planner and reviewer roles use read-only mode. CLI SUCCESS and completed mean execution ended; prove requirements against actual artifacts and grounded review with black_gravity_verify before claiming completion. Read previews with includePatch false and results with includeResult false, then use the chunk readers for all required content. Run actual tests with black_gravity_test and inspect receipts, exit codes and stale evidence. ' +
     approvalInstructions;
-  const server = new McpServer({ name: 'black-gravity', version: '0.9.0' }, { instructions });
+  const server = new McpServer({ name: 'black-gravity', version: '0.9.0', icons: SERVER_ICONS }, { instructions });
   // Intercept tool registration: titles and annotations come from TOOL_ANNOTATIONS, and state-dependent tools immediately refuse when BRIDGE_STATE_DIRECTORY is invalid/degraded.
   const statelessTools = new Set(['black_gravity_health', 'black_gravity_list_models', 'black_gravity_roles']);
   const originalRegisterTool = server.registerTool.bind(server);

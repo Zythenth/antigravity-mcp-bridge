@@ -20,7 +20,9 @@ const cacheEnv = { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: path.join(directory, 'wi
 const expectedFiles = [
   'package.json', 'bin/black-gravity.mjs', 'plugin/server.mjs',
   'plugin/.codex-plugin/plugin.json', 'plugin/.mcp.json',
+  'plugin/assets/icon.png', 'plugin/assets/icon-dark.png', 'plugin/assets/logo.png', 'plugin/assets/logo-dark.png',
   'plugin/skills/black-gravity/SKILL.md', 'plugin/skills/black-gravity/agents/openai.yaml',
+  'plugin/skills/black-gravity/assets/icon-small.png', 'plugin/skills/black-gravity/assets/icon-large.png',
   ...['approval-modes', 'copy-and-execution', 'groups', 'models', 'private-memory', 'provided-skills', 'review-and-integration', 'roles', 'session-control', 'specialist-tools', 'token-usage', 'waiting', 'windows-sandbox', 'workflows'].map(name => `plugin/skills/black-gravity/references/${name}.md`),
   'LICENSE', 'README.md', 'README.pt-BR.md', 'CHANGELOG.md', 'PRIVACY.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
   'plugin/anti-ai-craft/manifest.json', ...craft.files.map(file => 'plugin/anti-ai-craft/' + file.path),
