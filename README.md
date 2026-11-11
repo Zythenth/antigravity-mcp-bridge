@@ -28,7 +28,7 @@ Alterações textuais com bytes não-UTF-8 falham com `UNSUPPORTED_PATCH_ENCODIN
 
 Os exemplos de instalação selecionam a **0.9.0**. Consulte a [página do pacote no npm](https://www.npmjs.com/package/antigravity-mcp-bridge) para conferir a versão distribuída.
 
-No código-fonte atual, o pacote, o executável, o plugin, o catálogo, a skill, o servidor MCP e as ferramentas (`black_gravity_*`) já se chamam Black Gravity. A 0.9.0 publicada no npm continua com o nome `antigravity-mcp-bridge` e com as ferramentas `antigravity_*`, por isso os exemplos com `npx` usam esse nome. O diretório de estado padrão agora é `~/.black-gravity`, migrado uma vez a partir de `~/.antigravity-mcp-bridge`, e os endereços do repositório ainda não mudaram.
+No código-fonte atual, o pacote, o executável, o plugin, o catálogo, a skill, o servidor MCP e as ferramentas (`black_gravity_*`) já se chamam Black Gravity. A 0.9.0 publicada no npm continua com o nome `antigravity-mcp-bridge` e com as ferramentas `antigravity_*`, por isso os exemplos com `npx` usam esse nome. O diretório de estado padrão agora é `~/.black-gravity`, migrado uma vez a partir de `~/.antigravity-mcp-bridge`. O repositório agora é `Zythenth/black-gravity`; o endereço anterior `Zythenth/antigravity-mcp-bridge` redireciona para ele.
 
 A 0.9.0 inclui o Anti-AI Craft com as skills de código e segurança sempre carregadas e as demais sob demanda, redação de erros, frames, deltas, mensagens e estado antes da persistência, recusa de credenciais em entradas operacionais, confirmação do encerramento dos processos de cada execução, regras de delegação com restauração do fim de linha original nas prévias, sanitização única do estado salvo por versões anteriores e cancelamento efetivo de testes Windows recém-enfileirados.
 
@@ -64,8 +64,8 @@ No Windows, clientes que exigem o nome completo do comando podem usar `npx.cmd`.
 Os exemplos PowerShell usam `npm.cmd`, o lançador do npm para Windows, que funciona mesmo quando a política de execução bloqueia `npm.ps1`. Em outros shells, use `npm`.
 
 ```powershell
-git clone https://github.com/Zythenth/antigravity-mcp-bridge.git
-cd antigravity-mcp-bridge
+git clone https://github.com/Zythenth/black-gravity.git
+cd black-gravity
 npm.cmd ci
 npm.cmd run build:plugin
 npm.cmd test
@@ -101,14 +101,14 @@ O status retorna JSON com `requestedMode`, `supported`, `ready`, `buildId`, `nod
 
 Mantenha o cache fora dos projetos. O bridge resolve os caminhos reais e recusa sobreposição em ambas as direções entre o projeto e `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY`, antes de consultar modelos, enfileirar a tarefa ou copiar arquivos. Essa regra também vale com `includePaths` e no modo `system`.
 
-O runtime [Node 24.21.0 LPAC1 para Windows x64](https://github.com/Zythenth/antigravity-mcp-bridge/releases/tag/runtime-node-v24.21.0-lpac1-win-x64) está publicado em um Release imutável, com ABI 137, libuv base 1.52.1 e apenas o PR 5181 aplicado. Ele não declara suporte geral a outras versões, arquiteturas ou plataformas. O cache instala somente `node.exe`, a `LICENSE` upstream e `build.json`; este último registra a fonte fixada, o patch, a ferramenta de compilação e a proveniência da execução. A seleção substitui somente o `process.execPath` conhecido desse runtime e o `npm` adjacente validado; executáveis Node ou npm personalizados permanecem selecionados como foram informados. A substituição portátil inicial de `process.execPath` e do `npm` adjacente exige Node 24 no host do servidor. O requisito geral Node >=24 permite iniciar o servidor, mas hosts Node 25/26 falham em testes elegíveis com `PORTABLE_NODE_HOST_UNSUPPORTED`. O cache persiste entre reinicializações normais do processo e do servidor, mas a persistência através de uma reinicialização física ainda não foi verificada.
+O runtime [Node 24.21.0 LPAC1 para Windows x64](https://github.com/Zythenth/black-gravity/releases/tag/runtime-node-v24.21.0-lpac1-win-x64) está publicado em um Release imutável, com ABI 137, libuv base 1.52.1 e apenas o PR 5181 aplicado. Ele não declara suporte geral a outras versões, arquiteturas ou plataformas. O cache instala somente `node.exe`, a `LICENSE` upstream e `build.json`; este último registra a fonte fixada, o patch, a ferramenta de compilação e a proveniência da execução. A seleção substitui somente o `process.execPath` conhecido desse runtime e o `npm` adjacente validado; executáveis Node ou npm personalizados permanecem selecionados como foram informados. A substituição portátil inicial de `process.execPath` e do `npm` adjacente exige Node 24 no host do servidor. O requisito geral Node >=24 permite iniciar o servidor, mas hosts Node 25/26 falham em testes elegíveis com `PORTABLE_NODE_HOST_UNSUPPORTED`. O cache persiste entre reinicializações normais do processo e do servidor, mas a persistência através de uma reinicialização física ainda não foi verificada.
 
 ### Instalar como plugin do Codex
 
 O repositório contém um catálogo em `.agents/plugins/marketplace.json` e o plugin em `plugin/`. Instale o catálogo e o plugin:
 
 ```powershell
-codex plugin marketplace add Zythenth/antigravity-mcp-bridge
+codex plugin marketplace add Zythenth/black-gravity
 codex plugin add black-gravity@black-gravity
 ```
 
@@ -119,7 +119,7 @@ Instalações feitas com o nome antigo registraram o catálogo como `antigravity
 ```powershell
 codex plugin remove antigravity@antigravity-mcp-bridge
 codex plugin marketplace remove antigravity-mcp-bridge
-codex plugin marketplace add Zythenth/antigravity-mcp-bridge
+codex plugin marketplace add Zythenth/black-gravity
 codex plugin add black-gravity@black-gravity
 ```
 

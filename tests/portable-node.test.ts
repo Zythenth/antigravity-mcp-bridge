@@ -15,7 +15,7 @@ import { cacheLeafName, portableNodeStatus, preparePortableNodeRuntime, resolveP
 import type { AvailablePortableNodeDescriptor, PortableNodeDescriptor } from '../src/portable-node-descriptor.js';
 import { waitForTask } from './wait-for-task.js';
 
-const releaseRepository = 'https://github.com/Zythenth/antigravity-mcp-bridge';
+const releaseRepository = 'https://github.com/Zythenth/black-gravity';
 const releaseTag = 'runtime-node-v24.21.0-lpac1-win-x64';
 const shortTemporaryRoot = path.join(os.tmpdir(), `.pn-${process.pid}`);
 

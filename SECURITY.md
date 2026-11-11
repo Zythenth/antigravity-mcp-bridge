@@ -4,7 +4,7 @@ Security fixes target the latest published version of the plugin. Update the plu
 
 ## Reporting a vulnerability
 
-Use [Report a vulnerability](https://github.com/Zythenth/antigravity-mcp-bridge/security/advisories/new) to send a private report to the maintainer. The private vulnerability channel is enabled in the repository. Include the bridge and `agy` versions, the operating system, minimal steps, expected behavior, and observed impact. Remove tokens, personal data, and sensitive content from examples. Do not publish exploitation details in public issues while the problem is under analysis.
+Use [Report a vulnerability](https://github.com/Zythenth/black-gravity/security/advisories/new) to send a private report to the maintainer. The private vulnerability channel is enabled in the repository. Include the bridge and `agy` versions, the operating system, minimal steps, expected behavior, and observed impact. Remove tokens, personal data, and sensitive content from examples. Do not publish exploitation details in public issues while the problem is under analysis.
 
 ## Controls and limits
 

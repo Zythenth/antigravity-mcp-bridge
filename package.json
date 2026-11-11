@@ -4,11 +4,11 @@
   "description": "Black Gravity: an independent local MCP bridge for the official Google Antigravity CLI (agy), with isolated project copies and reviewed integration.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Zythenth/antigravity-mcp-bridge.git"
+    "url": "git+https://github.com/Zythenth/black-gravity.git"
   },
-  "homepage": "https://github.com/Zythenth/antigravity-mcp-bridge#readme",
+  "homepage": "https://github.com/Zythenth/black-gravity#readme",
   "bugs": {
-    "url": "https://github.com/Zythenth/antigravity-mcp-bridge/issues"
+    "url": "https://github.com/Zythenth/black-gravity/issues"
   },
   "engines": {
     "node": ">=24"

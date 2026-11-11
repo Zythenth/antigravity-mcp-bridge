@@ -1,4 +1,4 @@
 # Replace the path below with the absolute path of the compiled checkout.
 [mcp_servers.black-gravity]
 command = "node"
-args = ["C:\\path\\to\\antigravity-mcp-bridge\\dist\\src\\index.js"]
+args = ["C:\\path\\to\\black-gravity\\dist\\src\\index.js"]
