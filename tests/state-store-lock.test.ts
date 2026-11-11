@@ -13,12 +13,12 @@ async function loadStateStore(): Promise<typeof import('../src/state-store.js')>
 }
 
 function fixture() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-state-store-lock-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-state-store-lock-test-'));
   return {
     directory,
     close() {
       const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(directory));
-      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-state-store-lock-test-'));
+      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-state-store-lock-test-'));
       fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };

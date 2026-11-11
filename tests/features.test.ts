@@ -13,7 +13,7 @@ import { discardProjectCopy } from '../src/isolation.js';
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 async function fixture(profile = 'full', withApproval = false, environment: Record<string, string> = {}) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-feature-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-feature-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'source');
@@ -38,7 +38,7 @@ async function fixture(profile = 'full', withApproval = false, environment: Reco
     await client.close();
     for (const saved of new StateStore(path.join(directory, 'state')).load()) if (saved.project) await discardProjectCopy(saved.project);
     assert.equal(path.dirname(directory), os.tmpdir());
-    assert.ok(path.basename(directory).startsWith('agy-feature-test-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-feature-test-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } };
 }
@@ -171,7 +171,7 @@ test('black_gravity_resume accepts exactly one of taskId or sessionId through MC
 test('role handoff transfers plans, criteria and decisions to independent copies and rejects stale context', async () => {
   const f = await fixture('full', true);
   try {
-    const criteria = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }];
+    const criteria = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'BLACK_GRAVITY_TEST.md' } }];
     const plan = await f.call('black_gravity_run', { prompt: 'plan:test', role: 'planner', workingDirectory: f.source, acceptanceCriteria: criteria });
     await waitUntilReady(f.client, plan.task.taskId);
     const planContext = await f.call('black_gravity_context', { taskId: plan.task.taskId });
@@ -191,9 +191,9 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     const reviewed = (await f.call('black_gravity_result', { taskId: review.task.taskId })).task;
     assert.equal(reviewed.report.citationsChecked, true);
     assert.deepEqual(reviewed.handoff.decisions.items, ['Keep the existing source file']);
-    assert.equal(await readFile(path.join(reviewed.copyDirectory, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(await readFile(path.join(reviewed.copyDirectory, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     assert.equal((await f.call('black_gravity_preview', { taskId: run.task.taskId })).summary.added, 1);
-    await assert.rejects(readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(f.source, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
     const malicious = await f.call('black_gravity_handoff', { sourceTaskId: run.task.taskId, expectedContextSha256: context.treeSha256,
       role: 'reviewer', prompt: 'write-many:test' });
     const violation = await waitUntilReady(f.client, malicious.task.taskId);
@@ -219,11 +219,11 @@ test('role handoff transfers plans, criteria and decisions to independent copies
     assert.deepEqual(fixedTask.handoff.reports.map((report: any) => report.role), ['planner', 'reviewer']);
     const preview = await f.call('black_gravity_preview', { taskId: fixed.task.taskId });
     const verified = await f.call('black_gravity_verify', { taskId: fixed.task.taskId, expectedSha256: preview.sha256, reviews: [{
-      criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Checked the inherited artifact',
+      criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Checked the inherited artifact',
     }] });
     assert.equal(verified.status, 'passed');
     await f.call('black_gravity_integrate', { taskId: fixed.task.taskId, expectedSha256: preview.sha256 });
-    assert.equal(await readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(await readFile(path.join(f.source, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally { await f.close(); }
 });
 

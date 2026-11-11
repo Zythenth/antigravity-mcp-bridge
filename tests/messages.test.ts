@@ -74,7 +74,7 @@ test('public response extraction does not silently stop at a delivery page bound
 });
 
 test('a task saved with the earlier result reader name loads under the current name, and new messages refuse the earlier name', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-message-state-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-message-state-'));
   try {
     const store = new StateStore(directory);
     const taskId = randomUUID();

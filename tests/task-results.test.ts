@@ -78,7 +78,7 @@ describe('Task results and artifacts runtime', () => {
   let tasks: TaskManager;
 
   before(async () => {
-    tempRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'agy-results-test-'));
+    tempRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'black-gravity-results-test-'));
     repoDir = path.join(tempRoot, 'repo');
     stateDir = path.join(tempRoot, 'state');
     await fs.promises.mkdir(repoDir, { recursive: true });
@@ -100,7 +100,7 @@ describe('Task results and artifacts runtime', () => {
     await tasks.shutdown();
     for (const project of new Map(new StateStore(stateDir).load().filter(task => task.project).map(task => [task.project!.copyDirectory, task.project!])).values()) await discardProjectCopy(project);
     assert.equal(path.dirname(path.resolve(tempRoot)), path.resolve(os.tmpdir()));
-    assert.ok(path.basename(tempRoot).startsWith('agy-results-test-'));
+    assert.ok(path.basename(tempRoot).startsWith('black-gravity-results-test-'));
     await fs.promises.rm(tempRoot, { recursive: true, force: true });
   });
 

@@ -17,6 +17,7 @@ import {
   mcpCatalogSchema,
 } from './agent-policy.js';
 import type { ProjectLimits } from './config.js';
+import { hasOwnedPrefix } from './state-migration.js';
 
 export const EXECUTION_POLICY_PATHS = [
   '.agents/hooks.json',
@@ -758,13 +759,13 @@ export async function stageExecutionPolicy(
   mcpCatalogSchema.parse(setup.catalog);
   const selectedDefinitions = setup.policy.mcpServers.map(server => setup.catalog.find(entry => entry.id === server.serverId));
   if (selectedDefinitions.some(entry => !entry) || crypto.createHash('sha256').update(JSON.stringify(selectedDefinitions)).digest('hex') !== setup.policy.catalogSha256) throw new BridgeError('AGENT_POLICY_CHANGED', 'Trusted MCP catalog changed after task admission');
-  // Validate owned copy root: canonical parent equals os.tmpdir and basename starts agy-mcp-copy-, root nonlink
+  // Validate owned copy root: canonical parent equals os.tmpdir and basename starts black-gravity-copy-, root nonlink
   const canonicalTmp = await fsp.realpath(os.tmpdir());
   const absoluteCopy = path.resolve(copyDirectory);
   const copyParent = path.dirname(absoluteCopy);
   const canonicalParent = await fsp.realpath(copyParent);
 
-  if (!pathsEqual(canonicalTmp, canonicalParent) || !path.basename(absoluteCopy).startsWith('agy-mcp-copy-')) {
+  if (!pathsEqual(canonicalTmp, canonicalParent) || !hasOwnedPrefix(path.basename(absoluteCopy), 'copy')) {
     throw new BridgeError('UNSAFE_PROJECT_PATH', 'copyDirectory must be an owned temporary copy directly under os.tmpdir()');
   }
 
@@ -774,8 +775,8 @@ export async function stageExecutionPolicy(
   }
 
   const canonicalCopy = await fsp.realpath(absoluteCopy);
-  if (!path.basename(canonicalCopy).startsWith('agy-mcp-copy-')) {
-    throw new BridgeError('UNSAFE_PROJECT_PATH', 'canonical copyDirectory basename must start with agy-mcp-copy-');
+  if (!hasOwnedPrefix(path.basename(canonicalCopy), 'copy')) {
+    throw new BridgeError('UNSAFE_PROJECT_PATH', 'canonical copyDirectory basename must start with black-gravity-copy-');
   }
 
   // Validate stateDirectory: absolute, nonroot, nonlink, outside copy

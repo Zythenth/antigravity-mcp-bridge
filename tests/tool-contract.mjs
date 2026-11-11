@@ -12,7 +12,7 @@ const reviews = [
   {
     criterionId: 'created',
     verdict: 'passed',
-    path: 'AGY_BRIDGE_TEST.md',
+    path: 'BLACK_GRAVITY_TEST.md',
     line: 1,
     quote: 'Antigravity MCP bridge test successful.',
     explanation: 'Reviewed the requested artifact',
@@ -79,12 +79,12 @@ export const toolCases = [
     args: c => ({
       prompt: 'write:contract',
       workingDirectory: c.source,
-      artifactPaths: ['AGY_BRIDGE_TEST.md'],
+      artifactPaths: ['BLACK_GRAVITY_TEST.md'],
       acceptanceCriteria: [
         {
           id: 'created',
           description: 'Create the file',
-          check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' },
+          check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' },
         },
       ],
     }),
@@ -110,7 +110,7 @@ export const toolCases = [
     args: c => ({ taskId: c.task }),
     check: async (result, c) => {
       c.artifact = result.artifacts[0];
-      assert.equal(c.artifact?.path, 'AGY_BRIDGE_TEST.md', `[${c.scenario}] black_gravity_artifacts: artifact path mismatch`);
+      assert.equal(c.artifact?.path, 'BLACK_GRAVITY_TEST.md', `[${c.scenario}] black_gravity_artifacts: artifact path mismatch`);
     },
   },
   { name: 'black_gravity_read_artifact', args: c => ({ taskId: c.task, path: c.artifact.path, expectedSha256: c.artifact.sha256 }) },

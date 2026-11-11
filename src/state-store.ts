@@ -19,6 +19,7 @@ import { roleDefinitionSchema, effortSchema } from './roles.js';
 import { parseSandboxPolicySnapshot, sandboxPolicyDigest, sandboxPolicySchema, type SandboxPolicySnapshot } from './sandbox-policy.js';
 import { preauthorizedIntegrationRoots, mapFsError } from './integration-policy.js';
 import { validateStateDirectory, type ConfigurationIssue } from './config.js';
+import { hasOwnedPrefix, readMigrationMarker, samePath } from './state-migration.js';
 
 const uuid = /^[a-f0-9-]{36}$/;
 const SANITIZED_CACHE_VERSION = 1;
@@ -427,9 +428,9 @@ export class StateStore {
       }
       if (data.record.agentPolicy?.sha256 !== data.options.agentPolicy?.sha256) throw new BridgeError('INVALID_STATE', 'Persisted task tool policies disagree');
       if (data.project) {
-        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || (data.project.executionStateDirectory && path.relative(realpathSync.native(data.project.executionStateDirectory), realpathSync.native(this.directory)) !== '') || (data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)) throw new BridgeError('INVALID_STATE', 'Persisted execution policy differs from task or private storage');
-        for (const [directory, prefix] of [[data.project.copyDirectory, 'agy-mcp-copy-'], [data.project.gitDirectory, 'agy-mcp-baseline-']]) {
-          if (!path.isAbsolute(directory!) || path.relative(os.tmpdir(), path.dirname(directory!)) !== '' || !path.basename(directory!).startsWith(prefix!)) {
+        if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || (data.project.executionStateDirectory && !this.ownsExecutionState(data.project.executionStateDirectory)) || (data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)) throw new BridgeError('INVALID_STATE', 'Persisted execution policy differs from task or private storage');
+        for (const [directory, kind] of [[data.project.copyDirectory, 'copy'], [data.project.gitDirectory, 'baseline']] as const) {
+          if (!path.isAbsolute(directory) || path.relative(os.tmpdir(), path.dirname(directory)) !== '' || !hasOwnedPrefix(path.basename(directory), kind)) {
             throw new BridgeError('INVALID_STATE', 'Persisted copy is outside bridge temporary storage');
           }
         }
@@ -441,6 +442,13 @@ export class StateStore {
   }
 
   // Sanitized copies of legacy snapshots are cached per source file version; the source file itself is left to its writers.
+  /** Tasks carried over by the migration keep their receipts in the root they were created in. */
+  private ownsExecutionState(directory: string): boolean {
+    const origin = readMigrationMarker(this.directory)?.source;
+    if (origin && samePath(directory, origin)) return true;
+    return path.relative(realpathSync.native(directory), realpathSync.native(this.directory)) === '';
+  }
+
   private sanitizedDirectory(): string {
     const directory = path.join(this.directory, 'sanitized');
     mkdirSync(directory, { recursive: true, mode: 0o700 });

@@ -68,7 +68,7 @@ test('Windows short aliases resolve to the same project identity as asynchronous
 });
 
 test('remembered roots persist exactly, merge under a lock and can be revoked locally', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-integration-approval-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-integration-approval-'));
   try {
     const first = path.join(directory, 'first'), second = path.join(directory, 'second');
     mkdirSync(first); mkdirSync(second);
@@ -89,13 +89,13 @@ test('remembered roots persist exactly, merge under a lock and can be revoked lo
     assert.deepEqual(state.loadIntegrationRoots(), []);
   } finally {
     assert.equal(path.dirname(directory), path.resolve(os.tmpdir()));
-    assert.ok(path.basename(directory).startsWith('agy-integration-approval-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-integration-approval-'));
     rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
 test('remembered roots reject corrupt, oversized, noncanonical and linked state without replacement', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-integration-approval-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-integration-approval-'));
   try {
     const state = new StateStore(directory);
     const file = path.join(directory, 'integration-approvals.json');
@@ -121,7 +121,7 @@ test('remembered roots reject corrupt, oversized, noncanonical and linked state 
     assert.equal(readFileSync(outside, 'utf8'), valid);
   } finally {
     assert.equal(path.dirname(directory), path.resolve(os.tmpdir()));
-    assert.ok(path.basename(directory).startsWith('agy-integration-approval-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-integration-approval-'));
     rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
@@ -138,7 +138,7 @@ test('loadConfig validates BRIDGE_APPROVAL_MODE defaulting to auto, accepting as
 });
 
 test('MCP server instructions and health accurately expose automatic versus ask mode', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-approval-instructions-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-approval-instructions-test-'));
   try {
     const configAuto = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: path.join(directory, 'state-auto') });
     const adapterAuto = new CliAdapter(configAuto, [mockPath]);
@@ -182,7 +182,7 @@ test('MCP server instructions and health accurately expose automatic versus ask 
 });
 
 test('automatic mode integrates and updates sandbox policy without forms or elicitation', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-auto-mode-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-auto-mode-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'original');
@@ -216,18 +216,18 @@ test('automatic mode integrates and updates sandbox policy without forms or elic
     const run = await call('black_gravity_run', {
       prompt: 'write:test',
       workingDirectory: source,
-      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
+      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }],
     });
     await waitFor(async () => (await call('black_gravity_result', { taskId: run.task.taskId })).ready === true, async () => { const { ready, status } = await call('black_gravity_result', { taskId: run.task.taskId }); return { ready, status }; });
     const preview = await call('black_gravity_preview', { taskId: run.task.taskId });
     await call('black_gravity_verify', {
       taskId: run.task.taskId,
       expectedSha256: preview.sha256,
-      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
     });
     const integrated = await call('black_gravity_integrate', { taskId: run.task.taskId, expectedSha256: preview.sha256 });
     assert.equal(integrated.summary.added, 1);
-    assert.equal(readFileSync(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(readFileSync(path.join(source, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally {
     await client.close();
     rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -235,7 +235,7 @@ test('automatic mode integrates and updates sandbox policy without forms or elic
 });
 
 test('automatic mode preserves verification, test evidence, readonly and review change guards', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-auto-guards-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-auto-guards-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'original');
@@ -255,7 +255,7 @@ test('automatic mode preserves verification, test evidence, readonly and review 
     const writeTask = await tasks.run({
       prompt: 'write:test',
       workingDirectory: source,
-      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
+      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }],
     });
     await waitFor(() => tasks.status(writeTask.taskId).status === 'completed', () => tasks.status(writeTask.taskId).status);
     const preview = await tasks.preview(writeTask.taskId);
@@ -264,10 +264,10 @@ test('automatic mode preserves verification, test evidence, readonly and review 
     await assert.rejects(tasks.integrate(writeTask.taskId, '1'.repeat(64)), { code: 'REVIEW_CHANGED' });
 
     await tasks.verify(writeTask.taskId, preview.sha256, [
-      { criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
+      { criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
     ]);
     const taskCopy = tasks.status(writeTask.taskId).copyDirectory!;
-    writeFileSync(path.join(taskCopy, 'AGY_BRIDGE_TEST.md'), 'tampered content');
+    writeFileSync(path.join(taskCopy, 'BLACK_GRAVITY_TEST.md'), 'tampered content');
     await assert.rejects(tasks.integrate(writeTask.taskId, preview.sha256), { code: 'REVIEW_CHANGED' });
   } finally {
     await tasks.shutdown();
@@ -276,7 +276,7 @@ test('automatic mode preserves verification, test evidence, readonly and review 
 });
 
 test('ask mode requires forms, handles accept/deny/unavailable, and prevents remembered roots from bypassing ask', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-ask-guards-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-ask-guards-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'original');
@@ -302,12 +302,12 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
     const writeTask = await tasks.run({
       prompt: 'write:test',
       workingDirectory: source,
-      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
+      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }],
     });
     await waitFor(() => tasks.status(writeTask.taskId).status === 'completed', () => tasks.status(writeTask.taskId).status);
     const preview = await tasks.preview(writeTask.taskId);
     await tasks.verify(writeTask.taskId, preview.sha256, [
-      { criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
+      { criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
     ]);
 
     assert.equal(tasks.integrationPreauthorized(writeTask.taskId), true);
@@ -317,13 +317,13 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
 
     const integrated = await tasks.integrate(writeTask.taskId, preview.sha256, async () => ({ confirmed: true, rememberProject: true }));
     assert.equal(integrated.summary.added, 1);
-    assert.equal(readFileSync(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(readFileSync(path.join(source, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally {
     await tasks.shutdown();
     rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 
-  const mcpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-ask-mcp-test-'));
+  const mcpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-ask-mcp-test-'));
   const mcpSource = path.join(mcpDir, 'source');
   execFileSync('git', ['init', '--quiet', mcpSource]);
   writeFileSync(path.join(mcpSource, 'source.txt'), 'original');
@@ -355,7 +355,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       arguments: {
         prompt: 'write:test',
         workingDirectory: mcpSource,
-        acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
+        acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }],
       },
     })).structuredContent as any;
     await waitFor(async () => ((await unavailableClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await unavailableClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
@@ -365,7 +365,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       arguments: {
         taskId: run.task.taskId,
         expectedSha256: preview.sha256,
-        reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
+        reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
       },
     });
 
@@ -402,7 +402,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       arguments: {
         prompt: 'write:test',
         workingDirectory: mcpSource,
-        acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
+        acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }],
       },
     })).structuredContent as any;
     await waitFor(async () => ((await elicitationClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any).ready === true, async () => { const { ready, status } = ((await elicitationClient.callTool({ name: 'black_gravity_result', arguments: { taskId: run.task.taskId } })).structuredContent as any); return { ready, status }; });
@@ -412,7 +412,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       arguments: {
         taskId: run.task.taskId,
         expectedSha256: preview.sha256,
-        reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
+        reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' }],
       },
     });
 
@@ -429,7 +429,7 @@ test('ask mode requires forms, handles accept/deny/unavailable, and prevents rem
       arguments: { taskId: run.task.taskId, expectedSha256: preview.sha256 },
     })).structuredContent as any;
     assert.equal(acceptRes.summary.added, 1);
-    assert.equal(readFileSync(path.join(mcpSource, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(readFileSync(path.join(mcpSource, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally {
     await elicitationClient.close();
     rmSync(mcpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -495,7 +495,7 @@ test('readPreauthorizedIntegrationRoots reports access-denied for inaccessible p
   if (process.getuid?.() === 0) {
     return t.skip('Root user bypasses filesystem permission checks');
   }
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'agy-perm-test-'));
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-perm-test-'));
   const parent = path.join(tempDir, 'no-access');
   const child = path.join(parent, 'child');
   mkdirSync(child, { recursive: true });
@@ -525,7 +525,7 @@ test('readPreauthorizedIntegrationRoots reports access-denied for inaccessible p
 test('readPreauthorizedIntegrationRoots reports access-denied for directories without list permission on Windows', { skip: process.platform !== 'win32' }, t => {
   const username = process.env.USERNAME;
   if (!username) return t.skip('USERNAME environment variable is not set');
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-win-perm-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-win-perm-test-'));
   try {
     execFileSync('icacls', [directory, '/deny', `${username}:(RD)`]);
     const result = readPreauthorizedIntegrationRoots(JSON.stringify([directory]));
@@ -540,7 +540,7 @@ test('readPreauthorizedIntegrationRoots reports access-denied for directories wi
 });
 
 test('readPreauthorizedIntegrationRoots handles mixed lists without permissions widening or path leakage', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-mixed-roots-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-mixed-roots-'));
   try {
     const valid = path.join(directory, 'valid');
     mkdirSync(valid);
@@ -593,7 +593,7 @@ test('loadConfig tolerates invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS and co
 });
 
 test('ask mode with invalid preauthorized root requires confirmation and does not preauthorize task project', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-ask-invalid-root-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-ask-invalid-root-'));
   const source = path.join(directory, 'source');
   const otherValid = path.join(directory, 'other-valid');
   execFileSync('git', ['init', '--quiet', source]);
@@ -616,12 +616,12 @@ test('ask mode with invalid preauthorized root requires confirmation and does no
     const writeTask = await tasks.run({
       prompt: 'write:test',
       workingDirectory: source,
-      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }],
+      acceptanceCriteria: [{ id: 'created', description: 'Create file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }],
     });
     await waitFor(() => tasks.status(writeTask.taskId).status === 'completed', () => tasks.status(writeTask.taskId).status);
     const preview = await tasks.preview(writeTask.taskId);
     await tasks.verify(writeTask.taskId, preview.sha256, [
-      { criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
+      { criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Verified' },
     ]);
 
     assert.equal(tasks.integrationPreauthorized(writeTask.taskId), false);
@@ -629,7 +629,7 @@ test('ask mode with invalid preauthorized root requires confirmation and does no
 
     const integrated = await tasks.integrate(writeTask.taskId, preview.sha256, async () => true);
     assert.equal(integrated.summary.added, 1);
-    assert.equal(readFileSync(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(readFileSync(path.join(source, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
   } finally {
     await tasks.shutdown();
     rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -637,7 +637,7 @@ test('ask mode with invalid preauthorized root requires confirmation and does no
 });
 
 test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with single warning and health report', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-server-roots-test-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-server-roots-test-'));
   const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));
   const nonexistentAgy = path.join(tmpDir, 'nonexistent-agy');
   const nonexistentRoot = path.join(tmpDir, 'nonexistent-root');
@@ -773,7 +773,7 @@ test('server startup handles invalid BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS with
 });
 
 test('server startup handles unreadable BRIDGE_ALLOWED_AGY_TOOLS, invalid BRIDGE_SECRET_EXCLUSIONS, and relative FORBIDDEN_DIRECTORIES', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-server-startup-invalid-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-server-startup-invalid-'));
   const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));
   const nonexistentAgy = path.join(tmpDir, 'nonexistent-agy');
   const stateDir = path.join(tmpDir, 'state');
@@ -1056,7 +1056,7 @@ test('BRIDGE_CUSTOM_ROLES tolerates invalid values, built-in names, and duplicat
 });
 
 test('StateStore readIntegrationRoots tolerates invalid files, unsafe files, and maintains valid roots', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-tolerant-approvals-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-tolerant-approvals-'));
   try {
     const state = new StateStore(directory);
     const file = path.join(directory, 'integration-approvals.json');
@@ -1113,8 +1113,8 @@ test('StateStore readIntegrationRoots tolerates invalid files, unsafe files, and
 });
 
 test('StateStore readIntegrationRoots tolerates filesystem faults and maps access-denied and unresolvable', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-tolerant-faults-'));
-  const otherDir = mkdtempSync(path.join(os.tmpdir(), 'agy-other-valid-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-tolerant-faults-'));
+  const otherDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-other-valid-'));
   const originalLstatSync = fs.lstatSync;
   const originalReadFileSync = fs.readFileSync;
   try {
@@ -1205,7 +1205,7 @@ test('StateStore readIntegrationRoots tolerates filesystem faults and maps acces
 
 test('configurationWarning and configurationIssues never leak sensitive values', () => {
   const SENSITIVE = 'MARKER_LEAK_CHECK_987654321';
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-leak-check-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-leak-check-'));
   try {
     const file = path.join(directory, 'integration-approvals.json');
     writeFileSync(file, JSON.stringify({ version: 1, roots: ['relative/' + SENSITIVE] }));
@@ -1239,7 +1239,7 @@ test('configurationWarning and configurationIssues never leak sensitive values',
 });
 
 test('rememberIntegrationRoot refuses to overwrite invalid integration-approvals.json and preserves bytes', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-refuse-overwrite-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-refuse-overwrite-'));
   try {
     const state = new StateStore(directory);
     const file = path.join(directory, 'integration-approvals.json');
@@ -1254,7 +1254,7 @@ test('rememberIntegrationRoot refuses to overwrite invalid integration-approvals
 });
 
 test('black_gravity_health continues to respond when integration-approvals.json is invalid and lists the problem', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-health-invalid-file-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-health-invalid-file-'));
   try {
     const file = path.join(directory, 'integration-approvals.json');
     writeFileSync(file, '{"invalidJson": true');
@@ -1460,7 +1460,7 @@ test('loadConfig tolerates invalid BRIDGE_ANTI_AI_CRAFT_DIRECTORY, BRIDGE_WINDOW
 });
 
 test('operations refuse invalid path configurations with INVALID_CONFIGURATION and allow execution when unaffected', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-refusals-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-refusals-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'content');
@@ -1565,7 +1565,7 @@ test('operations refuse invalid path configurations with INVALID_CONFIGURATION a
 });
 
 test('server startup tolerates invalid craft, node cache, and agy path without leaking values', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-server-startup-paths-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-server-startup-paths-'));
   const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));
   const stateDir = path.join(tmpDir, 'state');
   mkdirSync(stateDir, { recursive: true });
@@ -1625,7 +1625,7 @@ test('server startup tolerates invalid craft, node cache, and agy path without l
 });
 
 test('resumed and handoff tasks refuse invalid craft directory with INVALID_CONFIGURATION when craft is on', async () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-craft-resume-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-craft-resume-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'content\n');
@@ -1723,7 +1723,7 @@ test('resumed and handoff tasks refuse invalid craft directory with INVALID_CONF
 
 test('Windows test repair refuses invalid craft directory with INVALID_CONFIGURATION when craft is on', async t => {
   if (process.platform !== 'win32') return t.skip('Windows LPAC execution requires Windows');
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-craft-repair-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-craft-repair-test-'));
   const source = path.join(directory, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   writeFileSync(path.join(source, 'source.txt'), 'content\n');
@@ -1803,8 +1803,8 @@ test('Windows test repair refuses invalid craft directory with INVALID_CONFIGURA
 
 test('Windows executor rejects invalid node cache in portable mode before staging and permits system mode', async t => {
   if (process.platform !== 'win32') return t.skip('Windows LPAC execution requires Windows');
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-copy-exec-test-'));
-  const copyDir = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-copy-exec-test-'));
+  const copyDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const systemStateDir = path.join(tmpDir, 'system-state');
   const directPortableStateDir = path.join(tmpDir, 'direct-portable-state');
   const childStateDir = path.join(tmpDir, 'child-state');
@@ -1894,7 +1894,7 @@ test('Windows executor rejects invalid node cache in portable mode before stagin
 });
 
 test('wait command tolerates invalid craft, node cache, and agy path without leaking values', () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-wait-tolerance-test-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-wait-tolerance-test-'));
   const stateDir = path.join(tmpDir, 'state');
   mkdirSync(stateDir, { recursive: true });
   const entryPath = fileURLToPath(new URL('../src/index.js', import.meta.url));

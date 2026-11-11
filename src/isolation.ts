@@ -22,6 +22,7 @@ import {
   type SecretScanState,
 } from './secret-preflight.js';
 import { normalizeSecretExceptionsPolicy } from './hardening-policy.js';
+import { hasOwnedPrefix } from './state-migration.js';
 
 export type { BlockedPath } from './secret-preflight.js';
 
@@ -165,13 +166,13 @@ export async function stageProjectExecutionPolicy(project: ProjectCopy, request:
 export async function discardProjectCopy(project: ProjectCopy): Promise<void> {
   await checkFenceMarker(project);
   const root = await realpath(os.tmpdir());
-  const targets = [
-    [project.copyDirectory, 'agy-mcp-copy-'],
-    [project.gitDirectory, 'agy-mcp-baseline-'],
+  const targets: Array<[string, 'copy' | 'baseline']> = [
+    [project.copyDirectory, 'copy'],
+    [project.gitDirectory, 'baseline'],
   ];
-  for (const [directory, prefix] of targets) {
+  for (const [directory, kind] of targets) {
     const absolute = path.resolve(directory!);
-    if (path.relative(root, await realpath(path.dirname(absolute))) !== '' || !path.basename(absolute).startsWith(prefix!)) {
+    if (path.relative(root, await realpath(path.dirname(absolute))) !== '' || !hasOwnedPrefix(path.basename(absolute), kind)) {
       throw new BridgeError('UNSAFE_PROJECT_PATH', 'Refusing to delete a directory outside bridge temporary storage');
     }
     const info = await lstat(absolute).catch(error => {
@@ -468,8 +469,8 @@ export async function createProjectCopy(sourceDirectory: string, includePaths?: 
     if (totalBytes > limits.maxCopyBytes) throw new BridgeError('COPY_LIMIT_EXCEEDED', `Copy exceeds ${limits.maxCopyBytes} bytes. Narrow includePaths.`);
   }
 
-  const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
-  const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
+  const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
+  const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-baseline-'));
   const baseline = new Map<string, string>();
   const project: ProjectCopy = { sourceDirectory, copyDirectory, gitDirectory, baseline, includedFiles: selected, blockedFiles: preflight.blocked };
   try {
@@ -1017,8 +1018,8 @@ export async function snapshotCopyFiles(project: ProjectCopy, limits: ProjectLim
 export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimits): Promise<ProjectCopy> {
   const preflight = await inspectCopyFiles(project, limits, false);
   const auxPaths = managedAuxiliarySet(project);
-  const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
-  const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-baseline-'));
+  const copyDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
+  const gitDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-baseline-'));
   const fork: ProjectCopy = {
     ...project,
     executionPolicy: undefined,
@@ -1030,7 +1031,7 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
     blockedFiles: preflight.blocked,
   };
   try {
-    const tempBaselineDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-worktree-'));
+    const tempBaselineDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-worktree-'));
     try {
       const budget = { remainingBytes: limits.maxCopyBytes };
       for (const relative of preflight.eligible) {
@@ -1102,7 +1103,7 @@ export async function forkProjectCopy(project: ProjectCopy, limits: ProjectLimit
       const root = await realpath(os.tmpdir());
       const info = await lstat(tempBaselineDir);
       const absolute = await realpath(tempBaselineDir);
-      if (info.isSymbolicLink() || !info.isDirectory() || path.relative(root, path.dirname(absolute)) !== '' || !path.basename(absolute).startsWith('agy-mcp-worktree-')) {
+      if (info.isSymbolicLink() || !info.isDirectory() || path.relative(root, path.dirname(absolute)) !== '' || !path.basename(absolute).startsWith('black-gravity-worktree-')) {
         throw new BridgeError('UNSAFE_PROJECT_PATH', 'Private baseline worktree was replaced or escaped temporary storage');
       }
       await rm(absolute, { recursive: true, force: true });

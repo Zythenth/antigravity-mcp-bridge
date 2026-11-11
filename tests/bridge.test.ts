@@ -20,7 +20,7 @@ import { createProjectCopy, discardProjectCopy, integrateProjectCopy, listProjec
 const mockPath = fileURLToPath(new URL('../../tests/mock-agy.mjs', import.meta.url));
 const stateDirectories: string[] = [];
 const managers: TaskManager[] = [];
-const acceptanceCriteria: AcceptanceCriterion[] = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }];
+const acceptanceCriteria: AcceptanceCriterion[] = [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-exists', path: 'BLACK_GRAVITY_TEST.md' } }];
 test('model preference survives restart, observes other servers and supports per-task Auto', async () => {
   const dir = await repository();
   const { adapter, tasks, config } = setup([mockPath], { BRIDGE_DEFAULT_MODEL: 'mock-flash' });
@@ -43,7 +43,7 @@ test('model preference survives restart, observes other servers and supports per
     assert.equal(tasks.getModel(), undefined);
     const auto = new TaskManager(adapter, config); managers.push(auto);
     assert.equal(auto.getModel(), undefined);
-    const invalidState = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(invalidState);
+    const invalidState = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-state-test-')); stateDirectories.push(invalidState);
     const invalid = new TaskManager(adapter, { ...config, stateDirectory: invalidState, defaultModel: 'not-available' }); managers.push(invalid);
     await assert.rejects(invalid.run({ prompt: 'split:test', workingDirectory: dir }), { code: 'MODEL_NOT_AVAILABLE' });
     assert.throws(() => loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_DEFAULT_MODEL: 'invalid model' }), /exact model ID/);
@@ -51,8 +51,8 @@ test('model preference survives restart, observes other servers and supports per
 });
 
 async function verifyTask(tasks: TaskManager, taskId: string, sha256: string) {
-  const quote = await readFile(path.join(tasks.status(taskId).copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8');
-  return tasks.verify(taskId, sha256, [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'The requested file exists with the fixture content' }]);
+  const quote = await readFile(path.join(tasks.status(taskId).copyDirectory!, 'BLACK_GRAVITY_TEST.md'), 'utf8');
+  return tasks.verify(taskId, sha256, [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote, explanation: 'The requested file exists with the fixture content' }]);
 }
 
 test('a denied concurrent resume preserves the retained task while another server awaits approval', async () => {
@@ -92,17 +92,17 @@ test('integration requires confirmation and rechecks the patch after confirmatio
     await verifyTask(tasks, task.taskId, preview.sha256);
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256), { code: 'APPROVAL_REQUIRED' });
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => false), { code: 'APPROVAL_DENIED' });
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async reviewed => {
       assert.equal(reviewed.sha256, preview.sha256);
-      await writeFile(path.join(finished.copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'changed after confirmation');
+      await writeFile(path.join(finished.copyDirectory!, 'BLACK_GRAVITY_TEST.md'), 'changed after confirmation');
       return true;
     }), { code: 'REVIEW_CHANGED' });
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
     const current = await tasks.preview(task.taskId);
     await verifyTask(tasks, task.taskId, current.sha256);
     await tasks.integrate(task.taskId, current.sha256, async () => true);
-    assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'changed after confirmation');
+    assert.equal(await readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'changed after confirmation');
     await tasks.discard(task.taskId);
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
@@ -121,7 +121,7 @@ test('CLI success and fabricated reviews cannot bypass acceptance verification',
     const preview = await tasks.preview(task.taskId);
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => true), { code: 'VERIFICATION_REQUIRED' });
     assert.equal((await tasks.verify(task.taskId, preview.sha256)).status, 'unverified');
-    const fabricated = { criterionId: 'created', verdict: 'passed' as const, path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'invented content', explanation: 'Unsupported assertion' };
+    const fabricated = { criterionId: 'created', verdict: 'passed' as const, path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'invented content', explanation: 'Unsupported assertion' };
     assert.equal((await tasks.verify(task.taskId, preview.sha256, [fabricated])).status, 'failed');
     await assert.rejects(tasks.verify(task.taskId, preview.sha256, [{ ...fabricated, path: '../outside.txt' }]), { code: 'INVALID_INCLUDE_PATH' });
     await assert.rejects(tasks.verify(task.taskId, preview.sha256, [{ ...fabricated, criterionId: 'unknown' }]), { code: 'INVALID_REVIEW' });
@@ -130,7 +130,7 @@ test('CLI success and fabricated reviews cannot bypass acceptance verification',
     const recovered = new TaskManager(adapter, config); managers.push(recovered);
     assert.deepEqual(recovered.status(task.taskId).verification, JSON.parse(JSON.stringify(verification)));
     await recovered.integrate(task.taskId, preview.sha256, async () => true);
-    assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(await readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     const noCriteria = await tasks.run({ prompt: 'write-many:test', workingDirectory: dir });
     await until(tasks, noCriteria.taskId, done);
     const unchecked = await tasks.preview(noCriteria.taskId);
@@ -163,7 +163,7 @@ test('verification detects changed ignored evidence even when the patch hash sta
     await assert.rejects(tasks.integrate(task.taskId, preview.sha256, async () => {
       await writeFile(file, 'expected but changed'); return true;
     }), { code: 'VERIFICATION_STALE' });
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -208,7 +208,7 @@ test('native test failure is preserved and narrative success never counts as exe
       assert.equal(final.tests?.at(-1)?.exitCode, current === tasks ? 7 : undefined);
       await assert.rejects(current.integrate(tested.taskId, preview.sha256, async () => true), { code: 'TASK_NOT_READY' });
     }
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
   } finally { await tasks.shutdown(); await unchecked.tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -299,7 +299,7 @@ test('patch readers bind pages to the full hash and select changed files without
     assert.equal(combined, preview.patch);
     const selected = await tasks.readPatch(task.taskId, preview.sha256, 'source.txt');
     assert.ok(selected.text.includes('+updated 😀 source'));
-    assert.ok(!selected.text.includes('AGY_BRIDGE_TEST.md'));
+    assert.ok(!selected.text.includes('BLACK_GRAVITY_TEST.md'));
     await assert.rejects(tasks.readPatch(task.taskId, preview.sha256, '../outside'), { code: 'INVALID_PATCH_PATH' });
     const result = tasks.readResult(task.taskId, 0, 50000);
     assert.equal(result.ready, true);
@@ -451,7 +451,7 @@ after(async () => {
   }
   for (const directory of stateDirectories) {
     assert.equal(path.dirname(directory), os.tmpdir());
-    assert.ok(path.basename(directory).startsWith('agy-mcp-state-test-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-state-test-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
@@ -472,7 +472,7 @@ test('restart recovers tasks, bounded events, sessions and the original copy', a
     const next = await recovered.run({ prompt: 'write:test', workingDirectory: dir, sessionId: finished.sessionId });
     await until(recovered, next.taskId, done);
     assert.equal(recovered.status(next.taskId).copyDirectory, finished.copyDirectory);
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
     const preview = await recovered.preview(next.taskId);
     await verifyTask(recovered, next.taskId, preview.sha256);
     await recovered.integrate(next.taskId, preview.sha256, async () => true);
@@ -529,7 +529,7 @@ test('read-only uses plan mode, survives resume, rejects integration and detects
     await tasks.discard(resumed.taskId);
     const violation = await tasks.run({ prompt: 'write:test', workingDirectory: dir, mode: 'read-only' });
     assert.equal((await until(tasks, violation.taskId, done)).error?.code, 'READ_ONLY_VIOLATION');
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
     await tasks.discard(violation.taskId);
   } finally { await tasks.shutdown(); await rm(dir, { recursive: true, force: true }); }
 });
@@ -584,7 +584,7 @@ test('resume refuses invalid selectors before any process, task or copy', async 
   let spawned = 0;
   adapter.spawnTask = (...args) => { spawned += 1; return spawnTask(...args); };
   // Test files run one at a time, so a copy that appears during a refused call came from that call.
-  const copies = async () => (await readdir(os.tmpdir())).filter(name => name.startsWith('agy-mcp-copy-'));
+  const copies = async () => (await readdir(os.tmpdir())).filter(name => name.startsWith('black-gravity-copy-'));
   const refused = async (options: Parameters<TaskManager['resume']>[0], taskId: string | undefined, hidden: string[] = []) => {
     const tasksBefore = tasks.list().length;
     const spawnedBefore = spawned;
@@ -783,7 +783,7 @@ test('startup maintenance keeps a failed cleanup for health, warns once and retr
 });
 
 function setup(prefixArgs = [mockPath], configOverrides: Record<string, string> = {}) {
-  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-mcp-state-test-')); stateDirectories.push(stateDirectory);
+  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-state-test-')); stateDirectories.push(stateDirectory);
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, DEFAULT_TIMEOUT_SECONDS: '30', BRIDGE_TEST_EXECUTOR: 'agy', BRIDGE_STATE_DIRECTORY: stateDirectory, ...configOverrides });
   const adapter = new CliAdapter(config, prefixArgs);
   const tasks = new TaskManager(adapter, config); managers.push(tasks);
@@ -804,7 +804,7 @@ async function until(tasks: TaskManager, taskId: string, predicate: (record: Tas
 const done = (task: TaskRecord) => ['completed', 'failed', 'cancelled', 'timeout'].includes(task.status);
 
 async function repository(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-bridge-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-bridge-test-'));
   execFileSync('git', ['init', '--quiet', dir]);
   await writeFile(path.join(dir, 'source.txt'), 'source');
   return dir;
@@ -907,13 +907,13 @@ test('failure, timeout, cancellation, queue and concurrency', async () => {
     const write = await tasks.run({ prompt: 'write:test', workingDirectory: dir, acceptanceCriteria });
     assert.equal((await until(tasks, write.taskId, done)).status, 'completed');
     const written = tasks.status(write.taskId).copyDirectory!;
-    assert.equal(await readFile(path.join(written, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
+    assert.equal(await readFile(path.join(written, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md'), 'utf8'), { code: 'ENOENT' });
     const preview = await tasks.preview(write.taskId);
-    assert.deepEqual(preview.files, [{ status: 'A', path: 'AGY_BRIDGE_TEST.md' }]);
+    assert.deepEqual(preview.files, [{ status: 'A', path: 'BLACK_GRAVITY_TEST.md' }]);
     await verifyTask(tasks, write.taskId, preview.sha256);
     await tasks.integrate(write.taskId, preview.sha256, async () => true);
-    assert.equal(await readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(await readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await assert.rejects(tasks.integrate(write.taskId, preview.sha256), { code: 'ALREADY_INTEGRATED' });
     await tasks.shutdown();
     await assert.rejects(tasks.run({ prompt: 'after shutdown', workingDirectory: dir }), { code: 'AGY_PROCESS_FAILED' });
@@ -950,8 +950,8 @@ test('resumed conversation reuses the isolated copy and source remains clean', a
     const resumedArgs = (tasks.readEvents(resumed.taskId).events.find(event => event.type === 'agent.started')!.data as { args: string[] }).args;
     assert.equal(resumedArgs[resumedArgs.indexOf('--add-dir') + 1], final.copyDirectory);
     assert.ok(!resumedArgs.includes('--new-project'));
-    assert.equal(await readFile(path.join(final.copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
-    await assert.rejects(readFile(path.join(dir, 'AGY_BRIDGE_TEST.md'), 'utf8'), { code: 'ENOENT' });
+    assert.equal(await readFile(path.join(final.copyDirectory!, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    await assert.rejects(readFile(path.join(dir, 'BLACK_GRAVITY_TEST.md'), 'utf8'), { code: 'ENOENT' });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

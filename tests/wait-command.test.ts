@@ -108,7 +108,7 @@ function runWaitArgs(waitArgs: readonly string[]) {
 }
 
 function stateFixture() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-wait-command-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-wait-command-test-'));
   const state = new StateStore(directory);
   const makeStored = (status: TaskStatus = 'running', ownerPid = process.pid): StoredTask => {
     const taskId = randomUUID();
@@ -139,7 +139,7 @@ function stateFixture() {
     close() {
       killRemainingChildren();
       const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(directory));
-      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-wait-command-test-'));
+      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-wait-command-test-'));
       fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };
@@ -199,7 +199,7 @@ class HoldAdapter extends CliAdapter {
 }
 
 async function managerFixture() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-wait-command-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-wait-command-test-'));
   const source = path.join(dir, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'Public fixture\n');
@@ -225,7 +225,7 @@ async function managerFixture() {
         await discardProjectCopy(project);
       }
       const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(dir));
-      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-wait-command-test-'));
+      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-wait-command-test-'));
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };

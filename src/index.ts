@@ -6,6 +6,8 @@ import { TaskManager } from './task-manager.js';
 import { portableNodeStatus, preparePortableNodeRuntime } from './portable-node.js';
 import { runWaitCommand, waitCommandArgv } from './wait-command.js';
 import { runPermissionsCommand } from './permissions-command.js';
+import { migrateDefaultState, migrateDefaultStateSettling } from './state-migration.js';
+import { recoverWindowsExecutions } from './windows-executor.js';
 
 const command = process.argv.slice(2);
 
@@ -20,6 +22,8 @@ async function runtimeCommand(): Promise<boolean> {
     return true;
   }
   try {
+    // Preparing the runtime creates the default root, so an earlier root is migrated first to keep its cache.
+    migrateDefaultState(config, process.env, { report: line => process.stderr.write(line + '\n') });
     await preparePortableNodeRuntime({ cacheDirectory: config.windowsNodeCacheDirectory, cacheDirectoryInvalid: config.windowsNodeCacheDirectoryInvalid });
     process.stdout.write(JSON.stringify(await portableNodeStatus(config.windowsNodeRuntime, config.windowsNodeCacheDirectory, undefined, { cacheDirectoryInvalid: config.windowsNodeCacheDirectoryInvalid })) + '\n');
     return true;
@@ -35,7 +39,11 @@ if (command[0] === 'wait') {
 } else if (command[0] === 'permissions') {
   process.exitCode = runPermissionsCommand(command.slice(1), text => process.stdout.write(text), text => process.stderr.write(text));
 } else if (!await runtimeCommand()) {
-  const config = loadConfig();
+  const loaded = loadConfig();
+  const config = await migrateDefaultStateSettling(loaded, process.env, async legacy => {
+    if (process.platform !== 'win32' || loaded.testExecutor !== 'windows-lpac') throw new Error('the Windows executor is not available in this configuration');
+    await recoverWindowsExecutions(legacy, { requireIdle: true });
+  }, { report: line => process.stderr.write(line + '\n') });
   const adapter = new CliAdapter(config);
   await adapter.discover();
   const tasks = new TaskManager(adapter, config);

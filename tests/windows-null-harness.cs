@@ -49,7 +49,7 @@ internal static class WindowsNullHarness
     [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern IntPtr CreateNamedPipe(string name,uint mode,uint type,uint instances,uint output,uint input,uint timeout,IntPtr attrs);
     static IntPtr CreatePrivateFileObject()
     {
-        IntPtr handle=CreateNamedPipe(@"\\.\pipe\LOCAL\AGY.TEST.NULL.CONTROL."+Guid.NewGuid().ToString("N"),0x40003,0,1,512,512,1000,IntPtr.Zero);
+        IntPtr handle=CreateNamedPipe(@"\\.\pipe\LOCAL\BLACK_GRAVITY.TEST.NULL.CONTROL."+Guid.NewGuid().ToString("N"),0x40003,0,1,512,512,1000,IntPtr.Zero);
         if(handle==new IntPtr(-1))throw new Win32Exception(Marshal.GetLastWin32Error(),"Create private pipe control");
         return handle;
     }
@@ -390,7 +390,7 @@ internal static class WindowsNullHarness
                 {
                     if(args.Length!=3)throw new Exception("Expected private file fixture path");
                     string target=Path.GetFullPath(args[2]);string parent=Path.GetDirectoryName(target);
-                    if(Path.GetFileName(target)!="null-control.txt"||!Path.GetFileName(parent).StartsWith("agy-mcp-null-fault-",StringComparison.Ordinal)||
+                    if(Path.GetFileName(target)!="null-control.txt"||!Path.GetFileName(parent).StartsWith("black-gravity-null-fault-",StringComparison.Ordinal)||
                         (File.GetAttributes(target)&FileAttributes.ReparsePoint)!=0||(File.GetAttributes(parent)&FileAttributes.ReparsePoint)!=0)throw new Exception("Unexpected file fixture");
                     if(testName=="prepare-private-file")
                     {
@@ -508,9 +508,9 @@ internal static class WindowsNullHarness
 
                     string tempDir = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar);
                     string fixtureId = Guid.NewGuid().ToString("N");
-                    string cwd = Path.Combine(tempDir, "agy-mcp-copy-null-" + fixtureId);
-                    string runtime = Path.Combine(tempDir, "agy-mcp-runtime-null-" + fixtureId);
-                    string scratch = Path.Combine(tempDir, "agy-mcp-scratch-null-" + fixtureId);
+                    string cwd = Path.Combine(tempDir, "black-gravity-copy-null-" + fixtureId);
+                    string runtime = Path.Combine(tempDir, "black-gravity-runtime-null-" + fixtureId);
+                    string scratch = Path.Combine(tempDir, "black-gravity-scratch-null-" + fixtureId);
                     Directory.CreateDirectory(cwd);
                     Directory.CreateDirectory(runtime);
                     Directory.CreateDirectory(scratch);
@@ -523,7 +523,7 @@ internal static class WindowsNullHarness
                         object leaseV1 = Activator.CreateInstance(leaseType);
                         leaseType.GetField("version").SetValue(leaseV1, 1);
                         leaseType.GetField("nonce").SetValue(leaseV1, nonce.ToString("D"));
-                        leaseType.GetField("profile").SetValue(leaseV1, "agy.test." + nonce.ToString("N"));
+                        leaseType.GetField("profile").SetValue(leaseV1, "black-gravity.test." + nonce.ToString("N"));
                         leaseType.GetField("phase").SetValue(leaseV1, "active");
                         leaseType.GetField("sid").SetValue(leaseV1, SidsTestA.Value);
                         leaseType.GetField("controllerPid").SetValue(leaseV1, Process.GetCurrentProcess().Id);
@@ -550,11 +550,11 @@ internal static class WindowsNullHarness
                             object alias = Activator.CreateInstance(aliasType);
                             aliasType.GetField("kind").SetValue(alias, kinds[i]);
                             aliasType.GetField("physicalRoot").SetValue(alias, roots[i]);
-                            aliasType.GetField("customName").SetValue(alias, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[i].ToUpperInvariant());
+                            aliasType.GetField("customName").SetValue(alias, "BLACK_GRAVITY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[i].ToUpperInvariant());
                             aliasType.GetField("drive").SetValue(alias, drives[i] + ":");
                             aliasType.GetField("aliasRoot").SetValue(alias, drives[i] + ":\\");
                             aliasType.GetField("customTarget").SetValue(alias, "\\??\\" + roots[i]);
-                            aliasType.GetField("driveTarget").SetValue(alias, "\\??\\AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[i].ToUpperInvariant());
+                            aliasType.GetField("driveTarget").SetValue(alias, "\\??\\BLACK_GRAVITY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[i].ToUpperInvariant());
                             aliases.SetValue(alias, i);
                         }
                         leaseType.GetField("aliases").SetValue(leaseV1, aliases);

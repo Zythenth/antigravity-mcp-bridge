@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
 const [mode, root, moduleUrl] = process.argv.slice(2);
-if (!path.isAbsolute(root) || path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))) !== '' || !path.basename(root).startsWith('agy-state-lock-test-')) throw Error('Expected named temporary fixture root');
+if (!path.isAbsolute(root) || path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))) !== '' || !path.basename(root).startsWith('black-gravity-state-lock-test-')) throw Error('Expected named temporary fixture root');
 const primary = path.join(root, 'state', 'registry.lock'), write = fs.writeFileSync, remove = fs.rmSync;
 let paused = false;
 function pause(ready, go) {

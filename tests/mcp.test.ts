@@ -14,7 +14,7 @@ import { outputSchemas } from '../src/output-schemas.js';
 delete process.env.BRIDGE_PREAUTHORIZED_INTEGRATION_ROOTS;
 
 test('MCP subprocess restart recovers results, events, review baseline and discard', async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-protocol-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-protocol-test-'));
   const source = path.join(dir, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   const submittedSource = process.platform === 'win32' ? source.toUpperCase() : source;
@@ -59,7 +59,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.deepEqual((await call('black_gravity_cleanup')).discardedTaskIds, []);
     assert.equal((await call('black_gravity_health')).integrationApproval.available, false);
     let taskId = (await call('black_gravity_run', { prompt: 'write:test', workingDirectory: submittedSource,
-      acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' } }] })).task.taskId;
+      acceptanceCriteria: [{ id: 'created', description: 'Create the requested file', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' } }] })).task.taskId;
     const deadline = Date.now() + 120000;
     let final;
     while (Date.now() < deadline) {
@@ -80,10 +80,10 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     const compactPreview = await call('black_gravity_preview', { taskId, includePatch: false });
     assert.equal(compactPreview.patch, undefined);
     assert.equal(compactPreview.sha256, firstPreview.sha256);
-    const patchChunk = await call('black_gravity_read_patch', { taskId, expectedSha256: firstPreview.sha256, path: 'AGY_BRIDGE_TEST.md' });
+    const patchChunk = await call('black_gravity_read_patch', { taskId, expectedSha256: firstPreview.sha256, path: 'BLACK_GRAVITY_TEST.md' });
     assert.equal(patchChunk.text, firstPreview.patch);
     await call('black_gravity_verify', { taskId, expectedSha256: firstPreview.sha256,
-      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
     const events = await call('black_gravity_events', { taskId });
     const unavailable = await client.callTool({ name: 'black_gravity_integrate', arguments: { taskId, expectedSha256: firstPreview.sha256, approved: true } });
     assert.equal((unavailable.structuredContent as any).error.code, 'APPROVAL_UNAVAILABLE');
@@ -97,15 +97,15 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal((await call('black_gravity_result', { taskId })).task.copyDirectory, final.task.copyDirectory);
     assert.deepEqual(await call('black_gravity_events', { taskId }), events);
     assert.ok((await call('black_gravity_tasks')).tasks.some((task: { taskId: string }) => task.taskId === taskId));
-    await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(source, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
     const preview = await call('black_gravity_preview', { taskId });
     const canonicalSource = await realpath(source);
     assert.equal(preview.sourceDirectory, canonicalSource);
     assert.equal(preview.summary.added, 1);
     const verified = await call('black_gravity_verify', { taskId, expectedSha256: preview.sha256,
-      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the requested artifact' }] });
     assert.equal(verified.status, 'passed');
-    const testScript = "if (require('node:fs').readFileSync('AGY_BRIDGE_TEST.md','utf8') !== 'Antigravity MCP bridge test successful.') process.exit(1); console.log('file checked');";
+    const testScript = "if (require('node:fs').readFileSync('BLACK_GRAVITY_TEST.md','utf8') !== 'Antigravity MCP bridge test successful.') process.exit(1); console.log('file checked');";
     const output = execFileSync(process.execPath, ['-e', testScript], { cwd: final.task.copyDirectory, encoding: 'utf8' });
     await call('black_gravity_record_test', { taskId, expectedSha256: preview.sha256, command: 'node -e ' + testScript, exitCode: 0, output });
     assert.equal((await call('black_gravity_preview', { taskId })).tests[0].stale, false);
@@ -131,13 +131,13 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal(consumption.bySession[0].observedCumulative.totalTokens, 6);
     assert.equal(consumption.byModel[0].model, 'mock-pro');
     await call('black_gravity_verify', { taskId, expectedSha256: preview.sha256,
-      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
+      reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote: 'Antigravity MCP bridge test successful.', explanation: 'Reviewed the artifact after native tests' }] });
 
     for (const response of ['decline', 'cancel', 'accept'] as const) {
       decision = response;
       const denied = await client.callTool({ name: 'black_gravity_integrate', arguments: { taskId, expectedSha256: preview.sha256 } });
       assert.equal((denied.structuredContent as any).error.code, 'APPROVAL_DENIED');
-      await assert.rejects(readFile(path.join(source, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+      await assert.rejects(readFile(path.join(source, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
       assert.equal((await call('black_gravity_health')).integrationApproval.preauthorizedProjectCount, 0);
     }
     confirmation = true;
@@ -145,7 +145,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
     assert.equal((await call('black_gravity_health')).integrationApproval.preauthorizedProjectCount, 0);
     assert.equal(confirmations.length, 4);
     assert.ok(confirmations.every(message => message.includes(preview.sha256) && message.includes(JSON.stringify(canonicalSource))));
-    assert.equal(await readFile(path.join(source, 'AGY_BRIDGE_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
+    assert.equal(await readFile(path.join(source, 'BLACK_GRAVITY_TEST.md'), 'utf8'), 'Antigravity MCP bridge test successful.');
     await call('black_gravity_discard', { taskId });
     await assert.rejects(readFile(path.join(final.task.copyDirectory, 'source.txt')), { code: 'ENOENT' });
     await client.close();
@@ -158,7 +158,7 @@ test('MCP subprocess restart recovers results, events, review baseline and disca
   } finally {
     await client?.close();
     assert.equal(path.dirname(dir), os.tmpdir());
-    assert.ok(path.basename(dir).startsWith('agy-mcp-protocol-test-'));
+    assert.ok(path.basename(dir).startsWith('black-gravity-protocol-test-'));
     await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

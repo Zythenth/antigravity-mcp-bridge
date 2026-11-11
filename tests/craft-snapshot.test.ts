@@ -12,7 +12,7 @@ const packaged = fileURLToPath(new URL('../../plugin/anti-ai-craft', import.meta
 const invalid = (error: unknown) => error instanceof BridgeError && error.code === 'CRAFT_SNAPSHOT_INVALID';
 
 async function synthetic(change?: (manifest: CraftManifest, root: string) => Promise<void> | void) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-craft-snapshot-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-craft-snapshot-'));
   const content = Buffer.from('---\nname: anti-ai-code\n---\nSynthetic skill.\n');
   await mkdir(path.join(root, 'skills', 'anti-ai-code'), { recursive: true });
   await writeFile(path.join(root, 'skills', 'anti-ai-code', 'SKILL.md'), content);

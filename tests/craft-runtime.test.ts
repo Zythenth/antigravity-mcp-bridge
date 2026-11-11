@@ -18,7 +18,7 @@ const directories: string[] = [];
 after(async () => { for (const directory of directories) await rm(directory, { recursive: true, force: true }); });
 
 async function setup(env: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-craft-runtime-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-craft-runtime-'));
   directories.push(root);
   const source = path.join(root, 'source');
   execFileSync('git', ['init', '--quiet', source]);
@@ -93,7 +93,7 @@ test('opt-out, conflicting names and a tampered snapshot are explicit', async ()
   } finally {
     await off.tasks.shutdown();
   }
-  const scratch = await mkdtemp(path.join(os.tmpdir(), 'agy-craft-synthetic-'));
+  const scratch = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-craft-synthetic-'));
   directories.push(scratch);
   const snapshot = await syntheticSnapshot(scratch);
   const custom = await setup({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: snapshot });
@@ -114,7 +114,7 @@ test('opt-out, conflicting names and a tampered snapshot are explicit', async ()
 });
 
 test('the private cache must be a real directory and is verified before every execution', async () => {
-  const scratch = await mkdtemp(path.join(os.tmpdir(), 'agy-craft-synthetic-'));
+  const scratch = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-craft-synthetic-'));
   directories.push(scratch);
   const snapshot = await syntheticSnapshot(scratch);
   const custom = await setup({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: snapshot });
@@ -158,7 +158,7 @@ test('the private cache must be a real directory and is verified before every ex
 });
 
 test('Windows test tasks keep the Anti-AI Craft selection of their source task', { skip: process.platform !== 'win32' }, async () => {
-  const scratch = await mkdtemp(path.join(os.tmpdir(), 'agy-craft-synthetic-'));
+  const scratch = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-craft-synthetic-'));
   directories.push(scratch);
   const snapshot = await syntheticSnapshot(scratch);
   const { source, tasks } = await setup({ BRIDGE_ANTI_AI_CRAFT_DIRECTORY: snapshot, BRIDGE_TEST_EXECUTOR: 'windows-lpac' });
@@ -169,8 +169,8 @@ test('Windows test tasks keep the Anti-AI Craft selection of their source task',
       mode: 'write',
       acceptanceCriteria: [{
         id: 'craft-test',
-        description: 'AGY_BRIDGE_TEST.md contains successful.',
-        check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'successful.' },
+        description: 'BLACK_GRAVITY_TEST.md contains successful.',
+        check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'successful.' },
       }],
     });
     const record = await finished(tasks, task.taskId);

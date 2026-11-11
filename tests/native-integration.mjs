@@ -6,9 +6,9 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 
-const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-native-integration-')));
+const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'black-gravity-native-integration-')));
 const source = path.join(directory, 'source');
-const markerDirectory = await realpath(await mkdtemp(path.join(os.homedir(), '.agy-isolation-check-')));
+const markerDirectory = await realpath(await mkdtemp(path.join(os.homedir(), '.black-gravity-isolation-check-')));
 const markerPath = path.join(markerDirectory, 'marker.txt');
 const markerContent = randomUUID();
 await writeFile(markerPath, markerContent);
@@ -90,8 +90,8 @@ try {
   for (const taskId of [testId, firstId].filter(Boolean)) await call('black_gravity_cancel', { taskId }).catch(() => {});
   for (const taskId of [testId, firstId].filter(Boolean)) await call('black_gravity_discard', { taskId }).catch(() => {});
   await client.close();
-  if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('agy-native-integration-')) throw Error('Unsafe test cleanup path');
+  if (path.relative(await realpath(os.tmpdir()), path.dirname(directory)) !== '' || !path.basename(directory).startsWith('black-gravity-native-integration-')) throw Error('Unsafe test cleanup path');
   await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-  if (path.relative(await realpath(os.homedir()), path.dirname(markerDirectory)) !== '' || !path.basename(markerDirectory).startsWith('.agy-isolation-check-')) throw Error('Unsafe marker cleanup path');
+  if (path.relative(await realpath(os.homedir()), path.dirname(markerDirectory)) !== '' || !path.basename(markerDirectory).startsWith('.black-gravity-isolation-check-')) throw Error('Unsafe marker cleanup path');
   await rm(markerDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

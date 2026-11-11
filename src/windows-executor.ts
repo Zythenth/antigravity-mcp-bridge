@@ -6,7 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { z } from 'zod';
 import { windowsHelperSource } from './windows-helper-source.js';
-import { loadConfig } from './config.js';
+import { defaultStateDirectory, loadConfig } from './config.js';
 import { stageWindowsCommand, validateWindowsCommand } from './windows-runtime.js';
 import { BridgeError } from './types.js';
 import { redactDiagnostic } from './subprocess.js';
@@ -121,7 +121,7 @@ async function nativeProcess(executable: string, args: string[], options: Window
 async function compileController(temp: string, options: WindowsExecutionOptions): Promise<{ directory: string; helper: string; stat: BigIntStats }> {
   const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
   if (!(await lstat(compiler).catch(() => undefined))?.isFile()) throw new BridgeError('WINDOWS_EXECUTOR_UNAVAILABLE', 'The existing Windows .NET Framework compiler is unavailable');
-  const directory = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-controller-')));
+  const directory = await realpath(await mkdtemp(path.join(temp, 'black-gravity-controller-')));
   const stat = await lstat(directory, { bigint: true });
   const source = path.join(directory, 'runner.cs'), helper = path.join(directory, 'runner.exe');
   try {
@@ -130,7 +130,7 @@ async function compileController(temp: string, options: WindowsExecutionOptions)
     if (built.code !== 0) throw new BridgeError('WINDOWS_EXECUTOR_BUILD_FAILED', (built.stdout + built.stderr).slice(-4000));
     return { directory, helper, stat };
   } catch (error) {
-    try { await removeOwned([[directory, 'agy-mcp-controller-', stat]], temp); }
+    try { await removeOwned([[directory, 'black-gravity-controller-', stat]], temp); }
     catch (cleanupError) {
       const original = error instanceof Error ? error.message : String(error);
       const cleanup = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
@@ -256,7 +256,7 @@ async function runRecoveryWithController(stateDirectory: string, options: Window
     const result = recoverySchema.parse(JSON.parse(observed.stdout));
     if (observed.code !== 0 || result.error) throw new BridgeError('WINDOWS_EXECUTION_RECOVERY_FAILED', result.error || 'Windows LPAC recovery did not complete');
     if (requireIdle && result.active !== 0) throw new BridgeError('WINDOWS_EXECUTION_RECOVERY_FAILED', 'Active Windows executions prevent a recovery retry');
-  } finally { await removeOwned([[controller.directory, 'agy-mcp-controller-', controller.stat]], temp); }
+  } finally { await removeOwned([[controller.directory, 'black-gravity-controller-', controller.stat]], temp); }
 }
 
 export async function recoverWindowsExecutions(stateDirectory: string, options: { requireIdle?: boolean } = {}): Promise<void> {
@@ -405,17 +405,17 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
       throw new BridgeError('INVALID_CONFIGURATION', 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY is invalid. See configurationIssues in black_gravity_health.');
     }
   }
-  const stateDirectory = path.resolve(options.stateDirectory ?? path.join(os.homedir(), '.antigravity-mcp-bridge'));
+  const stateDirectory = path.resolve(options.stateDirectory ?? defaultStateDirectory());
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
   await runRecoveryWithController(stateDirectory, options);
-  const temp = await realpath(os.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, 'agy-mcp-copy-');
+  const temp = await realpath(os.tmpdir()), cwd = await ownedDirectory(copyDirectory, temp, path.basename(copyDirectory).startsWith('agy-mcp-copy-') ? 'agy-mcp-copy-' : 'black-gravity-copy-');
   const controller = await compileController(temp, options);
   let runtime = '', scratch = '';
   let runtimeStat: BigIntStats | undefined, scratchStat: BigIntStats | undefined;
   try {
-    runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
+    runtime = await realpath(await mkdtemp(path.join(temp, 'black-gravity-runtime-')));
     runtimeStat = await lstat(runtime, { bigint: true });
-    scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
+    scratch = await realpath(await mkdtemp(path.join(temp, 'black-gravity-scratch-')));
     scratchStat = await lstat(scratch, { bigint: true });
     const staged = await stageWindowsCommand(command, runtime, { maxBytes: options.maxRuntimeBytes, maxFiles: options.maxRuntimeFiles ?? maxFiles },
       runtimeSelection);
@@ -442,7 +442,7 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
       environment.GIT_DEFAULT_REF_FORMAT = 'reftable';
     }
     const request = {
-      action: mode, nonce, profile: 'agy.test.' + nonce.replaceAll('-', ''), cwd, runtime, scratch, executable: staged.executable, args: staged.args,
+      action: mode, nonce, profile: 'black-gravity.test.' + nonce.replaceAll('-', ''), cwd, runtime, scratch, executable: staged.executable, args: staged.args,
       timeoutSeconds: options.timeoutSeconds, maxFiles, maxOutputChars: selection.maxOutputChars, network: selection.network, childProcesses: selection.childProcesses,
       stateDirectory, grants,
       environment,
@@ -459,9 +459,9 @@ export async function executeWindowsTest(command: TestCommand, copyDirectory: st
     return { ...result, portableNode: staged.portableNode };
   } finally {
     const toClean: Array<readonly [string, string, (BigIntStats | undefined)?]> = [];
-    if (scratch) toClean.push([scratch, 'agy-mcp-scratch-', scratchStat]);
-    if (runtime) toClean.push([runtime, 'agy-mcp-runtime-', runtimeStat]);
-    toClean.push([controller.directory, 'agy-mcp-controller-', controller.stat]);
+    if (scratch) toClean.push([scratch, 'black-gravity-scratch-', scratchStat]);
+    if (runtime) toClean.push([runtime, 'black-gravity-runtime-', runtimeStat]);
+    toClean.push([controller.directory, 'black-gravity-controller-', controller.stat]);
     await removeOwned(toClean, temp);
   }
 }

@@ -47,7 +47,10 @@ export type ConfigurationIssueReason =
   | 'unsafe-file'
   | 'link'
   | 'not-directory'
-  | 'unusable';
+  | 'unusable'
+  | 'legacy-state-busy'
+  | 'legacy-state-conflict'
+  | 'legacy-state-migration-failed';
 export interface ConfigurationIssue { variable: string; index?: number; reason: ConfigurationIssueReason }
 
 function positiveInteger(value: string | undefined, fallback: number, max: number): number {
@@ -464,6 +467,15 @@ export function validateStateDirectory(directory: string): { valid: true } | { v
   return { valid: true };
 }
 
+export function defaultStateDirectory(home: string = os.homedir()): string {
+  return path.join(home, '.black-gravity');
+}
+
+// The default root used before the rename. It is only ever read, to migrate it once into the current default root.
+export function legacyStateDirectory(home: string = os.homedir()): string {
+  return path.join(home, '.antigravity-mcp-bridge');
+}
+
 function readAntiAiCraftDirectory(value: string | undefined): {
   antiAiCraftDirectory?: string;
   antiAiCraftDirectoryInvalid?: boolean;
@@ -490,7 +502,7 @@ function readWindowsNodeCacheDirectory(value: string | undefined): {
 } {
   const variable = 'BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY';
   if (value === undefined) {
-    const defaultDirectory = path.resolve(path.join(os.homedir(), '.antigravity-mcp-bridge', 'windows-runtimes'));
+    const defaultDirectory = path.resolve(path.join(defaultStateDirectory(), 'windows-runtimes'));
     return { windowsNodeCacheDirectory: defaultDirectory, issues: [] };
   }
   if (value.includes('\0')) {
@@ -588,7 +600,7 @@ function readStateDirectory(value: string | undefined): {
 } {
   const variable = 'BRIDGE_STATE_DIRECTORY';
   if (!value) {
-    return { stateDirectory: path.join(os.homedir(), '.antigravity-mcp-bridge'), issues: [] };
+    return { stateDirectory: defaultStateDirectory(), issues: [] };
   }
   const validation = validateStateDirectory(value);
   if (!validation.valid) {
@@ -598,7 +610,7 @@ function readStateDirectory(value: string | undefined): {
 }
 
 export function stateDirectoryFrom(env: NodeJS.ProcessEnv): string {
-  return env.BRIDGE_STATE_DIRECTORY || path.join(os.homedir(), '.antigravity-mcp-bridge');
+  return env.BRIDGE_STATE_DIRECTORY || defaultStateDirectory();
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {

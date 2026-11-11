@@ -23,7 +23,7 @@ test('owned process tree follows creation order and ignores reused or unrelated 
 });
 
 test('cleanup terminates a descendant that outlived its exited parent and verifies it is gone', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-process-tree-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-process-tree-'));
   const pidFile = path.join(directory, 'descendant.pid');
   const spawnedAt = Date.now();
   const descendant = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`;

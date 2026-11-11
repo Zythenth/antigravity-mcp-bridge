@@ -40,7 +40,7 @@ class ControlledAdapter extends CliAdapter {
   }
 }
 async function fixture() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-message-delivery-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-message-delivery-test-'));
   const source = path.join(dir, 'source'); execFileSync('git', ['init', '--quiet', source]); await writeFile(path.join(source, 'source.txt'), 'Public fixture');
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(dir, 'state'), BRIDGE_TEST_EXECUTOR: 'agy' });
   const adapter = new ControlledAdapter(config); const tasks = new TaskManager(adapter, config);
@@ -48,7 +48,7 @@ async function fixture() {
     await tasks.shutdown();
     for (const project of new Map(new StateStore(config.stateDirectory).load().filter(t => t.project).map(t => [t.project!.copyDirectory, t.project!])).values()) await discardProjectCopy(project);
     const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(dir));
-    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-message-delivery-test-'));
+    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-message-delivery-test-'));
     await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } };
 }

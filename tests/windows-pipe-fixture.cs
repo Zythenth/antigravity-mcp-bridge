@@ -44,7 +44,7 @@ internal static class WindowsPipeFixture
 
     static string Probe(string scope, string kind, uint serverAccess, uint clientAccess)
     {
-        string name = "\\\\?\\pipe\\" + scope + "agy-lpac-probe-" + Guid.NewGuid().ToString("N");
+        string name = "\\\\?\\pipe\\" + scope + "black-gravity-lpac-probe-" + Guid.NewGuid().ToString("N");
         IntPtr server = CreateNamedPipe(name, serverAccess | FileFlagFirstPipeInstance, 0, 1, 65536, 65536, 0, IntPtr.Zero);
         if (server == InvalidHandle) return scope + kind + "Create=" + Marshal.GetLastWin32Error().ToString();
         try

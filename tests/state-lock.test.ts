@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { StateStore, processAlive } from '../src/state-store.js';
 
 test('concurrent stale registry recovery cannot remove a new live owner lock', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-state-lock-test-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-state-lock-test-'));
   const children: ReturnType<typeof spawn>[] = [], done: Promise<{ status: string; code?: string }>[] = [];
   const launch = (mode: string) => {
     const child = spawn(process.execPath, [fileURLToPath(new URL('../../tests/state-lock-process.mjs', import.meta.url)), mode, root, new URL('../src/state-store.js', import.meta.url).href], { windowsHide: true });
@@ -39,25 +39,25 @@ test('concurrent stale registry recovery cannot remove a new live owner lock', a
   } finally {
     writeFileSync(path.join(root, 'a-go'), '1'); writeFileSync(path.join(root, 'b-go'), '1');
     await Promise.allSettled(done); for (const child of children) if (child.exitCode === null) child.kill();
-    assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), ''); assert.ok(path.basename(root).startsWith('agy-state-lock-test-'));
+    assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), ''); assert.ok(path.basename(root).startsWith('black-gravity-state-lock-test-'));
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
 test('state lock release preserves a replaced file even when ownership JSON is copied', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-state-lock-test-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-state-lock-test-'));
   try {
     const state = path.join(root, 'state'), store = new StateStore(state), release = store.acquire('registry'), file = path.join(state, 'registry.lock');
     const original = readFileSync(file, 'utf8'); renameSync(file, file + '.original'); writeFileSync(file, original);
     assert.throws(release, { code: 'STATE_BUSY' }); assert.equal(readFileSync(file, 'utf8'), original);
   } finally {
-    assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), ''); assert.ok(path.basename(root).startsWith('agy-state-lock-test-'));
+    assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), ''); assert.ok(path.basename(root).startsWith('black-gravity-state-lock-test-'));
     await rm(root, { recursive: true, force: true });
   }
 });
 
 test('live, malformed and abandoned recovery locks stay intact; legacy stale locks and repeated release are safe', async () => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-state-lock-test-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-state-lock-test-'));
   try {
     const state = path.join(root, 'state'), store = new StateStore(state), file = path.join(state, 'registry.lock');
     const release = store.acquire('registry');
@@ -72,7 +72,7 @@ test('live, malformed and abandoned recovery locks stay intact; legacy stale loc
     assert.equal(readFileSync(file, 'utf8'), legacy); assert.equal(readFileSync(gate, 'utf8'), legacy);
     await rm(gate); const recovered = store.acquire('registry'); recovered(); assert.equal(existsSync(file), false);
   } finally {
-    assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), ''); assert.ok(path.basename(root).startsWith('agy-state-lock-test-'));
+    assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), ''); assert.ok(path.basename(root).startsWith('black-gravity-state-lock-test-'));
     await rm(root, { recursive: true, force: true });
   }
 });

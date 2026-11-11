@@ -8,7 +8,7 @@ import { reparseInspectorSource, windowsHelperSource } from '../src/windows-help
 
 test('native Windows inspectors distinguish Cloud Files from links and unknown tags', { skip: process.platform !== 'win32' || process.arch !== 'x64' }, async () => {
   const root = await realpath(os.tmpdir());
-  const directory = await realpath(await mkdtemp(path.join(root, 'agy-mcp-reparse-test-')));
+  const directory = await realpath(await mkdtemp(path.join(root, 'black-gravity-reparse-test-')));
   const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
   const inspector = path.join(directory, 'inspector.exe');
   const runner = path.join(directory, 'runner.dll');
@@ -46,7 +46,7 @@ test('native Windows inspectors distinguish Cloud Files from links and unknown t
     }).trim(), 'safe');
   } finally {
     assert.equal(path.dirname(directory), root);
-    assert.ok(path.basename(directory).startsWith('agy-mcp-reparse-test-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-reparse-test-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

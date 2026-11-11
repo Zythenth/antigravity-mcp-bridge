@@ -17,7 +17,7 @@ import {
 } from '../src/skills.js';
 import { BridgeError } from '../src/types.js';
 
-async function createTempDir(prefix = 'agy-skills-test-'): Promise<string> {
+async function createTempDir(prefix = 'black-gravity-skills-test-'): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
@@ -25,7 +25,7 @@ async function cleanupTempDir(dir: string): Promise<void> {
   const resolved = path.resolve(dir);
   const tempRoot = path.resolve(os.tmpdir());
   const rel = path.relative(tempRoot, resolved);
-  if (!rel || rel.startsWith('..') || rel.includes(path.sep) || rel.includes('/') || !path.basename(resolved).startsWith('agy-skills-test-')) {
+  if (!rel || rel.startsWith('..') || rel.includes(path.sep) || rel.includes('/') || !path.basename(resolved).startsWith('black-gravity-skills-test-')) {
     throw new Error(`Refusing to remove directory outside temporary storage: ${resolved}`);
   }
   await rm(resolved, { recursive: true, force: true });

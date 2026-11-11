@@ -8,7 +8,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 test('MCP bridge and SDK errors are redacted before reaching the client', async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-redaction-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-redaction-test-'));
   const credential = 'gh' + 'p_' + 'A'.repeat(36);
   const client = new Client({ name: 'bridge-redaction-test', version: '1' });
   try {

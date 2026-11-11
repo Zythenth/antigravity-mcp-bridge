@@ -112,7 +112,7 @@ export const successOutputSchemas = {
   black_gravity_health: z.object({
     toolProfile: toolProfileSchema.optional(),
     approvalMode: z.enum(['auto', 'ask']).optional(),
-    configurationIssues: z.array(z.object({ variable: z.string(), index: count.optional(), reason: z.enum(['invalid-json', 'not-a-list', 'too-many-entries', 'not-a-string', 'not-absolute', 'not-found', 'access-denied', 'not-a-directory', 'volume-root', 'unresolvable', 'not-an-object', 'legacy-format', 'invalid-format', 'invalid-name', 'forbidden-name', 'invalid-pattern', 'invalid-entry', 'duplicate', 'too-large', 'unsafe-file', 'link', 'not-directory', 'unusable']) }).strict()).optional(),
+    configurationIssues: z.array(z.object({ variable: z.string(), index: count.optional(), reason: z.enum(['invalid-json', 'not-a-list', 'too-many-entries', 'not-a-string', 'not-absolute', 'not-found', 'access-denied', 'not-a-directory', 'volume-root', 'unresolvable', 'not-an-object', 'legacy-format', 'invalid-format', 'invalid-name', 'forbidden-name', 'invalid-pattern', 'invalid-entry', 'duplicate', 'too-large', 'unsafe-file', 'link', 'not-directory', 'unusable', 'legacy-state-busy', 'legacy-state-conflict', 'legacy-state-migration-failed']) }).strict()).optional(),
     maintenanceIssues: z.array(z.object({ operation: z.literal('copy-cleanup'), code: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), since: z.string(), failures: count }).strict()).optional(),
     installed: z.boolean(), path: z.string(), version: z.string().optional(), authenticated: z.boolean().nullable(),
     capabilities: z.object({

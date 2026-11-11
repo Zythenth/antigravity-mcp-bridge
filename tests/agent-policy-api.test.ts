@@ -50,7 +50,7 @@ test('profile selectors snapshot defaults while explicit empty lists replace the
   assert.deepEqual(listRoles([role]).find(r => r.name === 'fixture')?.defaultMcpServers, [{ serverId: 'fixture', tools: ['echo'] }]);
 });
 test('catalog discovery returns IDs and ceilings without credentials or transport paths', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-policy-api-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-policy-api-'));
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_MCP_CATALOG: JSON.stringify(catalog), BRIDGE_STATE_DIRECTORY: directory, BRIDGE_TEST_EXECUTOR: 'agy' });
   const tasks = new TaskManager(new CliAdapter(config), config);
   try {

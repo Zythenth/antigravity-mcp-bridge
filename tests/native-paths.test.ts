@@ -22,7 +22,7 @@ test('legacy agy requests remain distinct from frozen Windows requests', () => {
 });
 
 test('native runner works when the ambient temp directory is unavailable and keeps snapshot files out of the fingerprint', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-native-temp-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-native-temp-test-'));
   let project: Awaited<ReturnType<typeof createProjectCopy>> | undefined;
   let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
   try {
@@ -49,13 +49,13 @@ test('native runner works when the ambient temp directory is unavailable and kee
   } finally {
     await native?.cleanup();
     if (project) await discardProjectCopy(project);
-    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('agy-native-temp-test-')) throw Error('Unsafe test cleanup path');
+    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('black-gravity-native-temp-test-')) throw Error('Unsafe test cleanup path');
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
 test('native runner accepts the Windows short alias of the same copy directory', { skip: process.platform !== 'win32' }, async context => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-native-path-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-native-path-test-'));
   let project: Awaited<ReturnType<typeof createProjectCopy>> | undefined;
   let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
   try {
@@ -79,7 +79,7 @@ test('native runner accepts the Windows short alias of the same copy directory',
   } finally {
     await native?.cleanup();
     if (project) await discardProjectCopy(project);
-    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('agy-native-path-test-')) throw Error('Unsafe test cleanup path');
+    if (path.dirname(directory) !== os.tmpdir() || !path.basename(directory).startsWith('black-gravity-native-path-test-')) throw Error('Unsafe test cleanup path');
     await rm(directory, { recursive: true, force: true });
   }
 });

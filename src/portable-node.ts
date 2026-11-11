@@ -155,7 +155,7 @@ async function inspectReparsePoints(paths: string[]): Promise<void> {
   }
 
   const tempRoot = await realpath(os.tmpdir());
-  const directory = await realpath(await mkdtemp(path.join(tempRoot, 'agy-mcp-inspector-')));
+  const directory = await realpath(await mkdtemp(path.join(tempRoot, 'black-gravity-inspector-')));
   const directoryInfo = await lstat(directory);
   const sourceFile = path.join(directory, 'inspector.cs');
   const exeFile = path.join(directory, 'inspector.exe');
@@ -165,7 +165,7 @@ async function inspectReparsePoints(paths: string[]): Promise<void> {
   let executionError: unknown;
 
   try {
-    await verifyOwnedTemporaryDirectory(directory, tempRoot, 'agy-mcp-inspector-');
+    await verifyOwnedTemporaryDirectory(directory, tempRoot, 'black-gravity-inspector-');
     await writeFile(sourceFile, reparseInspectorSource, { flag: 'wx', mode: 0o600 });
 
     const compileTimeout = timeRemainingMs();
@@ -278,7 +278,7 @@ async function inspectReparsePoints(paths: string[]): Promise<void> {
   } finally {
     let cleanupError: unknown;
     try {
-      await removeOwnedDirectory(directory, tempRoot, 'agy-mcp-inspector-', directoryInfo);
+      await removeOwnedDirectory(directory, tempRoot, 'black-gravity-inspector-', directoryInfo);
     } catch (error) {
       cleanupError = error;
     }

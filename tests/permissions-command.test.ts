@@ -261,7 +261,7 @@ test('--deny removes a tool that the preset would allow', () => {
 
 test('end-to-end CLI execution through entrypoint', async () => {
   const entry = fileURLToPath(new URL('../src/index.js', import.meta.url));
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'agy-permissions-cli-test-'));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-permissions-cli-test-'));
   try {
     const env: NodeJS.ProcessEnv = {
       HOME: tempDir,

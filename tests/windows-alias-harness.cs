@@ -89,11 +89,11 @@ public static class AliasHarness
 
     static void ForeignAndStacked()
     {
-        string directory = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-harness-" + Guid.NewGuid().ToString("N"));
-        string other = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-harness-" + Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(Path.GetTempPath(), "black-gravity-alias-harness-" + Guid.NewGuid().ToString("N"));
+        string other = Path.Combine(Path.GetTempPath(), "black-gravity-alias-harness-" + Guid.NewGuid().ToString("N"));
         string nonce = Guid.NewGuid().ToString("N").ToUpperInvariant();
-        string foreign = "AGY.TEST.HARNESS." + nonce + ".FOREIGN";
-        string stacked = "AGY.TEST.HARNESS." + nonce + ".STACKED";
+        string foreign = "BLACK_GRAVITY.TEST.HARNESS." + nonce + ".FOREIGN";
+        string stacked = "BLACK_GRAVITY.TEST.HARNESS." + nonce + ".STACKED";
         string first = Raw(directory), second = Raw(other);
         Directory.CreateDirectory(directory); Directory.CreateDirectory(other);
         try
@@ -136,7 +136,7 @@ public static class AliasHarness
 
     static void InsufficientLetters()
     {
-        string target = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-harness-" + Guid.NewGuid().ToString("N"));
+        string target = Path.Combine(Path.GetTempPath(), "black-gravity-alias-harness-" + Guid.NewGuid().ToString("N"));
         var allocated = new List<string>(); var pins = new List<IDisposable>();
         Directory.CreateDirectory(target);
         try
@@ -169,14 +169,21 @@ public static class AliasHarness
         }
     }
 
+    // The recovered gate holds the mutex of this build and the one of earlier builds.
+    static void CallGate(object gate, string method)
+    {
+        try { gate.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Invoke(gate, null); }
+        catch (TargetInvocationException error) { throw error.InnerException ?? error; }
+    }
+
     static void AbandonedMutex()
     {
         object controller = Invoke("CurrentControllerIdentity");
         string logon = (string)Get(controller, "logon");
-        string prefix = "Global\\AGY.TEST.DOS." + logon + ".";
+        string prefix = "Global\\BLACK_GRAVITY.TEST.DOS." + logon + ".";
         bool pinnedCreated;
         Mutex pinned = new Mutex(true, prefix + 'Z', out pinnedCreated);
-        Mutex abandoned = null, recovered = null;
+        Mutex abandoned = null; object recovered = null;
         try
         {
             // A busy gate belongs to its owner; abandon only a newly created fixture gate.
@@ -195,14 +202,14 @@ public static class AliasHarness
                 if (created) { letter = current; abandoned = candidateOwner; break; }
             }
             if (abandoned == null) throw new Exception("No unused drive gate is available for the abandoned-mutex fixture");
-            recovered = (Mutex)Invoke("AcquireRecoveryDriveGate", letter, controller, logon);
+            recovered = Invoke("AcquireRecoveryDriveGate", letter, controller, logon);
             if (recovered == null) throw new Exception("Abandoned mutex was not recovered");
         }
         finally
         {
             try
             {
-                if (recovered != null) { try { recovered.ReleaseMutex(); } finally { recovered.Close(); } }
+                if (recovered != null) { try { CallGate(recovered, "ReleaseMutex"); } finally { CallGate(recovered, "Close"); } }
             }
             finally
             {
@@ -256,7 +263,7 @@ public static class AliasHarness
         public LeaseFixture(string state)
         {
             this.state = state; nonce = Guid.NewGuid().ToString("D");
-            copy = NewTemporary("agy-mcp-copy-"); runtime = NewTemporary("agy-mcp-runtime-"); scratch = NewTemporary("agy-mcp-scratch-");
+            copy = NewTemporary("black-gravity-copy-"); runtime = NewTemporary("black-gravity-runtime-"); scratch = NewTemporary("black-gravity-scratch-");
             var available = new List<string>();
             for (char letter = 'Z'; letter >= 'D' && available.Count < 3; letter--)
             {
@@ -267,7 +274,7 @@ public static class AliasHarness
             string[] kinds = new string[] { "COPY", "RUNTIME", "SCRATCH" }, roots = new string[] { copy, runtime, scratch };
             for (int index = 0; index < 3; index++)
             {
-                drives[index] = available[index]; names[index] = "AGY.TEST." + nonce.ToUpperInvariant() + "." + kinds[index];
+                drives[index] = available[index]; names[index] = "BLACK_GRAVITY.TEST." + nonce.ToUpperInvariant() + "." + kinds[index];
                 targets[index] = Raw(roots[index]);
             }
             Directory.CreateDirectory(Path.Combine(state, "windows-lpac-leases")); file = Path.Combine(state, "windows-lpac-leases", nonce.Replace("-", "") + ".json");
@@ -281,7 +288,7 @@ public static class AliasHarness
         public void Write(int version, string phase, string logon, int pid, long started)
         {
             var lease = new Dictionary<string, object> {
-                { "version", version }, { "nonce", nonce }, { "profile", "agy.test." + nonce.Replace("-", "") }, { "phase", phase },
+                { "version", version }, { "nonce", nonce }, { "profile", "black-gravity.test." + nonce.Replace("-", "") }, { "phase", phase },
                 { "controllerPid", pid }, { "controllerStarted", started }, { "cwd", copy }, { "runtime", runtime }, { "scratch", scratch }, { "grants", new object[0] },
             };
             if (phase != "creating")
@@ -311,7 +318,7 @@ public static class AliasHarness
 
         public void CreateProfile()
         {
-            IntPtr identity; int result = CreateAppContainerProfile("agy.test." + nonce.Replace("-", ""), "alias harness", "alias harness", IntPtr.Zero, 0, out identity);
+            IntPtr identity; int result = CreateAppContainerProfile("black-gravity.test." + nonce.Replace("-", ""), "alias harness", "alias harness", IntPtr.Zero, 0, out identity);
             if (result < 0 || identity == IntPtr.Zero) throw new Exception("Harness profile creation failed: 0x" + result.ToString("x8"));
             try { sid = new SecurityIdentifier(identity).Value; }
             finally { FreeSid(identity); }
@@ -330,7 +337,7 @@ public static class AliasHarness
                 string[] custom = Targets(names[index]); if (custom != null && custom.Length == 1 && custom[0] == targets[index]) Remove(names[index], targets[index]);
             }
             if (File.Exists(file)) File.Delete(file);
-            if (!String.IsNullOrEmpty(sid)) DeleteAppContainerProfile("agy.test." + nonce.Replace("-", ""));
+            if (!String.IsNullOrEmpty(sid)) DeleteAppContainerProfile("black-gravity.test." + nonce.Replace("-", ""));
             Directory.Delete(copy); Directory.Delete(runtime); Directory.Delete(scratch);
         }
     }
@@ -340,7 +347,7 @@ public static class AliasHarness
         var result = new Dictionary<string, object>(); Invoke("Recover", state, result, new JavaScriptSerializer()); return result;
     }
 
-    static void CleanStateDirectory(string path, string prefix = "agy-mcp-alias-state-")
+    static void CleanStateDirectory(string path, string prefix = "black-gravity-alias-state-")
     {
         if (String.IsNullOrEmpty(path)) throw new ArgumentException("Path cannot be empty", "path");
         string fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -459,7 +466,7 @@ public static class AliasHarness
         SecurityIdentifier syntheticSid = new SecurityIdentifier("S-1-5-21-999-888-777-6666");
         SecurityIdentifier foreignSid = new SecurityIdentifier("S-1-5-21-1-2-3-4567");
 
-        string tree = Path.Combine(Path.GetTempPath(), "agy-mcp-growth-" + Guid.NewGuid().ToString("N"));
+        string tree = Path.Combine(Path.GetTempPath(), "black-gravity-growth-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tree);
         try
         {
@@ -499,9 +506,9 @@ public static class AliasHarness
             catch (Exception ex) { admissionRejected = ex.Message.IndexOf("exceeds the configured file limit", StringComparison.Ordinal) >= 0; }
             if (!admissionRejected) throw new Exception("Admission limit was not strictly enforced for tree exceeding maxFiles");
 
-            string dest = Path.Combine(Path.GetTempPath(), "agy-mcp-dest-" + Guid.NewGuid().ToString("N"));
+            string dest = Path.Combine(Path.GetTempPath(), "black-gravity-dest-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dest);
-            string rep = Path.Combine(Path.GetTempPath(), "agy-mcp-rep-" + Guid.NewGuid().ToString("N"));
+            string rep = Path.Combine(Path.GetTempPath(), "black-gravity-rep-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(rep);
             try
             {
@@ -535,12 +542,12 @@ public static class AliasHarness
             finally
             {
                 if (Directory.Exists(rep)) Directory.Delete(rep);
-                if (Directory.Exists(dest)) CleanStateDirectory(dest, "agy-mcp-dest-");
+                if (Directory.Exists(dest)) CleanStateDirectory(dest, "black-gravity-dest-");
             }
         }
         finally
         {
-            if (Directory.Exists(tree)) CleanStateDirectory(tree, "agy-mcp-growth-");
+            if (Directory.Exists(tree)) CleanStateDirectory(tree, "black-gravity-growth-");
         }
     }
 
@@ -552,7 +559,7 @@ public static class AliasHarness
         foreach (string candidate in ExistingLogons()) if (!String.Equals(candidate, current, StringComparison.OrdinalIgnoreCase)) { existing = candidate; break; }
         if (existing == null) throw new Exception("Harness needs an existing non-controller logon session");
 
-        string retainedState = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-state-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(retainedState);
+        string retainedState = Path.Combine(Path.GetTempPath(), "black-gravity-alias-state-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(retainedState);
         var retained = new LeaseFixture(retainedState);
         try
         {
@@ -568,8 +575,8 @@ public static class AliasHarness
         }
         finally { retained.Dispose(); CleanStateDirectory(retainedState); }
 
-        string state = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-state-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(state);
-        string absentLogon = MissingLogon(), foreign = Path.Combine(Path.GetTempPath(), "agy-mcp-alias-harness-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(foreign);
+        string state = Path.Combine(Path.GetTempPath(), "black-gravity-alias-state-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(state);
+        string absentLogon = MissingLogon(), foreign = Path.Combine(Path.GetTempPath(), "black-gravity-alias-harness-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(foreign);
         try
         {
             var planned = new LeaseFixture(state);

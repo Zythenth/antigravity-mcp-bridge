@@ -1579,7 +1579,7 @@ export class TaskManager {
         task.nativeTest = { nonce: native.nonce, commandLine: native.commandLine, attempts: [], steps: new Set() };
       }
       if (task.project.executionPolicy) {
-        policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset;
+        policyReceiptOffset = (await readExecutionPolicyReceipt(task.project.executionPolicy, task.project.executionStateDirectory ?? this.config.stateDirectory)).nextOffset;
         task.editReceipts = { offset: policyReceiptOffset, pending: new Map(), ambiguous: new Set() };
       } else task.editReceipts = undefined;
       if (task.options.craft) await verifyCraftSelection(task.options.craft);
@@ -1712,7 +1712,7 @@ export class TaskManager {
       } else {
         if (task.project.executionPolicy) {
           await verifyManagedCopy(task.project);
-          const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory, policyReceiptOffset, record.sessionId);
+          const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, task.project.executionStateDirectory ?? this.config.stateDirectory, policyReceiptOffset, record.sessionId);
           if (!record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'No new guarded finish was observed for this conversation');
           record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
         }
@@ -1815,7 +1815,7 @@ export class TaskManager {
         '. Make only relevant fixes in the isolated copy. Do not run tests, change the command, weaken assertions, alter sandbox permissions, or change bridge configuration. Stop after the repair so the bridge can rerun the same command.' };
     if (task.record.agentPolicy) options.agentPolicy = this.checkAgentPolicySnapshot(task.record.agentPolicy);
     await verifyManagedCopy(task.project);
-    const receiptOffset = task.project.executionPolicy ? (await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory)).nextOffset : 0;
+    const receiptOffset = task.project.executionPolicy ? (await readExecutionPolicyReceipt(task.project.executionPolicy, task.project.executionStateDirectory ?? this.config.stateDirectory)).nextOffset : 0;
     task.editReceipts = task.project.executionPolicy ? { offset: receiptOffset, pending: new Map(), ambiguous: new Set() } : undefined;
     task.record.result = undefined;
     task.record.usage = undefined;
@@ -1908,7 +1908,7 @@ export class TaskManager {
     }
     if (task.project.executionPolicy) {
       await verifyManagedCopy(task.project);
-      const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, this.config.stateDirectory, receiptOffset, task.record.sessionId);
+      const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, task.project.executionStateDirectory ?? this.config.stateDirectory, receiptOffset, task.record.sessionId);
       if (!task.record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'Repair did not produce a new guarded finish');
       task.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
     }

@@ -47,7 +47,7 @@ class HeldAdapter extends CliAdapter {
   }
 }
 async function fixture(body: (f: { root: string; source: string; config: Config; tasks: TaskManager; adapter: HeldAdapter; managers: TaskManager[] }) => Promise<void>) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-group-runtime-')), source = path.join(root, 'source');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-group-runtime-')), source = path.join(root, 'source');
   await mkdir(source); execFileSync('git', ['init', '--quiet'], { cwd: source }); await writeFile(path.join(source, 'source.txt'), 'fixture\n');
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', MAX_CONCURRENT_TASKS: '2',
     BRIDGE_CUSTOM_ROLES: JSON.stringify([{ name: 'tester', baseRole: 'implementer', instruction: 'PRIVATE_PROFILE_INSTRUCTION', defaults: { effort: 'high' } }]) });
@@ -57,7 +57,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
     for (const manager of managers) await manager.shutdown();
     for (const project of new Map(new StateStore(config.stateDirectory).load().flatMap(item => item.project ? [[item.project.copyDirectory, item.project] as const] : [])).values()) await discardProjectCopy(project);
     assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), '');
-    assert.ok(path.basename(root).startsWith('agy-group-runtime-'));
+    assert.ok(path.basename(root).startsWith('black-gravity-group-runtime-'));
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }

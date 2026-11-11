@@ -18,7 +18,7 @@ import { createProjectCopy, discardProjectCopy, type ProjectCopy } from '../src/
 import { DEFAULT_PROJECT_LIMITS, type ProjectLimits } from '../src/config.js';
 import { BridgeError } from '../src/types.js';
 
-async function createTempRepo(prefix = 'agy-artifacts-test-'): Promise<string> {
+async function createTempRepo(prefix = 'black-gravity-artifacts-test-'): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
   execFileSync('git', ['init', '--quiet', dir]);
   execFileSync('git', ['config', 'user.name', 'Bridge Test'], { cwd: dir });
@@ -33,7 +33,7 @@ async function cleanupTempDir(dir: string): Promise<void> {
   const resolved = path.resolve(dir);
   const tempRoot = path.resolve(os.tmpdir());
   const rel = path.relative(tempRoot, resolved);
-  if (!rel || rel.startsWith('..') || rel.includes(path.sep) || rel.includes('/') || !path.basename(resolved).startsWith('agy-artifacts-test-')) {
+  if (!rel || rel.startsWith('..') || rel.includes(path.sep) || rel.includes('/') || !path.basename(resolved).startsWith('black-gravity-artifacts-test-')) {
     throw new Error(`Refusing to remove directory outside temporary storage: ${resolved}`);
   }
   await rm(resolved, { recursive: true, force: true });
@@ -744,7 +744,7 @@ test('readArtifact honors lower of numeric maxBytes and policy maxCopyBytes cap'
 
 test('adversarial: deterministic parent-directory junction swap during readArtifact open is rejected by post-open validation', async (t) => {
   const repo = await createTempRepo();
-  const external = await mkdtemp(path.join(os.tmpdir(), 'agy-artifacts-ext-'));
+  const external = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-artifacts-ext-'));
   let project: ProjectCopy | undefined;
   const originalOpen = fsPromises.open;
   let swapped = false;
@@ -828,7 +828,7 @@ test('adversarial: deterministic parent-directory junction swap during readArtif
 
 test('adversarial: deterministic junction swap fault injection during collectArtifacts preflight is rejected', async (t) => {
   const repo = await createTempRepo();
-  const external = await mkdtemp(path.join(os.tmpdir(), 'agy-artifacts-ext-'));
+  const external = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-artifacts-ext-'));
   let project: ProjectCopy | undefined;
   const originalOpen = fsPromises.open;
   let swapped = false;

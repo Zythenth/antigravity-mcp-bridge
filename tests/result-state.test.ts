@@ -7,7 +7,7 @@ import path from 'node:path';
 import { StateStore } from '../src/state-store.js';
 
 test('persisted result contracts reject corrupt hashes, artifacts and output schemas', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-result-state-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-result-state-'));
   try {
     const store = new StateStore(directory);
     const taskId = randomUUID();
@@ -48,7 +48,7 @@ test('persisted result contracts reject corrupt hashes, artifacts and output sch
     assert.throws(() => store.load(), { code: 'INVALID_STATE' });
   } finally {
     const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(directory));
-    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-result-state-'));
+    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-result-state-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

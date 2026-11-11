@@ -18,7 +18,7 @@ const directories: string[] = [];
 after(async () => { for (const directory of directories) await rm(directory, { recursive: true, force: true }); });
 
 async function setup(scenario?: string, existingState?: string, timeoutSeconds = 20, extra: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-persistence-redaction-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-persistence-redaction-'));
   directories.push(root);
   const source = path.join(root, 'source');
   execFileSync('git', ['init', '--quiet', source]);
@@ -396,7 +396,7 @@ test('project metadata holding credentials is never cached', async () => {
 test('record fields kept verbatim that hold credentials are never cached', async () => {
   const { state, taskId, file, stored } = await legacyTask();
   delete stored.project;
-  stored.record.copyDirectory = path.join(os.tmpdir(), 'agy-mcp-copy-' + token);
+  stored.record.copyDirectory = path.join(os.tmpdir(), 'black-gravity-copy-' + token);
   await writeFile(file, JSON.stringify(stored));
   await (await setup(undefined, state)).tasks.shutdown();
   assert.equal((await sanitizedCopies(state, taskId)).length, 0);

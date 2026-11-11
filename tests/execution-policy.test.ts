@@ -21,7 +21,7 @@ import { DEFAULT_PROJECT_LIMITS } from '../src/config.js';
 
 async function removeFixture(directory: string) {
   assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
-  assert.ok(['agy-mcp-copy-', 'state-sibling-', 'foreign-state-'].some(prefix => path.basename(directory).startsWith(prefix)));
+  assert.ok(['black-gravity-copy-', 'state-sibling-', 'foreign-state-'].some(prefix => path.basename(directory).startsWith(prefix)));
   await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 
@@ -81,7 +81,7 @@ async function runHook(
 }
 
 test('staging execution policy creates 4 helpers and receipt, enforces limits and verifies safely', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
 
   try {
@@ -160,7 +160,7 @@ test('staging execution policy creates 4 helpers and receipt, enforces limits an
 });
 
 test('stageExecutionPolicy rejects conflicts, limits and preexisting receipt collision with clean rollback', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
 
   try {
@@ -241,7 +241,7 @@ test('stageExecutionPolicy rejects conflicts, limits and preexisting receipt col
 });
 
 test('verifyExecutionPolicy rejects same-size tamper, mutated policy hash and boundary mismatch', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
 
   try {
@@ -304,7 +304,7 @@ test('verifyExecutionPolicy rejects same-size tamper, mutated policy hash and bo
 
 test('table-driven generated hook execution controls native tools, MCP, safe ancestry, paths and spaces', async () => {
   // Use directory path containing spaces in os.tmpdir()
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-path with spaces-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-path with spaces-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-path with spaces-'));
   const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'foreign-state-'));
 
@@ -527,7 +527,7 @@ test('table-driven generated hook execution controls native tools, MCP, safe anc
 });
 
 test('hook enforces read-only mode, rejects junctions and invalid receipt offsets', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
 
   try {
@@ -618,7 +618,7 @@ test('hook enforces read-only mode, rejects junctions and invalid receipt offset
 
 
 test('receipt replacement is denied by both native hook and independent reader', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const policy = resolveAgentPolicy({ allowedTools: [] }, [], [], 'read-only', randomUUID());
@@ -631,7 +631,7 @@ test('receipt replacement is denied by both native hook and independent reader',
   } finally { await removeFixture(copyDir); await removeFixture(stateDir); }
 });
 test('new nested files are allowed while traversal, hardlinks and runtime shadows are denied', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const policy = resolveAgentPolicy({ allowedTools: ['view_file', 'write_to_file'] }, ['view_file', 'write_to_file'], [], 'write', randomUUID());
@@ -650,7 +650,7 @@ test('new nested files are allowed while traversal, hardlinks and runtime shadow
 
 
 test('native MCP presentation envelope retains strict server/tool and metadata validation', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-')), stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-')), stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const catalog = [{ id: 'probe', nativeServerName: 'bridge-policy-probe', command: process.execPath, tools: [{ name: 'echo', readOnly: true }] }];
     const policy = resolveAgentPolicy({ mcpServers: [{ serverId: 'probe' }] }, [], catalog, 'read-only', randomUUID());
@@ -669,7 +669,7 @@ test('native MCP presentation envelope retains strict server/tool and metadata v
 
 
 test('Windows LPAC tests can read project files but cannot read private MCP configuration', { skip: process.platform !== 'win32' }, async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-')), stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-')), stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const catalog = [{ id: 'probe', command: process.execPath, env: { FIXTURE_SECRET: 'synthetic-private-marker' }, tools: [{ name: 'echo', readOnly: true }] }];
     const policy = resolveAgentPolicy({ mcpServers: [{ serverId: 'probe' }] }, [], catalog, 'write', randomUUID());
@@ -684,11 +684,11 @@ test('Windows LPAC tests can read project files but cannot read private MCP conf
 });
 
 test('receipts retain canonical identity while I/O stays under the authorized state address', async t => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   const originalRealpath = fsPromises.realpath;
   const canonicalState = path.join(await originalRealpath(path.dirname(stateDir)), 'foreign-state-' + randomUUID());
-  const canonicalCopy = path.join(await originalRealpath(path.dirname(copyDir)), 'agy-mcp-copy-canonical-' + randomUUID());
+  const canonicalCopy = path.join(await originalRealpath(path.dirname(copyDir)), 'black-gravity-copy-canonical-' + randomUUID());
   const within = (root: string, input: unknown) => {
     const relative = path.relative(root, path.resolve(String(input)));
     return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
@@ -750,7 +750,7 @@ test('receipts retain canonical identity while I/O stays under the authorized st
 });
 
 test('receipt cleanup preserves the file when canonical verification is denied', async t => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const executionId = randomUUID(), catalog = createCatalog();
@@ -779,7 +779,7 @@ test('receipt cleanup preserves the file when canonical verification is denied',
 });
 
 test('modern CLI file tool aliases normalize capabilities, validate envelopes, and preserve path and receipt invariants', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
 
   try {

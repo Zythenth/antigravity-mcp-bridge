@@ -60,7 +60,7 @@ const SYNTHETIC_STRIPE_SECRET = '123456789012' + '345678901234';
 const SYNTHETIC_STRIPE_KEY = `${SYNTHETIC_STRIPE_PREFIX}${SYNTHETIC_STRIPE_SECRET}`;
 
 async function createRepo(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-file-protection-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-file-protection-'));
   execFileSync('git', ['init', '--quiet', dir]);
   await writeFile(path.join(dir, 'source.txt'), 'legitimate application source code\n');
   return dir;
@@ -393,7 +393,7 @@ test('paths: rejects traversal, NUL bytes, Windows ADS, device paths, and .git a
 
 test('paths: external symbolic links are denied where supported', async (t) => {
   const dir = await createRepo();
-  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'agy-external-fixture-'));
+  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-external-fixture-'));
   try {
     const outsideTarget = path.join(outsideDir, 'target.txt');
     try {
@@ -727,7 +727,7 @@ test('BRIDGE_SECRET_EXCLUSIONS: failure modes report issues, mark exclusions unu
     assert.equal(warn.includes(sensitivePattern), false);
 
     // Invalid exclusions refuse tasks at TaskManager level without creating tasks
-    const exclStateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-excl-state-'));
+    const exclStateDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-excl-state-'));
     const exclConfig = loadConfig({
       BRIDGE_ANTI_AI_CRAFT: 'off',
       BRIDGE_SECRET_EXCLUSIONS: 'not-json',
@@ -758,8 +758,8 @@ test('BRIDGE_SECRET_EXCLUSIONS: failure modes report issues, mark exclusions unu
 
 test('FORBIDDEN_DIRECTORIES: relative or NUL entries report issues, mark unusable, and refuse operations', async () => {
   const dir = await createRepo();
-  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-state-dir-'));
-  const validForbidden = await mkdtemp(path.join(os.tmpdir(), 'agy-forbidden-'));
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-state-dir-'));
+  const validForbidden = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-forbidden-'));
   try {
     // 1. Relative entry is never resolved against cwd
     const relativeRaw = 'relative-non-absolute-dir';
@@ -867,7 +867,7 @@ test('FORBIDDEN_DIRECTORIES: relative or NUL entries report issues, mark unusabl
 
     // 5. Diagnostics and error messages never leak configured values
     const sensitive = 'SENSITIVE_FORBIDDEN_DIR_998877';
-    const leakStateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-leak-state-'));
+    const leakStateDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-leak-state-'));
     const leakConfig = loadConfig({
       BRIDGE_ANTI_AI_CRAFT: 'off',
       FORBIDDEN_DIRECTORIES: 'relative/' + sensitive,
@@ -921,7 +921,7 @@ test('policy: glob pattern validation fails explicitly on invalid input', () => 
 test('git subprocess: guards errors and redacts diagnostics upon git operation failure', async () => {
   const dir = await createRepo();
   try {
-    const nonGitDir = await mkdtemp(path.join(os.tmpdir(), 'agy-non-git-'));
+    const nonGitDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-non-git-'));
     try {
       await assert.rejects(listProjectFiles(nonGitDir), (err: unknown) => {
         assert.ok(err instanceof BridgeError);
@@ -1194,7 +1194,7 @@ test('paths & identity: copyVerifiedFile rejects identity mismatch (dev/ino chan
     assert.ok(record);
 
     const source = path.join(dir, 'identity.txt');
-    const targetDir = await mkdtemp(path.join(os.tmpdir(), 'agy-target-'));
+    const targetDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-target-'));
     const target = path.join(targetDir, 'identity.txt');
 
     try {
@@ -1465,7 +1465,7 @@ test('patch integrity: non-UTF8 Latin1 text change fails closed with UNSUPPORTED
 
 test('integration: source Git filters and whitespace policy cannot execute code or change approved bytes', async () => {
   const dir = await createRepo();
-  const auxiliary = await mkdtemp(path.join(os.tmpdir(), 'agy-apply-policy-'));
+  const auxiliary = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-apply-policy-'));
   let copy;
   try {
     const marker = path.join(auxiliary, 'synthetic-filter-ran');
@@ -1746,7 +1746,7 @@ async function withOutputFixture(
   } finally {
     const actual = await realpath(dir);
     const info = await lstat(dir);
-    if (path.dirname(actual) !== await realpath(os.tmpdir()) || !path.basename(actual).startsWith('agy-file-protection-') ||
+    if (path.dirname(actual) !== await realpath(os.tmpdir()) || !path.basename(actual).startsWith('black-gravity-file-protection-') ||
         info.isSymbolicLink() || !info.isDirectory()) throw new Error('Unsafe output fixture cleanup');
     await rm(actual, { recursive: true, force: true });
   }
@@ -1933,7 +1933,7 @@ test('paths: directory junction ancestry rejection with identical file bytes and
     return;
   }
   const dir = await createRepo();
-  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'agy-external-junction-'));
+  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-external-junction-'));
   try {
     const localTarget = path.join(dir, 'source.txt');
     const outsideTarget = path.join(outsideDir, 'external-source.txt');
@@ -2389,7 +2389,7 @@ test('regression: deterministic after-scan HEAD swap in previewProjectCopy rejec
 
 test('regression: conflicting execution policy path in source rejects before first Git add and persisted copy without HEAD fails closed', async t => {
   const dir = await createRepo();
-  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-policy-state-'));
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-policy-state-'));
   try {
     await mkdir(path.join(dir, '.agents'), { recursive: true });
     const conflictMarker = 'BRIDGE_SYNTHETIC_CONFLICTING_HOOKS_CONTENT';

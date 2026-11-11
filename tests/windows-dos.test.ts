@@ -173,7 +173,7 @@ function assertLeasePlan(lease: ActiveLease): void {
   assert.equal(lease.aliases.length, 3);
   assert.deepEqual(new Set(lease.aliases.map(alias => alias.kind)), new Set(['copy', 'runtime', 'scratch']));
   for (const alias of lease.aliases) {
-    assert.match(alias.customName, /^AGY\.TEST\.[0-9A-F-]+\.(COPY|RUNTIME|SCRATCH)$/);
+    assert.match(alias.customName, /^BLACK_GRAVITY\.TEST\.[0-9A-F-]+\.(COPY|RUNTIME|SCRATCH)$/);
     assert.match(alias.drive, /^[D-Z]:$/);
     assert.equal(alias.aliasRoot, alias.drive + '\\');
     assert.equal(alias.customTarget, rawTarget(alias.physicalRoot));
@@ -272,7 +272,7 @@ async function runPolicy(executable: string, copy: string, state: string, childP
       [alias.drive, await hostSnapshot(executable, copy, alias.drive), alias.driveTarget] as const,
     ]))).flat();
     for (const [name, snapshot, target] of beforeMappings) assertExact(snapshot, target, 'before low-token attempts: ' + name);
-    freshCustomName = 'AGY.TEST.' + lease.nonce.toUpperCase() + '.FRESH';
+    freshCustomName = 'BLACK_GRAVITY.TEST.' + lease.nonce.toUpperCase() + '.FRESH';
     freshCustomTarget = rawTarget(copy);
     assertAbsent(await hostSnapshot(executable, copy, freshCustomName), 'fresh custom definition before low-token attempt');
     freshDriveName = await unusedDrive(executable, copy, new Set(lease.aliases.map(alias => alias.drive)));
@@ -325,12 +325,12 @@ async function runPolicy(executable: string, copy: string, state: string, childP
 
 test('LPAC children cannot query or mutate the executor DOS namespace', { skip: process.platform !== 'win32' }, async () => {
   const temporary = await realpath(os.tmpdir());
-  const root = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-dos-fixture-')));
-  const copy = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-copy-')));
-  const state = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-dos-state-')));
+  const root = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-dos-fixture-')));
+  const copy = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-copy-')));
+  const state = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-dos-state-')));
   try {
     const fixture = await compileFixture(root);
-    const controlName = 'AGY.TEST.HOST.' + randomUUID().replaceAll('-', '').toUpperCase();
+    const controlName = 'BLACK_GRAVITY.TEST.HOST.' + randomUUID().replaceAll('-', '').toUpperCase();
     const controlTarget = rawTarget(copy);
     assertAbsent(await hostSnapshot(fixture, copy, controlName), 'trusted host positive control before definition');
     try {
@@ -343,8 +343,8 @@ test('LPAC children cannot query or mutate the executor DOS namespace', { skip: 
     await runPolicy(fixture, copy, state, true);
     await runPolicy(fixture, copy, state, false);
   } finally {
-    await removeOwned(state, temporary, 'agy-mcp-dos-state-');
-    await removeOwned(copy, temporary, 'agy-mcp-copy-');
-    await removeOwned(root, temporary, 'agy-mcp-dos-fixture-');
+    await removeOwned(state, temporary, 'black-gravity-dos-state-');
+    await removeOwned(copy, temporary, 'black-gravity-copy-');
+    await removeOwned(root, temporary, 'black-gravity-dos-fixture-');
   }
 });

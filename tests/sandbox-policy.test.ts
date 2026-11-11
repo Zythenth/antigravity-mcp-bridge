@@ -78,7 +78,7 @@ test('protected state, source, and ancestor paths are denied before directory tr
 
 test('bridge scratch-named paths are protected like every other internal runner directory', async () => {
   await fixture(async paths => {
-    const scratch = path.join(paths.root, 'agy-mcp-scratch-owned');
+    const scratch = path.join(paths.root, 'black-gravity-scratch-owned');
     await mkdir(scratch);
     await assert.rejects(normalizeSandboxPolicy({ readRoots: [scratch] }, paths.state, []), { code: 'SANDBOX_PATH_PROTECTED' });
   });

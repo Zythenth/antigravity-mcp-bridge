@@ -168,7 +168,7 @@ function deadPid(): number {
 }
 
 function stateFixture() {
-  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'agy-wait-command-multi-test-')));
+  const directory = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-wait-command-multi-test-')));
   const state = new StateStore(directory);
   const makeStored = (status: TaskStatus = 'running', ownerPid = process.pid): StoredTask => {
     const taskId = randomUUID();
@@ -262,7 +262,7 @@ function stateFixture() {
       const tmpRoot = fs.realpathSync.native(os.tmpdir());
       const resolvedDir = fs.existsSync(directory) ? fs.realpathSync.native(directory) : path.resolve(directory);
       const relative = path.relative(tmpRoot, resolvedDir);
-      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-wait-command-multi-test-'));
+      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-wait-command-multi-test-'));
       fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };

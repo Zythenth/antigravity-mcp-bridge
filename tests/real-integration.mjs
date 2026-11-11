@@ -6,16 +6,16 @@ import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 
-const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-real-')));
+const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'black-gravity-real-')));
 execFileSync('git', ['init', '--quiet', directory]);
 await writeFile(path.join(directory, 'source.txt'), 'Disposable integration test project.');
-const client = new Client({ name: 'agy-mcp-integration-test', version: '1.0.0' }, { capabilities: { elicitation: { form: {} } } });
+const client = new Client({ name: 'black-gravity-integration-test', version: '1.0.0' }, { capabilities: { elicitation: { form: {} } } });
 client.setRequestHandler(ElicitRequestSchema, async request => {
   if (request.params.mode !== 'form' || !request.params.message.includes(JSON.stringify(directory))) throw new Error('Approval must refer only to the disposable test project');
   console.log('APPROVAL=simulated MCP client confirmation for disposable test project');
   return { action: 'accept', content: { confirm: true } };
 });
-const serverPath = process.env.AGY_BRIDGE_SERVER || path.resolve('dist/src/index.js');
+const serverPath = process.env.BRIDGE_TEST_SERVER || path.resolve('dist/src/index.js');
 const transport = new StdioClientTransport({ command: process.execPath,
   args: [serverPath], env: { ...process.env, AGY_PATH: process.env.AGY_PATH || 'agy' } });
 let taskId;
@@ -34,9 +34,9 @@ try {
   if (models.isError) throw new Error(JSON.stringify(models.structuredContent));
   console.log(`MODEL_COUNT=${models.structuredContent.models.length}`);
   const run = await client.callTool({ name: 'black_gravity_run', arguments: {
-    prompt: 'Create a file named AGY_BRIDGE_TEST.md in the current directory containing exactly this sentence: Antigravity MCP bridge test successful. Do not change other files.',
+    prompt: 'Create a file named BLACK_GRAVITY_TEST.md in the current directory containing exactly this sentence: Antigravity MCP bridge test successful. Do not change other files.',
     workingDirectory: directory, timeoutSeconds: 180,
-    acceptanceCriteria: [{ id: 'created', description: 'Create the requested file with the exact sentence', check: { kind: 'file-contains', path: 'AGY_BRIDGE_TEST.md', text: 'Antigravity MCP bridge test successful.' } }],
+    acceptanceCriteria: [{ id: 'created', description: 'Create the requested file with the exact sentence', check: { kind: 'file-contains', path: 'BLACK_GRAVITY_TEST.md', text: 'Antigravity MCP bridge test successful.' } }],
   } });
   if (run.isError) throw new Error(JSON.stringify(run.structuredContent));
   taskId = run.structuredContent.task.taskId;
@@ -60,17 +60,17 @@ try {
   console.log(`EVENT_COUNT=${eventCount}`);
   console.log(`SAW_LIVE=${sawLive}`);
   if (final.status !== 'completed') throw new Error(JSON.stringify(final.error || final.result || final));
-  try { await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8'); throw new Error('Source was modified before integration'); }
+  try { await readFile(path.join(directory, 'BLACK_GRAVITY_TEST.md'), 'utf8'); throw new Error('Source was modified before integration'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const preview = await client.callTool({ name: 'black_gravity_preview', arguments: { taskId } });
-  if (preview.isError || !preview.structuredContent.files.some(file => file.path === 'AGY_BRIDGE_TEST.md')) throw new Error(JSON.stringify(preview.structuredContent));
-  const quote = await readFile(path.join(final.copyDirectory, 'AGY_BRIDGE_TEST.md'), 'utf8');
+  if (preview.isError || !preview.structuredContent.files.some(file => file.path === 'BLACK_GRAVITY_TEST.md')) throw new Error(JSON.stringify(preview.structuredContent));
+  const quote = await readFile(path.join(final.copyDirectory, 'BLACK_GRAVITY_TEST.md'), 'utf8');
   const verification = await client.callTool({ name: 'black_gravity_verify', arguments: { taskId, expectedSha256: preview.structuredContent.sha256,
-    reviews: [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'Fixture content inspected independently' }] } });
+    reviews: [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote, explanation: 'Fixture content inspected independently' }] } });
   if (verification.isError || verification.structuredContent.status !== 'passed') throw new Error(JSON.stringify(verification.structuredContent));
   const integrated = await client.callTool({ name: 'black_gravity_integrate', arguments: { taskId, expectedSha256: preview.structuredContent.sha256 } });
   if (integrated.isError) throw new Error(JSON.stringify(integrated.structuredContent));
-  const contents = await readFile(path.join(directory, 'AGY_BRIDGE_TEST.md'), 'utf8');
+  const contents = await readFile(path.join(directory, 'BLACK_GRAVITY_TEST.md'), 'utf8');
   console.log(`FILE=${contents.trim()}`);
   if (final.status !== 'completed' || contents.trim() !== 'Antigravity MCP bridge test successful.' || eventCount < 3) process.exitCode = 1;
 } catch (error) {

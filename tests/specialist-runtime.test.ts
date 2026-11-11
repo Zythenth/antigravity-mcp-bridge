@@ -39,7 +39,7 @@ class RecordingAdapter extends CliAdapter {
 }
 
 async function fixture(customRoles: unknown[], body: (f: { root: string; repo: string; state: string; config: Config; adapter: RecordingAdapter; tasks: TaskManager; managers: TaskManager[] }) => Promise<void>) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-profile-runtime-'));
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-profile-runtime-'));
   const repo = path.join(root, 'repo'), state = path.join(root, 'state');
   const managers: TaskManager[] = [];
   try {
@@ -59,7 +59,7 @@ async function fixture(customRoles: unknown[], body: (f: { root: string; repo: s
     const projects = new Map(new StateStore(state).load().filter(item => item.project).map(item => [item.project!.copyDirectory, item.project!]));
     for (const project of projects.values()) await discardProjectCopy(project);
     assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
-    assert.ok(path.basename(root).startsWith('agy-profile-runtime-'));
+    assert.ok(path.basename(root).startsWith('black-gravity-profile-runtime-'));
     await rm(root, { recursive: true, force: true });
   }
 }

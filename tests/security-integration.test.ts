@@ -42,7 +42,7 @@ after(async () => {
 });
 
 async function createRepo(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-sec-test-repo-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-sec-test-repo-'));
   cleanupDirs.push(dir);
   execFileSync('git', ['init', '--quiet', dir]);
   execFileSync('git', ['-C', dir, 'config', 'user.name', 'Security Test']);
@@ -52,7 +52,7 @@ async function createRepo(): Promise<string> {
 }
 
 function setup(prefixArgs: string[], configOverrides: Record<string, string> = {}) {
-  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-sec-state-'));
+  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-sec-state-'));
   stateDirectories.push(stateDirectory);
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off',
     AGY_PATH: process.execPath,
@@ -86,9 +86,9 @@ const done = (task: TaskRecord) =>
   ['completed', 'failed', 'cancelled', 'timeout'].includes(task.status);
 
 test('CliAdapter filters environment in probes, models, and spawnTask, preserving required vars and config extensions', async () => {
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'agy-sec-adapter-'));
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-sec-adapter-'));
   cleanupDirs.push(tempDir);
-  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-sec-state-'));
+  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-sec-state-'));
   stateDirectories.push(stateDirectory);
   const reportFile = path.join(tempDir, 'env-audit.jsonl');
 

@@ -11,7 +11,7 @@ test('native Windows Null device helper enforces bounded least-privilege ACL tra
   skip: process.platform !== 'win32' || process.arch !== 'x64',
 }, async () => {
   const root = await realpath(os.tmpdir());
-  const directory = await realpath(await mkdtemp(path.join(root, 'agy-mcp-null-test-')));
+  const directory = await realpath(await mkdtemp(path.join(root, 'black-gravity-null-test-')));
   const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
   const runner = path.join(directory, 'runner.dll');
   const harness = path.join(directory, 'harness.exe');
@@ -51,7 +51,7 @@ test('native Windows Null device helper enforces bounded least-privilege ACL tra
     }
   } finally {
     assert.equal(path.dirname(directory), root);
-    assert.ok(path.basename(directory).startsWith('agy-mcp-null-test-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-null-test-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
@@ -67,10 +67,10 @@ test('native Windows cleanup reconciles a post-write validation failure using a 
     return directory;
   };
   try {
-    const fixture = await create('agy-mcp-null-fault-');
-    const copy = await create('agy-mcp-copy-');
-    const runtime = await create('agy-mcp-runtime-');
-    const scratch = await create('agy-mcp-scratch-');
+    const fixture = await create('black-gravity-null-fault-');
+    const copy = await create('black-gravity-copy-');
+    const runtime = await create('black-gravity-runtime-');
+    const scratch = await create('black-gravity-scratch-');
     const state = path.join(fixture, 'state');
     const target = path.join(fixture, 'null-control.txt');
     await mkdir(state);
@@ -106,7 +106,7 @@ test('native Windows cleanup reconciles a post-write validation failure using a 
     const nonce = randomUUID();
     const request = path.join(fixture, 'request.json');
     await writeFile(request, JSON.stringify({
-      action: 'write', nonce, profile: 'agy.test.' + nonce.replaceAll('-', ''), cwd: copy, runtime, scratch,
+      action: 'write', nonce, profile: 'black-gravity.test.' + nonce.replaceAll('-', ''), cwd: copy, runtime, scratch,
       executable: staged, args: [], timeoutSeconds: 15, maxFiles: 10000, maxOutputChars: 4000,
       network: false, childProcesses: false, stateDirectory: state, grants: [],
       environment: { SystemRoot: process.env.SystemRoot || 'C:\\Windows', GIT_EXEC_PATH: runtime },

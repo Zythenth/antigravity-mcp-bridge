@@ -10,9 +10,9 @@ const settings = { timeoutSeconds: 20, maxRuntimeBytes: 256 * 1024 * 1024, maxRu
 
 async function temporary<T>(run: (copy: string, state: string, outside: string) => Promise<T>): Promise<T> {
   const temp = await realpath(os.tmpdir());
-  const copy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
-  const state = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-state-')));
-  const outside = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-permissions-')));
+  const copy = await realpath(await mkdtemp(path.join(temp, 'black-gravity-copy-')));
+  const state = await realpath(await mkdtemp(path.join(temp, 'black-gravity-state-')));
+  const outside = await realpath(await mkdtemp(path.join(temp, 'black-gravity-permissions-')));
   try { return await run(copy, state, outside); }
   finally { for (const directory of [copy, state, outside]) await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 }

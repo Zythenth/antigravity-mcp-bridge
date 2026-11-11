@@ -30,14 +30,14 @@ async function waitFor(tasks: TaskManager, taskId: string, timeout = 180000) {
 }
 
 async function repository() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-mcp-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-windows-mcp-test-'));
   execFileSync('git', ['init', '--quiet', directory]);
   await writeFile(path.join(directory, 'source.txt'), 'source');
   return directory;
 }
 
 test('MCP policy setter requires an accepted form and preserves a compare-and-set ceiling', async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-policy-mcp-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-policy-mcp-test-'));
   let confirmation = false;
   let action: 'accept' | 'decline' = 'accept';
   let requests = 0;
@@ -98,7 +98,7 @@ test('MCP policy setter requires an accepted form and preserves a compare-and-se
 
 test('Windows test defaults to bridge-owned LPAC evidence and rejects forged stdout, failed commands, and cancelled commands', { skip: process.platform !== 'win32' }, async () => {
   const directory = await repository();
-  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-mcp-state-'));
+  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-windows-mcp-state-'));
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20',
     ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
     ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });
@@ -152,7 +152,7 @@ test('Windows test defaults to bridge-owned LPAC evidence and rejects forged std
     assert.ok(tasks.readEvents(cancelled.taskId).events.filter(event => event.type === 'process.started').length >= 4, 'LPAC controller did not start');
     await tasks.cancel(cancelled.taskId);
     assert.equal((await waitFor(tasks, cancelled.taskId)).error?.code, 'TASK_CANCELLED');
-    await assert.rejects(readFile(path.join(directory, 'AGY_BRIDGE_TEST.md')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(directory, 'BLACK_GRAVITY_TEST.md')), { code: 'ENOENT' });
   } finally {
     await tasks.shutdown();
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -163,7 +163,7 @@ test('Windows test defaults to bridge-owned LPAC evidence and rejects forged std
 test('a queued Windows test is denied when its frozen global ceiling is revoked', { skip: process.platform !== 'win32' }, async () => {
   const sourceDirectory = await repository();
   const busyDirectory = await repository();
-  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-policy-state-'));
+  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-windows-policy-state-'));
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20', MAX_CONCURRENT_TASKS: '1',
     ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
     ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });
@@ -246,7 +246,7 @@ test('a queued Windows test is denied when its frozen global ceiling is revoked'
 
 test('cancelling a Windows test right after it is queued stops it before execution', { skip: process.platform !== 'win32' }, async () => {
   const directory = await repository();
-  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'agy-windows-mcp-state-'));
+  const stateDirectory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-windows-mcp-state-'));
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', AGY_PATH: process.execPath, BRIDGE_STATE_DIRECTORY: stateDirectory, DEFAULT_TIMEOUT_SECONDS: '20',
     ...(process.env.BRIDGE_WINDOWS_NODE_RUNTIME ? { BRIDGE_WINDOWS_NODE_RUNTIME: process.env.BRIDGE_WINDOWS_NODE_RUNTIME } : {}),
     ...(process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY ? { BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY: process.env.BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY } : {}) });

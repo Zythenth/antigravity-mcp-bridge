@@ -60,11 +60,11 @@ interface FixtureSpec {
 const DEAD_PID = 99999999;
 const INBOX_MESSAGE_ID = '66666666-6666-4666-8666-666666666666';
 const SNAPSHOT_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.json$/i;
-const FIXTURE_CWD = path.join(os.tmpdir(), 'agy-restart-fixture-cwd');
+const FIXTURE_CWD = path.join(os.tmpdir(), 'black-gravity-restart-fixture-cwd');
 const FIXTURE_PROJECT = {
   sourceDirectory: FIXTURE_CWD,
-  copyDirectory: path.join(os.tmpdir(), 'agy-mcp-copy-restart-fixture'),
-  gitDirectory: path.join(os.tmpdir(), 'agy-mcp-baseline-restart-fixture'),
+  copyDirectory: path.join(os.tmpdir(), 'black-gravity-copy-restart-fixture'),
+  gitDirectory: path.join(os.tmpdir(), 'black-gravity-baseline-restart-fixture'),
   baseline: [],
   includedFiles: [],
 };
@@ -200,7 +200,7 @@ function normalized(dir: string): Map<string, Snapshot> {
 }
 
 async function control(fixtures: readonly FixtureSpec[]): Promise<Map<string, Snapshot>> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   try {
     for (const f of fixtures) {
       writeSnapshot(dir, f);
@@ -290,7 +290,7 @@ async function cleanupDir(dir: string, managers: TaskManager[]): Promise<void> {
 }
 
 test('normal startup transitions interrupted tasks, preserves terminal and orphan tasks, and logs task.failed', async t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   const managers: TaskManager[] = [];
   try {
     const fixtures: FixtureSpec[] = [
@@ -351,7 +351,7 @@ test('normal startup transitions interrupted tasks, preserves terminal and orpha
 });
 
 test('windows acl write denial degrades startup without mutation or logs, recovering after acl removal', { skip: process.platform !== 'win32' }, async t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   const managers: TaskManager[] = [];
   const middleId = TASK_IDS[1];
   const file = path.join(dir, `${middleId}.json`);
@@ -405,7 +405,7 @@ test('windows acl write denial degrades startup without mutation or logs, recove
 });
 
 test('read-only file mode degrades startup without mutation or logs, recovering after chmod', { skip: process.getuid?.() === 0 }, async t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   const managers: TaskManager[] = [];
   const middleId = TASK_IDS[1];
   const file = path.join(dir, `${middleId}.json`);
@@ -455,7 +455,7 @@ test('read-only file mode degrades startup without mutation or logs, recovering 
 
 test('rename failure in the middle yields partial result, next startup reaches control state', async t => {
   for (const omitRedacted of [false, true]) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
     const managers: TaskManager[] = [];
     const middleId = TASK_IDS[1];
     let restoreRename = () => {};
@@ -524,7 +524,7 @@ test('rename failure in the middle yields partial result, next startup reaches c
 });
 
 test('a temporary that cannot be removed does not stop removing the others', async t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   const managers: TaskManager[] = [];
   let restoreRename = () => {};
   let restoreRmSync = () => {};
@@ -592,7 +592,7 @@ test('publication order updates non-transitioned tasks first and transitioned ta
   const b2Id = TASK_IDS[2];
 
   for (const failTarget of ['S', 'B1', 'B2'] as const) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
     const managers: TaskManager[] = [];
     let restoreRename = () => {};
     try {
@@ -676,7 +676,7 @@ test('publication order updates non-transitioned tasks first and transitioned ta
 });
 
 test('read-only terminal snapshot needs no write and startup succeeds', { skip: process.getuid?.() === 0 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   const managers: TaskManager[] = [];
   const termId = TASK_IDS[2];
   const termFile = path.join(dir, `${termId}.json`);
@@ -717,7 +717,7 @@ test('read-only terminal snapshot needs no write and startup succeeds', { skip: 
 });
 
 test('refresh failing on a running manager throws and keeps manager usable without file mutation', { skip: process.getuid?.() === 0 }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-restart-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-restart-'));
   const managers: TaskManager[] = [];
   const midId = TASK_IDS[1];
   const midFile = path.join(dir, `${midId}.json`);

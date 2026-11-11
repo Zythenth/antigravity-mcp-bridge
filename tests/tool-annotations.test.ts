@@ -12,7 +12,7 @@ import { toolEnabled, type ToolProfile } from '../src/tool-profiles.js';
 const profiles: readonly ToolProfile[] = ['full', 'query', 'review', 'implementation'];
 
 async function listTools(profile: ToolProfile) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-annotations-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-annotations-test-'));
   const client = new Client({ name: 'annotations-test', version: '1' });
   try {
     await client.connect(new StdioClientTransport({ command: process.execPath,

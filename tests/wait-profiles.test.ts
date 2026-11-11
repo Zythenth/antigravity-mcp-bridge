@@ -297,7 +297,7 @@ class HoldAdapter extends CliAdapter {
 }
 
 async function managerFixture() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-wait-profiles-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-wait-profiles-test-'));
   const source = path.join(dir, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'Public fixture\n');
@@ -327,7 +327,7 @@ async function managerFixture() {
         await discardProjectCopy(project);
       }
       const relative = path.relative(fs.realpathSync.native(os.tmpdir()), fs.realpathSync.native(dir));
-      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-wait-profiles-test-'));
+      assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-wait-profiles-test-'));
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     },
   };

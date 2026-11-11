@@ -38,7 +38,7 @@ class MemoryAdapter extends CliAdapter {
   }
 }
 async function fixture(body: (f: { root: string; source: string; config: Config; tasks: TaskManager; adapter: MemoryAdapter; managers: TaskManager[] }) => Promise<void>, extra: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-memory-runtime-')), source = path.join(root, 'source');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-memory-runtime-')), source = path.join(root, 'source');
   await mkdir(source); execFileSync('git', ['init', '--quiet'], { cwd: source }); await writeFile(path.join(source, 'source.txt'), 'fixture\n');
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...extra });
   const adapter = new MemoryAdapter(config), tasks = new TaskManager(adapter, config), managers = [tasks];
@@ -49,7 +49,7 @@ async function fixture(body: (f: { root: string; source: string; config: Config;
     const copies = new Map(new StateStore(config.stateDirectory).load().flatMap(item => item.project ? [[item.project.copyDirectory, item.project] as const] : []));
     for (const project of copies.values()) await discardProjectCopy(project);
     assert.equal(path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))), '');
-    assert.ok(path.basename(root).startsWith('agy-memory-runtime-'));
+    assert.ok(path.basename(root).startsWith('black-gravity-memory-runtime-'));
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }

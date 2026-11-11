@@ -28,7 +28,7 @@ function snapshot(record: Record<string, unknown> = {}) {
 }
 
 test('task reload validates observed CLI usage fields and preserves valid legacy snapshots', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-usage-state-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-usage-state-test-'));
   const file = path.join(directory, taskId + '.json');
   const state = new StateStore(directory);
   try {

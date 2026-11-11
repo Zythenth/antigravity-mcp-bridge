@@ -86,7 +86,7 @@ async function profileExists(sid: string): Promise<boolean> {
 }
 
 function ownedProfile(profile: string, action: 'create' | 'remove'): string {
-  assert.match(profile, /^agy\.test\.[0-9a-f]{32}$/);
+  assert.match(profile, /^(?:black-gravity|agy)\.test\.[0-9a-f]{32}$/);
   const source = 'using System;using System.Runtime.InteropServices;using System.Security.Principal;public static class ProfileFixture {' +
     '[DllImport("userenv.dll",CharSet=CharSet.Unicode)]static extern int CreateAppContainerProfile(string n,string d,string x,IntPtr c,uint z,out IntPtr s);' +
     '[DllImport("userenv.dll",CharSet=CharSet.Unicode)]static extern int DeleteAppContainerProfile(string n);[DllImport("advapi32.dll")]static extern IntPtr FreeSid(IntPtr s);' +
@@ -143,7 +143,7 @@ async function verifyControllerAnnouncement(announcement: Announcement, state: s
   assert.equal(request.action, 'write');
   assert.equal(path.resolve(request.stateDirectory || ''), path.resolve(state));
   assert.equal(path.dirname(path.dirname(announcement.requestPath)), temporary);
-  assert.ok(path.basename(path.dirname(announcement.requestPath)).startsWith('agy-mcp-controller-'));
+  assert.ok(path.basename(path.dirname(announcement.requestPath)).startsWith('black-gravity-controller-'));
   process.kill(announcement.controllerPid, 0);
 }
 
@@ -164,14 +164,14 @@ async function stopController(worker: ChildProcessWithoutNullStreams, announceme
 
 async function crashFixture<T>(run: (resources: { copy: string; state: string; grant: string; ready: string; heartbeat: string }) => Promise<T>): Promise<T> {
   const temporary = await realpath(os.tmpdir());
-  const copy = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-copy-')));
-  const state = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-recovery-state-')));
-  const grant = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-recovery-grant-')));
+  const copy = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-copy-')));
+  const state = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-recovery-state-')));
+  const grant = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-recovery-grant-')));
   try {
     storedAcls([{ path: grant, mode: 'explicit' }]);
     return await run({ copy, state, grant, ready: path.join(copy, 'ready.txt'), heartbeat: path.join(copy, 'heartbeat.txt') }); }
   finally {
-    for (const [directory, prefix] of [[copy, 'agy-mcp-copy-'], [state, 'agy-mcp-recovery-state-'], [grant, 'agy-mcp-recovery-grant-']] as const) await removeOwned(directory, prefix);
+    for (const [directory, prefix] of [[copy, 'black-gravity-copy-'], [state, 'black-gravity-recovery-state-'], [grant, 'black-gravity-recovery-grant-']] as const) await removeOwned(directory, prefix);
   }
 }
 
@@ -224,7 +224,7 @@ test('Windows recovery preserves a live controller, rejects a reused PID as stal
       assert.equal(fresh.exitCode, 0, JSON.stringify(fresh)); assert.equal(fresh.output, 'fresh execution');
     } finally {
       if (worker && worker.exitCode === null) worker.kill('SIGTERM');
-      await removeOwned(controllerDirectory, 'agy-mcp-controller-');
+      await removeOwned(controllerDirectory, 'black-gravity-controller-');
     }
   });
 });
@@ -242,8 +242,8 @@ test('Windows recovery leaves an existing scratch replacement untouched but skip
       await verifyControllerAnnouncement(launched.announcement, state);
       await eventually('LPAC command did not become ready', async () => (await readFile(ready, 'utf8').catch(() => undefined)) === 'ready' ? true : undefined);
       const active = await readLease(state); staleLease = active.file;
-      const scratch = await ownedTemporaryDirectory(active.value.scratch, 'agy-mcp-scratch-');
-      const runtime = await ownedTemporaryDirectory(active.value.runtime, 'agy-mcp-runtime-');
+      const scratch = await ownedTemporaryDirectory(active.value.scratch, 'black-gravity-scratch-');
+      const runtime = await ownedTemporaryDirectory(active.value.runtime, 'black-gravity-runtime-');
       assert.ok(active.value.grants.some(grantEntry => grantEntry.path === scratch));
       assert.ok(active.value.grants.some(grantEntry => grantEntry.path === runtime));
       await stopController(worker, launched.announcement); worker = undefined;
@@ -264,7 +264,7 @@ test('Windows recovery leaves an existing scratch replacement untouched but skip
     } finally {
       if (worker && worker.exitCode === null) worker.kill('SIGTERM');
       if (staleLease) await rm(staleLease, { force: true });
-      await removeOwned(controllerDirectory, 'agy-mcp-controller-');
+      await removeOwned(controllerDirectory, 'black-gravity-controller-');
     }
   });
 });
@@ -298,17 +298,17 @@ test('Windows cleanup revokes the owned SID after a child creates a hardlink', {
 
     // Verify independent next run in a different owned copy sharing the same state directory
     const temp = await realpath(os.tmpdir());
-    const secondCopy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+    const secondCopy = await realpath(await mkdtemp(path.join(temp, 'black-gravity-copy-')));
     try {
       const nextResult = await executeWindowsTest({ executable: process.execPath, args: ['-e', "process.stdout.write('next run ok')"] }, secondCopy, { ...settings, stateDirectory: state });
       assert.equal(nextResult.exitCode, 0, nextResult.output);
       assert.equal(nextResult.output, 'next run ok');
     } finally {
-      await removeOwned(secondCopy, 'agy-mcp-copy-');
+      await removeOwned(secondCopy, 'black-gravity-copy-');
     }
 
     // Verify preexisting hardlinks are still refused at admission
-    const thirdCopy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+    const thirdCopy = await realpath(await mkdtemp(path.join(temp, 'black-gravity-copy-')));
     try {
       const pre1 = path.join(thirdCopy, 'pre1.txt');
       const pre2 = path.join(thirdCopy, 'pre2.txt');
@@ -319,7 +319,7 @@ test('Windows cleanup revokes the owned SID after a child creates a hardlink', {
         /hard links|INVALID_SANDBOX_PATH/
       );
     } finally {
-      await removeOwned(thirdCopy, 'agy-mcp-copy-');
+      await removeOwned(thirdCopy, 'black-gravity-copy-');
     }
   });
 });
@@ -327,11 +327,11 @@ test('Windows cleanup revokes the owned SID after a child creates a hardlink', {
 test('Windows recovery handles creating leases and missing SID cannot produce invalid cleanup-failed lease', { skip: process.platform !== 'win32' }, async () => {
   await crashFixture(async ({ copy, state }) => {
     const temp = await realpath(os.tmpdir());
-    const scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
-    const runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
+    const scratch = await realpath(await mkdtemp(path.join(temp, 'black-gravity-scratch-')));
+    const runtime = await realpath(await mkdtemp(path.join(temp, 'black-gravity-runtime-')));
     try {
       const nonce = randomUUID();
-      const profile = 'agy.test.' + nonce.replace(/-/g, '');
+      const profile = 'black-gravity.test.' + nonce.replace(/-/g, '');
       const leaseDirectory = path.join(state, 'windows-lpac-leases');
       await mkdir(leaseDirectory, { recursive: true });
       const leaseFile = path.join(leaseDirectory, nonce.replace(/-/g, '') + '.json');
@@ -351,9 +351,9 @@ test('Windows recovery handles creating leases and missing SID cannot produce in
         grants: [],
         logon: '00000000.00000000',
         aliases: [
-          { kind: 'copy', physicalRoot: copy, customName: 'AGY.TEST.' + nonce.toUpperCase() + '.COPY', drive: 'Z:', aliasRoot: 'Z:\\', customTarget: '\\??\\' + copy, driveTarget: '\\??\\AGY.TEST.' + nonce.toUpperCase() + '.COPY', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
-          { kind: 'runtime', physicalRoot: runtime, customName: 'AGY.TEST.' + nonce.toUpperCase() + '.RUNTIME', drive: 'Y:', aliasRoot: 'Y:\\', customTarget: '\\??\\' + runtime, driveTarget: '\\??\\AGY.TEST.' + nonce.toUpperCase() + '.RUNTIME', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
-          { kind: 'scratch', physicalRoot: scratch, customName: 'AGY.TEST.' + nonce.toUpperCase() + '.SCRATCH', drive: 'X:', aliasRoot: 'X:\\', customTarget: '\\??\\' + scratch, driveTarget: '\\??\\AGY.TEST.' + nonce.toUpperCase() + '.SCRATCH', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
+          { kind: 'copy', physicalRoot: copy, customName: 'BLACK_GRAVITY.TEST.' + nonce.toUpperCase() + '.COPY', drive: 'Z:', aliasRoot: 'Z:\\', customTarget: '\\??\\' + copy, driveTarget: '\\??\\BLACK_GRAVITY.TEST.' + nonce.toUpperCase() + '.COPY', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
+          { kind: 'runtime', physicalRoot: runtime, customName: 'BLACK_GRAVITY.TEST.' + nonce.toUpperCase() + '.RUNTIME', drive: 'Y:', aliasRoot: 'Y:\\', customTarget: '\\??\\' + runtime, driveTarget: '\\??\\BLACK_GRAVITY.TEST.' + nonce.toUpperCase() + '.RUNTIME', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
+          { kind: 'scratch', physicalRoot: scratch, customName: 'BLACK_GRAVITY.TEST.' + nonce.toUpperCase() + '.SCRATCH', drive: 'X:', aliasRoot: 'X:\\', customTarget: '\\??\\' + scratch, driveTarget: '\\??\\BLACK_GRAVITY.TEST.' + nonce.toUpperCase() + '.SCRATCH', volume: 0, fileIndexHigh: 0, fileIndexLow: 0 },
         ],
         nullDeviceGrant: false,
         jobCreated: false,
@@ -371,13 +371,13 @@ test('Windows recovery handles creating leases and missing SID cannot produce in
       }
 
       // 2. Creating lease with persisted SID
-      const nonce2 = randomUUID(), profile2 = 'agy.test.' + nonce2.replaceAll('-', '');
+      const nonce2 = randomUUID(), profile2 = 'black-gravity.test.' + nonce2.replaceAll('-', '');
       const file2 = path.join(leaseDirectory, nonce2.replaceAll('-', '') + '.json');
       const sid2 = ownedProfile(profile2, 'create');
       try {
         assert.equal(await profileExists(sid2), true);
         const aliases = creatingLease.aliases.map(alias => {
-          const customName = 'AGY.TEST.' + nonce2.toUpperCase() + '.' + alias.kind.toUpperCase();
+          const customName = 'BLACK_GRAVITY.TEST.' + nonce2.toUpperCase() + '.' + alias.kind.toUpperCase();
           return { ...alias, customName, driveTarget: '\\??\\' + customName };
         });
         await writeFile(file2, JSON.stringify({ ...creatingLease, nonce: nonce2, profile: profile2, sid: sid2, aliases }), 'utf8');
@@ -388,6 +388,46 @@ test('Windows recovery handles creating leases and missing SID cannot produce in
         ownedProfile(profile2, 'remove');
       }
     } finally {
+      await removeOwned(scratch, 'black-gravity-scratch-');
+      await removeOwned(runtime, 'black-gravity-runtime-');
+    }
+  });
+});
+
+test('Windows recovery settles a lease written before the rename by the names it recorded', { skip: process.platform !== 'win32' }, async () => {
+  await crashFixture(async ({ state }) => {
+    const temp = await realpath(os.tmpdir());
+    const copy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+    const scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
+    const runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
+    try {
+      const nonce = randomUUID();
+      const profile = 'agy.test.' + nonce.replaceAll('-', '');
+      const leaseDirectory = path.join(state, 'windows-lpac-leases');
+      await mkdir(leaseDirectory, { recursive: true });
+      const leaseFile = path.join(leaseDirectory, nonce.replaceAll('-', '') + '.json');
+      const alias = (kind: string, physicalRoot: string, drive: string) => {
+        const customName = 'AGY.TEST.' + nonce.toUpperCase() + '.' + kind.toUpperCase();
+        return { kind, physicalRoot, customName, drive, aliasRoot: drive + '\\', customTarget: '\\??\\' + physicalRoot, driveTarget: '\\??\\' + customName, volume: 0, fileIndexHigh: 0, fileIndexLow: 0 };
+      };
+      const lease = {
+        version: 3, nonce, profile, sid: '', phase: 'creating', controllerPid: process.pid, controllerStarted: 1,
+        cwd: copy, runtime, scratch, grants: [], logon: '00000000.00000000',
+        aliases: [alias('copy', copy, 'Z:'), alias('runtime', runtime, 'Y:'), alias('scratch', scratch, 'X:')],
+        nullDeviceGrant: false, jobCreated: false,
+      };
+      const sid = ownedProfile(profile, 'create');
+      try {
+        assert.equal(await profileExists(sid), true);
+        await writeFile(leaseFile, JSON.stringify(lease), 'utf8');
+        await recoverWindowsExecutions(state, { requireIdle: true });
+        assert.equal(await profileExists(sid), false, 'the profile recorded under the earlier name is removed');
+        await assert.rejects(readFile(leaseFile), { code: 'ENOENT' });
+      } finally {
+        ownedProfile(profile, 'remove');
+      }
+    } finally {
+      await removeOwned(copy, 'agy-mcp-copy-');
       await removeOwned(scratch, 'agy-mcp-scratch-');
       await removeOwned(runtime, 'agy-mcp-runtime-');
     }
@@ -396,7 +436,7 @@ test('Windows recovery handles creating leases and missing SID cannot produce in
 
 test('Windows cleanup budget allows growth above admission limit and preserves foreign ACL', { skip: process.platform !== 'win32' }, async () => {
   const temp = await realpath(os.tmpdir());
-  const compileDir = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-harness-compile-')));
+  const compileDir = await realpath(await mkdtemp(path.join(temp, 'black-gravity-harness-compile-')));
   const runnerExe = path.join(compileDir, 'runner.exe');
   const harnessExe = path.join(compileDir, 'harness.exe');
   const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
@@ -406,7 +446,7 @@ test('Windows cleanup budget allows growth above admission limit and preserves f
     const output = execFileSync(harnessExe, [runnerExe, 'cleanup-growth'], { windowsHide: true, encoding: 'utf8' });
     assert.equal(output.trim(), '');
   } finally {
-    await removeOwned(compileDir, 'agy-mcp-harness-compile-');
+    await removeOwned(compileDir, 'black-gravity-harness-compile-');
   }
 });
 
@@ -415,7 +455,7 @@ test('Windows cleanup revokes the owned SID from post-grant final reparse point 
     let worker: ChildProcessWithoutNullStreams | undefined;
     let controllerDirectory: string | undefined;
     const temp = await realpath(os.tmpdir());
-    const destination = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-destination-')));
+    const destination = await realpath(await mkdtemp(path.join(temp, 'black-gravity-destination-')));
     try {
       const destFile = path.join(destination, 'dest-file.txt');
       await writeFile(destFile, 'destination content');
@@ -469,7 +509,7 @@ test('Windows cleanup revokes the owned SID from post-grant final reparse point 
 
       await assert.rejects(readFile(active.file));
 
-      const preJunctionCopy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
+      const preJunctionCopy = await realpath(await mkdtemp(path.join(temp, 'black-gravity-copy-')));
       try {
         await symlink(destination, path.join(preJunctionCopy, 'pre-junction'), 'junction');
         await assert.rejects(
@@ -481,20 +521,20 @@ test('Windows cleanup revokes the owned SID from post-grant final reparse point 
           /reparse point|INVALID_SANDBOX_PATH/
         );
       } finally {
-        await removeOwned(preJunctionCopy, 'agy-mcp-copy-');
+        await removeOwned(preJunctionCopy, 'black-gravity-copy-');
       }
     } finally {
       if (worker && worker.exitCode === null) worker.kill('SIGTERM');
-      await removeOwned(destination, 'agy-mcp-destination-');
-      await removeOwned(controllerDirectory, 'agy-mcp-controller-');
+      await removeOwned(destination, 'black-gravity-destination-');
+      await removeOwned(controllerDirectory, 'black-gravity-controller-');
     }
   });
 });
 
 test('Windows test admission allows retry of terminal local-executor failure after native recovery while preserving prior failure', { skip: process.platform !== 'win32' }, async () => {
   const temp = await realpath(os.tmpdir());
-  const repoDir = await realpath(await mkdtemp(path.join(temp, 'agy-retry-repo-')));
-  const stateDir = await realpath(await mkdtemp(path.join(temp, 'agy-retry-state-')));
+  const repoDir = await realpath(await mkdtemp(path.join(temp, 'black-gravity-retry-repo-')));
+  const stateDir = await realpath(await mkdtemp(path.join(temp, 'black-gravity-retry-state-')));
   execFileSync('git', ['init', '--quiet', repoDir]);
   await writeFile(path.join(repoDir, 'source.txt'), 'initial source');
   const startupLease = path.join(stateDir, 'windows-lpac-leases', 'initial-invalid.json');
@@ -596,8 +636,8 @@ test('Windows test admission allows retry of terminal local-executor failure aft
     await tasks.shutdown();
     await rm(startupLease, { force: true });
     for (const project of new Map(new StateStore(stateDir).load().filter(entry => entry.project).map(entry => [entry.project!.copyDirectory, entry.project!])).values()) await discardProjectCopy(project);
-    await ownedTemporaryDirectory(repoDir, 'agy-retry-repo-');
-    await ownedTemporaryDirectory(stateDir, 'agy-retry-state-');
+    await ownedTemporaryDirectory(repoDir, 'black-gravity-retry-repo-');
+    await ownedTemporaryDirectory(stateDir, 'black-gravity-retry-state-');
     await rm(repoDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     await rm(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }

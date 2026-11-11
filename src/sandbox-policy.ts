@@ -48,7 +48,7 @@ export interface SandboxPolicySnapshot {
 
 export interface SandboxPathValidationLimits extends Pick<ProjectLimits, 'maxCopyFiles' | 'maxCopyBytes'> {}
 
-const ownedTemporaryDirectory = /^agy-mcp-(?:copy|baseline|runtime|controller|scratch)-/i;
+const ownedTemporaryDirectory = /^(?:black-gravity|agy-mcp)-(?:copy|baseline|runtime|controller|scratch)-/i;
 const windowsDevice = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
 
 function pathKey(value: string): string {

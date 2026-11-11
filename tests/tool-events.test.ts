@@ -110,7 +110,7 @@ class GuardedAdapter extends CliAdapter {
 async function fixture(
   body: (f: { root: string; source: string; config: Config; adapter: GuardedAdapter; tasks: TaskManager; managers: TaskManager[] }) => Promise<void>
 ) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-tool-events-')), source = path.join(root, 'source');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-tool-events-')), source = path.join(root, 'source');
   await mkdir(source);
   execFileSync('git', ['init', '--quiet'], { cwd: source });
   await writeFile(path.join(source, 'source.txt'), INITIAL_SOURCE, 'utf8');
@@ -128,7 +128,7 @@ async function fixture(
       await discardProjectCopy(project);
     }
     assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
-    assert.ok(path.basename(root).startsWith('agy-tool-events-'));
+    assert.ok(path.basename(root).startsWith('black-gravity-tool-events-'));
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
@@ -633,7 +633,7 @@ test('editSearch classifies line-endings, whitespace and unicode mismatches with
 });
 
 test('hook records mismatch none on exact match, omits edit on deny and reader rejects unexpected edit keys', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const executionId = randomUUID();
@@ -957,7 +957,7 @@ test('large edit_file ERROR step with 17000-character message keeps failure and 
 });
 
 test('hook classifies edit_file above 16 MiB read cap as unknown', async () => {
-  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-copy-'));
+  const copyDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-copy-'));
   const stateDir = await mkdtemp(path.join(os.tmpdir(), 'state-sibling-'));
   try {
     const executionId = randomUUID();
@@ -1009,7 +1009,7 @@ test('hook classifies edit_file above 16 MiB read cap as unknown', async () => {
 });
 
 test('StateStore save and load round-trip compacts and expands all four raw event forms', async () => {
-  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'agy-state-roundtrip-'));
+  const stateDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-state-roundtrip-'));
   try {
     const store = new StateStore(stateDir);
     const taskId = randomUUID();

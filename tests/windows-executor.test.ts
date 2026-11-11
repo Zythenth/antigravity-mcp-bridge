@@ -17,14 +17,14 @@ const settings = { timeoutSeconds: 15, maxRuntimeBytes: 256 * 1024 * 1024,
   windowsNodeRuntime: runtime.windowsNodeRuntime, portableNodeCacheDirectory: runtime.windowsNodeCacheDirectory };
 async function fixture<T>(run: (copy: string, outside: string) => Promise<T>): Promise<T> {
   const temp = await realpath(os.tmpdir());
-  const copy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
-  const outside = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-private-')));
+  const copy = await realpath(await mkdtemp(path.join(temp, 'black-gravity-copy-')));
+  const outside = await realpath(await mkdtemp(path.join(temp, 'black-gravity-private-')));
   try {
     await writeFile(path.join(copy, 'source.txt'), 'original');
     await writeFile(path.join(outside, 'private.txt'), 'private marker');
     return await run(copy, outside);
   } finally {
-    for (const [directory, prefix] of [[copy, 'agy-mcp-copy-'], [outside, 'agy-mcp-private-']] as const) {
+    for (const [directory, prefix] of [[copy, 'black-gravity-copy-'], [outside, 'black-gravity-private-']] as const) {
       assert.equal(path.dirname(directory), temp); assert.ok(path.basename(directory).startsWith(prefix));
       await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
@@ -249,7 +249,7 @@ test('Windows executor captures Node child default stdin, stdout, and stderr pip
 
 test('Windows LPAC permits LOCAL named-pipe endpoints but blocks the global endpoints in installed libuv', { skip: process.platform !== 'win32' }, async () => {
   await fixture(async copy => {
-    const probeDirectory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-mcp-pipe-probe-')));
+    const probeDirectory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'black-gravity-pipe-probe-')));
     const probe = path.join(probeDirectory, 'pipe-probe.exe');
     const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
     try {
@@ -264,7 +264,7 @@ test('Windows LPAC permits LOCAL named-pipe endpoints but blocks the global endp
       assert.match(result.output, /LOCAL\\StdoutOpen=0/);
     } finally {
       assert.equal(path.dirname(probeDirectory), await realpath(os.tmpdir()));
-      assert.ok(path.basename(probeDirectory).startsWith('agy-mcp-pipe-probe-'));
+      assert.ok(path.basename(probeDirectory).startsWith('black-gravity-pipe-probe-'));
       await rm(probeDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
@@ -487,7 +487,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
 
       // Verify the staged git.exe hash against the independently resolved host native git binary
       const tempRoot = await realpath(os.tmpdir());
-      const testRuntime = await realpath(await mkdtemp(path.join(tempRoot, 'agy-mcp-verify-git-')));
+      const testRuntime = await realpath(await mkdtemp(path.join(tempRoot, 'black-gravity-verify-git-')));
       try {
         const stagedGitCmd = await stageWindowsCommand({ executable: 'git.exe', args: ['--version'] }, testRuntime, {
           maxBytes: 256 * 1024 * 1024,
@@ -498,7 +498,7 @@ test('Windows executor stages real Git inside LPAC, isolates host config, verifi
         assert.equal(stagedGitHash, hostGitHash);
       } finally {
         assert.equal(path.dirname(testRuntime), tempRoot);
-        assert.ok(path.basename(testRuntime).startsWith('agy-mcp-verify-git-'));
+        assert.ok(path.basename(testRuntime).startsWith('black-gravity-verify-git-'));
         assert.equal((await lstat(testRuntime)).isSymbolicLink(), false);
         await rm(testRuntime, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
       }
@@ -542,7 +542,7 @@ async function scratchCleanupFault(replace: boolean) {
   const temporary = await realpath(os.tmpdir());
   const owned = (target: string) => {
     assert.equal(path.dirname(target), temporary);
-    assert.ok(path.basename(target).startsWith('agy-mcp-scratch-'));
+    assert.ok(path.basename(target).startsWith('black-gravity-scratch-'));
     const info = lstatSync(target, { bigint: true });
     assert.equal(info.isSymbolicLink(), false);
     assert.equal(info.isDirectory(), true);

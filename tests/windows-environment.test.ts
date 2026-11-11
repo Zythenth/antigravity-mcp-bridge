@@ -9,7 +9,7 @@ import { CliAdapter } from '../src/cli-adapter.js';
 import { loadConfig } from '../src/config.js';
 
 test('Windows commands resolve when an MCP client omits PATHEXT, preserving explicit values', { skip: process.platform !== 'win32' }, async () => {
-  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'agy-environment-test-')));
+  const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), 'black-gravity-environment-test-')));
   const executable = path.join(directory, 'bridge-environment-fixture.cmd');
   const originalPath = process.env.PATH;
   const originalPathExt = process.env.PATHEXT;
@@ -47,7 +47,7 @@ test('Windows commands resolve when an MCP client omits PATHEXT, preserving expl
     if (originalPathExt === undefined) delete process.env.PATHEXT;
     else process.env.PATHEXT = originalPathExt;
     assert.equal(path.relative(await realpath(os.tmpdir()), path.dirname(directory)), '');
-    assert.ok(path.basename(directory).startsWith('agy-environment-test-'));
+    assert.ok(path.basename(directory).startsWith('black-gravity-environment-test-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });

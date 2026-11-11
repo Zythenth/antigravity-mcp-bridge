@@ -80,7 +80,7 @@ internal static class WindowsTestRunner
         public uint volume;
         public uint fileIndexHigh;
         public uint fileIndexLow;
-        internal Mutex gate;
+        internal DriveGate gate;
     }
 
     [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; public int inherit; }
@@ -227,10 +227,20 @@ internal static class WindowsTestRunner
         logon.high = unchecked((int)high); logon.low = low; return true;
     }
 
-    static string DriveGateName(string logon, char letter)
+    // A drive letter is shared with runners built before the rename, which reserve it under the earlier name only.
+    // Both mutexes are therefore taken, always in this order, so the two generations never define the same letter at once.
+    static string[] DriveGateNames(string logon, char letter)
     {
         Luid parsed; if (!TryParseLogon(logon, out parsed)) throw new Exception("Invalid logon identifier for DOS alias mutex");
-        return "Global\\AGY.TEST.DOS." + logon + "." + letter;
+        return new string[] { "Global\\BLACK_GRAVITY.TEST.DOS." + logon + "." + letter, "Global\\AGY.TEST.DOS." + logon + "." + letter };
+    }
+
+    internal sealed class DriveGate
+    {
+        readonly Mutex current, earlier;
+        internal DriveGate(Mutex current, Mutex earlier) { this.current = current; this.earlier = earlier; }
+        internal void ReleaseMutex() { earlier.ReleaseMutex(); current.ReleaseMutex(); }
+        internal void Close() { earlier.Close(); current.Close(); }
     }
 
     static bool LogonSessionExists(string value)
@@ -286,31 +296,40 @@ internal static class WindowsTestRunner
         if (targets == null || targets.Length != 1 || !String.Equals(targets[0], target, StringComparison.Ordinal)) throw new Exception("DOS device definition is missing, foreign, or stacked: " + name);
     }
 
-    static Mutex AcquireDriveGate(char letter, ControllerIdentity controller)
+    static DriveGate AcquireDriveGate(char letter, ControllerIdentity controller)
     {
         var security = new MutexSecurity(); security.SetOwner(controller.user);
         security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
-        bool created; Mutex gate = new Mutex(true, DriveGateName(controller.logon, letter), out created, security);
-        if (created) return gate;
-        gate.Close(); return null;
+        string[] names = DriveGateNames(controller.logon, letter);
+        bool created; Mutex current = new Mutex(true, names[0], out created, security);
+        if (!created) { current.Close(); return null; }
+        Mutex earlier;
+        try { earlier = new Mutex(true, names[1], out created, security); }
+        catch { current.ReleaseMutex(); current.Close(); throw; }
+        if (created) return new DriveGate(current, earlier);
+        earlier.Close(); current.ReleaseMutex(); current.Close(); return null;
     }
 
-    static Mutex AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)
+    static DriveGate AcquireRecoveryDriveGate(char letter, ControllerIdentity controller, string logon)
     {
         var security = new MutexSecurity(); security.SetOwner(controller.user);
         security.AddAccessRule(new MutexAccessRule(controller.user, MutexRights.FullControl, AccessControlType.Allow));
-        bool created, owned = false; Mutex gate = null;
+        string[] names = DriveGateNames(logon, letter); var gates = new Mutex[names.Length]; int held = 0;
         try
         {
-            gate = new Mutex(false, DriveGateName(logon, letter), out created, security);
-            try { owned = gate.WaitOne(0); }
-            catch (AbandonedMutexException) { owned = true; }
-            if (!owned) throw new Exception("DOS drive mutex is held: " + letter);
-            return gate;
+            for (int index = 0; index < names.Length; index++)
+            {
+                bool created, owned; gates[index] = new Mutex(false, names[index], out created, security);
+                try { owned = gates[index].WaitOne(0); }
+                catch (AbandonedMutexException) { owned = true; }
+                if (!owned) throw new Exception("DOS drive mutex is held: " + letter);
+                held = index + 1;
+            }
+            return new DriveGate(gates[0], gates[1]);
         }
         catch
         {
-            if (gate != null) { if (owned) gate.ReleaseMutex(); gate.Close(); }
+            for (int index = names.Length - 1; index >= 0; index--) if (gates[index] != null) { if (index < held) gates[index].ReleaseMutex(); gates[index].Close(); }
             throw;
         }
     }
@@ -327,13 +346,13 @@ internal static class WindowsTestRunner
             for (char letter = 'Z'; letter >= 'D' && selected < aliases.Length; letter--)
             {
                 string drive = letter + ":"; if (QueryDosTargets(drive) != null) continue;
-                Mutex gate = AcquireDriveGate(letter, controller); if (gate == null) continue;
+                DriveGate gate = AcquireDriveGate(letter, controller); if (gate == null) continue;
                 try
                 {
                     if (QueryDosTargets(drive) != null) continue;
                     Grant root = roots[selected].grant;
                     if (!root.directory) throw new Exception("Owned DOS alias root is not a directory");
-                    string custom = "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();
+                    string custom = "BLACK_GRAVITY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[selected].ToUpperInvariant();
                     RequireDosAbsent(custom);
                     aliases[selected] = new AliasPlan { kind = kinds[selected], physicalRoot = root.path, customName = custom, drive = drive, aliasRoot = drive + "\\", customTarget = RawDosTarget(root.path), driveTarget = RawDosTarget(custom), volume = root.volume, fileIndexHigh = root.fileIndexHigh, fileIndexLow = root.fileIndexLow, gate = gate };
                     gate = null; selected++;
@@ -591,6 +610,12 @@ internal static class WindowsTestRunner
         string parent = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar);
         if (!String.Equals(Path.GetDirectoryName(full), parent, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith(prefix, StringComparison.Ordinal)) throw new Exception("Directory is not owned temporary storage");
         return full;
+    }
+
+    // A copy persisted before the rename keeps its original name until it is discarded.
+    static string CopyPrefix(string directory)
+    {
+        return directory != null && Path.GetFileName(directory.TrimEnd(Path.DirectorySeparatorChar)).StartsWith("agy-mcp-copy-", StringComparison.Ordinal) ? "agy-mcp-copy-" : "black-gravity-copy-";
     }
 
     static string OwnedDirectory(string directory, string prefix)
@@ -881,26 +906,28 @@ internal static class WindowsTestRunner
 
     sealed class NullDeviceGate : IDisposable
     {
-        const string MutexName = "Global\\AGY.TEST.NULL_DEVICE.MUTEX";
+        // The Null device is shared with runners built before the rename, which serialize on the earlier name only.
+        // Both mutexes are therefore taken, always in this order, so the two generations never rewrite its DACL at once.
+        static readonly string[] MutexNames = { "Global\\BLACK_GRAVITY.TEST.NULL_DEVICE.MUTEX", "Global\\AGY.TEST.NULL_DEVICE.MUTEX" };
         const uint MutexSynchronizeAndModify = 0x00100001; // SYNCHRONIZE | MUTEX_MODIFY_STATE
-        IntPtr handle = IntPtr.Zero;
-        bool owned = false;
+        readonly IntPtr[] handles = new IntPtr[MutexNames.Length];
+        readonly bool[] owned = new bool[MutexNames.Length];
 
         public static NullDeviceGate Acquire(int timeoutMilliseconds = 30000)
         {
             var gate = new NullDeviceGate();
             try
             {
-                gate.OpenOrCreate();
-                uint wait = WaitForSingleObject(gate.handle, checked((uint)timeoutMilliseconds));
-                if (wait == WaitObject0 || wait == 0x80)
+                for (int index = 0; index < MutexNames.Length; index++)
                 {
-                    gate.owned = true;
-                    return gate;
+                    gate.handles[index] = OpenOrCreate(MutexNames[index]);
+                    uint wait = WaitForSingleObject(gate.handles[index], checked((uint)timeoutMilliseconds));
+                    if (wait == WaitObject0 || wait == 0x80) { gate.owned[index] = true; continue; }
+                    if (wait == WaitTimeout) throw new Exception("Null device mutex wait timed out");
+                    int err = Marshal.GetLastWin32Error();
+                    throw new Win32Exception(err, "Wait for Null device mutex (Win32 " + err + ")");
                 }
-                if (wait == WaitTimeout) throw new Exception("Null device mutex wait timed out");
-                int err = Marshal.GetLastWin32Error();
-                throw new Win32Exception(err, "Wait for Null device mutex (Win32 " + err + ")");
+                return gate;
             }
             catch
             {
@@ -909,10 +936,10 @@ internal static class WindowsTestRunner
             }
         }
 
-        void OpenOrCreate()
+        static IntPtr OpenOrCreate(string MutexName)
         {
-            handle = OpenMutex(MutexSynchronizeAndModify, false, MutexName);
-            if (handle != IntPtr.Zero) return;
+            IntPtr handle = OpenMutex(MutexSynchronizeAndModify, false, MutexName);
+            if (handle != IntPtr.Zero) return handle;
             int err = Marshal.GetLastWin32Error();
             if (err != 2 && err != 1168) throw new Win32Exception(err, "Open Null device mutex (Win32 " + err + ")");
 
@@ -939,19 +966,21 @@ internal static class WindowsTestRunner
                 finally { Marshal.FreeHGlobal(pSa); }
             }
             finally { Marshal.FreeHGlobal(pSd); }
+            return handle;
         }
 
         public void Dispose()
         {
-            if (handle != IntPtr.Zero)
+            for (int index = handles.Length - 1; index >= 0; index--)
             {
-                if (owned)
+                if (handles[index] == IntPtr.Zero) continue;
+                if (owned[index])
                 {
-                    ReleaseMutex(handle);
-                    owned = false;
+                    ReleaseMutex(handles[index]);
+                    owned[index] = false;
                 }
-                CloseHandle(handle);
-                handle = IntPtr.Zero;
+                CloseHandle(handles[index]);
+                handles[index] = IntPtr.Zero;
             }
         }
     }
@@ -1198,7 +1227,16 @@ internal static class WindowsTestRunner
         }
     }
 
-    static string ExecutionJobName(Lease lease) { return "Global\\AGY.TEST.JOB." + Guid.ParseExact(lease.nonce, "D").ToString("N"); }
+    // A lease written before the rename is settled under the names it recorded; the private lease file is the proof of ownership.
+    static bool IsEarlierLease(Lease lease) { return lease.profile.StartsWith("agy.test.", StringComparison.Ordinal); }
+
+    static string LeasePrefix(Lease lease, string kind)
+    {
+        if (IsEarlierLease(lease)) return "agy-mcp-" + kind + "-";
+        return kind == "copy" ? CopyPrefix(lease.cwd) : "black-gravity-" + kind + "-";
+    }
+
+    static string ExecutionJobName(Lease lease) { return "Global\\" + (IsEarlierLease(lease) ? "AGY.TEST" : "BLACK_GRAVITY.TEST") + ".JOB." + Guid.ParseExact(lease.nonce, "D").ToString("N"); }
 
     static IntPtr CreateExecutionJob(Lease lease, SecurityIdentifier user)
     {
@@ -1287,10 +1325,10 @@ internal static class WindowsTestRunner
     {
         Guid nonce;
         if (lease == null || (lease.version != 1 && lease.version != 2 && lease.version != 3) || !Guid.TryParseExact(lease.nonce, "D", out nonce) || String.IsNullOrEmpty(lease.profile) ||
-            !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||
+            (!String.Equals(lease.profile, "black-gravity.test." + nonce.ToString("N"), StringComparison.Ordinal) && !String.Equals(lease.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) || Path.GetFileName(expectedFile) != nonce.ToString("N") + ".json" ||
             lease.controllerPid <= 0 || lease.controllerStarted <= 0 || lease.grants == null || (lease.phase != "creating" && lease.phase != "active" && lease.phase != "cleanup-failed")) throw new Exception("Invalid Windows LPAC lease");
         if (lease.phase != "creating" && String.IsNullOrEmpty(lease.sid)) throw new Exception("Lease has no profile identity");
-        OwnedTemporaryPath(lease.cwd, "agy-mcp-copy-"); OwnedTemporaryPath(lease.runtime, "agy-mcp-runtime-"); OwnedTemporaryPath(lease.scratch, "agy-mcp-scratch-");
+        OwnedTemporaryPath(lease.cwd, LeasePrefix(lease, "copy")); OwnedTemporaryPath(lease.runtime, LeasePrefix(lease, "runtime")); OwnedTemporaryPath(lease.scratch, LeasePrefix(lease, "scratch"));
         if (lease.version == 2 || lease.version == 3) ValidateLeaseAliases(lease, nonce);
         if (lease.version < 3 && (lease.nullDeviceGrant || lease.jobCreated == true)) throw new Exception("Legacy lease cannot declare Null device grant or named job");
         if (lease.version == 3 && !lease.jobCreated.HasValue) throw new Exception("Lease has no job creation state");
@@ -1305,7 +1343,7 @@ internal static class WindowsTestRunner
         {
             AliasPlan alias = lease.aliases[index];
             if (alias == null || !String.Equals(alias.kind, kinds[index], StringComparison.Ordinal) || !String.Equals(alias.physicalRoot, roots[index], StringComparison.OrdinalIgnoreCase) ||
-                !String.Equals(alias.customName, "AGY.TEST." + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||
+                !String.Equals(alias.customName, (IsEarlierLease(lease) ? "AGY.TEST." : "BLACK_GRAVITY.TEST.") + nonce.ToString("D").ToUpperInvariant() + "." + kinds[index].ToUpperInvariant(), StringComparison.Ordinal) ||
                 String.IsNullOrEmpty(alias.drive) || alias.drive.Length != 2 || alias.drive[0] < 'D' || alias.drive[0] > 'Z' || alias.drive[1] != ':' || !drives.Add(alias.drive[0]) || (index != 0 && alias.drive[0] >= lease.aliases[index - 1].drive[0]) || !String.Equals(alias.aliasRoot, alias.drive + "\\", StringComparison.Ordinal) ||
                 !String.Equals(alias.customTarget, RawDosTarget(roots[index]), StringComparison.Ordinal) || !String.Equals(alias.driveTarget, RawDosTarget(alias.customName), StringComparison.Ordinal)) throw new Exception("Invalid Windows LPAC alias plan");
         }
@@ -1354,9 +1392,9 @@ internal static class WindowsTestRunner
     {
         if (grant == null || !grant.directory) return false;
         string directory = null, prefix = null;
-        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = "agy-mcp-copy-"; }
-        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = "agy-mcp-runtime-"; }
-        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = "agy-mcp-scratch-"; }
+        if (String.Equals(grant.path, lease.cwd, StringComparison.OrdinalIgnoreCase)) { directory = lease.cwd; prefix = LeasePrefix(lease, "copy"); }
+        else if (String.Equals(grant.path, lease.runtime, StringComparison.OrdinalIgnoreCase)) { directory = lease.runtime; prefix = LeasePrefix(lease, "runtime"); }
+        else if (String.Equals(grant.path, lease.scratch, StringComparison.OrdinalIgnoreCase)) { directory = lease.scratch; prefix = LeasePrefix(lease, "scratch"); }
         else return false;
         directory = OwnedTemporaryPath(directory, prefix);
         if (GetFileAttributes(directory) != InvalidFileAttributes) return false;
@@ -1457,9 +1495,15 @@ internal static class WindowsTestRunner
     {
         foreach (string part in value.Split(new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
         {
-            if (part.StartsWith("agy-mcp-copy-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-baseline-", StringComparison.OrdinalIgnoreCase) ||
-                part.StartsWith("agy-mcp-runtime-", StringComparison.OrdinalIgnoreCase) || part.StartsWith("agy-mcp-controller-", StringComparison.OrdinalIgnoreCase) ||
-                part.StartsWith("agy-mcp-scratch-", StringComparison.OrdinalIgnoreCase)) return true;
+            // Directories of the previous name stay protected while a copy created before the rename survives.
+            foreach (string owner in new string[] { "black-gravity-", "agy-mcp-" })
+            {
+                if (!part.StartsWith(owner, StringComparison.OrdinalIgnoreCase)) continue;
+                string kind = part.Substring(owner.Length);
+                if (kind.StartsWith("copy-", StringComparison.OrdinalIgnoreCase) || kind.StartsWith("baseline-", StringComparison.OrdinalIgnoreCase) ||
+                    kind.StartsWith("runtime-", StringComparison.OrdinalIgnoreCase) || kind.StartsWith("controller-", StringComparison.OrdinalIgnoreCase) ||
+                    kind.StartsWith("scratch-", StringComparison.OrdinalIgnoreCase)) return true;
+            }
         }
         return false;
     }
@@ -1503,12 +1547,12 @@ internal static class WindowsTestRunner
             }
             if (request.action != "write" && request.action != "read-only") throw new Exception("Invalid controller action");
             Guid nonce; if (!Guid.TryParseExact(request.nonce, "D", out nonce)) throw new Exception("Invalid nonce");
-            if (!String.Equals(request.profile, "agy.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");
+            if (!String.Equals(request.profile, "black-gravity.test." + nonce.ToString("N"), StringComparison.Ordinal)) throw new Exception("Invalid deterministic profile name");
             result["nonce"] = request.nonce;
             if (request.timeoutSeconds < 1 || request.timeoutSeconds > 86400 || request.maxFiles < 1 || request.maxFiles > 1000000 || request.maxOutputChars < 256 || request.maxOutputChars > 64000 || request.args == null || request.environment == null || request.grants == null) throw new Exception("Invalid request");
             if (request.args.Length > 50) throw new Exception("Too many command arguments");
             foreach (string argument in request.args) if (argument == null || argument.Length > 4000 || argument.IndexOf('\0') >= 0) throw new Exception("Invalid command argument");
-            cwd = OwnedDirectory(request.cwd, "agy-mcp-copy-"); runtime = OwnedDirectory(request.runtime, "agy-mcp-runtime-"); scratch = OwnedDirectory(request.scratch, "agy-mcp-scratch-");
+            cwd = OwnedDirectory(request.cwd, CopyPrefix(request.cwd)); runtime = OwnedDirectory(request.runtime, "black-gravity-runtime-"); scratch = OwnedDirectory(request.scratch, "black-gravity-scratch-");
             string executable = Path.GetFullPath(request.executable);
             if (!executable.StartsWith(runtime + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(executable) || (File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0) throw new Exception("Executable must be staged inside the runtime");
             var requestedGrants = new List<Grant>();

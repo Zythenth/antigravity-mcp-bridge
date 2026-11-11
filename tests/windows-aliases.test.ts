@@ -19,12 +19,12 @@ async function ownedTemporaryDirectory(directory: string, prefix: string): Promi
 
 async function fixture<T>(run: (copy: string, state: string, sibling: string) => Promise<T>): Promise<T> {
   const temporary = await realpath(os.tmpdir());
-  const copy = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-copy-')));
-  const state = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-alias-state-')));
-  const sibling = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-alias-sibling-')));
+  const copy = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-copy-')));
+  const state = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-alias-state-')));
+  const sibling = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-alias-sibling-')));
   try { return await run(copy, state, sibling); }
   finally {
-    for (const [directory, prefix] of [[copy, 'agy-mcp-copy-'], [state, 'agy-mcp-alias-state-'], [sibling, 'agy-mcp-alias-sibling-']] as const) {
+    for (const [directory, prefix] of [[copy, 'black-gravity-copy-'], [state, 'black-gravity-alias-state-'], [sibling, 'black-gravity-alias-sibling-']] as const) {
       await rm(await ownedTemporaryDirectory(directory, prefix), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   }
@@ -52,7 +52,7 @@ async function run(executable: string, args: string[]): Promise<ProcessResult> {
 async function aliasHarness(): Promise<AliasHarness> {
   harnessPromise ??= (async () => {
     const temporary = await realpath(os.tmpdir());
-    const directory = await realpath(await mkdtemp(path.join(temporary, 'agy-mcp-alias-harness-')));
+    const directory = await realpath(await mkdtemp(path.join(temporary, 'black-gravity-alias-harness-')));
     const runner = path.join(directory, 'runner.cs'), library = path.join(directory, 'runner.dll'), source = path.join(directory, 'harness.cs'), executable = path.join(directory, 'harness.exe');
     const compiler = path.join(process.env.SystemRoot || 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
     try {
@@ -76,7 +76,7 @@ async function aliasHarness(): Promise<AliasHarness> {
 
 after(async () => {
   const harness = await harnessPromise;
-  if (harness) await rm(await ownedTemporaryDirectory(harness.directory, 'agy-mcp-alias-harness-'), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  if (harness) await rm(await ownedTemporaryDirectory(harness.directory, 'black-gravity-alias-harness-'), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 async function harnessAction(action: string, name?: string): Promise<string> {
@@ -89,7 +89,7 @@ async function harnessAction(action: string, name?: string): Promise<string> {
 async function assertAliasesAbsent(result: { nonce: string; pathMappings: Array<{ kind: string; aliasRoot: string }> }): Promise<void> {
   for (const mapping of result.pathMappings) {
     assert.equal(await harnessAction('query', mapping.aliasRoot.slice(0, 2)), 'ABSENT', 'drive alias must be removed');
-    const custom = 'AGY.TEST.' + result.nonce.toUpperCase() + '.' + mapping.kind.toUpperCase();
+    const custom = 'BLACK_GRAVITY.TEST.' + result.nonce.toUpperCase() + '.' + mapping.kind.toUpperCase();
     assert.equal(await harnessAction('query', custom), 'ABSENT', 'custom alias must be removed');
   }
 }

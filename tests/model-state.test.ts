@@ -6,7 +6,7 @@ import path from 'node:path';
 import { StateStore } from '../src/state-store.js';
 
 test('model state rejects corrupt records and concurrent writes without overwriting preferences', () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'agy-model-state-test-'));
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-model-state-test-'));
   try {
     const state = new StateStore(directory);
     assert.equal(state.loadModel(), undefined);

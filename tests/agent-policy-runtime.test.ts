@@ -48,14 +48,14 @@ class GuardedAdapter extends CliAdapter {
   }
 }
 async function fixture(body: (f: { root: string; source: string; config: Config; adapter: GuardedAdapter; tasks: TaskManager; managers: TaskManager[] }) => Promise<void>, environment: Record<string, string> = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'agy-policy-runtime-')), source = path.join(root, 'source');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-policy-runtime-')), source = path.join(root, 'source');
   await mkdir(source); execFileSync('git', ['init', '--quiet'], { cwd: source }); await writeFile(path.join(source, 'source.txt'), 'fixture\n');
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...environment }), adapter = new GuardedAdapter(config), tasks = new TaskManager(adapter, config), managers = [tasks];
   try { await body({ root, source, config, adapter, tasks, managers }); }
   finally {
     for (const manager of managers) await manager.shutdown();
     for (const project of new Map(new StateStore(config.stateDirectory).load().flatMap(item => item.project ? [[item.project.copyDirectory, item.project] as const] : [])).values()) await discardProjectCopy(project);
-    assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert.ok(path.basename(root).startsWith('agy-policy-runtime-')); await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    assert.equal(path.dirname(root), path.resolve(os.tmpdir())); assert.ok(path.basename(root).startsWith('black-gravity-policy-runtime-')); await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 async function end(tasks: TaskManager, task: TaskRecord) { return waitForTask(tasks, task.taskId); }

@@ -37,7 +37,7 @@ if (process.platform === 'win32') {
   }
 }
 
-async function createTempRepo(prefix = 'agy-host-git-test-'): Promise<string> {
+async function createTempRepo(prefix = 'black-gravity-host-git-test-'): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
   execFileSync('git', ['init', '--quiet', dir]);
   execFileSync('git', ['config', 'user.name', 'Bridge Test'], { cwd: dir });
@@ -96,7 +96,7 @@ test('host-git: core.fsmonitor cannot run from project configuration', async () 
 
 test('host-git: executable resolution rejects candidates inside cwd and permits outside symlinks', async () => {
   const dir = await createTempRepo();
-  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'agy-outside-git-'));
+  const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-outside-git-'));
   const hijackMarker = path.join(os.tmpdir(), `hijack-marker-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
   const isWindows = process.platform === 'win32';
   const fakeExeName = isWindows ? 'git.exe' : 'git';
@@ -143,7 +143,7 @@ test('host-git: executable resolution rejects candidates inside cwd and permits 
     if (!isWindows) {
       const outsideExe = path.join(outsideDir, 'git');
       await writeFile(outsideExe, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-      const outsideSymlinkDir = await mkdtemp(path.join(os.tmpdir(), 'agy-symlink-git-'));
+      const outsideSymlinkDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-symlink-git-'));
       try {
         const outsideSymlink = path.join(outsideSymlinkDir, 'git');
         await symlink(outsideExe, outsideSymlink);
@@ -193,7 +193,7 @@ test('host-git: executable resolution rejects candidates inside cwd and permits 
 });
 
 test('host-git: global clean filter cannot execute on snapshot add', async () => {
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), 'agy-fake-home-'));
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-fake-home-'));
   const marker = path.join(os.tmpdir(), `clean-marker-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
   const filterScript = path.join(fakeHome, 'filter.mjs');
   await writeFile(filterScript, `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(marker)}, 'clean executed');\n`);
@@ -235,7 +235,7 @@ test('host-git: global clean filter cannot execute on snapshot add', async () =>
 });
 
 test('host-git: effective core.excludesfile and default XDG ignores are preserved', async () => {
-  const fakeHome = await mkdtemp(path.join(os.tmpdir(), 'agy-fake-home-'));
+  const fakeHome = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-fake-home-'));
   const repo = await createTempRepo();
 
   const origHome = process.env.HOME;
@@ -485,11 +485,11 @@ test('host-git: explicit truncation marker suppresses overlong stderr without ta
 
 test('host-git: child PATH rebuilt with absolute entries only, excluding cwd and project roots', async () => {
   const dir = await createTempRepo();
-  const excludedProject = await createTempRepo('agy-excluded-proj-');
+  const excludedProject = await createTempRepo('black-gravity-excluded-proj-');
 
   try {
     const isWindows = process.platform === 'win32';
-    const validOutsideDir = await mkdtemp(path.join(os.tmpdir(), 'agy-valid-outside-'));
+    const validOutsideDir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-valid-outside-'));
 
     try {
       // Input raw PATH with: empty entries, relative entries (., relative/sub), cwd, and excluded project root

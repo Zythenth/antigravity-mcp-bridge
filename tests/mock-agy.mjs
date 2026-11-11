@@ -119,7 +119,7 @@ if (scenario === 'split') {
 }
 if (scenario === 'skills-read') { result('SUCCESS', { response: JSON.stringify({ skill: readFileSync('.agents/skills/presentations/SKILL.md', 'utf8'), reference: readFileSync('.agents/skills/presentations/references/guide.md', 'utf8') }) }); process.exit(0); }
 if (scenario === 'skills-tamper') writeFileSync('.agents/skills/presentations/SKILL.md', 'changed by fixture');
-if (scenario === 'write') writeFileSync(path.join(process.cwd(), 'AGY_BRIDGE_TEST.md'), 'Antigravity MCP bridge test successful.');
+if (scenario === 'write') writeFileSync(path.join(process.cwd(), 'BLACK_GRAVITY_TEST.md'), 'Antigravity MCP bridge test successful.');
 if (scenario === 'write-many') {
   writeFileSync(path.join(process.cwd(), 'one.txt'), 'one');
   writeFileSync(path.join(process.cwd(), 'two.txt'), 'two');

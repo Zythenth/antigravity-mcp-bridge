@@ -16,7 +16,7 @@ import path from 'node:path';
 import test from 'node:test';
 test('fixture', () => {
   fs.writeFileSync(process.env.FIXTURE_OUTPUT, os.tmpdir());
-  fs.mkdirSync(path.join(os.tmpdir(), 'agy-mcp-copy-leftover'));
+  fs.mkdirSync(path.join(os.tmpdir(), 'black-gravity-copy-leftover'));
   if (process.env.FIXTURE_FAILS) throw new Error('expected failure');
 });
 `;

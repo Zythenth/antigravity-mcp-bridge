@@ -31,7 +31,7 @@ const repositories: string[] = [];
 const managers: TaskManager[] = [];
 
 function setup(prefixArgs = [fixturePath], configOverrides: Record<string, string> = {}) {
-  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'agy-sub-state-test-'));
+  const stateDirectory = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-sub-state-test-'));
   stateDirectories.push(stateDirectory);
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off',
     AGY_PATH: process.execPath,
@@ -48,7 +48,7 @@ function setup(prefixArgs = [fixturePath], configOverrides: Record<string, strin
 }
 
 async function createRepo(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-sub-repo-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-sub-repo-test-'));
   repositories.push(dir);
   execFileSync('git', ['init', '--quiet', dir]);
   await writeFile(path.join(dir, 'source.txt'), 'source content\n');

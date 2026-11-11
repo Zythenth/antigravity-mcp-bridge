@@ -9,7 +9,7 @@ import { StateStore, type StoredTask } from '../src/state-store.js';
 import { sandboxPolicyDigest } from '../src/sandbox-policy.js';
 
 function fixture() {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agy-state-write-test-'));
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'black-gravity-state-write-test-'));
   const state = new StateStore(directory);
   const taskId = randomUUID();
   const snapshot: StoredTask = { ownerPid: process.pid, events: [], cursor: 0,
@@ -17,7 +17,7 @@ function fixture() {
     options: { workingDirectory: directory, prompt: 'fixture' } };
   return { directory, state, snapshot, close() {
     const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(directory));
-    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-state-write-test-'));
+    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-state-write-test-'));
     fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } };
 }

@@ -15,12 +15,12 @@ const limits = { maxBytes: 256 * 1024 * 1024, maxFiles: 10_000 };
 async function runtimeFixture<T>(run: (runtime: string, outside: string) => Promise<T>): Promise<T> {
   const tempPath = os.tmpdir();
   const canonicalTemp = await realpath(tempPath);
-  const runtime = await mkdtemp(path.join(tempPath, 'agy-mcp-runtime-test-'));
-  const outside = await mkdtemp(path.join(tempPath, 'agy-mcp-runtime-private-'));
+  const runtime = await mkdtemp(path.join(tempPath, 'black-gravity-runtime-test-'));
+  const outside = await mkdtemp(path.join(tempPath, 'black-gravity-runtime-private-'));
   try {
     return await run(runtime, outside);
   } finally {
-    for (const [directory, prefix] of [[runtime, 'agy-mcp-runtime-test-'], [outside, 'agy-mcp-runtime-private-']] as const) {
+    for (const [directory, prefix] of [[runtime, 'black-gravity-runtime-test-'], [outside, 'black-gravity-runtime-private-']] as const) {
       const canonical = await realpath(directory);
       assert.equal(path.dirname(canonical), canonicalTemp);
       assert.ok(path.basename(canonical).startsWith(prefix));

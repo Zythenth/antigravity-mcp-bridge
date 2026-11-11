@@ -111,13 +111,13 @@ test('loadConfig validates BRIDGE_STATE_DIRECTORY per failure type without leaki
   // 4. Unset keeps default
   const unsetConfig = loadConfig({});
   assert.equal(unsetConfig.stateDirectoryInvalid, undefined);
-  assert.equal(unsetConfig.stateDirectory, path.join(os.homedir(), '.antigravity-mcp-bridge'));
+  assert.equal(unsetConfig.stateDirectory, path.join(os.homedir(), '.black-gravity'));
   assert.equal(unsetConfig.configurationIssues.some(issue => issue.variable === 'BRIDGE_STATE_DIRECTORY'), false);
 
   // 5. Empty string keeps default
   const emptyConfig = loadConfig({ BRIDGE_STATE_DIRECTORY: '' });
   assert.equal(emptyConfig.stateDirectoryInvalid, undefined);
-  assert.equal(emptyConfig.stateDirectory, path.join(os.homedir(), '.antigravity-mcp-bridge'));
+  assert.equal(emptyConfig.stateDirectory, path.join(os.homedir(), '.black-gravity'));
   assert.equal(emptyConfig.configurationIssues.some(issue => issue.variable === 'BRIDGE_STATE_DIRECTORY'), false);
 
   // 6. Absolute path keeps value
@@ -129,7 +129,7 @@ test('loadConfig validates BRIDGE_STATE_DIRECTORY per failure type without leaki
 });
 
 test('Real server startup over stdio enters degraded mode on relative BRIDGE_STATE_DIRECTORY', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-rel-state-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-rel-state-'));
   const fakeHome = path.join(tmpDir, 'fake-home');
   const fakeCwd = path.join(tmpDir, 'fake-cwd');
   mkdirSync(fakeHome);
@@ -193,7 +193,7 @@ test('Real server startup over stdio enters degraded mode on relative BRIDGE_STA
     assert.match(stderrLines[0]!, /BRIDGE_STATE_DIRECTORY not-absolute/);
     assert.equal(stderr.includes('relative-state-dir'), false);
 
-    assert.equal(existsSync(path.join(fakeHome, '.antigravity-mcp-bridge')), false);
+    assert.equal(existsSync(path.join(fakeHome, '.black-gravity')), false);
     assert.deepEqual(readdirSync(fakeCwd), []);
     assert.equal(existsSync(path.join(fakeCwd, 'relative-state-dir')), false);
     assert.equal(existsSync(path.resolve('relative-state-dir')), false);
@@ -205,7 +205,7 @@ test('Real server startup over stdio enters degraded mode on relative BRIDGE_STA
 });
 
 test('Real server startup over stdio or TaskManager handles NUL byte in BRIDGE_STATE_DIRECTORY', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-nul-state-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-nul-state-'));
   const fakeHome = path.join(tmpDir, 'fake-home');
   const fakeCwd = path.join(tmpDir, 'fake-cwd');
   mkdirSync(fakeHome);
@@ -284,7 +284,7 @@ test('Real server startup over stdio or TaskManager handles NUL byte in BRIDGE_S
       await tasks.shutdown();
     }
 
-    assert.equal(existsSync(path.join(fakeHome, '.antigravity-mcp-bridge')), false);
+    assert.equal(existsSync(path.join(fakeHome, '.black-gravity')), false);
     assert.deepEqual(readdirSync(fakeCwd), []);
   } finally {
     rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -292,7 +292,7 @@ test('Real server startup over stdio or TaskManager handles NUL byte in BRIDGE_S
 });
 
 test('Real server startup over stdio enters degraded mode on link BRIDGE_STATE_DIRECTORY', async t => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-link-state-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-link-state-'));
   const fakeHome = path.join(tmpDir, 'fake-home');
   const fakeCwd = path.join(tmpDir, 'fake-cwd');
   const targetDir = path.join(tmpDir, 'link-target');
@@ -356,7 +356,7 @@ test('Real server startup over stdio enters degraded mode on link BRIDGE_STATE_D
     await client.close();
     client = undefined;
 
-    assert.equal(existsSync(path.join(fakeHome, '.antigravity-mcp-bridge')), false);
+    assert.equal(existsSync(path.join(fakeHome, '.black-gravity')), false);
     assert.deepEqual(readdirSync(fakeCwd), []);
     assert.deepEqual(readdirSync(targetDir), []);
   } finally {
@@ -366,7 +366,7 @@ test('Real server startup over stdio enters degraded mode on link BRIDGE_STATE_D
 });
 
 test('Real server startup over stdio and wait command enter degraded mode on existing regular file BRIDGE_STATE_DIRECTORY', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-file-state-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-file-state-'));
   const fakeHome = path.join(tmpDir, 'fake-home');
   const fakeCwd = path.join(tmpDir, 'fake-cwd');
   const regularFile = path.join(tmpDir, 'regular-file.txt');
@@ -450,7 +450,7 @@ test('Real server startup over stdio and wait command enter degraded mode on exi
 });
 
 test('TaskManager in degraded mode refuses state operations and performs harmless cleanup/shutdown', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-tm-degraded-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-tm-degraded-'));
   try {
     const config = loadConfig({
       BRIDGE_STATE_DIRECTORY: 'relative-state-path',
@@ -522,7 +522,7 @@ test('TaskManager in degraded mode refuses state operations and performs harmles
 });
 
 test('TaskManager enters degraded mode with unusable when StateStore construction fails after validation', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-tm-unusable-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-tm-unusable-'));
   try {
     const filePath = path.join(tmpDir, 'file-barrier.txt');
     writeFileSync(filePath, 'barrier');
@@ -554,7 +554,7 @@ test('TaskManager enters degraded mode with unusable when StateStore constructio
 });
 
 test('TaskManager enters degraded mode with unusable when refresh throws after StateStore construction succeeds', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-tm-corrupt-refresh-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-tm-corrupt-refresh-'));
   const stateDir = path.join(tmpDir, 'state');
   mkdirSync(stateDir);
   const corruptedTaskId = randomUUID();
@@ -590,7 +590,7 @@ test('TaskManager enters degraded mode with unusable when refresh throws after S
 });
 
 test('TaskManager enters degraded mode and discards events when refresh throws after emitting', async t => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-tm-refresh-event-discard-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-tm-refresh-event-discard-'));
   const stateDir = path.join(tmpDir, 'state');
   mkdirSync(stateDir);
   const taskId = randomUUID();
@@ -650,7 +650,7 @@ test('TaskManager enters degraded mode and discards events when refresh throws a
 });
 
 test('StateStore probeWritable leaves no probe file on normal execution', () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-store-probe-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-store-probe-'));
   try {
     const store = new StateStore(tmpDir);
     store.probeWritable();
@@ -661,7 +661,7 @@ test('StateStore probeWritable leaves no probe file on normal execution', () => 
 });
 
 test('Normal server startup leaves no probe file in state directory', async () => {
-  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-normal-no-probe-'));
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-normal-no-probe-'));
   const fakeHome = path.join(tmpDir, 'fake-home');
   const fakeCwd = path.join(tmpDir, 'fake-cwd');
   const stateDir = path.join(tmpDir, 'state');
@@ -773,7 +773,7 @@ test('wait command refuses relative, NUL, and on win32 root-relative state direc
 
 if (process.platform === 'win32') {
   test('Real server startup over stdio enters degraded mode on win32 malformed BRIDGE_STATE_DIRECTORY', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-malformed-state-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-malformed-state-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     mkdirSync(fakeHome);
@@ -838,7 +838,7 @@ if (process.platform === 'win32') {
       assert.equal(stderr.includes('invalid?state'), false);
       assert.equal(stderr.includes('C:\\invalid?state'), false);
 
-      assert.equal(existsSync(path.join(fakeHome, '.antigravity-mcp-bridge')), false);
+      assert.equal(existsSync(path.join(fakeHome, '.black-gravity')), false);
       assert.deepEqual(readdirSync(fakeCwd), []);
     } finally {
       if (client) await client.close();
@@ -847,7 +847,7 @@ if (process.platform === 'win32') {
   });
 
   test('Real server startup over stdio enters degraded mode on win32 malformed UNC BRIDGE_STATE_DIRECTORY', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-unc-malformed-state-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-unc-malformed-state-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     mkdirSync(fakeHome);
@@ -912,7 +912,7 @@ if (process.platform === 'win32') {
       assert.equal(stderr.includes('invalid?share'), false);
       assert.equal(stderr.includes('\\\\server\\invalid?share\\state'), false);
 
-      assert.equal(existsSync(path.join(fakeHome, '.antigravity-mcp-bridge')), false);
+      assert.equal(existsSync(path.join(fakeHome, '.black-gravity')), false);
       assert.deepEqual(readdirSync(fakeCwd), []);
     } finally {
       if (client) await client.close();
@@ -921,7 +921,7 @@ if (process.platform === 'win32') {
   });
 
   test('Real server startup over stdio and wait command enter degraded mode on win32 256-character component without creating parent', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-overlong-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-overlong-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     const parentDir = path.join(tmpDir, 'parent-must-not-be-created');
@@ -1020,7 +1020,7 @@ if (process.platform === 'win32') {
   }
 
   test('Real server startup over stdio enters degraded mode on win32 when state directory listing is denied', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-acl-rd-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-acl-rd-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     const stateDir = path.join(tmpDir, 'state');
@@ -1103,7 +1103,7 @@ if (process.platform === 'win32') {
   });
 
   test('Real server startup over stdio enters degraded mode on win32 when state directory file writing is denied', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-acl-wd-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-acl-wd-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     const stateDir = path.join(tmpDir, 'state');
@@ -1186,7 +1186,7 @@ if (process.platform === 'win32') {
   });
 
   test('Real server startup over stdio enters degraded mode on win32 when running task exists and write is denied', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-acl-running-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-acl-running-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     const stateDir = path.join(tmpDir, 'state');
@@ -1282,7 +1282,7 @@ if (process.platform === 'win32') {
   });
 
   test('Startup with deny-read ACL leaves no probe file after ACL is restored', async () => {
-    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'agy-srv-win-acl-no-probe-'));
+    const tmpDir = mkdtempSync(path.join(os.tmpdir(), 'black-gravity-srv-win-acl-no-probe-'));
     const fakeHome = path.join(tmpDir, 'fake-home');
     const fakeCwd = path.join(tmpDir, 'fake-cwd');
     const stateDir = path.join(tmpDir, 'state');

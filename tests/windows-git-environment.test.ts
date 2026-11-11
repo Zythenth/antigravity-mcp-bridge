@@ -23,17 +23,17 @@ async function harnessFixture<T>(run: (context: {
   invoke: (environment: Record<string, string>, maxFiles?: number) => HarnessResponse;
 }) => Promise<T>): Promise<T> {
   const temp = await realpath(os.tmpdir());
-  const workDir = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-git-env-test-')));
-  const copy = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-copy-')));
-  const runtime = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-runtime-')));
-  const scratch = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-scratch-')));
-  const outside = await realpath(await mkdtemp(path.join(temp, 'agy-mcp-outside-')));
+  const workDir = await realpath(await mkdtemp(path.join(temp, 'black-gravity-git-env-test-')));
+  const copy = await realpath(await mkdtemp(path.join(temp, 'black-gravity-copy-')));
+  const runtime = await realpath(await mkdtemp(path.join(temp, 'black-gravity-runtime-')));
+  const scratch = await realpath(await mkdtemp(path.join(temp, 'black-gravity-scratch-')));
+  const outside = await realpath(await mkdtemp(path.join(temp, 'black-gravity-outside-')));
   const directories: Array<[string, string]> = [
-    [workDir, 'agy-mcp-git-env-test-'],
-    [copy, 'agy-mcp-copy-'],
-    [runtime, 'agy-mcp-runtime-'],
-    [scratch, 'agy-mcp-scratch-'],
-    [outside, 'agy-mcp-outside-'],
+    [workDir, 'black-gravity-git-env-test-'],
+    [copy, 'black-gravity-copy-'],
+    [runtime, 'black-gravity-runtime-'],
+    [scratch, 'black-gravity-scratch-'],
+    [outside, 'black-gravity-outside-'],
   ];
 
   try {

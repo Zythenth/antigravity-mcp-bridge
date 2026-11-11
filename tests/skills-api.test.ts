@@ -16,7 +16,7 @@ import type { ProvidedSkill } from '../src/skills.js';
 const skillContent = '---\nname: Presentations\ndescription: Fixture skill\n---\n# Slides\nPRESERVE_SKILL_BYTES_7E3A';
 const skills: ProvidedSkill[] = [{ name: 'Presentations', content: skillContent, resources: [{ path: 'references/guide.md', content: 'REFERENCE_BYTES_942C' }] }];
 async function fixture(extra: Record<string, string> = {}) {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'agy-skill-api-test-'));
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-skill-api-test-'));
   const source = path.join(dir, 'source');
   execFileSync('git', ['init', '--quiet', source]);
   await writeFile(path.join(source, 'source.txt'), 'source');
@@ -30,7 +30,7 @@ async function fixture(extra: Record<string, string> = {}) {
     const copies = new Map(new StateStore(config.stateDirectory).load().filter(t => t.project).map(t => [t.project!.copyDirectory, t.project!]));
     for (const project of copies.values()) await discardProjectCopy(project);
     const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(dir));
-    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-skill-api-test-'));
+    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-skill-api-test-'));
     await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } };
 }
@@ -67,15 +67,15 @@ test('supplied auxiliary files never become source patches or source writes afte
   const f = await fixture();
   try {
     const run = await f.tasks.run({ prompt: 'write:test', workingDirectory: f.source, skills,
-      acceptanceCriteria: [{ id: 'created', description: 'Create fixture file', check: { kind: 'file-exists', path: 'AGY_BRIDGE_TEST.md' } }] });
+      acceptanceCriteria: [{ id: 'created', description: 'Create fixture file', check: { kind: 'file-exists', path: 'BLACK_GRAVITY_TEST.md' } }] });
     const end = await finished(f.tasks, run.taskId);
     assert.equal(end.status, 'completed');
     const preview = await f.tasks.preview(run.taskId);
-    assert.deepEqual(preview.files, [{ status: 'A', path: 'AGY_BRIDGE_TEST.md' }]);
-    const quote = await readFile(path.join(end.copyDirectory!, 'AGY_BRIDGE_TEST.md'), 'utf8');
-    await f.tasks.verify(run.taskId, preview.sha256, [{ criterionId: 'created', verdict: 'passed', path: 'AGY_BRIDGE_TEST.md', line: 1, quote, explanation: 'Observed fixture file and exact content' }]);
+    assert.deepEqual(preview.files, [{ status: 'A', path: 'BLACK_GRAVITY_TEST.md' }]);
+    const quote = await readFile(path.join(end.copyDirectory!, 'BLACK_GRAVITY_TEST.md'), 'utf8');
+    await f.tasks.verify(run.taskId, preview.sha256, [{ criterionId: 'created', verdict: 'passed', path: 'BLACK_GRAVITY_TEST.md', line: 1, quote, explanation: 'Observed fixture file and exact content' }]);
     await f.tasks.integrate(run.taskId, preview.sha256, async () => true);
-    assert.equal(await readFile(path.join(f.source, 'AGY_BRIDGE_TEST.md'), 'utf8'), quote);
+    assert.equal(await readFile(path.join(f.source, 'BLACK_GRAVITY_TEST.md'), 'utf8'), quote);
     await assert.rejects(readFile(path.join(f.source, '.agents/skills/presentations/SKILL.md')), { code: 'ENOENT' });
   } finally { await f.close(); }
 });

@@ -35,7 +35,7 @@ class InboxAdapter extends CliAdapter {
   }
 }
 async function fixture(hold = true, configOverrides: Record<string, string> = {}) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'agy-inbox-test-'));
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'black-gravity-inbox-test-'));
   const source = path.join(directory, 'source'); execFileSync('git', ['init', '--quiet', source]); await writeFile(path.join(source, 'source.txt'), 'source');
   const config = loadConfig({ BRIDGE_ANTI_AI_CRAFT: 'off', BRIDGE_STATE_DIRECTORY: path.join(directory, 'state'), BRIDGE_TEST_EXECUTOR: 'agy', ...configOverrides });
   const adapter = new InboxAdapter(config, hold); const managers: TaskManager[] = [new TaskManager(adapter, config)]; const tasks = managers[0]!;
@@ -44,7 +44,7 @@ async function fixture(hold = true, configOverrides: Record<string, string> = {}
     const projects = new Map(new StateStore(config.stateDirectory).load().filter(s => s.project).map(s => [s.project!.copyDirectory, s.project!]));
     for (const project of projects.values()) await discardProjectCopy(project);
     const relative = path.relative(path.resolve(os.tmpdir()), path.resolve(directory));
-    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('agy-inbox-test-'));
+    assert.ok(relative && !relative.startsWith('..') && !relative.includes(path.sep) && relative.startsWith('black-gravity-inbox-test-'));
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } };
 }
