@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Both READMEs now list Claude Desktop as supported and add OpenCode, also supported, with its `opencode.json` configuration. The Claude Desktop section states where `claude_desktop_config.json` is on Windows and macOS.
+
 - The English and Brazilian Portuguese READMEs now share a short installation and first-use guide. Technical reference material moved to public documentation, and both editions use the animated Black Gravity logo.
 
 - Documentation: the [task management guide](documentation/task-management.md#events-sessions-and-cancellation) explains how to recover from a migration gate left behind by a server that died (`~/.black-gravity.migrating.takeover`): stop every client that starts the server, confirm that no bridge process and no process with the PID recorded in the file is running, remove only that file, and restart. The [Windows runtime guide](documentation/windows-runtime.md#portable-node-runtime) states that the default portable-runtime cache is `~/.black-gravity/windows-runtimes`, set only by `BRIDGE_WINDOWS_NODE_CACHE_DIRECTORY` and not by `BRIDGE_STATE_DIRECTORY`, and what the migration does with the previous cache. When `black-gravity` is published to npm, the previous package will be deprecated, not unpublished, with `npm deprecate antigravity-mcp-bridge@"<=0.9.0" "antigravity-mcp-bridge was renamed to black-gravity. Install black-gravity instead; migration notes: https://github.com/Zythenth/black-gravity/blob/main/CHANGELOG.md"`. Behavior does not change.

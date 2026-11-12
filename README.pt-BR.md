@@ -10,7 +10,7 @@ Black Gravity é um servidor MCP local que delega tarefas de programação ao Go
 
 ## Instalação
 
-Use um só método de registro por harness para não duplicar ferramentas. Os comandos rodam na raiz do repositório. Um harness é **Suportado** quando o próprio comando dele registrou o build deste repositório e o listou, sem chamar modelo. O que não foi executado assim fica como **Não verificado**.
+Use um só método de registro por harness para não duplicar ferramentas. Os comandos rodam na raiz do repositório. Um harness é **Suportado** quando o próprio comando dele registrou o build deste repositório e o listou, sem chamar modelo, ou quando o mantenedor confirmou o funcionamento com a configuração mostrada. O restante fica como **Não verificado**.
 
 | Harness | Estado | O que foi conferido |
 |---|---|---|
@@ -18,7 +18,8 @@ Use um só método de registro por harness para não duplicar ferramentas. Os co
 | Codex, somente MCP | Suportado | Listado por `codex mcp list` (mesma versão) |
 | Claude Code, somente MCP | Suportado | Exibido como Connected por `claude mcp list` (Claude Code 2.1.319, Windows) |
 | Plugin do Claude Code com skill | Planejado | Ainda não disponível |
-| Claude Desktop | Não verificado | A configuração abaixo não foi executada; não há comando de listagem nem configuração isolada |
+| Claude Desktop | Suportado | Confirmado pelo mantenedor com a configuração abaixo |
+| OpenCode | Suportado | Confirmado pelo mantenedor com a configuração abaixo |
 | agy | Não verificado | `agy mcp list` existe, mas o agy não documenta como isolar a configuração |
 | Outros clientes MCP (stdio) | Parcial | O servidor respondeu `initialize` e `tools/list` com 50 ferramentas; nenhum outro cliente foi testado |
 | Comandos para Linux e macOS | Não verificado | Sem máquina de teste |
@@ -58,7 +59,7 @@ claude mcp list
 
 ### Claude Desktop
 
-**Não verificado.** Adicione o servidor a `claude_desktop_config.json` com o caminho absoluto de `plugin/server.mjs` e reinicie o aplicativo.
+**Suportado.** Adicione o servidor a `claude_desktop_config.json` com o caminho absoluto de `plugin/server.mjs` e reinicie o aplicativo. O arquivo fica em `%APPDATA%\Claude` no Windows e em `~/Library/Application Support/Claude` no macOS; **Settings > Developer > Edit Config** o abre.
 
 ```json
 {
@@ -66,6 +67,23 @@ claude mcp list
     "black-gravity": {
       "command": "node",
       "args": ["<absolute path to plugin/server.mjs>"]
+    }
+  }
+}
+```
+
+### OpenCode
+
+**Suportado.** Adicione o servidor em `mcp` no `opencode.json`, na raiz do projeto ou em `~/.config/opencode/opencode.json` para todos os projetos, com o caminho absoluto de `plugin/server.mjs`, e reinicie o OpenCode.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "black-gravity": {
+      "type": "local",
+      "command": ["node", "<absolute path to plugin/server.mjs>"],
+      "enabled": true
     }
   }
 }
