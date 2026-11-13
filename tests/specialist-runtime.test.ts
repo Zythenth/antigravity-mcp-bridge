@@ -8,6 +8,7 @@ import { PassThrough } from 'node:stream';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CliAdapter, type Model } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
@@ -17,7 +18,7 @@ import { successOutputSchemas } from '../src/output-schemas.js';
 import type { RunOptions, TaskRecord } from '../src/types.js';
 import { waitForTask } from './wait-for-task.js';
 
-class RecordingAdapter extends CliAdapter {
+class RecordingAdapter extends ControlledCliAdapter {
   calls: Array<{ options: RunOptions; model: string | undefined; cwd: string }> = [];
   override async listModels(): Promise<Model[]> { return ['model-a', 'model-b'].map(id => ({ id, name: id })); }
   override spawnTask(options: RunOptions, model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {

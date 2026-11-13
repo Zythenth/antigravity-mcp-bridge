@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readdir, readFile, writeFile, rm, appendFile, link, copyFile, rename, truncate } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { DEFAULT_PROJECT_LIMITS, loadConfig, type Config } from '../src/config.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
@@ -73,7 +73,7 @@ async function runHook(
   });
 }
 
-class GuardedAdapter extends CliAdapter {
+class GuardedAdapter extends ControlledCliAdapter {
   script?: (ctx: { options: RunOptions; cwd: string; session: string; write: (frame: unknown) => void }) => Promise<void> | void;
   override spawnTask(options: RunOptions, _model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {
     const child = new EventEmitter() as ChildProcessWithoutNullStreams, stdout = new PassThrough(), stderr = new PassThrough();
@@ -600,7 +600,9 @@ test('editSearch classifies line-endings, whitespace and unicode mismatches with
       allowedTools: ['view_file', 'replace_file_content'],
       mcpServers: [],
     }));
-    assert.equal(flowTask.status, 'completed', JSON.stringify(flowTask.error));
+    assert.equal(flowTask.status, 'failed', JSON.stringify(flowTask.error));
+    assert.equal(flowTask.error?.code, 'AGY_PROCESS_FAILED');
+    assert.match(flowTask.error.message, /denied by pre-tool hook/);
     const flowFailed = tasks.events.read(flowTask.taskId).events.filter(e => e.type === 'tool.failed');
     assert.equal(flowFailed.length, 3);
     assert.equal('editSearch' in (flowFailed[0]!.data as Record<string, unknown>), false);

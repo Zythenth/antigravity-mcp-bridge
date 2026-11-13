@@ -8,11 +8,11 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { TaskManager } from '../dist/src/task-manager.js';
 import { loadConfig } from '../dist/src/config.js';
-import { CliAdapter } from '../dist/src/cli-adapter.js';
+import { ControlledCliAdapter } from '../dist/tests/controlled-cli-adapter.js';
 const [root, groupId, digest] = process.argv.slice(2);
 if (!path.isAbsolute(root) || path.relative(path.resolve(os.tmpdir()), path.dirname(path.resolve(root))) !== '' || !path.basename(root).startsWith('black-gravity-group-runtime-')) throw Error('Expected named temporary fixture root');
 const config = loadConfig({ BRIDGE_STATE_DIRECTORY: path.join(root, 'state'), BRIDGE_TEST_EXECUTOR: 'agy' });
-class Adapter extends CliAdapter {
+class Adapter extends ControlledCliAdapter {
   spawnTask(options, _model, cwd) {
     fs.appendFileSync(path.join(root, 'admissions.jsonl'), JSON.stringify({ key: options.group.nodeKey }) + '\n');
     const child = new EventEmitter(), stdout = new PassThrough(), sessionId = randomUUID();

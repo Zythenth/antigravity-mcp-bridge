@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy } from '../src/isolation.js';
@@ -18,7 +18,7 @@ import { waitForTask } from './wait-for-task.js';
 
 const question = { kind: 'question', text: 'Which public fixture should be used?' };
 const envelope = '<black-gravity-message>' + JSON.stringify(question) + '</black-gravity-message>';
-class ControlledAdapter extends CliAdapter {
+class ControlledAdapter extends ControlledCliAdapter {
   constructor(config: Config) { super(config); }
   override async listModels() { return []; }
   override spawnTask(_options: RunOptions, _model: string | undefined, _cwd: string): ChildProcessWithoutNullStreams {

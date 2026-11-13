@@ -7,7 +7,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path'; import os from 'node:os';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy } from '../src/isolation.js';
@@ -17,7 +17,7 @@ import { clientTask } from '../src/messages.js';
 import { successOutputSchemas } from '../src/output-schemas.js';
 import type { RunOptions, CallerInboxItem } from '../src/types.js';
 
-class InboxAdapter extends CliAdapter {
+class InboxAdapter extends ControlledCliAdapter {
   readonly calls: Array<{ options: RunOptions; directory: string }> = [];
   active = 0; maxActive = 0; releaseFirst?: () => void;
   constructor(config: Config, private readonly holdFirst: boolean) { super(config); }

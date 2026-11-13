@@ -100,7 +100,12 @@ export class CliAdapter {
   private help = '';
   private version?: string;
   private installed = false;
+  private lastDiscovery?: Discovery;
   constructor(private readonly config: Config, private readonly prefixArgs: string[] = []) {}
+
+  getDiscovery(): Discovery | undefined {
+    return this.lastDiscovery;
+  }
 
   private environment(): NodeJS.ProcessEnv {
     return cliEnvironment(this.config.allowedEnvVars);
@@ -164,11 +169,13 @@ export class CliAdapter {
       this.installed = false;
       this.version = undefined;
       this.help = '';
-      return {
+      const discovery: Discovery = {
         installed: false, path: '', authenticated: null,
         capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: 'INVALID_CONFIGURATION: AGY_PATH is invalid. See configurationIssues in black_gravity_health.',
       };
+      this.lastDiscovery = discovery;
+      return discovery;
     }
     try {
       const [version, help] = await Promise.all([this.probe(['--version']), this.probe(['--help'])]);
@@ -203,7 +210,7 @@ export class CliAdapter {
       this.version = versionText;
       this.help = helpText;
       this.installed = true;
-      return {
+      const discovery: Discovery = {
         installed: true, path: await resolveExecutable(this.config.agyPath), version: this.version, authenticated: null,
         capabilities: {
           structuredOutput: streaming, streaming, sandbox,
@@ -212,17 +219,21 @@ export class CliAdapter {
           resume: this.help.includes('--conversation'), sessionsList: false, cancel: false,
         },
       };
+      this.lastDiscovery = discovery;
+      return discovery;
     } catch (error) {
       this.installed = false;
       this.version = undefined;
       this.help = '';
       const err = error instanceof BridgeError ? error : processError(error, 'probe');
       const formatted = `${err.code}: ${redactDiagnostic(err.message)}`;
-      return {
+      const discovery: Discovery = {
         installed: false, path: this.config.agyPath, authenticated: null,
         capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: formatted,
       };
+      this.lastDiscovery = discovery;
+      return discovery;
     }
   }
 

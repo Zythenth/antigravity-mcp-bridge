@@ -1,5 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CliAdapter } from './cli-adapter.js';
+import { AgyExecutionAdapter } from './agy-execution-adapter.js';
 import { loadConfig, configurationWarning } from './config.js';
 import { createMcpServer } from './mcp-server.js';
 import { TaskManager } from './task-manager.js';
@@ -46,7 +47,8 @@ if (command[0] === 'wait') {
   }, { report: line => process.stderr.write(line + '\n') });
   const adapter = new CliAdapter(config);
   await adapter.discover();
-  const tasks = new TaskManager(adapter, config);
+  const executionAdapter = new AgyExecutionAdapter(adapter, config);
+  const tasks = new TaskManager(adapter, config, executionAdapter);
   const warning = configurationWarning(tasks.configurationIssues);
   if (warning) process.stderr.write(warning + '\n');
   function reportMaintenance(problem: string | undefined) {

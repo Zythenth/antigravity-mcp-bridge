@@ -148,6 +148,27 @@ export function readNativeReceipt(step: Record<string, unknown>, expected: { non
   } catch { return; }
 }
 
+export function classifySandboxDenial(text: string): BridgeError | undefined {
+  const input = text.trim();
+  if (!input) return undefined;
+  const access = /granting access to [^\r\n]{1,200}:\s*(?:access is denied|permission denied|access denied)/i.exec(input);
+  if (access) {
+    const cause = input.slice(access.index, access.index + 2000);
+    return new BridgeError('AGY_SANDBOX_ACCESS_DENIED', 'Native sandbox access preparation failed. Inspect the reported target and Windows ACLs; this error alone does not prove that initial setup is missing. Reported error: ' + cause);
+  }
+  const setup = /failed to prompt user for admin escalation|permission check failed for escalate_admin/i.exec(input);
+  if (setup) {
+    const cause = input.slice(setup.index, setup.index + 2000);
+    return new BridgeError('AGY_SANDBOX_SETUP_REQUIRED', 'The native runtime requested administrative sandbox setup and it was not completed. Inspect the official interactive CLI setup request; do not approve command bypass. Reported error: ' + cause);
+  }
+  const bypass = /permission check failed for unsandboxed\b/i.exec(input);
+  if (bypass) {
+    const cause = input.slice(bypass.index, bypass.index + 2000);
+    return new BridgeError('AGY_SANDBOX_BYPASS_DENIED', 'The runtime reported a denied sandbox bypass. Preserve that denial; do not retry the command through another host execution path. Reported error: ' + cause);
+  }
+  return undefined;
+}
+
 export function readNativeSandboxError(step: Record<string, unknown>, expected: { nonce: string; commandLine: string }): BridgeError | undefined {
   if (step.state !== 'DONE' || step.step_type !== 'tool' || step.tool_name !== 'run_command') return;
   const info = step.tool_info as { parameters?: { CommandLine?: unknown; BypassSandbox?: unknown }; output?: unknown } | undefined;
@@ -156,14 +177,5 @@ export function readNativeSandboxError(step: Record<string, unknown>, expected: 
     return new BridgeError('AGY_SANDBOX_BYPASS_REQUESTED', 'The test command requested sandbox bypass; its receipt cannot verify isolated execution.');
   }
   if (typeof info.output !== 'string' || readNativeReceipt(step, expected)) return;
-  const cause = info.output.trim().slice(-2000);
-  if (/granting access to [^\r\n]+:\s*(?:access is denied|permission denied|access denied)/i.test(cause)) {
-    return new BridgeError('AGY_SANDBOX_ACCESS_DENIED', 'Native sandbox access preparation failed. Inspect the reported target and Windows ACLs; this error alone does not prove that initial setup is missing. Reported error: ' + cause);
-  }
-  if (/failed to prompt user for admin escalation|permission check failed for escalate_admin/i.test(cause)) {
-    return new BridgeError('AGY_SANDBOX_SETUP_REQUIRED', 'The native runtime requested administrative sandbox setup and it was not completed. Inspect the official interactive CLI setup request; do not approve command bypass. Reported error: ' + cause);
-  }
-  if (/permission check failed for unsandboxed\b/i.test(cause)) {
-    return new BridgeError('AGY_SANDBOX_BYPASS_DENIED', 'The runtime reported a denied sandbox bypass. Preserve that denial; do not retry the command through another host execution path. Reported error: ' + cause);
-  }
+  return classifySandboxDenial(info.output);
 }

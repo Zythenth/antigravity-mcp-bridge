@@ -36904,9 +36904,13 @@ var CliAdapter = class {
   help = "";
   version;
   installed = false;
+  lastDiscovery;
   constructor(config2, prefixArgs = []) {
     this.config = config2;
     this.prefixArgs = prefixArgs;
+  }
+  getDiscovery() {
+    return this.lastDiscovery;
   }
   environment() {
     return cliEnvironment(this.config.allowedEnvVars);
@@ -36974,13 +36978,15 @@ var CliAdapter = class {
       this.installed = false;
       this.version = void 0;
       this.help = "";
-      return {
+      const discovery = {
         installed: false,
         path: "",
         authenticated: null,
         capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: "INVALID_CONFIGURATION: AGY_PATH is invalid. See configurationIssues in black_gravity_health."
       };
+      this.lastDiscovery = discovery;
+      return discovery;
     }
     try {
       const [version2, help] = await Promise.all([this.probe(["--version"]), this.probe(["--help"])]);
@@ -37015,7 +37021,7 @@ var CliAdapter = class {
       this.version = versionText;
       this.help = helpText;
       this.installed = true;
-      return {
+      const discovery = {
         installed: true,
         path: await resolveExecutable(this.config.agyPath),
         version: this.version,
@@ -37032,19 +37038,23 @@ var CliAdapter = class {
           cancel: false
         }
       };
+      this.lastDiscovery = discovery;
+      return discovery;
     } catch (error62) {
       this.installed = false;
       this.version = void 0;
       this.help = "";
       const err = error62 instanceof BridgeError ? error62 : processError(error62, "probe");
       const formatted = `${err.code}: ${redactDiagnostic(err.message)}`;
-      return {
+      const discovery = {
         installed: false,
         path: this.config.agyPath,
         authenticated: null,
         capabilities: { structuredOutput: false, streaming: false, sandbox: false, readOnlyMode: false, models: false, modelSelection: false, resume: false, sessionsList: false, cancel: false },
         error: formatted
       };
+      this.lastDiscovery = discovery;
+      return discovery;
     }
   }
   async health() {
@@ -37203,8 +37213,1470 @@ var CliAdapter = class {
   }
 };
 
+// dist/src/logger.js
+function logTaskEvent(taskId, type, data) {
+  if (!type.startsWith("task.") && type !== "process.started")
+    return;
+  const details = data && typeof data === "object" ? data : {};
+  const entry = { timestamp: (/* @__PURE__ */ new Date()).toISOString(), taskId, type };
+  if (type === "process.started" && typeof details.pid === "number")
+    entry.pid = details.pid;
+  if (type === "task.failed" && typeof details.code === "string")
+    entry.code = details.code;
+  process.stderr.write(JSON.stringify(entry) + "\n");
+}
+
+// dist/src/event-store.js
+var MAX_EVENT_PAYLOAD_CHARS = 16e3;
+var EventStore = class {
+  capacity;
+  onAppend;
+  events = [];
+  cursors = /* @__PURE__ */ new Map();
+  heldLogs;
+  constructor(capacity, onAppend) {
+    this.capacity = capacity;
+    this.onAppend = onAppend;
+  }
+  holdLogs() {
+    this.heldLogs = [];
+  }
+  releaseLogs(shouldPublish) {
+    const held = this.heldLogs;
+    this.heldLogs = void 0;
+    if (held) {
+      for (const [taskId, type, data] of held) {
+        if (shouldPublish(taskId))
+          logTaskEvent(taskId, type, data);
+      }
+    }
+  }
+  append(taskId, type, data, raw) {
+    const sequence = (this.cursors.get(taskId) || 0) + 1;
+    this.cursors.set(taskId, sequence);
+    const bounded = (value) => {
+      const serialized = JSON.stringify(value);
+      return serialized && serialized.length > MAX_EVENT_PAYLOAD_CHARS ? { truncated: true, preview: serialized.slice(0, MAX_EVENT_PAYLOAD_CHARS) } : value;
+    };
+    const event = { taskId, sequence, timestamp: (/* @__PURE__ */ new Date()).toISOString(), type, data: bounded(data) };
+    if (raw !== void 0)
+      event.raw = bounded(raw);
+    this.events.push(event);
+    if (this.events.length > this.capacity)
+      this.events.splice(0, this.events.length - this.capacity);
+    if (this.heldLogs)
+      this.heldLogs.push([taskId, type, data]);
+    else
+      logTaskEvent(taskId, type, data);
+    this.onAppend?.(taskId);
+    return event;
+  }
+  read(taskId, after = 0, limit = 200) {
+    const bucket = this.events.filter((event) => event.taskId === taskId);
+    const oldestAvailable = bucket[0]?.sequence || (this.cursors.get(taskId) || 0) + 1;
+    const events = bucket.filter((event) => event.sequence > after).slice(0, limit);
+    return { events, nextCursor: events.at(-1)?.sequence || after, oldestAvailable, truncated: after < oldestAvailable - 1 };
+  }
+  drop(taskId) {
+    this.cursors.delete(taskId);
+    for (let index = this.events.length - 1; index >= 0; index--) {
+      if (this.events[index]?.taskId === taskId)
+        this.events.splice(index, 1);
+    }
+  }
+  snapshot(taskId) {
+    return { events: this.events.filter((event) => event.taskId === taskId), cursor: this.cursors.get(taskId) || 0 };
+  }
+  restore(taskId, events, cursor) {
+    this.drop(taskId);
+    this.events.push(...events);
+    this.events.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.sequence - b.sequence);
+    if (this.events.length > this.capacity)
+      this.events.splice(0, this.events.length - this.capacity);
+    this.cursors.set(taskId, cursor);
+  }
+};
+
+// dist/src/execution-contract.js
+function isCapabilitySupported(capabilities, key) {
+  return Object.hasOwn(capabilities, key) && capabilities[key] === "supported";
+}
+function assertExecutionCapabilities(request, capabilities) {
+  const required2 = [request.mode === "write" ? "write" : "read"];
+  if (request.session)
+    required2.push("resume");
+  if (request.outputSchema !== void 0)
+    required2.push("structuredOutput");
+  for (const key of required2) {
+    if (!isCapabilitySupported(capabilities, key))
+      throw new TypeError("Execution capability unavailable: " + key);
+  }
+}
+
+// dist/src/native-tests.js
+import { createHash as createHash14, randomUUID as randomUUID7 } from "node:crypto";
+import { appendFile, mkdir as mkdir4, readFile as readFile5, rm as rm3, writeFile as writeFile5 } from "node:fs/promises";
+import path15 from "node:path";
+var testCommandSchema = external_exports.object({
+  executable: external_exports.string().min(1).max(1e3),
+  args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
+}).strict();
+var receiptSchema = external_exports.object({
+  nonce: external_exports.string().uuid(),
+  exitCode: external_exports.number().int().min(0).max(255).nullable(),
+  beforeSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(),
+  afterSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(),
+  error: external_exports.string().optional(),
+  truncated: external_exports.boolean()
+}).strict();
+async function nativeRunner(load, settings) {
+  const fs = load("node:fs");
+  const crypto3 = load("node:crypto");
+  const paths2 = load("node:path");
+  const processes = load("node:child_process");
+  const receipt = { nonce: settings.nonce, exitCode: null, truncated: false };
+  let gitDirectory;
+  let output2 = "";
+  try {
+    if (paths2.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== "")
+      throw new Error("Test working directory differs from the copy");
+    gitDirectory = fs.mkdtempSync(paths2.join(process.cwd(), ".black-gravity-test-snapshot-"));
+    processes.execFileSync("git", ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
+    fs.mkdirSync(paths2.join(gitDirectory, "info"), { recursive: true });
+    fs.appendFileSync(paths2.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n/" + paths2.basename(gitDirectory) + "/\n");
+    async function fingerprint() {
+      const list = processes.execFileSync("git", ["--git-dir=" + gitDirectory, "--work-tree=" + process.cwd(), "ls-files", "--others", "--exclude-standard", "-z"], { maxBuffer: 1e7 }).toString("utf8").split("\0").filter(Boolean).sort();
+      if (list.length > settings.maxCopyFiles)
+        throw new Error("Test snapshot file limit exceeded");
+      const tree = crypto3.createHash("sha256");
+      let bytes = 0;
+      for (const relative2 of list) {
+        let current = process.cwd();
+        for (const part of relative2.split("/")) {
+          if (!part || part === ".." || part === "." || part === ".git")
+            throw new Error("Unsafe test path");
+          current = paths2.join(current, part);
+          if (fs.lstatSync(current).isSymbolicLink())
+            throw new Error("Test snapshot contains a link");
+        }
+        if (!fs.lstatSync(current).isFile())
+          throw new Error("Test snapshot contains a non-file");
+        const hash3 = crypto3.createHash("sha256");
+        for await (const chunk of fs.createReadStream(current)) {
+          bytes += chunk.length;
+          if (bytes > settings.maxCopyBytes)
+            throw new Error("Test snapshot byte limit exceeded");
+          hash3.update(chunk);
+        }
+        tree.update(relative2 + "\0" + hash3.digest("hex") + "\0");
+      }
+      return tree.digest("hex");
+    }
+    receipt.beforeSha256 = await fingerprint();
+    let executable = settings.executable, args = settings.args;
+    if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
+      if (args.some((arg) => /[&|<>^()%!"\r\n]/.test(arg)))
+        throw new Error("Batch arguments contain unsupported shell metacharacters; use a native executable");
+      const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
+      const script = "$ErrorActionPreference='Stop'; try { $global:LASTEXITCODE=0; & (Get-Command -Name " + quote(executable) + " -CommandType Application -ErrorAction Stop).Source " + args.map(quote).join(" ") + "; exit $LASTEXITCODE } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 127 }";
+      executable = paths2.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+      args = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
+    }
+    const child = processes.spawn(executable, args, { cwd: process.cwd(), windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+    const append = (chunk) => {
+      const text = chunk.toString("utf8");
+      if (output2.length + text.length > 4e3)
+        receipt.truncated = true;
+      output2 = (output2 + text).slice(-4e3);
+    };
+    child.stdout.on("data", append);
+    child.stderr.on("data", append);
+    const timer = setTimeout(() => {
+      receipt.error = "Command timed out";
+      child.kill();
+    }, settings.timeoutSeconds * 1e3);
+    child.once("error", (error62) => {
+      receipt.error = error62.message;
+    });
+    receipt.exitCode = await new Promise((resolve2) => child.once("close", resolve2));
+    clearTimeout(timer);
+    receipt.afterSha256 = await fingerprint();
+  } catch (error62) {
+    receipt.error = error62 instanceof Error ? error62.message : String(error62);
+  } finally {
+    if (gitDirectory) {
+      if (paths2.dirname(paths2.resolve(gitDirectory)) !== paths2.resolve(process.cwd()) || !paths2.basename(gitDirectory).startsWith(".black-gravity-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
+        throw new Error("Unsafe snapshot cleanup path");
+      fs.rmSync(gitDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  }
+  process.stdout.write(output2 + "\nBLACK_GRAVITY_TEST:" + settings.nonce + ":" + Buffer.from(JSON.stringify(receipt)).toString("base64") + "\n");
+}
+async function prepareNativeTest(project, request, settings) {
+  testCommandSchema.parse({ executable: request.executable, args: request.args });
+  const nonce = randomUUID7();
+  const file3 = ".black-gravity-test-" + nonce + ".cjs";
+  const absolute = path15.join(project.copyDirectory, file3);
+  const script = "(" + nativeRunner.toString() + ")(require, " + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
+  const hash3 = createHash14("sha256").update(script).digest("hex");
+  const exclude = path15.join(project.gitDirectory, "info", "exclude");
+  await mkdir4(path15.dirname(exclude), { recursive: true });
+  await appendFile(exclude, "\n/" + file3 + "\n");
+  await writeFile5(absolute, script, { flag: "wx", mode: 384 });
+  const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
+  let commandLine;
+  if (process.platform === "win32") {
+    const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
+    commandLine = "& " + quote(process.execPath) + " -e " + quote(bootstrap);
+  } else {
+    const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
+    commandLine = quote(process.execPath) + " -e " + quote(bootstrap);
+  }
+  if (commandLine.length > 3e4)
+    throw new BridgeError("INVALID_TEST_COMMAND", "Test command exceeds the process argument limit");
+  return {
+    nonce,
+    commandLine,
+    prompt: "Execute this exact CommandLine with run_command in the current copy, inside the native sandbox: " + JSON.stringify(commandLine) + ". Do not replace, edit or summarize its execution. The runner prints the actual command output and a receipt. Maximum attempts: " + request.maxAttempts + ". Only after a nonzero command receipt, make relevant fixes and retry the same CommandLine if attempts remain. Do not run outside the sandbox, change the runner, weaken tests, or claim success without the receipt. Stop when the command passes or attempts are exhausted.\n<bridge-test-command>" + JSON.stringify({ commandLine, maxAttempts: request.maxAttempts }) + "</bridge-test-command>",
+    async cleanup() {
+      await rm3(absolute, { force: true });
+      const content = await readFile5(exclude, "utf8");
+      await writeFile5(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
+    }
+  };
+}
+function readNativeReceipt(step, expected) {
+  if (step.state !== "DONE" || step.step_type !== "tool" || step.tool_name !== "run_command")
+    return;
+  const info = step.tool_info;
+  if (info?.parameters?.CommandLine !== expected.commandLine || typeof info.output !== "string")
+    return;
+  if (info.parameters.BypassSandbox !== void 0 && info.parameters.BypassSandbox !== false)
+    return;
+  const prefix = "BLACK_GRAVITY_TEST:" + expected.nonce + ":";
+  const lines = info.output.split(/\r?\n/).filter((line) => line.startsWith(prefix));
+  if (lines.length !== 1)
+    return;
+  try {
+    const receipt = receiptSchema.parse(JSON.parse(Buffer.from(lines[0].slice(prefix.length), "base64").toString("utf8")));
+    if (receipt.nonce !== expected.nonce)
+      return;
+    return { receipt, output: info.output.slice(0, info.output.indexOf(prefix)).trim().slice(-4e3) };
+  } catch {
+    return;
+  }
+}
+function classifySandboxDenial(text) {
+  const input2 = text.trim();
+  if (!input2)
+    return void 0;
+  const access3 = /granting access to [^\r\n]{1,200}:\s*(?:access is denied|permission denied|access denied)/i.exec(input2);
+  if (access3) {
+    const cause = input2.slice(access3.index, access3.index + 2e3);
+    return new BridgeError("AGY_SANDBOX_ACCESS_DENIED", "Native sandbox access preparation failed. Inspect the reported target and Windows ACLs; this error alone does not prove that initial setup is missing. Reported error: " + cause);
+  }
+  const setup = /failed to prompt user for admin escalation|permission check failed for escalate_admin/i.exec(input2);
+  if (setup) {
+    const cause = input2.slice(setup.index, setup.index + 2e3);
+    return new BridgeError("AGY_SANDBOX_SETUP_REQUIRED", "The native runtime requested administrative sandbox setup and it was not completed. Inspect the official interactive CLI setup request; do not approve command bypass. Reported error: " + cause);
+  }
+  const bypass = /permission check failed for unsandboxed\b/i.exec(input2);
+  if (bypass) {
+    const cause = input2.slice(bypass.index, bypass.index + 2e3);
+    return new BridgeError("AGY_SANDBOX_BYPASS_DENIED", "The runtime reported a denied sandbox bypass. Preserve that denial; do not retry the command through another host execution path. Reported error: " + cause);
+  }
+  return void 0;
+}
+function readNativeSandboxError(step, expected) {
+  if (step.state !== "DONE" || step.step_type !== "tool" || step.tool_name !== "run_command")
+    return;
+  const info = step.tool_info;
+  if (info?.parameters?.CommandLine !== expected.commandLine)
+    return;
+  if (info.parameters.BypassSandbox !== void 0 && info.parameters.BypassSandbox !== false) {
+    return new BridgeError("AGY_SANDBOX_BYPASS_REQUESTED", "The test command requested sandbox bypass; its receipt cannot verify isolated execution.");
+  }
+  if (typeof info.output !== "string" || readNativeReceipt(step, expected))
+    return;
+  return classifySandboxDenial(info.output);
+}
+
+// dist/src/payload-safety.js
+var DEFAULT_MAX_PAYLOAD_DEPTH = 64;
+var DEFAULT_MAX_PAYLOAD_NODES = 1e5;
+function sanitizePayload(value, options = {}) {
+  const maxDepth = options.maxDepth ?? DEFAULT_MAX_PAYLOAD_DEPTH;
+  const maxNodes = options.maxNodes ?? DEFAULT_MAX_PAYLOAD_NODES;
+  for (const limit of [maxDepth, maxNodes]) {
+    if (!Number.isSafeInteger(limit) || limit < 1)
+      throw new RangeError("Payload limits must be positive safe integers");
+  }
+  let redacted = false, truncated = false, nodes = 0;
+  const pending = [];
+  const copy = (input2, depth) => {
+    if (++nodes > maxNodes) {
+      truncated = true;
+      return { keep: true, value: "[node limit exceeded]" };
+    }
+    if (typeof input2 === "string") {
+      const text = redactDiagnostic(input2);
+      if (text !== input2)
+        redacted = true;
+      return { keep: true, value: text };
+    }
+    if (typeof input2 === "number")
+      return { keep: true, value: Number.isFinite(input2) ? input2 : null };
+    if (typeof input2 === "boolean" || input2 === null)
+      return { keep: true, value: input2 };
+    if (typeof input2 !== "object")
+      return { keep: false };
+    if (depth > maxDepth) {
+      truncated = true;
+      return { keep: true, value: "[depth limit exceeded]" };
+    }
+    const target = Array.isArray(input2) ? [] : {};
+    pending.push({ source: input2, target, depth });
+    return { keep: true, value: target };
+  };
+  const root = copy(value, 0);
+  while (pending.length) {
+    const { source, target, depth } = pending.pop();
+    if (Array.isArray(source)) {
+      for (const item of source) {
+        const next = copy(item, depth + 1);
+        target.push(next.keep ? next.value : null);
+        if (nodes > maxNodes)
+          break;
+      }
+      continue;
+    }
+    for (const key in source) {
+      if (nodes > maxNodes)
+        break;
+      if (!Object.hasOwn(source, key))
+        continue;
+      const next = copy(source[key], depth + 1);
+      if (!next.keep)
+        continue;
+      const name = redactDiagnostic(key);
+      if (name !== key)
+        redacted = true;
+      if (Object.hasOwn(target, name)) {
+        redacted = true;
+        continue;
+      }
+      Object.defineProperty(target, name, { value: next.value, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  return { value: root.keep ? root.value : void 0, redacted, truncated };
+}
+
+// dist/src/process-tree.js
+import { spawn as spawn4 } from "node:child_process";
+import path16 from "node:path";
+async function listWindowsProcesses() {
+  const systemRoot = process.env.SystemRoot || "C:\\Windows";
+  const powershell = path16.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const script = 'Get-CimInstance Win32_Process | ForEach-Object { if ($_.CreationDate) { "$($_.ProcessId) $($_.ParentProcessId) $($_.CreationDate.ToFileTimeUtc())" } }';
+  return new Promise((resolve2, reject) => {
+    let child;
+    try {
+      child = spawn4(powershell, ["-NoProfile", "-NonInteractive", "-Command", script], {
+        shell: false,
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+    } catch (err) {
+      reject(err);
+      return;
+    }
+    let settled = false;
+    const timer = setTimeout(() => {
+      fail3(new Error("Process listing timed out after 15s"));
+    }, 15e3);
+    timer.unref();
+    function fail3(err) {
+      if (settled)
+        return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+      }
+      reject(err);
+    }
+    const chunks = [];
+    let totalBytes = 0;
+    const MAX_STDOUT_BYTES = 16 * 1024 * 1024;
+    if (child.stdout) {
+      child.stdout.on("data", (chunk) => {
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_STDOUT_BYTES) {
+          fail3(new Error("Process listing stdout exceeded 16 MiB"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+    }
+    if (child.stderr) {
+      child.stderr.resume();
+    }
+    child.on("error", (err) => {
+      fail3(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (settled)
+        return;
+      settled = true;
+      if (code !== 0) {
+        reject(new Error(`Process listing exited with code ${code}`));
+        return;
+      }
+      const output2 = Buffer.concat(chunks).toString("utf8");
+      const lines = output2.split(/\r?\n/);
+      const processes = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed)
+          continue;
+        const parts = trimmed.split(/\s+/);
+        if (parts.length < 3)
+          continue;
+        const pid = Number(parts[0]);
+        const parentPid = Number(parts[1]);
+        const ftStr = parts[2];
+        if (!Number.isInteger(pid) || pid < 0 || !Number.isInteger(parentPid) || parentPid < 0) {
+          continue;
+        }
+        if (!ftStr || !/^\d+$/.test(ftStr)) {
+          continue;
+        }
+        try {
+          const ft = BigInt(ftStr);
+          const createdAt = Number(ft / 10000n) - 116444736e5;
+          if (!Number.isFinite(createdAt))
+            continue;
+          processes.push({ pid, parentPid, createdAt });
+        } catch {
+          continue;
+        }
+      }
+      resolve2(processes);
+    });
+  });
+}
+function ownedProcesses(processes, rootPid, spawnedAt) {
+  const root = processes.find((p) => p.pid === rootPid && p.createdAt >= spawnedAt - 2e3);
+  const result = [];
+  const visited = /* @__PURE__ */ new Set();
+  const queue = [];
+  if (root) {
+    result.push(root);
+    visited.add(root.pid);
+    queue.push({ pid: root.pid, createdAt: root.createdAt });
+  } else {
+    visited.add(rootPid);
+    queue.push({ pid: rootPid, createdAt: spawnedAt - 2e3 });
+  }
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head++];
+    if (!current)
+      break;
+    for (const p of processes) {
+      if (p.parentPid === current.pid && p.createdAt >= current.createdAt && !visited.has(p.pid)) {
+        visited.add(p.pid);
+        result.push(p);
+        queue.push({ pid: p.pid, createdAt: p.createdAt });
+      }
+    }
+  }
+  return result;
+}
+function sleep2(ms) {
+  return new Promise((resolve2) => setTimeout(resolve2, Math.max(0, ms)));
+}
+function killProcess(pid) {
+  return new Promise((resolve2) => {
+    try {
+      const systemRoot = process.env.SystemRoot || "C:\\Windows";
+      const taskkill = path16.join(systemRoot, "System32", "taskkill.exe");
+      const child = spawn4(taskkill, ["/PID", String(pid), "/F"], {
+        windowsHide: true,
+        shell: false,
+        stdio: "ignore"
+      });
+      child.once("error", () => resolve2());
+      child.once("close", () => resolve2());
+    } catch {
+      resolve2();
+    }
+  });
+}
+function isProcessAlive(target) {
+  try {
+    process.kill(target, 0);
+    return true;
+  } catch (err) {
+    return err?.code === "EPERM";
+  }
+}
+async function reconcileOwnedProcesses(root, options) {
+  const graceMs = options?.graceMs ?? 3e3;
+  if (process.platform === "win32") {
+    if (typeof root.pid !== "number" || root.pid <= 0) {
+      return { verified: false, method: "windows-snapshot", remaining: [] };
+    }
+    const list = options?.list ?? listWindowsProcesses;
+    let targets;
+    try {
+      const snapshot = await list();
+      targets = ownedProcesses(snapshot, root.pid, root.spawnedAt);
+    } catch {
+      return { verified: false, method: "windows-snapshot", remaining: [] };
+    }
+    if (targets.length === 0) {
+      return { verified: true, method: "windows-snapshot", remaining: [] };
+    }
+    for (const target2 of targets) {
+      await killProcess(target2.pid);
+    }
+    const deadline2 = Date.now() + graceMs;
+    let remaining = targets;
+    do {
+      if (graceMs > 0) {
+        const waitMs = Math.min(250, Math.max(1, deadline2 - Date.now()));
+        await sleep2(waitMs);
+      }
+      let currentList;
+      try {
+        currentList = await list();
+      } catch {
+        return { verified: false, method: "windows-snapshot", remaining };
+      }
+      remaining = targets.filter((target2) => currentList.some((p) => p.pid === target2.pid && Math.abs(p.createdAt - target2.createdAt) <= 1));
+      if (remaining.length === 0) {
+        return { verified: true, method: "windows-snapshot", remaining: [] };
+      }
+    } while (Date.now() < deadline2);
+    return { verified: false, method: "windows-snapshot", remaining };
+  }
+  if (typeof root.pid !== "number" || root.pid <= 0) {
+    return { verified: false, method: "process-group", remaining: [] };
+  }
+  const target = root.processGroup ? -root.pid : root.pid;
+  if (!isProcessAlive(target)) {
+    return { verified: true, method: "process-group", remaining: [] };
+  }
+  try {
+    process.kill(target, "SIGKILL");
+  } catch {
+  }
+  const deadline = Date.now() + graceMs;
+  do {
+    if (graceMs > 0) {
+      const waitMs = Math.min(100, Math.max(1, deadline - Date.now()));
+      await sleep2(waitMs);
+    }
+    if (!isProcessAlive(target)) {
+      return { verified: true, method: "process-group", remaining: [] };
+    }
+  } while (Date.now() < deadline);
+  return { verified: !isProcessAlive(target), method: "process-group", remaining: [] };
+}
+
+// dist/src/stream-parser.js
+import { StringDecoder as StringDecoder2 } from "node:string_decoder";
+var LineParser = class {
+  onLine;
+  maxLineChars;
+  onOverflow;
+  decoder = new StringDecoder2("utf8");
+  remainder = "";
+  discarding = false;
+  constructor(onLine, maxLineChars = 2e6, onOverflow) {
+    this.onLine = onLine;
+    this.maxLineChars = maxLineChars;
+    this.onOverflow = onOverflow;
+    if (!Number.isSafeInteger(maxLineChars) || maxLineChars < 1)
+      throw new RangeError("Invalid line limit");
+  }
+  write(chunk) {
+    this.consume(this.decoder.write(chunk));
+  }
+  end() {
+    this.consume(this.decoder.end());
+    if (!this.discarding && this.remainder)
+      this.onLine(this.remainder);
+    this.remainder = "";
+  }
+  consume(text) {
+    let offset = 0;
+    while (offset < text.length) {
+      const newline = text.indexOf("\n", offset);
+      const end = newline === -1 ? text.length : newline;
+      if (!this.discarding) {
+        if (this.remainder.length + end - offset > this.maxLineChars) {
+          this.remainder = "";
+          this.discarding = true;
+          this.onOverflow?.();
+        } else {
+          this.remainder += text.slice(offset, end);
+        }
+      }
+      if (newline === -1)
+        return;
+      if (!this.discarding) {
+        const line = this.remainder.replace(/\r$/, "");
+        if (line)
+          this.onLine(line);
+      }
+      this.remainder = "";
+      this.discarding = false;
+      offset = newline + 1;
+    }
+  }
+};
+
+// dist/src/usage.js
+var usageCountersSchema = external_exports.object({
+  inputTokens: external_exports.number().int().nonnegative().nullable(),
+  outputTokens: external_exports.number().int().nonnegative().nullable(),
+  totalTokens: external_exports.number().int().nonnegative().nullable(),
+  thinkingTokens: external_exports.number().int().nonnegative().nullable(),
+  cacheReadTokens: external_exports.number().int().nonnegative().nullable()
+});
+var fields = {
+  inputTokens: "input_tokens",
+  outputTokens: "output_tokens",
+  totalTokens: "total_tokens",
+  thinkingTokens: "thinking_tokens",
+  cacheReadTokens: "cache_read_tokens"
+};
+var keys = Object.keys(fields);
+function normalizeUsage(raw) {
+  const data = raw && typeof raw === "object" ? raw : {};
+  return Object.fromEntries(keys.map((key) => {
+    const value = data[fields[key]];
+    return [key, typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null];
+  }));
+}
+function taskTokenUsage(task2) {
+  if (task2.usageProvenance === "local-executor") {
+    return {
+      scope: "task",
+      source: "local-executor",
+      counters: { inputTokens: 0, outputTokens: 0, totalTokens: 0, thinkingTokens: 0, cacheReadTokens: 0 },
+      available: true,
+      partial: false,
+      warnings: []
+    };
+  }
+  const raw = task2.result?.usage;
+  const current = normalizeUsage(raw);
+  const counters = { ...current };
+  const warnings = [];
+  if (task2.usageIsResume) {
+    for (const key of keys) {
+      const before = task2.usageBaseline?.[key];
+      const after = current[key];
+      counters[key] = before !== void 0 && before !== null && after !== null && after >= before ? after - before : null;
+      if (before !== null && before !== void 0 && after !== null && after < before)
+        warnings.push("Counter reset: " + key);
+    }
+    if (!task2.usageBaseline)
+      warnings.push("Previous session counters are unavailable; cumulative usage is not task usage");
+  }
+  const available = keys.some((key) => counters[key] !== null);
+  const partial2 = keys.some((key) => counters[key] === null);
+  if (raw === void 0)
+    warnings.push("Final CLI usage is unavailable");
+  if (partial2)
+    warnings.push("Missing counters remain null; no estimate or zero substitution");
+  return {
+    scope: "task",
+    source: available ? task2.usageIsResume ? "session-delta" : "session-total" : "unavailable",
+    counters,
+    available,
+    partial: partial2,
+    warnings
+  };
+}
+function sum(rows) {
+  return Object.fromEntries(keys.map((key) => {
+    if (!rows.length || rows.some((row) => row[key] === null))
+      return [key, null];
+    const total = rows.reduce((total2, row) => total2 + row[key], 0);
+    return [key, Number.isSafeInteger(total) ? total : null];
+  }));
+}
+function aggregateUsage(tasks) {
+  const byTask = tasks.map((task2) => ({ taskId: task2.taskId, sessionId: task2.sessionId ?? null, model: task2.model ?? null, status: task2.status, ...taskTokenUsage(task2) }));
+  const models = [...new Set(tasks.map((task2) => task2.model ?? null))];
+  const sessions = [...new Set(tasks.map((task2) => task2.sessionId).filter((id2) => id2 !== void 0))];
+  return {
+    scope: "retained-tasks",
+    taskCount: tasks.length,
+    measuredTaskCount: byTask.filter((task2) => task2.available).length,
+    counters: sum(byTask.map((task2) => task2.counters)),
+    byTask,
+    byModel: models.map((model) => {
+      const rows = byTask.filter((task2) => task2.model === model);
+      return { model, taskCount: rows.length, counters: sum(rows.map((task2) => task2.counters)) };
+    }),
+    bySession: sessions.map((sessionId) => {
+      const rows = byTask.filter((task2) => task2.sessionId === sessionId);
+      const latest = tasks.filter((task2) => task2.sessionId === sessionId && task2.usageProvenance !== "local-executor" && (task2.lastObservedCliUsage !== void 0 || task2.result?.usage !== void 0)).at(-1);
+      return {
+        sessionId,
+        taskCount: rows.length,
+        counters: sum(rows.map((task2) => task2.counters)),
+        observedCumulative: latest?.lastObservedCliUsage ?? (latest ? normalizeUsage(latest.result.usage) : null)
+      };
+    })
+  };
+}
+
+// dist/src/agy-execution-adapter.js
+var RESPONSE_HOLD_BACK_CHARS = 8192;
+var MAX_BUFFERED_RESPONSE_STEPS = 16;
+var MAX_RESPONSE_STEPS = 1e3;
+var MAX_HELD_RESPONSE_LINES = 100;
+var STDERR_BUFFER_LIMIT = 1e4;
+var ResponseRedactor = class {
+  pending = /* @__PURE__ */ new Map();
+  releaseDelta(index, delta, done, onTruncated) {
+    let entry = this.pending.get(index);
+    if (!entry) {
+      if (this.pending.size >= MAX_RESPONSE_STEPS)
+        return "";
+      entry = { text: "", redaction: {}, suppressing: false, dropped: "", untilDone: false, held: [], overflow: false };
+      this.pending.set(index, entry);
+    }
+    let input2 = delta;
+    if (entry.suppressing) {
+      const newline = entry.untilDone ? -1 : input2.indexOf("\n");
+      this.dropText(entry, newline < 0 ? input2 : input2.slice(0, newline));
+      input2 = newline < 0 || entry.untilDone ? "" : input2.slice(newline + 1);
+      if (newline >= 0 && !entry.untilDone)
+        entry.suppressing = false;
+    }
+    entry.text += input2;
+    const cut = done ? entry.text.length : entry.text.lastIndexOf("\n") + 1;
+    const ready = entry.text.slice(0, cut);
+    entry.text = entry.text.slice(cut);
+    let marker = "";
+    const buffered = [...this.pending.values()].filter((item) => item.text).length;
+    if (entry.text.length > RESPONSE_HOLD_BACK_CHARS || entry.text && buffered > MAX_BUFFERED_RESPONSE_STEPS) {
+      this.dropText(entry, entry.text);
+      entry.text = "";
+      entry.suppressing = true;
+      marker = "[response line suppressed before redaction]\n";
+      onTruncated?.(index, RESPONSE_HOLD_BACK_CHARS);
+    }
+    let released = "";
+    const redactLine = (line) => {
+      const redacted = redactDiagnostic(line, entry.redaction);
+      return line.endsWith("\n") && !redacted.endsWith("\n") ? redacted + "\n" : redacted;
+    };
+    for (const line of ready.split(/(?<=\n)/).filter(Boolean)) {
+      const inBody = entry.held.length > 0 || entry.overflow;
+      const minimum = inBody ? 1 : 16;
+      const bodyLine = new RegExp(`^[A-Za-z0-9+/=]{${minimum},1024}\\r?\\n$`).test(line) || inBody && /^\r?\n$/.test(line);
+      if (!entry.redaction.inPrivateKey && bodyLine) {
+        if (entry.overflow)
+          continue;
+        entry.held.push(line);
+        if (entry.held.length > MAX_HELD_RESPONSE_LINES) {
+          entry.held = [];
+          entry.overflow = true;
+          released += "[response lines suppressed before redaction]\n";
+        }
+        continue;
+      }
+      entry.overflow = false;
+      const orphanEnd = !entry.redaction.inPrivateKey && /-----END [^-]*PRIVATE KEY-----/.test(line) && !/-----BEGIN [^-]*PRIVATE KEY-----/.test(line);
+      if (orphanEnd && entry.held.length)
+        released += "[private key redacted]\n";
+      else
+        released += entry.held.map(redactLine).join("");
+      entry.held = [];
+      released += redactLine(line);
+    }
+    if (done) {
+      released += entry.held.map(redactLine).join("");
+      entry.held = [];
+    }
+    return released + marker;
+  }
+  flushStep(index, onChunk) {
+    if (!this.pending.has(index))
+      return;
+    const text = this.releaseDelta(index, "", true);
+    if (text)
+      onChunk(index, text);
+  }
+  flushAll(onChunk) {
+    for (const index of [...this.pending.keys()]) {
+      this.flushStep(index, onChunk);
+    }
+    this.pending.clear();
+  }
+  // Dropped text may hold a key delimiter that redaction never saw, so the rest of that step stays suppressed.
+  dropText(entry, text) {
+    if ((entry.dropped + text).includes("-----"))
+      entry.untilDone = true;
+    entry.dropped = (entry.dropped + text).slice(-4);
+  }
+};
+var MCP_PERMISSION_RE = /no output produced[^\r\n]{0,200}["']mcp["'][^\r\n]{0,200}permission[^\r\n]{0,200}headless|(?:permission check failed|tool call denied|denied tool|action denied|cannot request approval)[^\r\n]{0,200}\bmcp\b|\bmcp\b[^\r\n]{0,200}(?:permission denied|permission check failed|requires? approval|not authorized)/iu;
+var SOFT_DENIAL_RE = /permission check failed|tool(?:\s+call|\s+execution)?\s+(?:was\s+)?denied|(?:soft\s+)?tool\s+denial|(?:action|command|operation)\s+(?:was\s+)?denied\s+(?:by\s+(?:the\s+)?(?:pre-?tool\s+hook|execution\s+policy|hook|policy|sandbox|security|user|headless|agy|\bmcp\b|permission\s+(?:check|policy))|in\s+(?:headless|non-?interactive)\s+mode)|(?:headless|non-?interactive|agy|pre-?tool\s+hook|execution\s+policy|sandbox|\bmcp\b)[^\r\n]{0,200}(?:confirmation|approval|permission)\s+(?:required|denied|rejected)|(?:confirmation|approval|permission)\s+(?:required|denied|rejected)[^\r\n]{0,200}(?:headless|non-?interactive|pre-?tool\s+hook|execution\s+policy|sandbox|agy|\bmcp\b)|headless\s+mode\s+cannot\s+(?:prompt|request)\s+(?:for\s+)?(?:permission|approval|confirmation)|user\s+denied\s+(?:permission|the\s+tool|tool\s+execution)|denied\s+by\s+(?:the\s+)?(?:pre-?tool\s+hook|execution\s+policy|hook|policy|sandbox|security|user|headless|agy|\bmcp\b|permission\s+(?:check|policy))|(?:not\s+allowed|blocked)\s+by\s+(?:the\s+)?(?:bridge\s+)?(?:pre-?tool\s+hook|execution\s+policy|hook|policy|sandbox|security|headless|agy|\bmcp\b)|failed to prompt user for /i;
+var SOFT_TOOL_STATES = /* @__PURE__ */ new Set(["DENIED", "BLOCKED", "REJECTED", "CANCELED", "CANCELLED"]);
+function errorPriority(code) {
+  switch (code) {
+    case "AGY_AUTH_REQUIRED":
+      return 6;
+    case "AGY_MCP_PERMISSION_REQUIRED":
+      return 5;
+    case "AGY_SANDBOX_BYPASS_REQUESTED":
+      return 4;
+    case "AGY_SANDBOX_BYPASS_DENIED":
+    case "AGY_SANDBOX_SETUP_REQUIRED":
+    case "AGY_SANDBOX_ACCESS_DENIED":
+      return 3;
+    default:
+      return 1;
+  }
+}
+function pickHigherPriority(current, candidate) {
+  if (!candidate)
+    return current;
+  if (!current)
+    return candidate;
+  return errorPriority(candidate.code) > errorPriority(current.code) ? candidate : current;
+}
+function classifyCliTextError(text, context = "stderr") {
+  const trimmed = text.trim();
+  if (!trimmed)
+    return void 0;
+  if (context !== "run-command-output" && CliAdapter.authError(trimmed)) {
+    return new BridgeError("AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
+  }
+  if (MCP_PERMISSION_RE.test(trimmed)) {
+    return new BridgeError("AGY_MCP_PERMISSION_REQUIRED", "Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.");
+  }
+  const sandbox = classifySandboxDenial(trimmed);
+  if (sandbox)
+    return sandbox;
+  const denial = SOFT_DENIAL_RE.exec(trimmed);
+  if (denial) {
+    return new BridgeError("AGY_PROCESS_FAILED", redactDiagnostic(trimmed.slice(denial.index)).slice(0, 2e3));
+  }
+  return void 0;
+}
+function classifyDeniedActions(deniedActions) {
+  if (!Array.isArray(deniedActions) || deniedActions.length === 0)
+    return void 0;
+  const names = [];
+  let hasEscalate = false;
+  let hasUnsandboxed = false;
+  let hasMcp = false;
+  for (const item of deniedActions) {
+    if (typeof item === "string") {
+      names.push(item);
+      if (/escalate_admin/i.test(item))
+        hasEscalate = true;
+      if (/unsandboxed/i.test(item))
+        hasUnsandboxed = true;
+      if (/\bmcp\b/i.test(item))
+        hasMcp = true;
+      continue;
+    }
+    if (item && typeof item === "object") {
+      const record2 = item;
+      const action = typeof record2.action === "string" ? record2.action : typeof record2.name === "string" ? record2.name : typeof record2.tool === "string" ? record2.tool : "";
+      const reason = typeof record2.reason === "string" ? record2.reason : typeof record2.message === "string" ? record2.message : "";
+      const label = [action, reason].filter(Boolean).join(": ") || JSON.stringify(item);
+      names.push(label);
+      if (action === "escalate_admin" || /escalate_admin/i.test(label))
+        hasEscalate = true;
+      if (action === "unsandboxed" || /unsandboxed/i.test(label))
+        hasUnsandboxed = true;
+      if (/\bmcp\b/i.test(label))
+        hasMcp = true;
+    }
+  }
+  if (hasEscalate) {
+    return new BridgeError("AGY_SANDBOX_SETUP_REQUIRED", "The CLI denied administrative sandbox setup for this process. A setup performed in an exited CLI session does not prove that its administrative broker is still available.");
+  }
+  if (hasUnsandboxed) {
+    return new BridgeError("AGY_SANDBOX_BYPASS_DENIED", "The runtime reported a denied sandbox bypass. Preserve that denial; do not retry the command through another host execution path.");
+  }
+  if (hasMcp) {
+    return new BridgeError("AGY_MCP_PERMISSION_REQUIRED", "Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.");
+  }
+  const summary = names.map((name) => redactDiagnostic(name)).join("; ").slice(0, 1500);
+  return new BridgeError("AGY_PROCESS_FAILED", `CLI denied actions despite exit status: ${summary}`);
+}
+function toResultError(err, fallbackCode = "AGY_PROCESS_FAILED") {
+  if (err instanceof BridgeError)
+    return { code: err.code, message: redactDiagnostic(err.message) || err.code };
+  const raw = err instanceof Error ? err.message : String(err);
+  return { code: fallbackCode, message: redactDiagnostic(raw) || fallbackCode };
+}
+function explicitNonEmptyString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : void 0;
+}
+var AgyExecutionAdapter = class {
+  cli;
+  config;
+  explicitCapabilities;
+  identity = { id: "agy", provider: "agy" };
+  observedDiscovery;
+  constructor(cli, config2, explicitCapabilities) {
+    this.cli = cli;
+    this.config = config2;
+    this.explicitCapabilities = explicitCapabilities;
+  }
+  get capabilities() {
+    if (this.explicitCapabilities)
+      return this.explicitCapabilities;
+    const discovery = this.cli.getDiscovery() ?? this.observedDiscovery;
+    if (!discovery) {
+      return {
+        read: "unknown",
+        write: "unknown",
+        sandbox: "unknown",
+        network: "unknown",
+        skills: "unknown",
+        resources: "unknown",
+        structuredOutput: "unknown",
+        cancel: "unknown",
+        resume: "unknown",
+        observableUsage: "unknown"
+      };
+    }
+    if (!discovery.installed) {
+      return {
+        read: "unsupported",
+        write: "unsupported",
+        sandbox: "unsupported",
+        network: "unknown",
+        skills: "unsupported",
+        resources: "unknown",
+        structuredOutput: "unsupported",
+        cancel: "unsupported",
+        resume: "unsupported",
+        observableUsage: "unsupported"
+      };
+    }
+    return {
+      read: discovery.capabilities.readOnlyMode ? "supported" : "unsupported",
+      write: discovery.capabilities.sandbox && discovery.capabilities.streaming ? "supported" : "unsupported",
+      sandbox: discovery.capabilities.sandbox ? "supported" : "unsupported",
+      network: "unknown",
+      skills: "supported",
+      resources: "unknown",
+      structuredOutput: discovery.capabilities.structuredOutput ? "supported" : "unsupported",
+      cancel: discovery.capabilities.cancel ? "supported" : "unknown",
+      resume: discovery.capabilities.resume ? "supported" : "unsupported",
+      observableUsage: discovery.capabilities.streaming ? "supported" : "unknown"
+    };
+  }
+  async checkCapabilities(request) {
+    if (!this.explicitCapabilities) {
+      const discovery = this.cli.getDiscovery() ?? await this.cli.discover();
+      this.observedDiscovery = discovery;
+      if (!discovery.installed) {
+        const match = discovery.error?.match(/^([A-Z0-9_]+):\s*(.*)$/s);
+        return {
+          code: match?.[1] || "AGY_NOT_FOUND",
+          message: redactDiagnostic(match?.[2] || discovery.error || "agy executable not found")
+        };
+      }
+    }
+    try {
+      assertExecutionCapabilities(request, this.capabilities);
+      return void 0;
+    } catch (error62) {
+      return {
+        code: "AGY_CAPABILITY_UNAVAILABLE",
+        message: redactDiagnostic(error62 instanceof Error ? error62.message : String(error62))
+      };
+    }
+  }
+  async execute(request, hooks) {
+    const terminationBefore = this.terminationFromSignal(hooks);
+    if (terminationBefore) {
+      return this.terminatedResult(request.taskId, terminationBefore, void 0, void 0, void 0, 0);
+    }
+    const precheckError = await this.checkCapabilities(request);
+    const terminationAfterDiscovery = this.terminationFromSignal(hooks);
+    if (terminationAfterDiscovery) {
+      return this.terminatedResult(request.taskId, terminationAfterDiscovery, void 0, void 0, void 0, 0);
+    }
+    if (precheckError) {
+      return { taskId: request.taskId, status: "failed", error: precheckError };
+    }
+    const options = hooks?.runOptions ?? {
+      prompt: request.prompt,
+      workingDirectory: request.workingDirectory,
+      role: request.role,
+      model: request.model,
+      effort: request.effort,
+      sessionId: request.session?.id,
+      mode: request.mode,
+      outputSchema: request.outputSchema,
+      timeoutSeconds: this.config.defaultTimeoutSeconds
+    };
+    const spawnCwd = hooks?.spawnWorkingDirectory ?? request.workingDirectory;
+    const spawnedAt = Date.now();
+    let child;
+    try {
+      child = this.cli.spawnTask(options, request.model ?? void 0, spawnCwd);
+    } catch (error62) {
+      return { taskId: request.taskId, status: "failed", error: toResultError(error62) };
+    }
+    const spawnedPid = child.pid;
+    let standaloneTermination;
+    let standaloneTimer;
+    const onAbort = () => terminateSubprocess(child);
+    let stderr = "";
+    let stderrSuppressed = false;
+    let uninspectedStdoutLoss = false;
+    let uninspectedStderrLoss = false;
+    let hookFailure;
+    const stderrRedactor = {};
+    let lastWasRedactedKey = false;
+    let parseErrors = 0;
+    let sessionId = request.session?.id;
+    let lastUsage;
+    let resultFrame;
+    let observedDenial;
+    const redactor = new ResponseRedactor();
+    const recordHookFailure = (error62) => {
+      if (hookFailure === void 0)
+        hookFailure = error62;
+      terminateSubprocess(child);
+    };
+    const safeInvoke = (fn) => {
+      try {
+        fn();
+      } catch (error62) {
+        recordHookFailure(error62);
+      }
+    };
+    const recordDenial = (candidate) => {
+      observedDenial = pickHigherPriority(observedDenial, candidate);
+    };
+    const emitChunk = (index, textDelta) => {
+      hooks?.onEvent?.("response.chunk", { step_index: index, step_type: "agent_response", text_delta: textDelta });
+    };
+    const handleStdoutLine = (line) => {
+      let source;
+      try {
+        const parsed = JSON.parse(line);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          throw new Error("Expected event object");
+        source = parsed;
+      } catch {
+        parseErrors += 1;
+        recordDenial(classifyCliTextError(line));
+        hooks?.onParseError?.();
+        hooks?.onEvent?.("stream.unparsed", { line: redactDiagnostic(line).slice(0, 4e3) });
+        return;
+      }
+      const sanitized = sanitizePayload(source);
+      const raw = sanitized.value;
+      if (sanitized.truncated) {
+        uninspectedStdoutLoss = true;
+        hooks?.onEvent?.("stream.truncated", { maxDepth: DEFAULT_MAX_PAYLOAD_DEPTH, maxNodes: DEFAULT_MAX_PAYLOAD_NODES });
+      }
+      const sourceType = raw.event;
+      if (sourceType === "init") {
+        if (typeof raw.conversation_id === "string") {
+          sessionId = raw.conversation_id;
+          hooks?.onSession?.(raw.conversation_id);
+        }
+        hooks?.onEvent?.("agent.started", raw.init || {}, raw);
+        return;
+      }
+      if (sourceType === "step_update" && raw.step_update && typeof raw.step_update === "object") {
+        const step = raw.step_update;
+        const sourceStep = source.step_update;
+        if (typeof step.step_index === "number") {
+          hooks?.onNativeStep?.(sourceStep, step.step_index);
+        }
+        if (step.step_type === "agent_response" && Number.isSafeInteger(step.step_index)) {
+          const index = step.step_index;
+          if (typeof sourceStep.text_delta === "string") {
+            hooks?.onRawResponseDelta?.(index, sourceStep.text_delta);
+            const released = redactor.releaseDelta(index, sourceStep.text_delta, step.state === "DONE", (stepIdx, maxPendingChars) => {
+              hooks?.onEvent?.("response.truncated", { step_index: stepIdx, maxPendingChars });
+            });
+            step.text_delta = released;
+          } else if (step.state === "DONE") {
+            redactor.flushStep(index, emitChunk);
+          }
+        } else if (step.step_type === "agent_response" && typeof step.text_delta === "string") {
+          step.text_delta = "";
+        }
+        let type = "step.update";
+        let eventData = step;
+        if (step.step_type === "tool") {
+          const result = this.handleToolStep(step, hooks);
+          type = result.type;
+          eventData = result.eventData;
+          recordDenial(result.denial);
+        } else if (step.step_type === "agent_response" && typeof step.text_delta === "string") {
+          type = "response.chunk";
+        }
+        hooks?.onEvent?.(type, eventData, raw);
+        if (step.usage !== void 0) {
+          lastUsage = step.usage;
+          hooks?.onUsage?.(step.usage);
+        }
+        hooks?.onStreaming?.();
+        return;
+      }
+      if (sourceType === "result" && raw.result && typeof raw.result === "object") {
+        redactor.flushAll(emitChunk);
+        const result = raw.result;
+        if (typeof result.error === "string") {
+          result.error = redactDiagnostic(result.error);
+        }
+        resultFrame = result;
+        if (typeof result.conversation_id === "string") {
+          sessionId = result.conversation_id;
+          hooks?.onSession?.(result.conversation_id);
+        }
+        if (result.usage !== void 0) {
+          lastUsage = result.usage;
+          hooks?.onUsage?.(result.usage, normalizeUsage(result.usage));
+        }
+        hooks?.onResultFrame?.(raw.result);
+        hooks?.onFinalText?.(result.response, result.structured_output);
+        hooks?.onEvent?.("agy.result", result, raw);
+        return;
+      }
+      hooks?.onEvent?.("agy.event", raw, raw);
+    };
+    const stdoutParser = new LineParser(handleStdoutLine, void 0, () => {
+      uninspectedStdoutLoss = true;
+      hooks?.onEvent?.("process.output_rejected", { stream: "stdout", reason: "line_limit" });
+    });
+    const stderrParser = new LineParser((line) => {
+      if (stderrSuppressed)
+        return;
+      const redacted = redactDiagnostic(line, stderrRedactor);
+      if (redacted === "[private key redacted]") {
+        if (!lastWasRedactedKey) {
+          lastWasRedactedKey = true;
+          stderr = (stderr + "\n" + redacted).slice(-STDERR_BUFFER_LIMIT);
+          hooks?.onEvent?.("process.stderr", { text: redacted });
+        }
+        return;
+      }
+      lastWasRedactedKey = false;
+      recordDenial(classifyCliTextError(redacted));
+      stderr = (stderr + "\n" + redacted).slice(-STDERR_BUFFER_LIMIT);
+      hooks?.onEvent?.("process.stderr", { text: redacted.slice(0, 4e3) });
+    }, void 0, () => {
+      if (stderrSuppressed)
+        return;
+      stderrSuppressed = true;
+      uninspectedStderrLoss = true;
+      stderr = (stderr + "\n[stderr suppressed after line limit]").slice(-STDERR_BUFFER_LIMIT);
+      hooks?.onEvent?.("process.output_rejected", { stream: "stderr", reason: "line_limit", remainingStreamSuppressed: true });
+    });
+    const onStreamError = (error62) => {
+      const redacted = redactDiagnostic(error62.message);
+      stderr = (stderr + "\n" + redacted).slice(-STDERR_BUFFER_LIMIT);
+      safeInvoke(() => hooks?.onEvent?.("process.error", { message: redacted }));
+      if (!this.terminationFromSignal(hooks) && !standaloneTermination)
+        terminateSubprocess(child);
+    };
+    const closePromise = new Promise((resolve2) => {
+      child.once("close", resolve2);
+    });
+    child.stdout.on("data", (chunk) => {
+      if (hookFailure === void 0)
+        safeInvoke(() => stdoutParser.write(chunk));
+    });
+    child.stderr.on("data", (chunk) => {
+      if (hookFailure === void 0 && !stderrSuppressed)
+        safeInvoke(() => stderrParser.write(chunk));
+    });
+    child.stdout.on("error", onStreamError);
+    child.stderr.on("error", onStreamError);
+    child.stdin.on("error", onStreamError);
+    child.on("error", onStreamError);
+    let exitCode = null;
+    let processCleanup;
+    try {
+      safeInvoke(() => hooks?.onProcessStarted?.(spawnedPid, Boolean(hooks.repair)));
+      if (hookFailure === void 0) {
+        if (hooks?.signal) {
+          if (hooks.signal.aborted)
+            onAbort();
+          else
+            hooks.signal.addEventListener("abort", onAbort, { once: true });
+        } else {
+          const timeoutSeconds = options.timeoutSeconds ?? this.config.defaultTimeoutSeconds;
+          standaloneTimer = setTimeout(() => {
+            standaloneTermination = "timeout";
+            terminateSubprocess(child);
+          }, timeoutSeconds * 1e3);
+          standaloneTimer.unref();
+        }
+      }
+      exitCode = await closePromise;
+      if (child.pid !== void 0) {
+        const cleanup = await reconcileOwnedProcesses({
+          pid: child.pid,
+          spawnedAt,
+          processGroup: isOwnedProcessGroup(child)
+        });
+        processCleanup = {
+          verified: cleanup.verified,
+          spawnedAt: new Date(spawnedAt).toISOString(),
+          checkedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          remaining: cleanup.remaining.length
+        };
+        safeInvoke(() => {
+          hooks?.onProcessCleanup?.(processCleanup);
+          hooks?.onEvent?.("process.cleanup", {
+            verified: cleanup.verified,
+            method: cleanup.method,
+            remaining: cleanup.remaining.length
+          });
+        });
+      }
+      try {
+        await hooks?.onAfterProcessExit?.(processCleanup, spawnedPid);
+      } catch (error62) {
+        recordHookFailure(error62);
+      }
+    } finally {
+      if (standaloneTimer)
+        clearTimeout(standaloneTimer);
+      hooks?.signal?.removeEventListener("abort", onAbort);
+      terminateSubprocess(child);
+    }
+    if (hookFailure === void 0) {
+      safeInvoke(() => {
+        stdoutParser.end();
+        stderrParser.end();
+        redactor.flushAll(emitChunk);
+      });
+    }
+    const common = {
+      taskId: request.taskId,
+      session: sessionId ? { id: sessionId } : void 0,
+      raw: resultFrame,
+      usage: resultFrame?.usage ?? lastUsage,
+      exitCode,
+      processCleanup,
+      parseErrors,
+      spawnedPid
+    };
+    const termination = this.terminationFromSignal(hooks) ?? standaloneTermination;
+    if (termination) {
+      return this.terminatedResult(request.taskId, termination, common.session, common.raw, common.usage, parseErrors, exitCode, processCleanup, spawnedPid);
+    }
+    if (child.schemaCleanupError) {
+      return { ...common, status: "failed", error: toResultError(child.schemaCleanupError, "SCHEMA_CLEANUP_FAILED") };
+    }
+    if (hookFailure !== void 0) {
+      return { ...common, status: "failed", error: toResultError(hookFailure) };
+    }
+    if (child.startupError) {
+      return { ...common, status: "failed", error: toResultError(child.startupError, "AGY_IO_FAILED") };
+    }
+    if (child.communicationError) {
+      return { ...common, status: "failed", error: toResultError(child.communicationError, "AGY_IO_FAILED") };
+    }
+    const authCombined = stderr + JSON.stringify(resultFrame || "");
+    if (CliAdapter.authError(authCombined)) {
+      return {
+        ...common,
+        status: "failed",
+        error: { code: "AGY_AUTH_REQUIRED", message: "Authenticate with the official interactive `agy` command" }
+      };
+    }
+    recordDenial(classifyCliTextError(stderr));
+    if (resultFrame) {
+      recordDenial(classifyDeniedActions(resultFrame.denied_actions));
+      const frameError = explicitNonEmptyString(resultFrame.error);
+      if (frameError)
+        recordDenial(classifyCliTextError(frameError, "result"));
+    }
+    if (observedDenial && errorPriority(observedDenial.code) >= 3) {
+      return { ...common, status: "failed", error: toResultError(observedDenial) };
+    }
+    if (resultFrame && Array.isArray(resultFrame.denied_actions) && resultFrame.denied_actions.length > 0) {
+      const deniedErr = classifyDeniedActions(resultFrame.denied_actions);
+      return { ...common, status: "failed", error: toResultError(deniedErr) };
+    }
+    const exactStatus = resultFrame && typeof resultFrame.status === "string" ? resultFrame.status : void 0;
+    const statusLabel = exactStatus !== void 0 && exactStatus.length > 0 ? exactStatus.trim() === exactStatus ? exactStatus : JSON.stringify(exactStatus) : "UNKNOWN";
+    const detailReason = resultFrame ? explicitNonEmptyString(resultFrame.error) ?? explicitNonEmptyString(resultFrame.reason) ?? explicitNonEmptyString(stderr) : explicitNonEmptyString(stderr);
+    if (resultFrame && (resultFrame.denied === true || resultFrame.permission_denied === true || resultFrame.incomplete === true)) {
+      return {
+        ...common,
+        status: "failed",
+        error: {
+          code: "AGY_PROCESS_FAILED",
+          message: redactDiagnostic(detailReason || `CLI reported an incomplete or denied execution (status ${statusLabel})`)
+        }
+      };
+    }
+    if (resultFrame && explicitNonEmptyString(resultFrame.error)) {
+      const errText = explicitNonEmptyString(resultFrame.error);
+      const classified = classifyCliTextError(errText, "result");
+      return {
+        ...common,
+        status: "failed",
+        error: classified ? toResultError(classified) : { code: "AGY_PROCESS_FAILED", message: redactDiagnostic(errText) }
+      };
+    }
+    if (observedDenial) {
+      return { ...common, status: "failed", error: toResultError(observedDenial) };
+    }
+    if (!resultFrame) {
+      const fallbackMessage = stderr.trim() ? redactDiagnostic(stderr.trim()) : `agy exited with code ${exitCode} without emitting a result event`;
+      return {
+        ...common,
+        status: "failed",
+        error: { code: parseErrors > 0 ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message: fallbackMessage }
+      };
+    }
+    if (exactStatus !== "SUCCESS") {
+      const extraReason = explicitNonEmptyString(resultFrame.reason) ?? explicitNonEmptyString(stderr);
+      const message = extraReason ? `CLI ended with non-SUCCESS status ${statusLabel}: ${redactDiagnostic(extraReason)}` : `CLI ended with non-SUCCESS status ${statusLabel}`;
+      return {
+        ...common,
+        status: "failed",
+        error: {
+          code: "AGY_PROCESS_FAILED",
+          message
+        }
+      };
+    }
+    if (exitCode !== 0) {
+      return {
+        ...common,
+        status: "failed",
+        error: {
+          code: "AGY_PROCESS_FAILED",
+          message: redactDiagnostic(detailReason || `agy exited with code ${exitCode}`)
+        }
+      };
+    }
+    if (uninspectedStdoutLoss || uninspectedStderrLoss) {
+      const lostStreams = [
+        ...uninspectedStdoutLoss ? ["stdout"] : [],
+        ...uninspectedStderrLoss ? ["stderr"] : []
+      ];
+      return {
+        ...common,
+        status: "failed",
+        error: {
+          code: "AGY_PROCESS_FAILED",
+          message: `CLI output truncated without denial inspection (${lostStreams.join(", ")})`
+        }
+      };
+    }
+    const finalResponse = typeof resultFrame.response === "string" ? resultFrame.response : "";
+    return {
+      ...common,
+      status: "completed",
+      response: finalResponse,
+      structuredOutput: resultFrame.structured_output
+    };
+  }
+  handleToolStep(step, hooks) {
+    const type = step.state === "DONE" ? "tool.completed" : step.state === "ERROR" ? "tool.failed" : "tool.started";
+    const toolInfo = step.tool_info && typeof step.tool_info === "object" ? step.tool_info : void 0;
+    const toolError = toolInfo?.error && typeof toolInfo.error === "object" ? toolInfo.error : void 0;
+    const rawErrorMsg = typeof toolError?.message === "string" ? toolError.message : void 0;
+    const params = toolInfo?.parameters && typeof toolInfo.parameters === "object" ? toolInfo.parameters : void 0;
+    const editSearch = hooks?.resolveEditMismatch?.(step.tool_name, step.state, rawErrorMsg, params);
+    let denial;
+    const stepDenied = classifyDeniedActions(toolInfo?.denied_actions) ?? classifyDeniedActions(step.denied_actions);
+    if (stepDenied)
+      denial = pickHigherPriority(denial, stepDenied);
+    const stateUpper = typeof step.state === "string" ? step.state.toUpperCase() : "";
+    if (step.denied === true || step.permission_denied === true || toolInfo?.denied === true || toolInfo?.permission_denied === true || SOFT_TOOL_STATES.has(stateUpper)) {
+      const reason = rawErrorMsg ?? (typeof toolInfo?.output === "string" ? toolInfo.output : void 0);
+      denial = pickHigherPriority(denial, classifyCliTextError(reason ?? "", "tool-error") ?? new BridgeError("AGY_PROCESS_FAILED", redactDiagnostic(reason || `Tool step ${String(step.tool_name ?? "")} ended with state ${stateUpper || "DENIED"}`)));
+    }
+    if (step.state === "ERROR") {
+      if (rawErrorMsg)
+        denial = pickHigherPriority(denial, classifyCliTextError(rawErrorMsg, "tool-error"));
+      if (typeof toolInfo?.output === "string")
+        denial = pickHigherPriority(denial, classifyCliTextError(toolInfo.output, "tool-error"));
+      if (!denial && typeof toolError?.type === "string" && /(?:hook|permission|policy|deni|reject|block)/i.test(toolError.type)) {
+        denial = new BridgeError("AGY_PROCESS_FAILED", redactDiagnostic(rawErrorMsg || `Tool step ${String(step.tool_name ?? "")} denied (${toolError.type})`).slice(0, 2e3));
+      }
+      const failure3 = {
+        ...typeof toolError?.type === "string" && toolError.type.length <= 64 ? { type: toolError.type } : {},
+        message: rawErrorMsg !== void 0 ? redactDiagnostic(rawErrorMsg).slice(0, 500) : "Tool reported an error without details"
+      };
+      let eventData = { ...step, failure: failure3, ...editSearch ? { editSearch } : {} };
+      if (JSON.stringify(eventData).length > MAX_EVENT_PAYLOAD_CHARS) {
+        const { conversation_id, step_index, state, step_type, tool_name, duration_seconds } = step;
+        eventData = {
+          ...conversation_id !== void 0 ? { conversation_id } : {},
+          ...step_index !== void 0 ? { step_index } : {},
+          ...state !== void 0 ? { state } : {},
+          ...step_type !== void 0 ? { step_type } : {},
+          ...tool_name !== void 0 ? { tool_name } : {},
+          ...duration_seconds !== void 0 ? { duration_seconds } : {},
+          failure: failure3,
+          ...editSearch ? { editSearch } : {},
+          truncated: true
+        };
+      }
+      return { type, eventData, denial };
+    }
+    if (step.state === "DONE" && step.tool_name === "run_command" && typeof toolInfo?.output === "string") {
+      const trimmedOutput = toolInfo.output.trim();
+      const cmdDenial = classifyCliTextError(trimmedOutput, "run-command-output");
+      if (cmdDenial)
+        denial = pickHigherPriority(denial, cmdDenial);
+    }
+    return { type, eventData: step, denial };
+  }
+  terminationFromSignal(hooks) {
+    const fromCallback = hooks?.getTerminationReason?.();
+    if (fromCallback)
+      return fromCallback;
+    const signal = hooks?.signal;
+    if (!signal?.aborted)
+      return void 0;
+    return signal.reason === "timeout" ? "timeout" : "cancelled";
+  }
+  terminatedResult(taskId, termination, session, raw, usage, parseErrors, exitCode, processCleanup, spawnedPid) {
+    return {
+      taskId,
+      status: termination,
+      error: termination === "timeout" ? { code: "TASK_TIMEOUT", message: "Task execution timed out" } : { code: "TASK_CANCELLED", message: "Task cancelled" },
+      session,
+      raw,
+      usage,
+      exitCode,
+      processCleanup,
+      parseErrors,
+      spawnedPid
+    };
+  }
+};
+
 // dist/src/workflows.js
-import { createHash as createHash14 } from "node:crypto";
+import { createHash as createHash15 } from "node:crypto";
 var HASH_REGEX = /^[a-f0-9]{64}$/;
 var workflowHookSchema = external_exports.object({
   requireReview: external_exports.boolean().optional(),
@@ -37338,7 +38810,7 @@ function workflowCheckpointSha256(checkpoint) {
   if (!parsed.success) {
     throw new BridgeError("INVALID_WORKFLOW_CHECKPOINT", parsed.error.issues[0]?.message ?? "Invalid workflow checkpoint");
   }
-  return createHash14("sha256").update(Buffer.from(JSON.stringify(parsed.data), "utf8")).digest("hex");
+  return createHash15("sha256").update(Buffer.from(JSON.stringify(parsed.data), "utf8")).digest("hex");
 }
 var workflowInputSchema = external_exports.object({
   nodeKey: nodeKeySchema,
@@ -37413,107 +38885,8 @@ function buildWorkflowContext(inputs) {
   if (bytes > MAX_WORKFLOW_CONTEXT_BYTES) {
     throw new BridgeError("WORKFLOW_CONTEXT_TOO_LARGE", `Workflow context size (${bytes} bytes) exceeds limit of ${MAX_WORKFLOW_CONTEXT_BYTES} bytes`);
   }
-  const sha256 = createHash14("sha256").update(Buffer.from(text, "utf8")).digest("hex");
+  const sha256 = createHash15("sha256").update(Buffer.from(text, "utf8")).digest("hex");
   return { text, sha256, bytes };
-}
-
-// dist/src/usage.js
-var usageCountersSchema = external_exports.object({
-  inputTokens: external_exports.number().int().nonnegative().nullable(),
-  outputTokens: external_exports.number().int().nonnegative().nullable(),
-  totalTokens: external_exports.number().int().nonnegative().nullable(),
-  thinkingTokens: external_exports.number().int().nonnegative().nullable(),
-  cacheReadTokens: external_exports.number().int().nonnegative().nullable()
-});
-var fields = {
-  inputTokens: "input_tokens",
-  outputTokens: "output_tokens",
-  totalTokens: "total_tokens",
-  thinkingTokens: "thinking_tokens",
-  cacheReadTokens: "cache_read_tokens"
-};
-var keys = Object.keys(fields);
-function normalizeUsage(raw) {
-  const data = raw && typeof raw === "object" ? raw : {};
-  return Object.fromEntries(keys.map((key) => {
-    const value = data[fields[key]];
-    return [key, typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null];
-  }));
-}
-function taskTokenUsage(task2) {
-  if (task2.usageProvenance === "local-executor") {
-    return {
-      scope: "task",
-      source: "local-executor",
-      counters: { inputTokens: 0, outputTokens: 0, totalTokens: 0, thinkingTokens: 0, cacheReadTokens: 0 },
-      available: true,
-      partial: false,
-      warnings: []
-    };
-  }
-  const raw = task2.result?.usage;
-  const current = normalizeUsage(raw);
-  const counters = { ...current };
-  const warnings = [];
-  if (task2.usageIsResume) {
-    for (const key of keys) {
-      const before = task2.usageBaseline?.[key];
-      const after = current[key];
-      counters[key] = before !== void 0 && before !== null && after !== null && after >= before ? after - before : null;
-      if (before !== null && before !== void 0 && after !== null && after < before)
-        warnings.push("Counter reset: " + key);
-    }
-    if (!task2.usageBaseline)
-      warnings.push("Previous session counters are unavailable; cumulative usage is not task usage");
-  }
-  const available = keys.some((key) => counters[key] !== null);
-  const partial2 = keys.some((key) => counters[key] === null);
-  if (raw === void 0)
-    warnings.push("Final CLI usage is unavailable");
-  if (partial2)
-    warnings.push("Missing counters remain null; no estimate or zero substitution");
-  return {
-    scope: "task",
-    source: available ? task2.usageIsResume ? "session-delta" : "session-total" : "unavailable",
-    counters,
-    available,
-    partial: partial2,
-    warnings
-  };
-}
-function sum(rows) {
-  return Object.fromEntries(keys.map((key) => {
-    if (!rows.length || rows.some((row) => row[key] === null))
-      return [key, null];
-    const total = rows.reduce((total2, row) => total2 + row[key], 0);
-    return [key, Number.isSafeInteger(total) ? total : null];
-  }));
-}
-function aggregateUsage(tasks) {
-  const byTask = tasks.map((task2) => ({ taskId: task2.taskId, sessionId: task2.sessionId ?? null, model: task2.model ?? null, status: task2.status, ...taskTokenUsage(task2) }));
-  const models = [...new Set(tasks.map((task2) => task2.model ?? null))];
-  const sessions = [...new Set(tasks.map((task2) => task2.sessionId).filter((id2) => id2 !== void 0))];
-  return {
-    scope: "retained-tasks",
-    taskCount: tasks.length,
-    measuredTaskCount: byTask.filter((task2) => task2.available).length,
-    counters: sum(byTask.map((task2) => task2.counters)),
-    byTask,
-    byModel: models.map((model) => {
-      const rows = byTask.filter((task2) => task2.model === model);
-      return { model, taskCount: rows.length, counters: sum(rows.map((task2) => task2.counters)) };
-    }),
-    bySession: sessions.map((sessionId) => {
-      const rows = byTask.filter((task2) => task2.sessionId === sessionId);
-      const latest = tasks.filter((task2) => task2.sessionId === sessionId && task2.usageProvenance !== "local-executor" && (task2.lastObservedCliUsage !== void 0 || task2.result?.usage !== void 0)).at(-1);
-      return {
-        sessionId,
-        taskCount: rows.length,
-        counters: sum(rows.map((task2) => task2.counters)),
-        observedCumulative: latest?.lastObservedCliUsage ?? (latest ? normalizeUsage(latest.result.usage) : null)
-      };
-    })
-  };
 }
 
 // dist/src/group-budget.js
@@ -37584,10 +38957,10 @@ function requireGroupBudget(status2) {
 }
 
 // dist/src/group-contract.js
-import { createHash as createHash16 } from "node:crypto";
+import { createHash as createHash17 } from "node:crypto";
 
 // dist/src/verification.js
-import { createHash as createHash15 } from "node:crypto";
+import { createHash as createHash16 } from "node:crypto";
 import { createReadStream as createReadStream3 } from "node:fs";
 var criterionSchema = external_exports.object({
   id: external_exports.string().regex(/^[a-zA-Z0-9_-]{1,64}$/),
@@ -37631,7 +39004,7 @@ async function verifyCriteria(project, sha256, criteria = [], reviews = []) {
         chunks.push(chunk);
       }
       const buffer = Buffer.concat(chunks);
-      fileHashes[relative2] = createHash15("sha256").update(buffer).digest("hex");
+      fileHashes[relative2] = createHash16("sha256").update(buffer).digest("hex");
       contents.set(relative2, buffer);
       return buffer;
     } catch (error62) {
@@ -37728,7 +39101,7 @@ var groupDefinitionSchema = external_exports.object({
     ctx.addIssue({ code: "custom", message: "Group definition exceeds 4 MiB" });
 });
 function groupDefinitionSha256(definition) {
-  return createHash16("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
+  return createHash17("sha256").update(JSON.stringify(groupDefinitionSchema.parse(definition))).digest("hex");
 }
 var groupStateSchema = external_exports.enum(["created", "running", "paused", "completed", "failed", "cancelled"]);
 var groupNodeRecordSchema = external_exports.object({
@@ -37753,7 +39126,7 @@ var peerDeliverySchema = external_exports.object({
   error: external_exports.object({ code: external_exports.string(), message: external_exports.string() }).strict().optional()
 }).strict().superRefine((delivery, ctx) => {
   if (typeof delivery.text === "string") {
-    const expectedSha256 = createHash16("sha256").update(delivery.text, "utf8").digest("hex");
+    const expectedSha256 = createHash17("sha256").update(delivery.text, "utf8").digest("hex");
     if (delivery.sha256 !== expectedSha256) {
       ctx.addIssue({
         code: "custom",
@@ -45855,182 +47228,6 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
-// dist/src/native-tests.js
-import { createHash as createHash17, randomUUID as randomUUID7 } from "node:crypto";
-import { appendFile, mkdir as mkdir4, readFile as readFile5, rm as rm3, writeFile as writeFile5 } from "node:fs/promises";
-import path15 from "node:path";
-var testCommandSchema = external_exports.object({
-  executable: external_exports.string().min(1).max(1e3),
-  args: external_exports.array(external_exports.string().max(4e3)).max(50).default([])
-}).strict();
-var receiptSchema = external_exports.object({
-  nonce: external_exports.string().uuid(),
-  exitCode: external_exports.number().int().min(0).max(255).nullable(),
-  beforeSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(),
-  afterSha256: external_exports.string().regex(/^[a-f0-9]{64}$/).optional(),
-  error: external_exports.string().optional(),
-  truncated: external_exports.boolean()
-}).strict();
-async function nativeRunner(load, settings) {
-  const fs = load("node:fs");
-  const crypto3 = load("node:crypto");
-  const paths2 = load("node:path");
-  const processes = load("node:child_process");
-  const receipt = { nonce: settings.nonce, exitCode: null, truncated: false };
-  let gitDirectory;
-  let output2 = "";
-  try {
-    if (paths2.relative(fs.realpathSync.native(settings.copyDirectory), fs.realpathSync.native(process.cwd())) !== "")
-      throw new Error("Test working directory differs from the copy");
-    gitDirectory = fs.mkdtempSync(paths2.join(process.cwd(), ".black-gravity-test-snapshot-"));
-    processes.execFileSync("git", ["-c", "init.templateDir=", "init", "--bare", "--quiet", gitDirectory]);
-    fs.mkdirSync(paths2.join(gitDirectory, "info"), { recursive: true });
-    fs.appendFileSync(paths2.join(gitDirectory, "info", "exclude"), "\n/" + settings.file + "\n/" + paths2.basename(gitDirectory) + "/\n");
-    async function fingerprint() {
-      const list = processes.execFileSync("git", ["--git-dir=" + gitDirectory, "--work-tree=" + process.cwd(), "ls-files", "--others", "--exclude-standard", "-z"], { maxBuffer: 1e7 }).toString("utf8").split("\0").filter(Boolean).sort();
-      if (list.length > settings.maxCopyFiles)
-        throw new Error("Test snapshot file limit exceeded");
-      const tree = crypto3.createHash("sha256");
-      let bytes = 0;
-      for (const relative2 of list) {
-        let current = process.cwd();
-        for (const part of relative2.split("/")) {
-          if (!part || part === ".." || part === "." || part === ".git")
-            throw new Error("Unsafe test path");
-          current = paths2.join(current, part);
-          if (fs.lstatSync(current).isSymbolicLink())
-            throw new Error("Test snapshot contains a link");
-        }
-        if (!fs.lstatSync(current).isFile())
-          throw new Error("Test snapshot contains a non-file");
-        const hash3 = crypto3.createHash("sha256");
-        for await (const chunk of fs.createReadStream(current)) {
-          bytes += chunk.length;
-          if (bytes > settings.maxCopyBytes)
-            throw new Error("Test snapshot byte limit exceeded");
-          hash3.update(chunk);
-        }
-        tree.update(relative2 + "\0" + hash3.digest("hex") + "\0");
-      }
-      return tree.digest("hex");
-    }
-    receipt.beforeSha256 = await fingerprint();
-    let executable = settings.executable, args = settings.args;
-    if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
-      if (args.some((arg) => /[&|<>^()%!"\r\n]/.test(arg)))
-        throw new Error("Batch arguments contain unsupported shell metacharacters; use a native executable");
-      const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
-      const script = "$ErrorActionPreference='Stop'; try { $global:LASTEXITCODE=0; & (Get-Command -Name " + quote(executable) + " -CommandType Application -ErrorAction Stop).Source " + args.map(quote).join(" ") + "; exit $LASTEXITCODE } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 127 }";
-      executable = paths2.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-      args = ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")];
-    }
-    const child = processes.spawn(executable, args, { cwd: process.cwd(), windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
-    const append = (chunk) => {
-      const text = chunk.toString("utf8");
-      if (output2.length + text.length > 4e3)
-        receipt.truncated = true;
-      output2 = (output2 + text).slice(-4e3);
-    };
-    child.stdout.on("data", append);
-    child.stderr.on("data", append);
-    const timer = setTimeout(() => {
-      receipt.error = "Command timed out";
-      child.kill();
-    }, settings.timeoutSeconds * 1e3);
-    child.once("error", (error62) => {
-      receipt.error = error62.message;
-    });
-    receipt.exitCode = await new Promise((resolve2) => child.once("close", resolve2));
-    clearTimeout(timer);
-    receipt.afterSha256 = await fingerprint();
-  } catch (error62) {
-    receipt.error = error62 instanceof Error ? error62.message : String(error62);
-  } finally {
-    if (gitDirectory) {
-      if (paths2.dirname(paths2.resolve(gitDirectory)) !== paths2.resolve(process.cwd()) || !paths2.basename(gitDirectory).startsWith(".black-gravity-test-snapshot-") || fs.lstatSync(gitDirectory).isSymbolicLink())
-        throw new Error("Unsafe snapshot cleanup path");
-      fs.rmSync(gitDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
-    }
-  }
-  process.stdout.write(output2 + "\nBLACK_GRAVITY_TEST:" + settings.nonce + ":" + Buffer.from(JSON.stringify(receipt)).toString("base64") + "\n");
-}
-async function prepareNativeTest(project, request, settings) {
-  testCommandSchema.parse({ executable: request.executable, args: request.args });
-  const nonce = randomUUID7();
-  const file3 = ".black-gravity-test-" + nonce + ".cjs";
-  const absolute = path15.join(project.copyDirectory, file3);
-  const script = "(" + nativeRunner.toString() + ")(require, " + JSON.stringify({ executable: request.executable, args: request.args, nonce, file: file3, copyDirectory: project.copyDirectory, ...settings }) + ");";
-  const hash3 = createHash17("sha256").update(script).digest("hex");
-  const exclude = path15.join(project.gitDirectory, "info", "exclude");
-  await mkdir4(path15.dirname(exclude), { recursive: true });
-  await appendFile(exclude, "\n/" + file3 + "\n");
-  await writeFile5(absolute, script, { flag: "wx", mode: 384 });
-  const bootstrap = "const fs=require('node:fs'),c=require('node:crypto'),b=fs.readFileSync('" + file3 + "');if(c.createHash('sha256').update(b).digest('hex')!=='" + hash3 + "')throw Error('TestRunnerChanged');Function('require',b.toString())(require);";
-  let commandLine;
-  if (process.platform === "win32") {
-    const quote = (value) => "'" + value.replaceAll("'", "''") + "'";
-    commandLine = "& " + quote(process.execPath) + " -e " + quote(bootstrap);
-  } else {
-    const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
-    commandLine = quote(process.execPath) + " -e " + quote(bootstrap);
-  }
-  if (commandLine.length > 3e4)
-    throw new BridgeError("INVALID_TEST_COMMAND", "Test command exceeds the process argument limit");
-  return {
-    nonce,
-    commandLine,
-    prompt: "Execute this exact CommandLine with run_command in the current copy, inside the native sandbox: " + JSON.stringify(commandLine) + ". Do not replace, edit or summarize its execution. The runner prints the actual command output and a receipt. Maximum attempts: " + request.maxAttempts + ". Only after a nonzero command receipt, make relevant fixes and retry the same CommandLine if attempts remain. Do not run outside the sandbox, change the runner, weaken tests, or claim success without the receipt. Stop when the command passes or attempts are exhausted.\n<bridge-test-command>" + JSON.stringify({ commandLine, maxAttempts: request.maxAttempts }) + "</bridge-test-command>",
-    async cleanup() {
-      await rm3(absolute, { force: true });
-      const content = await readFile5(exclude, "utf8");
-      await writeFile5(exclude, content.split(/\r?\n/).filter((line) => line !== "/" + file3).join("\n"));
-    }
-  };
-}
-function readNativeReceipt(step, expected) {
-  if (step.state !== "DONE" || step.step_type !== "tool" || step.tool_name !== "run_command")
-    return;
-  const info = step.tool_info;
-  if (info?.parameters?.CommandLine !== expected.commandLine || typeof info.output !== "string")
-    return;
-  if (info.parameters.BypassSandbox !== void 0 && info.parameters.BypassSandbox !== false)
-    return;
-  const prefix = "BLACK_GRAVITY_TEST:" + expected.nonce + ":";
-  const lines = info.output.split(/\r?\n/).filter((line) => line.startsWith(prefix));
-  if (lines.length !== 1)
-    return;
-  try {
-    const receipt = receiptSchema.parse(JSON.parse(Buffer.from(lines[0].slice(prefix.length), "base64").toString("utf8")));
-    if (receipt.nonce !== expected.nonce)
-      return;
-    return { receipt, output: info.output.slice(0, info.output.indexOf(prefix)).trim().slice(-4e3) };
-  } catch {
-    return;
-  }
-}
-function readNativeSandboxError(step, expected) {
-  if (step.state !== "DONE" || step.step_type !== "tool" || step.tool_name !== "run_command")
-    return;
-  const info = step.tool_info;
-  if (info?.parameters?.CommandLine !== expected.commandLine)
-    return;
-  if (info.parameters.BypassSandbox !== void 0 && info.parameters.BypassSandbox !== false) {
-    return new BridgeError("AGY_SANDBOX_BYPASS_REQUESTED", "The test command requested sandbox bypass; its receipt cannot verify isolated execution.");
-  }
-  if (typeof info.output !== "string" || readNativeReceipt(step, expected))
-    return;
-  const cause = info.output.trim().slice(-2e3);
-  if (/granting access to [^\r\n]+:\s*(?:access is denied|permission denied|access denied)/i.test(cause)) {
-    return new BridgeError("AGY_SANDBOX_ACCESS_DENIED", "Native sandbox access preparation failed. Inspect the reported target and Windows ACLs; this error alone does not prove that initial setup is missing. Reported error: " + cause);
-  }
-  if (/failed to prompt user for admin escalation|permission check failed for escalate_admin/i.test(cause)) {
-    return new BridgeError("AGY_SANDBOX_SETUP_REQUIRED", "The native runtime requested administrative sandbox setup and it was not completed. Inspect the official interactive CLI setup request; do not approve command bypass. Reported error: " + cause);
-  }
-  if (/permission check failed for unsandboxed\b/i.test(cause)) {
-    return new BridgeError("AGY_SANDBOX_BYPASS_DENIED", "The runtime reported a denied sandbox bypass. Preserve that denial; do not retry the command through another host execution path. Reported error: " + cause);
-  }
-}
-
 // dist/src/handoff.js
 var decisionsSchema = external_exports.array(external_exports.string().min(1).max(2e3)).max(20);
 var handoffSchema = external_exports.object({
@@ -46104,7 +47301,7 @@ function compareFindings(tasks, models) {
 import { createHash as createHash18 } from "node:crypto";
 import { lstat as lstat8, readdir as readdir5, realpath as realpath6 } from "node:fs/promises";
 import os6 from "node:os";
-import path16 from "node:path";
+import path17 from "node:path";
 var paths = external_exports.array(external_exports.string().min(1).max(1e3)).max(20);
 var persistedPolicySchema = external_exports.object({
   readRoots: paths,
@@ -46152,8 +47349,8 @@ function comparePaths(left, right) {
   return 0;
 }
 function contains(root, target) {
-  const relative2 = path16.relative(pathKey(root), pathKey(target));
-  return relative2 === "" || !relative2.startsWith(".." + path16.sep) && relative2 !== ".." && !path16.isAbsolute(relative2);
+  const relative2 = path17.relative(pathKey(root), pathKey(target));
+  return relative2 === "" || !relative2.startsWith(".." + path17.sep) && relative2 !== ".." && !path17.isAbsolute(relative2);
 }
 function overlaps(left, right) {
   return contains(left, right) || contains(right, left);
@@ -46219,17 +47416,17 @@ function localAbsolutePath(value) {
         throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions cannot name a Windows device or relative path");
       }
     }
-  } else if (!path16.isAbsolute(value) || value.startsWith("//")) {
+  } else if (!path17.isAbsolute(value) || value.startsWith("//")) {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Sandbox permissions require local absolute paths");
   }
-  return path16.resolve(value);
+  return path17.resolve(value);
 }
 async function inspectExistingPath(absolute) {
-  const root = path16.parse(absolute).root;
-  const parts = path16.relative(root, absolute).split(path16.sep).filter(Boolean);
+  const root = path17.parse(absolute).root;
+  const parts = path17.relative(root, absolute).split(path17.sep).filter(Boolean);
   let current = root;
   for (let index = 0; index < parts.length; index++) {
-    current = path16.join(current, parts[index]);
+    current = path17.join(current, parts[index]);
     let info;
     try {
       info = await lstat8(current);
@@ -46265,7 +47462,7 @@ async function inspectDirectoryGrant(directory, limits) {
       throw new BridgeError("INVALID_SANDBOX_PATH", "Could not inspect a sandbox directory grant");
     }
     for (const name of children) {
-      const child = path16.join(current, name);
+      const child = path17.join(current, name);
       let info;
       try {
         info = await lstat8(child);
@@ -46295,11 +47492,11 @@ async function inspectSandboxGrant(value) {
 }
 async function canonicalProtectedPath(value) {
   const absolute = localAbsolutePath(value);
-  const root = path16.parse(absolute).root;
-  const parts = path16.relative(root, absolute).split(path16.sep).filter(Boolean);
+  const root = path17.parse(absolute).root;
+  const parts = path17.relative(root, absolute).split(path17.sep).filter(Boolean);
   let current = root, firstMissing = parts.length;
   for (let index = 0; index < parts.length; index++) {
-    const next = path16.join(current, parts[index]);
+    const next = path17.join(current, parts[index]);
     let info;
     try {
       info = await lstat8(next);
@@ -46321,13 +47518,13 @@ async function canonicalProtectedPath(value) {
   } catch {
     throw new BridgeError("INVALID_SANDBOX_PATH", "Could not canonicalize a protected sandbox path");
   }
-  return path16.join(canonical, ...parts.slice(firstMissing));
+  return path17.join(canonical, ...parts.slice(firstMissing));
 }
 async function protectedPaths(stateDirectory, forbidden, portableNodeCacheDirectory) {
   return Promise.all([
     stateDirectory,
     ...portableNodeCacheDirectory ? [portableNodeCacheDirectory] : [],
-    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path16.join(os6.homedir(), name)),
+    ...[".codex", ".gemini", ".ssh", ".aws", ".azure"].map((name) => path17.join(os6.homedir(), name)),
     ...forbidden
   ].map(canonicalProtectedPath));
 }
@@ -46335,7 +47532,7 @@ async function canonicalPaths(values, protectedRoots, limits) {
   const temporary = await canonicalProtectedPath(os6.tmpdir());
   const canonical = await Promise.all(values.map(async (value) => {
     const target = await inspectSandboxGrant(value);
-    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path16.sep).some((part) => ownedTemporaryDirectory.test(part))) {
+    if (protectedRoots.some((root) => overlaps(root, target.canonical)) || contains(target.canonical, temporary) || target.canonical.split(path17.sep).some((part) => ownedTemporaryDirectory.test(part))) {
       throw new BridgeError("SANDBOX_PATH_PROTECTED", "Sandbox permission target overlaps protected bridge storage, credentials, source, or temporary paths");
     }
     if (target.directory)
@@ -46867,19 +48064,19 @@ function toolAnnotations(name) {
 
 // dist/src/wait-command.js
 import { lstatSync as lstatSync5, readFileSync as readFileSync4 } from "node:fs";
-import path18 from "node:path";
+import path19 from "node:path";
 import { setTimeout as setTimeout2 } from "node:timers/promises";
 
 // dist/src/state-store.js
 import { createHash as createHash19, randomUUID as randomUUID8 } from "node:crypto";
 import { closeSync as closeSync3, lstatSync as lstatSync4, mkdirSync as mkdirSync4, openSync as openSync3, readFileSync as readFileSync3, readdirSync as readdirSync3, realpathSync as realpathSync4, renameSync as renameSync3, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import path17 from "node:path";
+import path18 from "node:path";
 import os7 from "node:os";
 var uuid3 = /^[a-f0-9-]{36}$/;
 var SANITIZED_CACHE_VERSION = 1;
 var maxSandboxPolicyFileBytes = 2 * 20 * 1e3 * 6 + 4096;
 var modelSelectionSchema = external_exports.object({ version: external_exports.literal(1), model: external_exports.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/).nullable() }).strict();
-var integrationApprovalRootSchema = external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path17.isAbsolute(root) && path17.resolve(root) === root && root !== path17.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()));
+var integrationApprovalRootSchema = external_exports.string().min(1).max(1e3).refine((root) => !root.includes("\0") && path18.isAbsolute(root) && path18.resolve(root) === root && root !== path18.parse(root).root && (process.platform !== "win32" || root === root.toLowerCase()));
 var integrationApprovalsSchema = external_exports.object({ version: external_exports.literal(1), roots: external_exports.array(integrationApprovalRootSchema).max(20) }).strict();
 var blockedMetadataSchema = external_exports.object({
   path: external_exports.string(),
@@ -47074,18 +48271,18 @@ var StateStore = class {
   }
   probeWritable() {
     readdirSync3(this.directory);
-    const probeFile = path17.join(this.directory, ".startup-probe-" + randomUUID8());
+    const probeFile = path18.join(this.directory, ".startup-probe-" + randomUUID8());
     writeFileSync4(probeFile, "", { flag: "wx", mode: 384 });
     rmSync3(probeFile);
   }
   file(taskId) {
     if (!uuid3.test(taskId))
       throw new BridgeError("INVALID_STATE", "Invalid persisted task ID");
-    return path17.join(this.directory, taskId + ".json");
+    return path18.join(this.directory, taskId + ".json");
   }
   readIntegrationRoots() {
     const variable = "integration-approvals.json";
-    const file3 = path17.join(this.directory, "integration-approvals.json");
+    const file3 = path18.join(this.directory, "integration-approvals.json");
     let stat4;
     try {
       stat4 = lstatSync4(file3);
@@ -47144,7 +48341,7 @@ var StateStore = class {
   rememberIntegrationRoot(directory) {
     const canonical = preauthorizedIntegrationRoots(JSON.stringify([directory]))[0];
     const release = this.acquire("integration-approvals");
-    const target = path17.join(this.directory, "integration-approvals.json");
+    const target = path18.join(this.directory, "integration-approvals.json");
     const temporary = target + "." + randomUUID8() + ".tmp";
     try {
       const roots = this.loadIntegrationRoots();
@@ -47159,7 +48356,7 @@ var StateStore = class {
     }
   }
   loadModel() {
-    const file3 = path17.join(this.directory, "model-selection.json");
+    const file3 = path18.join(this.directory, "model-selection.json");
     try {
       const stat4 = lstatSync4(file3);
       if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.size > 1024)
@@ -47172,7 +48369,7 @@ var StateStore = class {
     }
   }
   loadSandboxPolicy() {
-    const file3 = path17.join(this.directory, "sandbox-policy.json");
+    const file3 = path18.join(this.directory, "sandbox-policy.json");
     try {
       const stat4 = lstatSync4(file3);
       if (!stat4.isFile() || stat4.isSymbolicLink() || stat4.size > maxSandboxPolicyFileBytes)
@@ -47193,7 +48390,7 @@ var StateStore = class {
     } catch {
       throw new BridgeError("INVALID_STATE", "Invalid sandbox policy snapshot");
     }
-    const target = path17.join(this.directory, "sandbox-policy.json");
+    const target = path18.join(this.directory, "sandbox-policy.json");
     const temporary = target + "." + randomUUID8() + ".tmp";
     try {
       this.loadSandboxPolicy();
@@ -47206,7 +48403,7 @@ var StateStore = class {
   saveModel(model) {
     const selection = modelSelectionSchema.parse({ version: 1, model });
     const release = this.acquire("model-selection");
-    const target = path17.join(this.directory, "model-selection.json");
+    const target = path18.join(this.directory, "model-selection.json");
     const temporary = target + "." + randomUUID8() + ".tmp";
     try {
       this.loadModel();
@@ -47269,7 +48466,7 @@ var StateStore = class {
   load(source) {
     const names = source ? [source.name] : readdirSync3(this.directory).filter((name) => uuid3.test(name.slice(0, -5)) && name.endsWith(".json"));
     return names.map((name) => {
-      const file3 = source?.file ?? path17.join(this.directory, name);
+      const file3 = source?.file ?? path18.join(this.directory, name);
       const stat4 = lstatSync4(file3);
       if (stat4.isSymbolicLink() || !stat4.isFile() || stat4.size > 7e7)
         throw new BridgeError("INVALID_STATE", "Unsafe persisted task file");
@@ -47281,7 +48478,7 @@ var StateStore = class {
       } catch {
         throw new BridgeError("INVALID_STATE", "Invalid persisted task: " + name);
       }
-      if (data.record.taskId + ".json" !== name || !path17.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
+      if (data.record.taskId + ".json" !== name || !path18.isAbsolute(data.record.workingDirectory) || data.options.workingDirectory !== data.record.workingDirectory || data.options.prompt !== data.record.prompt || data.events.some((event) => event.taskId !== data.record.taskId || event.sequence > data.cursor)) {
         throw new BridgeError("INVALID_STATE", "Persisted task does not match its identity");
       }
       const messages = data.record.messages ?? [];
@@ -47309,7 +48506,7 @@ var StateStore = class {
         if (Boolean(data.project.executionPolicy) !== Boolean(data.project.executionStateDirectory) || data.project.executionStateDirectory && !this.ownsExecutionState(data.project.executionStateDirectory) || data.project.executionPolicy && data.project.executionPolicy.policy.sha256 !== data.record.agentPolicy?.sha256)
           throw new BridgeError("INVALID_STATE", "Persisted execution policy differs from task or private storage");
         for (const [directory, kind2] of [[data.project.copyDirectory, "copy"], [data.project.gitDirectory, "baseline"]]) {
-          if (!path17.isAbsolute(directory) || path17.relative(os7.tmpdir(), path17.dirname(directory)) !== "" || !hasOwnedPrefix(path17.basename(directory), kind2)) {
+          if (!path18.isAbsolute(directory) || path18.relative(os7.tmpdir(), path18.dirname(directory)) !== "" || !hasOwnedPrefix(path18.basename(directory), kind2)) {
             throw new BridgeError("INVALID_STATE", "Persisted copy is outside bridge temporary storage");
           }
         }
@@ -47332,10 +48529,10 @@ var StateStore = class {
     const origin = readMigrationMarker(this.directory)?.source;
     if (origin && samePath(directory, origin))
       return true;
-    return path17.relative(realpathSync4.native(directory), realpathSync4.native(this.directory)) === "";
+    return path18.relative(realpathSync4.native(directory), realpathSync4.native(this.directory)) === "";
   }
   sanitizedDirectory() {
-    const directory = path17.join(this.directory, "sanitized");
+    const directory = path18.join(this.directory, "sanitized");
     mkdirSync4(directory, { recursive: true, mode: 448 });
     if (lstatSync4(directory).isSymbolicLink() || !lstatSync4(directory).isDirectory())
       throw new BridgeError("INVALID_STATE", "Sanitized state cache must be a real directory");
@@ -47344,7 +48541,7 @@ var StateStore = class {
   sanitizedFile(taskId, fingerprint) {
     if (!uuid3.test(taskId) || !/^[a-f0-9]{64}$/.test(fingerprint))
       throw new BridgeError("INVALID_STATE", "Invalid sanitized state key");
-    return path17.join(this.sanitizedDirectory(), taskId + "-" + fingerprint + ".v" + SANITIZED_CACHE_VERSION + ".json");
+    return path18.join(this.sanitizedDirectory(), taskId + "-" + fingerprint + ".v" + SANITIZED_CACHE_VERSION + ".json");
   }
   loadSanitized(taskId, fingerprint) {
     let file3;
@@ -47366,7 +48563,7 @@ var StateStore = class {
   dropSanitized(taskId, keep) {
     const directory = this.sanitizedDirectory();
     for (const name of readdirSync3(directory)) {
-      const file3 = path17.join(directory, name);
+      const file3 = path18.join(directory, name);
       if (name.startsWith(taskId + "-") && !name.endsWith(".tmp") && file3 !== keep)
         removeCachedFile(file3);
     }
@@ -47381,7 +48578,7 @@ var StateStore = class {
   acquire(name) {
     if (!/^[a-zA-Z0-9-]+$/.test(name))
       throw new BridgeError("INVALID_STATE", "Invalid lock name");
-    const file3 = path17.join(this.directory, name + ".lock"), token = randomUUID8();
+    const file3 = path18.join(this.directory, name + ".lock"), token = randomUUID8();
     const root = lstatSync4(this.directory, { bigint: true });
     const busy = () => new BridgeError("STATE_BUSY", "Another operation owns this task or copy, or its lock cannot be verified");
     const checkRoot = () => {
@@ -47562,7 +48759,7 @@ function createFileReader(file3, maxBytes, requireSingleLink, parse4) {
   };
 }
 function createTaskReader(stateDirectory, taskId) {
-  return createFileReader(path18.join(stateDirectory, `${taskId}.json`), maxTaskStateBytes, false, (raw) => {
+  return createFileReader(path19.join(stateDirectory, `${taskId}.json`), maxTaskStateBytes, false, (raw) => {
     const parsed = waitSnapshotSchema.parse(raw);
     if (parsed.record.taskId !== taskId)
       throw new Error("Task ID mismatch");
@@ -47590,7 +48787,7 @@ function findPromptMessage(record2, after) {
 function waitCommandArgv(stateDirectory, entry = process.argv[1], node2 = process.execPath) {
   if (!entry)
     return void 0;
-  return [node2, path18.resolve(entry), "wait", "--state-directory", stateDirectory];
+  return [node2, path19.resolve(entry), "wait", "--state-directory", stateDirectory];
 }
 function shellCommand(argv) {
   return argv.map((arg) => `'${arg.split("'").join("'\\''")}'`).join(" ");
@@ -47784,7 +48981,7 @@ async function runWaitCommand(args, env, write, options = {}) {
     }
     return reader;
   };
-  const groupReader = groupId !== null ? createFileReader(path18.join(stateDirectory, `group-${groupId}.json`), maxGroupStateBytes, true, (raw) => {
+  const groupReader = groupId !== null ? createFileReader(path19.join(stateDirectory, `group-${groupId}.json`), maxGroupStateBytes, true, (raw) => {
     const parsed = waitGroupSchema.parse(raw);
     if (parsed.groupId.toLowerCase() !== groupId)
       throw new Error("Group ID mismatch");
@@ -48551,7 +49748,7 @@ Integration modifies the original. Confirm only after reviewing the patch and th
 // dist/src/group-store.js
 import { lstatSync as lstatSync6, readdirSync as readdirSync4, readFileSync as readFileSync5, realpathSync as realpathSync5, rmSync as rmSync4, writeFileSync as writeFileSync5 } from "node:fs";
 import { randomUUID as randomUUID9 } from "node:crypto";
-import path19 from "node:path";
+import path20 from "node:path";
 var GroupStore = class {
   state;
   root;
@@ -48567,7 +49764,7 @@ var GroupStore = class {
       const stat5 = lstatSync6(current);
       if (!stat5.isDirectory() || stat5.isSymbolicLink())
         throw new BridgeError("INVALID_STATE", "Unsafe group storage ancestry");
-      const parent = path19.dirname(current);
+      const parent = path20.dirname(current);
       if (parent === current)
         break;
       current = parent;
@@ -48580,7 +49777,7 @@ var GroupStore = class {
       throw new BridgeError("INVALID_STATE", "Group storage identity changed");
     if (!/^[a-f0-9-]{36}$/i.test(groupId))
       throw new BridgeError("INVALID_GROUP", "Invalid group ID");
-    return path19.join(this.root, "group-" + groupId.toLowerCase() + ".json");
+    return path20.join(this.root, "group-" + groupId.toLowerCase() + ".json");
   }
   read(groupId) {
     const file3 = this.file(groupId);
@@ -48629,10 +49826,10 @@ var GroupStore = class {
 // dist/src/group-manager.js
 import { createHash as createHash20, randomUUID as randomUUID10 } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
-import path20 from "node:path";
+import path21 from "node:path";
 import { fileURLToPath } from "node:url";
 var finished = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
-var bridgeDirectory = path20.dirname(fileURLToPath(import.meta.url));
+var bridgeDirectory = path21.dirname(fileURLToPath(import.meta.url));
 function coordinationCause(error62) {
   const name = error62 instanceof Error ? error62.constructor?.name : void 0;
   const cause = { errorClass: typeof name === "string" && /^[A-Za-z_$][\w$]{0,63}$/.test(name) ? name : error62 instanceof Error ? "Error" : "NonError" };
@@ -48657,10 +49854,10 @@ function coordinationCause(error62) {
         continue;
       }
     }
-    if (!path20.isAbsolute(file3))
+    if (!path21.isAbsolute(file3))
       continue;
-    const relative2 = path20.relative(bridgeDirectory, file3);
-    if (!relative2 || relative2.startsWith("..") || path20.isAbsolute(relative2) || relative2.split(/[\\/]/).includes("node_modules"))
+    const relative2 = path21.relative(bridgeDirectory, file3);
+    if (!relative2 || relative2.startsWith("..") || path21.isAbsolute(relative2) || relative2.split(/[\\/]/).includes("node_modules"))
       continue;
     if (match[1].length <= 128 && /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(match[1])) {
       cause.frame = match[1];
@@ -49341,292 +50538,6 @@ var GroupManager = class {
 import { createHash as createHash25, randomUUID as randomUUID14 } from "node:crypto";
 import path27 from "node:path";
 
-// dist/src/process-tree.js
-import { spawn as spawn4 } from "node:child_process";
-import path21 from "node:path";
-async function listWindowsProcesses() {
-  const systemRoot = process.env.SystemRoot || "C:\\Windows";
-  const powershell = path21.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-  const script = 'Get-CimInstance Win32_Process | ForEach-Object { if ($_.CreationDate) { "$($_.ProcessId) $($_.ParentProcessId) $($_.CreationDate.ToFileTimeUtc())" } }';
-  return new Promise((resolve2, reject) => {
-    let child;
-    try {
-      child = spawn4(powershell, ["-NoProfile", "-NonInteractive", "-Command", script], {
-        shell: false,
-        windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"]
-      });
-    } catch (err) {
-      reject(err);
-      return;
-    }
-    let settled = false;
-    const timer = setTimeout(() => {
-      fail3(new Error("Process listing timed out after 15s"));
-    }, 15e3);
-    timer.unref();
-    function fail3(err) {
-      if (settled)
-        return;
-      settled = true;
-      clearTimeout(timer);
-      try {
-        child.kill();
-      } catch {
-      }
-      reject(err);
-    }
-    const chunks = [];
-    let totalBytes = 0;
-    const MAX_STDOUT_BYTES = 16 * 1024 * 1024;
-    if (child.stdout) {
-      child.stdout.on("data", (chunk) => {
-        totalBytes += chunk.length;
-        if (totalBytes > MAX_STDOUT_BYTES) {
-          fail3(new Error("Process listing stdout exceeded 16 MiB"));
-          return;
-        }
-        chunks.push(chunk);
-      });
-    }
-    if (child.stderr) {
-      child.stderr.resume();
-    }
-    child.on("error", (err) => {
-      fail3(err);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (settled)
-        return;
-      settled = true;
-      if (code !== 0) {
-        reject(new Error(`Process listing exited with code ${code}`));
-        return;
-      }
-      const output2 = Buffer.concat(chunks).toString("utf8");
-      const lines = output2.split(/\r?\n/);
-      const processes = [];
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed)
-          continue;
-        const parts = trimmed.split(/\s+/);
-        if (parts.length < 3)
-          continue;
-        const pid = Number(parts[0]);
-        const parentPid = Number(parts[1]);
-        const ftStr = parts[2];
-        if (!Number.isInteger(pid) || pid < 0 || !Number.isInteger(parentPid) || parentPid < 0) {
-          continue;
-        }
-        if (!ftStr || !/^\d+$/.test(ftStr)) {
-          continue;
-        }
-        try {
-          const ft = BigInt(ftStr);
-          const createdAt = Number(ft / 10000n) - 116444736e5;
-          if (!Number.isFinite(createdAt))
-            continue;
-          processes.push({ pid, parentPid, createdAt });
-        } catch {
-          continue;
-        }
-      }
-      resolve2(processes);
-    });
-  });
-}
-function ownedProcesses(processes, rootPid, spawnedAt) {
-  const root = processes.find((p) => p.pid === rootPid && p.createdAt >= spawnedAt - 2e3);
-  const result = [];
-  const visited = /* @__PURE__ */ new Set();
-  const queue = [];
-  if (root) {
-    result.push(root);
-    visited.add(root.pid);
-    queue.push({ pid: root.pid, createdAt: root.createdAt });
-  } else {
-    visited.add(rootPid);
-    queue.push({ pid: rootPid, createdAt: spawnedAt - 2e3 });
-  }
-  let head = 0;
-  while (head < queue.length) {
-    const current = queue[head++];
-    if (!current)
-      break;
-    for (const p of processes) {
-      if (p.parentPid === current.pid && p.createdAt >= current.createdAt && !visited.has(p.pid)) {
-        visited.add(p.pid);
-        result.push(p);
-        queue.push({ pid: p.pid, createdAt: p.createdAt });
-      }
-    }
-  }
-  return result;
-}
-function sleep2(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, Math.max(0, ms)));
-}
-function killProcess(pid) {
-  return new Promise((resolve2) => {
-    try {
-      const systemRoot = process.env.SystemRoot || "C:\\Windows";
-      const taskkill = path21.join(systemRoot, "System32", "taskkill.exe");
-      const child = spawn4(taskkill, ["/PID", String(pid), "/F"], {
-        windowsHide: true,
-        shell: false,
-        stdio: "ignore"
-      });
-      child.once("error", () => resolve2());
-      child.once("close", () => resolve2());
-    } catch {
-      resolve2();
-    }
-  });
-}
-function isProcessAlive(target) {
-  try {
-    process.kill(target, 0);
-    return true;
-  } catch (err) {
-    return err?.code === "EPERM";
-  }
-}
-async function reconcileOwnedProcesses(root, options) {
-  const graceMs = options?.graceMs ?? 3e3;
-  if (process.platform === "win32") {
-    if (typeof root.pid !== "number" || root.pid <= 0) {
-      return { verified: false, method: "windows-snapshot", remaining: [] };
-    }
-    const list = options?.list ?? listWindowsProcesses;
-    let targets;
-    try {
-      const snapshot = await list();
-      targets = ownedProcesses(snapshot, root.pid, root.spawnedAt);
-    } catch {
-      return { verified: false, method: "windows-snapshot", remaining: [] };
-    }
-    if (targets.length === 0) {
-      return { verified: true, method: "windows-snapshot", remaining: [] };
-    }
-    for (const target2 of targets) {
-      await killProcess(target2.pid);
-    }
-    const deadline2 = Date.now() + graceMs;
-    let remaining = targets;
-    do {
-      if (graceMs > 0) {
-        const waitMs = Math.min(250, Math.max(1, deadline2 - Date.now()));
-        await sleep2(waitMs);
-      }
-      let currentList;
-      try {
-        currentList = await list();
-      } catch {
-        return { verified: false, method: "windows-snapshot", remaining };
-      }
-      remaining = targets.filter((target2) => currentList.some((p) => p.pid === target2.pid && Math.abs(p.createdAt - target2.createdAt) <= 1));
-      if (remaining.length === 0) {
-        return { verified: true, method: "windows-snapshot", remaining: [] };
-      }
-    } while (Date.now() < deadline2);
-    return { verified: false, method: "windows-snapshot", remaining };
-  }
-  if (typeof root.pid !== "number" || root.pid <= 0) {
-    return { verified: false, method: "process-group", remaining: [] };
-  }
-  const target = root.processGroup ? -root.pid : root.pid;
-  if (!isProcessAlive(target)) {
-    return { verified: true, method: "process-group", remaining: [] };
-  }
-  try {
-    process.kill(target, "SIGKILL");
-  } catch {
-  }
-  const deadline = Date.now() + graceMs;
-  do {
-    if (graceMs > 0) {
-      const waitMs = Math.min(100, Math.max(1, deadline - Date.now()));
-      await sleep2(waitMs);
-    }
-    if (!isProcessAlive(target)) {
-      return { verified: true, method: "process-group", remaining: [] };
-    }
-  } while (Date.now() < deadline);
-  return { verified: !isProcessAlive(target), method: "process-group", remaining: [] };
-}
-
-// dist/src/payload-safety.js
-var DEFAULT_MAX_PAYLOAD_DEPTH = 64;
-var DEFAULT_MAX_PAYLOAD_NODES = 1e5;
-function sanitizePayload(value, options = {}) {
-  const maxDepth = options.maxDepth ?? DEFAULT_MAX_PAYLOAD_DEPTH;
-  const maxNodes = options.maxNodes ?? DEFAULT_MAX_PAYLOAD_NODES;
-  for (const limit of [maxDepth, maxNodes]) {
-    if (!Number.isSafeInteger(limit) || limit < 1)
-      throw new RangeError("Payload limits must be positive safe integers");
-  }
-  let redacted = false, truncated = false, nodes = 0;
-  const pending = [];
-  const copy = (input2, depth) => {
-    if (++nodes > maxNodes) {
-      truncated = true;
-      return { keep: true, value: "[node limit exceeded]" };
-    }
-    if (typeof input2 === "string") {
-      const text = redactDiagnostic(input2);
-      if (text !== input2)
-        redacted = true;
-      return { keep: true, value: text };
-    }
-    if (typeof input2 === "number")
-      return { keep: true, value: Number.isFinite(input2) ? input2 : null };
-    if (typeof input2 === "boolean" || input2 === null)
-      return { keep: true, value: input2 };
-    if (typeof input2 !== "object")
-      return { keep: false };
-    if (depth > maxDepth) {
-      truncated = true;
-      return { keep: true, value: "[depth limit exceeded]" };
-    }
-    const target = Array.isArray(input2) ? [] : {};
-    pending.push({ source: input2, target, depth });
-    return { keep: true, value: target };
-  };
-  const root = copy(value, 0);
-  while (pending.length) {
-    const { source, target, depth } = pending.pop();
-    if (Array.isArray(source)) {
-      for (const item of source) {
-        const next = copy(item, depth + 1);
-        target.push(next.keep ? next.value : null);
-        if (nodes > maxNodes)
-          break;
-      }
-      continue;
-    }
-    for (const key in source) {
-      if (nodes > maxNodes)
-        break;
-      if (!Object.hasOwn(source, key))
-        continue;
-      const next = copy(source[key], depth + 1);
-      if (!next.keep)
-        continue;
-      const name = redactDiagnostic(key);
-      if (name !== key)
-        redacted = true;
-      if (Object.hasOwn(target, name)) {
-        redacted = true;
-        continue;
-      }
-      Object.defineProperty(target, name, { value: next.value, enumerable: true, writable: true, configurable: true });
-    }
-  }
-  return { value: root.keep ? root.value : void 0, redacted, truncated };
-}
-
 // dist/src/craft.js
 import { randomUUID as randomUUID11 } from "node:crypto";
 import { existsSync as existsSync2 } from "node:fs";
@@ -50080,143 +50991,6 @@ function mergePermanentSkills(permanent, supplied) {
   }
   return merged;
 }
-
-// dist/src/logger.js
-function logTaskEvent(taskId, type, data) {
-  if (!type.startsWith("task.") && type !== "process.started")
-    return;
-  const details = data && typeof data === "object" ? data : {};
-  const entry = { timestamp: (/* @__PURE__ */ new Date()).toISOString(), taskId, type };
-  if (type === "process.started" && typeof details.pid === "number")
-    entry.pid = details.pid;
-  if (type === "task.failed" && typeof details.code === "string")
-    entry.code = details.code;
-  process.stderr.write(JSON.stringify(entry) + "\n");
-}
-
-// dist/src/event-store.js
-var MAX_EVENT_PAYLOAD_CHARS = 16e3;
-var EventStore = class {
-  capacity;
-  onAppend;
-  events = [];
-  cursors = /* @__PURE__ */ new Map();
-  heldLogs;
-  constructor(capacity, onAppend) {
-    this.capacity = capacity;
-    this.onAppend = onAppend;
-  }
-  holdLogs() {
-    this.heldLogs = [];
-  }
-  releaseLogs(shouldPublish) {
-    const held = this.heldLogs;
-    this.heldLogs = void 0;
-    if (held) {
-      for (const [taskId, type, data] of held) {
-        if (shouldPublish(taskId))
-          logTaskEvent(taskId, type, data);
-      }
-    }
-  }
-  append(taskId, type, data, raw) {
-    const sequence = (this.cursors.get(taskId) || 0) + 1;
-    this.cursors.set(taskId, sequence);
-    const bounded = (value) => {
-      const serialized = JSON.stringify(value);
-      return serialized && serialized.length > MAX_EVENT_PAYLOAD_CHARS ? { truncated: true, preview: serialized.slice(0, MAX_EVENT_PAYLOAD_CHARS) } : value;
-    };
-    const event = { taskId, sequence, timestamp: (/* @__PURE__ */ new Date()).toISOString(), type, data: bounded(data) };
-    if (raw !== void 0)
-      event.raw = bounded(raw);
-    this.events.push(event);
-    if (this.events.length > this.capacity)
-      this.events.splice(0, this.events.length - this.capacity);
-    if (this.heldLogs)
-      this.heldLogs.push([taskId, type, data]);
-    else
-      logTaskEvent(taskId, type, data);
-    this.onAppend?.(taskId);
-    return event;
-  }
-  read(taskId, after = 0, limit = 200) {
-    const bucket = this.events.filter((event) => event.taskId === taskId);
-    const oldestAvailable = bucket[0]?.sequence || (this.cursors.get(taskId) || 0) + 1;
-    const events = bucket.filter((event) => event.sequence > after).slice(0, limit);
-    return { events, nextCursor: events.at(-1)?.sequence || after, oldestAvailable, truncated: after < oldestAvailable - 1 };
-  }
-  drop(taskId) {
-    this.cursors.delete(taskId);
-    for (let index = this.events.length - 1; index >= 0; index--) {
-      if (this.events[index]?.taskId === taskId)
-        this.events.splice(index, 1);
-    }
-  }
-  snapshot(taskId) {
-    return { events: this.events.filter((event) => event.taskId === taskId), cursor: this.cursors.get(taskId) || 0 };
-  }
-  restore(taskId, events, cursor) {
-    this.drop(taskId);
-    this.events.push(...events);
-    this.events.sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.sequence - b.sequence);
-    if (this.events.length > this.capacity)
-      this.events.splice(0, this.events.length - this.capacity);
-    this.cursors.set(taskId, cursor);
-  }
-};
-
-// dist/src/stream-parser.js
-import { StringDecoder as StringDecoder2 } from "node:string_decoder";
-var LineParser = class {
-  onLine;
-  maxLineChars;
-  onOverflow;
-  decoder = new StringDecoder2("utf8");
-  remainder = "";
-  discarding = false;
-  constructor(onLine, maxLineChars = 2e6, onOverflow) {
-    this.onLine = onLine;
-    this.maxLineChars = maxLineChars;
-    this.onOverflow = onOverflow;
-    if (!Number.isSafeInteger(maxLineChars) || maxLineChars < 1)
-      throw new RangeError("Invalid line limit");
-  }
-  write(chunk) {
-    this.consume(this.decoder.write(chunk));
-  }
-  end() {
-    this.consume(this.decoder.end());
-    if (!this.discarding && this.remainder)
-      this.onLine(this.remainder);
-    this.remainder = "";
-  }
-  consume(text) {
-    let offset = 0;
-    while (offset < text.length) {
-      const newline = text.indexOf("\n", offset);
-      const end = newline === -1 ? text.length : newline;
-      if (!this.discarding) {
-        if (this.remainder.length + end - offset > this.maxLineChars) {
-          this.remainder = "";
-          this.discarding = true;
-          this.onOverflow?.();
-        } else {
-          this.remainder += text.slice(offset, end);
-        }
-      }
-      if (newline === -1)
-        return;
-      if (!this.discarding) {
-        const line = this.remainder.replace(/\r$/, "");
-        if (line)
-          this.onLine(line);
-      }
-      this.remainder = "";
-      this.discarding = false;
-      offset = newline + 1;
-    }
-  }
-};
 
 // dist/src/chunks.js
 import { createHash as createHash22 } from "node:crypto";
@@ -53790,10 +54564,6 @@ async function executeWindowsTest(command2, copyDirectory, options) {
 }
 
 // dist/src/task-manager.js
-var RESPONSE_HOLD_BACK_CHARS = 8192;
-var MAX_BUFFERED_RESPONSE_STEPS = 16;
-var MAX_RESPONSE_STEPS = 1e3;
-var MAX_HELD_RESPONSE_LINES = 100;
 var RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5e6 };
 var RESUME_GUIDANCE = "Pass the taskId of the task to continue, or a sessionId obtained from black_gravity_status";
 var RESUME_REFUSED = `Resume requires a completed, non-integrated task in this project. ${RESUME_GUIDANCE}`;
@@ -53886,9 +54656,11 @@ var TaskManager = class {
     this.nativeRecovery = Promise.resolve();
     this.nativeRecoveryError = void 0;
   }
-  constructor(adapter, config2) {
+  executor;
+  constructor(adapter, config2, executor) {
     this.adapter = adapter;
     this.config = config2;
+    this.executor = executor ?? new AgyExecutionAdapter(adapter, config2);
     this.events = new EventStore(config2.eventBufferSize, (taskId) => this.persist(taskId));
     if (config2.stateDirectoryInvalid) {
       const reason = config2.configurationIssues.find((i) => i.variable === "BRIDGE_STATE_DIRECTORY")?.reason ?? "not-absolute";
@@ -55577,7 +56349,9 @@ var TaskManager = class {
       }
       if (task2.nativeAbort)
         task2.nativeAbort.abort();
-      else if (task2.child)
+      if (task2.executionAbort)
+        task2.executionAbort.abort("cancelled");
+      if (task2.child)
         this.terminate(task2.child);
     }
     return this.status(taskId);
@@ -55615,10 +56389,7 @@ var TaskManager = class {
       try {
         await this.executeWindowsNativeTest(task2);
       } catch (error62) {
-        if (task2.termination)
-          this.finish(task2, task2.termination);
-        else
-          this.finish(task2, "failed", error62 instanceof BridgeError ? error62.code : "WINDOWS_EXECUTION_UNVERIFIED", error62 instanceof Error ? error62.message : String(error62));
+        this.finishFromError(task2, error62, "WINDOWS_EXECUTION_UNVERIFIED");
       }
       return;
     }
@@ -55628,8 +56399,6 @@ var TaskManager = class {
     let native;
     let readOnlyBaseline;
     let policyReceiptOffset = 0;
-    let lineEndingStyles;
-    let byteOrderMarks;
     try {
       task2.project ??= await createProjectCopy(record2.workingDirectory, task2.options.includePaths, (project) => {
         task2.project = project;
@@ -55677,109 +56446,12 @@ var TaskManager = class {
         task2.editReceipts = void 0;
       if (task2.options.craft)
         await verifyCraftSelection(task2.options.craft);
-      const spawnedAt = Date.now();
-      let child;
-      if (record2.mode === "read-only")
-        child = this.adapter.spawnTask(task2.options, record2.model, task2.project.copyDirectory);
-      else
-        ({ child, styles: lineEndingStyles, boms: byteOrderMarks } = await this.spawnWithLfCopy(task2, native ? { ...task2.options, prompt: native.prompt } : task2.options, !native));
-      task2.child = child;
-      record2.pid = child.pid;
-      record2.status = "running";
-      this.events.append(record2.taskId, "process.started", { pid: child.pid });
-      const timeoutMs = task2.options.timeoutSeconds * 1e3;
-      task2.timer = setTimeout(() => {
-        task2.termination ??= "timeout";
-        this.terminate(child);
-      }, timeoutMs);
-      task2.timer.unref();
-      let stderr = "";
-      let stderrSuppressed = false;
-      const stderrRedactor = {};
-      let lastWasRedactedKey = false;
-      const stdoutParser = new LineParser((line) => this.handleStdout(task2, line), void 0, () => {
-        this.events.append(task2.record.taskId, "process.output_rejected", { stream: "stdout", reason: "line_limit" });
-      });
-      const stderrParser = new LineParser((line) => {
-        if (stderrSuppressed)
-          return;
-        const redacted = redactDiagnostic(line, stderrRedactor);
-        if (redacted === "[private key redacted]") {
-          if (!lastWasRedactedKey) {
-            lastWasRedactedKey = true;
-            stderr = (stderr + "\n" + redacted).slice(-1e4);
-            this.events.append(record2.taskId, "process.stderr", { text: redacted });
-          }
-          return;
-        }
-        lastWasRedactedKey = false;
-        stderr = (stderr + "\n" + redacted).slice(-1e4);
-        this.events.append(record2.taskId, "process.stderr", { text: redacted.slice(0, 4e3) });
-      }, void 0, () => {
-        if (stderrSuppressed)
-          return;
-        stderrSuppressed = true;
-        stderr = (stderr + "\n[stderr suppressed after line limit]").slice(-1e4);
-        this.events.append(task2.record.taskId, "process.output_rejected", { stream: "stderr", reason: "line_limit", remainingStreamSuppressed: true });
-      });
-      child.stdout.on("data", (chunk) => stdoutParser.write(chunk));
-      child.stderr.on("data", (chunk) => {
-        if (!stderrSuppressed)
-          stderrParser.write(chunk);
-      });
-      child.stdout.on("error", (error62) => {
-        const redacted = redactDiagnostic(error62.message);
-        stderr += "\n" + redacted;
-        this.events.append(record2.taskId, "process.error", { message: redacted });
-        if (!task2.termination)
-          this.terminate(child);
-      });
-      child.stderr.on("error", (error62) => {
-        const redacted = redactDiagnostic(error62.message);
-        stderr += "\n" + redacted;
-        this.events.append(record2.taskId, "process.error", { message: redacted });
-        if (!task2.termination)
-          this.terminate(child);
-      });
-      child.stdin.on("error", (error62) => {
-        const redacted = redactDiagnostic(error62.message);
-        stderr += "\n" + redacted;
-        this.events.append(record2.taskId, "process.error", { message: redacted });
-        if (!task2.termination)
-          this.terminate(child);
-      });
-      child.on("error", (error62) => {
-        const redacted = redactDiagnostic(error62.message);
-        stderr += `
-${redacted}`;
-        this.events.append(record2.taskId, "process.error", { message: redacted });
-        if (!task2.termination)
-          this.terminate(child);
-      });
-      const exitCode = await new Promise((resolve2) => {
-        child.once("close", resolve2);
-      });
-      await this.reconcileProcesses(task2, child, spawnedAt);
-      if (child.pid === void 0 || record2.processCleanup?.verified)
-        await this.restoreLineEndings(task2);
-      stdoutParser.end();
-      stderrParser.end();
-      if (task2.timer) {
-        clearTimeout(task2.timer);
-        task2.timer = void 0;
-      }
-      task2.child = void 0;
+      const isReadOnly = record2.mode === "read-only";
+      const { result: execResult, styles, boms } = await this.runAgyStep(task2, native ? { ...task2.options, prompt: native.prompt } : task2.options, { prepareLf: !isReadOnly, convertLf: !isReadOnly && !native });
       if (task2.termination) {
         this.finish(task2, task2.termination);
         return;
       }
-      if (child.schemaCleanupError)
-        throw child.schemaCleanupError;
-      if (child.startupError)
-        throw child.startupError;
-      if (child.communicationError)
-        throw child.communicationError;
-      record2.exitCode = exitCode;
       if (native) {
         await native.cleanup();
         native = void 0;
@@ -55810,9 +56482,13 @@ ${redacted}`;
             throw task2.nativeTest.failure;
           const last = attempts.at(-1)?.receipt;
           if (!last || last.exitCode === null || last.error) {
-            const denied = record2.result?.denied_actions;
-            if (Array.isArray(denied) && denied.some((action) => action && typeof action === "object" && action.action === "escalate_admin")) {
-              throw new BridgeError("AGY_SANDBOX_SETUP_REQUIRED", "The CLI denied administrative sandbox setup for this process. A setup performed in an exited CLI session does not prove that its administrative broker is still available.");
+            if (last && (last.exitCode === null || last.error)) {
+              throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "No valid execution receipt from the exact run_command call; check native sandbox permissions");
+            }
+            if (execResult.status !== "completed") {
+              const nonCompleteError = this.resultFailure(task2, execResult);
+              this.finish(task2, this.terminalStateFromResult(task2, execResult), nonCompleteError.code, nonCompleteError.message);
+              return;
             }
             throw new BridgeError("TEST_EXECUTION_UNVERIFIED", "No valid execution receipt from the exact run_command call; check native sandbox permissions");
           }
@@ -55830,53 +56506,45 @@ ${redacted}`;
       }
       if (record2.mode === "read-only")
         await verifyReadOnlyCopy(task2.project, readOnlyBaseline);
-      if (CliAdapter.authError(stderr + JSON.stringify(record2.result || "")))
-        this.finish(task2, "failed", "AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
-      else if (/no output produced[^\r\n]*["']mcp["'][^\r\n]*permission[^\r\n]*headless/iu.test(stderr)) {
-        this.finish(task2, "failed", "AGY_MCP_PERMISSION_REQUIRED", "Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.");
-      } else if (exitCode !== 0 || !record2.result || record2.result.status !== "SUCCESS") {
-        const rawMessage = record2.result?.error || (stderr.trim() ? stderr.trim() : `agy exited with code ${exitCode}`);
-        const message = redactDiagnostic(rawMessage);
-        this.finish(task2, "failed", !record2.result && task2.parseErrors ? "STREAM_PARSE_ERROR" : "AGY_PROCESS_FAILED", message);
-      } else {
-        if (task2.project.executionPolicy) {
-          await verifyManagedCopy(task2.project);
-          const receipt = await readExecutionPolicyReceipt(task2.project.executionPolicy, task2.project.executionStateDirectory ?? this.config.stateDirectory, policyReceiptOffset, record2.sessionId);
-          if (!record2.sessionId || !receipt.guardedFinish)
-            throw new BridgeError("AGENT_POLICY_UNVERIFIED", "No new guarded finish was observed for this conversation");
-          record2.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
-        }
-        if (record2.mode !== "read-only")
-          await this.normalizeEditedFiles(task2, lineEndingStyles, byteOrderMarks);
-        record2.report = await validateRoleReport((record2.roleDefinition ?? resolveRole(record2.role ?? "implementer")).baseRole, record2.result.structured_output, task2.project.copyDirectory);
-        if (!task2.options.nativeTest && record2.outputSchema !== void 0) {
-          const rawStructured = record2.result?.structured_output;
-          record2.structuredResult = validateStructuredResult(record2.outputSchema, rawStructured);
-        }
-        if (!task2.options.nativeTest && record2.artifactPaths !== void 0) {
-          record2.artifacts = await collectArtifacts(task2.project, record2.artifactPaths, this.config);
-        }
-        this.finish(task2, "completed");
+      if (execResult.status !== "completed") {
+        const nonCompleteError = this.resultFailure(task2, execResult);
+        this.finish(task2, this.terminalStateFromResult(task2, execResult), nonCompleteError.code, nonCompleteError.message);
+        return;
       }
+      await this.verifyAndRecordExecutionPolicy(task2, policyReceiptOffset, "No new guarded finish was observed for this conversation");
+      if (record2.mode !== "read-only")
+        await this.normalizeEditedFiles(task2, styles, boms);
+      const structuredOutput = record2.result?.structured_output ?? execResult.structuredOutput;
+      record2.report = await validateRoleReport((record2.roleDefinition ?? resolveRole(record2.role ?? "implementer")).baseRole, structuredOutput, task2.project.copyDirectory);
+      if (!task2.options.nativeTest && record2.outputSchema !== void 0) {
+        record2.structuredResult = validateStructuredResult(record2.outputSchema, structuredOutput);
+      }
+      if (!task2.options.nativeTest && record2.artifactPaths !== void 0) {
+        record2.artifacts = await collectArtifacts(task2.project, record2.artifactPaths, this.config);
+      }
+      this.finish(task2, "completed");
     } catch (error62) {
       if (task2.timer) {
         clearTimeout(task2.timer);
         task2.timer = void 0;
       }
+      if (task2.executionAbort) {
+        task2.executionAbort.abort(task2.termination ?? "cancelled");
+        task2.executionAbort = void 0;
+      }
       if (task2.child) {
         this.terminate(task2.child);
         task2.child = void 0;
       }
-      if (task2.termination)
-        this.finish(task2, task2.termination);
-      else {
-        const code = error62 instanceof BridgeError ? error62.code : "AGY_PROCESS_FAILED";
-        this.finish(task2, "failed", code, error62 instanceof Error ? redactDiagnostic(error62.message) : redactDiagnostic(String(error62)));
-      }
+      this.finishFromError(task2, error62, "AGY_PROCESS_FAILED");
     } finally {
       if (task2.timer) {
         clearTimeout(task2.timer);
         task2.timer = void 0;
+      }
+      if (task2.executionAbort) {
+        task2.executionAbort.abort(task2.termination ?? "cancelled");
+        task2.executionAbort = void 0;
       }
       if (task2.child) {
         this.terminate(task2.child);
@@ -55974,115 +56642,18 @@ ${redacted}`;
     task2.record.usage = void 0;
     if (options.craft)
       await verifyCraftSelection(options.craft);
-    const spawnedAt = Date.now();
-    const { child, styles, boms } = await this.spawnWithLfCopy(task2, options, true);
-    task2.child = child;
-    task2.record.pid = child.pid;
-    task2.record.status = "running";
-    this.events.append(task2.record.taskId, "process.started", { pid: child.pid, repair: true });
-    let stderr = "";
-    let stderrSuppressed = false;
-    const repairStderrRedactor = {};
-    let lastRepairWasRedactedKey = false;
-    const stdoutParser = new LineParser((line) => this.handleStdout(task2, line), void 0, () => {
-      this.events.append(task2.record.taskId, "process.output_rejected", { stream: "stdout", reason: "line_limit" });
+    const { result: execResult, styles, boms } = await this.runAgyStep(task2, options, {
+      prepareLf: true,
+      convertLf: true,
+      repair: true
     });
-    const stderrParser = new LineParser((line) => {
-      if (stderrSuppressed)
-        return;
-      const redacted = redactDiagnostic(line, repairStderrRedactor);
-      if (redacted === "[private key redacted]") {
-        if (!lastRepairWasRedactedKey) {
-          lastRepairWasRedactedKey = true;
-          stderr = (stderr + "\n" + redacted).slice(-1e4);
-          this.events.append(task2.record.taskId, "process.stderr", { text: redacted });
-        }
-        return;
-      }
-      lastRepairWasRedactedKey = false;
-      stderr = (stderr + "\n" + redacted).slice(-1e4);
-      this.events.append(task2.record.taskId, "process.stderr", { text: redacted.slice(0, 4e3) });
-    }, void 0, () => {
-      if (stderrSuppressed)
-        return;
-      stderrSuppressed = true;
-      stderr = (stderr + "\n[stderr suppressed after line limit]").slice(-1e4);
-      this.events.append(task2.record.taskId, "process.output_rejected", { stream: "stderr", reason: "line_limit", remainingStreamSuppressed: true });
-    });
-    child.stdout.on("data", (chunk) => stdoutParser.write(chunk));
-    child.stderr.on("data", (chunk) => {
-      if (!stderrSuppressed)
-        stderrParser.write(chunk);
-    });
-    child.stdout.on("error", (error62) => {
-      const redacted = redactDiagnostic(error62.message);
-      stderr += "\n" + redacted;
-      this.events.append(task2.record.taskId, "process.error", { message: redacted });
-      if (!task2.termination)
-        this.terminate(child);
-    });
-    child.stderr.on("error", (error62) => {
-      const redacted = redactDiagnostic(error62.message);
-      stderr += "\n" + redacted;
-      this.events.append(task2.record.taskId, "process.error", { message: redacted });
-      if (!task2.termination)
-        this.terminate(child);
-    });
-    child.stdin.on("error", (error62) => {
-      const redacted = redactDiagnostic(error62.message);
-      stderr += "\n" + redacted;
-      this.events.append(task2.record.taskId, "process.error", { message: redacted });
-      if (!task2.termination)
-        this.terminate(child);
-    });
-    child.on("error", (error62) => {
-      const redacted = redactDiagnostic(error62.message);
-      stderr += `
-${redacted}`;
-      this.events.append(task2.record.taskId, "process.error", { message: redacted });
-      if (!task2.termination)
-        this.terminate(child);
-    });
-    try {
-      const exitCode = await new Promise((resolve2) => {
-        child.once("close", resolve2);
-      });
-      await this.reconcileProcesses(task2, child, spawnedAt);
-      if (child.pid === void 0 || task2.record.processCleanup?.verified)
-        await this.restoreLineEndings(task2);
-      stdoutParser.end();
-      stderrParser.end();
-      task2.child = void 0;
-      task2.record.exitCode = exitCode;
-      if (task2.termination)
-        return;
-      if (child.schemaCleanupError)
-        throw child.schemaCleanupError;
-      if (child.startupError)
-        throw child.startupError;
-      if (child.communicationError)
-        throw child.communicationError;
-      if (CliAdapter.authError(stderr + JSON.stringify(task2.record.result || ""))) {
-        throw new BridgeError("AGY_AUTH_REQUIRED", "Authenticate with the official interactive `agy` command");
-      }
-      if (exitCode !== 0 || !task2.record.result || task2.record.result.status !== "SUCCESS") {
-        const rawMessage = task2.record.result?.error || (stderr.trim() ? stderr.trim() : `agy repair exited with code ${exitCode}`);
-        const message = redactDiagnostic(rawMessage);
-        throw new BridgeError("AGY_PROCESS_FAILED", message);
-      }
-    } finally {
-      if (task2.child) {
-        this.terminate(task2.child);
-        task2.child = void 0;
-      }
+    if (task2.termination)
+      return;
+    if (execResult.status !== "completed") {
+      const failure3 = this.resultFailure(task2, execResult);
+      throw new BridgeError(failure3.code, failure3.message);
     }
-    if (task2.project.executionPolicy) {
-      await verifyManagedCopy(task2.project);
-      const receipt = await readExecutionPolicyReceipt(task2.project.executionPolicy, task2.project.executionStateDirectory ?? this.config.stateDirectory, receiptOffset, task2.record.sessionId);
-      if (!task2.record.sessionId || !receipt.guardedFinish)
-        throw new BridgeError("AGENT_POLICY_UNVERIFIED", "Repair did not produce a new guarded finish");
-      task2.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
-    }
+    await this.verifyAndRecordExecutionPolicy(task2, receiptOffset, "Repair did not produce a new guarded finish");
     await this.normalizeEditedFiles(task2, styles, boms);
   }
   async executeWindowsNativeTest(task2) {
@@ -56103,7 +56674,9 @@ ${redacted}`;
       task2.termination ??= "timeout";
       if (task2.nativeAbort)
         task2.nativeAbort.abort();
-      else if (task2.child)
+      if (task2.executionAbort)
+        task2.executionAbort.abort("timeout");
+      if (task2.child)
         this.terminate(task2.child);
     }, task2.options.timeoutSeconds * 1e3);
     task2.timer.unref();
@@ -56191,238 +56764,324 @@ ${redacted}`;
         clearTimeout(task2.timer);
       task2.timer = void 0;
       task2.nativeAbort = void 0;
+      if (task2.executionAbort) {
+        task2.executionAbort.abort(task2.termination ?? "cancelled");
+        task2.executionAbort = void 0;
+      }
       if (task2.child) {
         this.terminate(task2.child);
         task2.child = void 0;
       }
     }
   }
-  handleStdout(task2, line) {
+  async runAgyStep(task2, options, config2) {
     const record2 = task2.record;
-    let source;
-    try {
-      const parsed = JSON.parse(line);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-        throw new Error("Expected event object");
-      source = parsed;
-    } catch {
-      task2.parseErrors = (task2.parseErrors || 0) + 1;
-      this.events.append(record2.taskId, "stream.unparsed", { line: redactDiagnostic(line).slice(0, 4e3) });
-      return;
+    const project = task2.project;
+    let styles;
+    let boms;
+    if (config2.prepareLf) {
+      ({ styles, boms } = await this.prepareLfCopy(task2, config2.convertLf));
     }
-    const sanitized = sanitizePayload(source);
-    const raw = sanitized.value;
-    if (sanitized.truncated)
-      this.events.append(record2.taskId, "stream.truncated", { maxDepth: DEFAULT_MAX_PAYLOAD_DEPTH, maxNodes: DEFAULT_MAX_PAYLOAD_NODES });
-    const sourceType = raw.event;
-    if (sourceType === "init") {
-      if (typeof raw.conversation_id === "string")
-        record2.sessionId = raw.conversation_id;
-      this.events.append(record2.taskId, "agent.started", raw.init || {}, raw);
-    } else if (sourceType === "step_update" && raw.step_update && typeof raw.step_update === "object") {
-      const step = raw.step_update;
-      const sourceStep = source.step_update;
-      if (task2.nativeTest && typeof step.step_index === "number" && !task2.nativeTest.steps.has(step.step_index)) {
-        const blocked = readNativeSandboxError(sourceStep, task2.nativeTest);
-        const failure3 = blocked && new BridgeError(blocked.code, redactDiagnostic(blocked.message));
-        if (failure3) {
-          if (task2.nativeTest.failure?.code !== "AGY_SANDBOX_BYPASS_REQUESTED")
-            task2.nativeTest.failure = failure3;
-          this.events.append(record2.taskId, "test.blocked", { code: failure3.code, message: failure3.message });
-        }
-        const attempt = readNativeReceipt(sourceStep, task2.nativeTest);
-        if (attempt) {
-          if (task2.nativeTest.failure?.code !== "AGY_SANDBOX_BYPASS_REQUESTED")
-            task2.nativeTest.failure = void 0;
-          task2.nativeTest.steps.add(step.step_index);
-          task2.nativeTest.attempts.push({ ...attempt, output: redactDiagnostic(attempt.output) });
-          this.events.append(record2.taskId, "test.executed", { attempt: task2.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
-          if (task2.nativeTest.attempts.length > task2.options.nativeTest.maxAttempts) {
-            task2.termination ??= "cancelled";
-            if (task2.child)
-              this.terminate(task2.child);
-          }
-        }
+    const controller = new AbortController();
+    task2.executionAbort = controller;
+    if (task2.termination)
+      controller.abort(task2.termination);
+    let spawnedPid;
+    let stepTimer;
+    let hookResultSeen = false;
+    const request = {
+      taskId: record2.taskId,
+      prompt: options.prompt,
+      workingDirectory: project.copyDirectory,
+      role: options.role ?? "implementer",
+      model: record2.model,
+      effort: options.effort,
+      session: options.sessionId ? { id: options.sessionId } : void 0,
+      mode: record2.mode ?? "write",
+      outputSchema: config2.repair || options.nativeTest ? void 0 : options.outputSchema
+    };
+    const startStepTimer = () => {
+      if (!task2.timer) {
+        stepTimer = setTimeout(() => {
+          task2.termination ??= "timeout";
+          controller.abort("timeout");
+        }, (options.timeoutSeconds ?? this.config.defaultTimeoutSeconds) * 1e3);
+        stepTimer.unref();
+        task2.timer = stepTimer;
       }
-      if (step.step_type === "agent_response" && Number.isSafeInteger(step.step_index)) {
-        const index = step.step_index;
-        if (typeof sourceStep.text_delta === "string") {
-          this.acceptResponseText(task2, index, sourceStep.text_delta);
-          step.text_delta = this.releaseResponseDelta(task2, index, sourceStep.text_delta, step.state === "DONE");
-        } else if (step.state === "DONE" && task2.pendingResponses?.has(index))
-          this.flushResponse(task2, index);
-      } else if (step.step_type === "agent_response" && typeof step.text_delta === "string") {
-        step.text_delta = "";
+    };
+    const recordFinalText = (response2, structuredOutput) => {
+      if (typeof response2 === "string")
+        this.captureMessages(task2, response2, "final", true);
+      if (structuredOutput && typeof structuredOutput === "object" && typeof structuredOutput.summary === "string") {
+        this.captureMessages(task2, structuredOutput.summary, "structured-final", true);
       }
-      let type = "step.update";
-      let eventData = step;
-      if (step.step_type === "tool") {
-        type = step.state === "DONE" ? "tool.completed" : step.state === "ERROR" ? "tool.failed" : "tool.started";
-        const toolInfo = step.tool_info && typeof step.tool_info === "object" ? step.tool_info : void 0;
-        const toolError = toolInfo?.error && typeof toolInfo.error === "object" ? toolInfo.error : void 0;
-        const rawErrorMsg = typeof toolError?.message === "string" ? toolError.message : void 0;
-        let matchedEdit;
-        if (step.tool_name === "edit_file" && (step.state === "DONE" || step.state === "ERROR" && !/denied by pre-tool hook/i.test(rawErrorMsg ?? ""))) {
-          if (task2.project?.executionPolicy && task2.editReceipts) {
-            try {
-              const { nextOffset, edits } = readReceiptEditsSync(task2.project.executionPolicy, task2.editReceipts.offset, record2.sessionId);
-              task2.editReceipts.offset = nextOffset;
-              for (const edit of edits) {
-                if (task2.editReceipts.ambiguous.has(edit.pathSha256))
-                  continue;
-                const list = task2.editReceipts.pending.get(edit.pathSha256);
-                if (list)
-                  list.push(edit);
-                else
-                  task2.editReceipts.pending.set(edit.pathSha256, [edit]);
+    };
+    let result;
+    try {
+      if (this.executor instanceof AgyExecutionAdapter) {
+        const hooks = {
+          runOptions: options,
+          spawnWorkingDirectory: project.copyDirectory,
+          signal: controller.signal,
+          getTerminationReason: () => task2.termination,
+          repair: config2.repair,
+          onProcessStarted: (pid, isRepair) => {
+            spawnedPid = pid;
+            record2.pid = pid;
+            record2.status = "running";
+            this.events.append(record2.taskId, "process.started", isRepair ? { pid, repair: true } : { pid });
+            startStepTimer();
+          },
+          onProcessCleanup: (cleanup) => {
+            record2.processCleanup = cleanup;
+          },
+          onAfterProcessExit: async () => {
+            if (spawnedPid === void 0 || record2.processCleanup?.verified) {
+              await this.restoreLineEndings(task2);
+            }
+          },
+          onEvent: (type, data, raw) => {
+            this.events.append(record2.taskId, type, data, raw);
+          },
+          onSession: (sessionId) => {
+            record2.sessionId = sessionId;
+          },
+          onStreaming: () => {
+            if (record2.status === "running")
+              record2.status = "streaming";
+          },
+          onUsage: (usage, normalized) => {
+            record2.usage = usage;
+            if (normalized)
+              record2.lastObservedCliUsage = normalized;
+          },
+          onRawResponseDelta: (stepIndex, textDelta) => {
+            this.acceptResponseText(task2, stepIndex, textDelta);
+          },
+          onResultFrame: (frame) => {
+            hookResultSeen = true;
+            record2.result = frame;
+          },
+          onFinalText: recordFinalText,
+          resolveEditMismatch: (toolName, state, rawErrorMsg, params) => this.resolveEditMismatch(task2, toolName, state, rawErrorMsg, params),
+          onNativeStep: (sourceStep, stepIndex) => {
+            if (!task2.nativeTest || task2.nativeTest.steps.has(stepIndex))
+              return;
+            const blocked = readNativeSandboxError(sourceStep, task2.nativeTest);
+            const failure3 = blocked && new BridgeError(blocked.code, redactDiagnostic(blocked.message));
+            if (failure3) {
+              if (task2.nativeTest.failure?.code !== "AGY_SANDBOX_BYPASS_REQUESTED")
+                task2.nativeTest.failure = failure3;
+              this.events.append(record2.taskId, "test.blocked", { code: failure3.code, message: failure3.message });
+            }
+            const attempt = readNativeReceipt(sourceStep, task2.nativeTest);
+            if (attempt) {
+              if (task2.nativeTest.failure?.code !== "AGY_SANDBOX_BYPASS_REQUESTED")
+                task2.nativeTest.failure = void 0;
+              task2.nativeTest.steps.add(stepIndex);
+              task2.nativeTest.attempts.push({ ...attempt, output: redactDiagnostic(attempt.output) });
+              this.events.append(record2.taskId, "test.executed", { attempt: task2.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
+              if (task2.nativeTest.attempts.length > task2.options.nativeTest.maxAttempts) {
+                task2.termination ??= "cancelled";
+                controller.abort("cancelled");
               }
-              const params = toolInfo?.parameters && typeof toolInfo.parameters === "object" ? toolInfo.parameters : void 0;
-              const pathSha256 = createHash25("sha256").update(String(params?.Path), "utf8").digest("hex");
-              if (!task2.editReceipts.ambiguous.has(pathSha256)) {
-                const pending = task2.editReceipts.pending.get(pathSha256);
-                if (pending && pending.length > 1) {
-                  task2.editReceipts.ambiguous.add(pathSha256);
-                  task2.editReceipts.pending.delete(pathSha256);
-                } else
-                  matchedEdit = pending?.shift();
-              }
-            } catch {
-              task2.editReceipts = void 0;
             }
           }
-        }
-        if (step.state === "ERROR") {
-          const failure3 = {
-            ...typeof toolError?.type === "string" && toolError.type.length <= 64 ? { type: toolError.type } : {},
-            message: rawErrorMsg !== void 0 ? redactDiagnostic(rawErrorMsg).slice(0, 500) : "Tool reported an error without details"
-          };
-          const editSearch = step.tool_name === "edit_file" && /target (content|text) (was )?not found/i.test(failure3.message) ? matchedEdit ? {
-            mismatch: matchedEdit.mismatch === "none" ? "unknown" : matchedEdit.mismatch,
-            target: { sha256: matchedEdit.targetSha256, bytes: matchedEdit.targetBytes, lines: matchedEdit.targetLines }
-          } : { mismatch: "unknown" } : void 0;
-          eventData = { ...step, failure: failure3, ...editSearch ? { editSearch } : {} };
-          if (JSON.stringify(eventData).length > MAX_EVENT_PAYLOAD_CHARS) {
-            const { conversation_id, step_index, state, step_type, tool_name, duration_seconds } = step;
-            eventData = {
-              ...conversation_id !== void 0 ? { conversation_id } : {},
-              ...step_index !== void 0 ? { step_index } : {},
-              ...state !== void 0 ? { state } : {},
-              ...step_type !== void 0 ? { step_type } : {},
-              ...tool_name !== void 0 ? { tool_name } : {},
-              ...duration_seconds !== void 0 ? { duration_seconds } : {},
-              failure: failure3,
-              ...editSearch ? { editSearch } : {},
-              truncated: true
-            };
-          }
-        }
-      } else if (step.step_type === "agent_response" && typeof step.text_delta === "string")
-        type = "response.chunk";
-      this.events.append(record2.taskId, type, eventData, raw);
-      if (step.usage !== void 0)
-        record2.usage = step.usage;
-      if (record2.status === "running")
-        record2.status = "streaming";
-    } else if (sourceType === "result" && raw.result && typeof raw.result === "object") {
-      for (const index of [...task2.pendingResponses?.keys() ?? []])
-        this.flushResponse(task2, index);
-      const result = raw.result;
-      if (typeof result.error === "string") {
-        result.error = redactDiagnostic(result.error);
+        };
+        result = await this.executor.execute(request, hooks);
+      } else {
+        record2.status = "running";
+        startStepTimer();
+        result = await this.executePureAdapterBounded(this.executor, request, task2, controller.signal);
       }
-      record2.result = raw.result;
-      if (typeof result.conversation_id === "string")
-        record2.sessionId = result.conversation_id;
-      if (result.usage !== void 0) {
-        record2.usage = result.usage;
-        record2.lastObservedCliUsage = normalizeUsage(result.usage);
+    } catch (error62) {
+      if (spawnedPid === void 0)
+        await this.restoreLineEndings(task2).catch(() => void 0);
+      if (error62 instanceof TypeError && error62.message.startsWith("Execution capability unavailable:")) {
+        throw new BridgeError("AGY_CAPABILITY_UNAVAILABLE", error62.message);
       }
-      if (typeof result.response === "string")
-        this.captureMessages(task2, result.response, "final", true);
-      const structured = result.structured_output;
-      if (structured && typeof structured === "object" && typeof structured.summary === "string")
-        this.captureMessages(task2, structured.summary, "structured-final", true);
-      this.events.append(record2.taskId, "agy.result", result, raw);
-    } else
-      this.events.append(record2.taskId, "agy.event", raw, raw);
-  }
-  // Deltas may split a credential, so only complete lines are released, redacted with per-step state.
-  releaseResponseDelta(task2, index, delta, done) {
-    task2.pendingResponses ??= /* @__PURE__ */ new Map();
-    let pending = task2.pendingResponses.get(index);
-    if (!pending) {
-      if (task2.pendingResponses.size >= MAX_RESPONSE_STEPS)
-        return "";
-      pending = { text: "", redaction: {}, suppressing: false, dropped: "", untilDone: false, held: [], overflow: false };
-      task2.pendingResponses.set(index, pending);
-    }
-    let input2 = delta;
-    if (pending.suppressing) {
-      const newline = pending.untilDone ? -1 : input2.indexOf("\n");
-      this.dropResponseText(pending, newline < 0 ? input2 : input2.slice(0, newline));
-      input2 = newline < 0 || pending.untilDone ? "" : input2.slice(newline + 1);
-      if (newline >= 0 && !pending.untilDone)
-        pending.suppressing = false;
-    }
-    pending.text += input2;
-    const cut = done ? pending.text.length : pending.text.lastIndexOf("\n") + 1;
-    const ready = pending.text.slice(0, cut);
-    pending.text = pending.text.slice(cut);
-    let marker = "";
-    const buffered = [...task2.pendingResponses.values()].filter((item) => item.text).length;
-    if (pending.text.length > RESPONSE_HOLD_BACK_CHARS || pending.text && buffered > MAX_BUFFERED_RESPONSE_STEPS) {
-      this.dropResponseText(pending, pending.text);
-      pending.text = "";
-      pending.suppressing = true;
-      marker = "[response line suppressed before redaction]\n";
-      this.events.append(task2.record.taskId, "response.truncated", { step_index: index, maxPendingChars: RESPONSE_HOLD_BACK_CHARS });
-    }
-    let released = "";
-    const redactLine = (line) => {
-      const redacted = redactDiagnostic(line, pending.redaction);
-      return line.endsWith("\n") && !redacted.endsWith("\n") ? redacted + "\n" : redacted;
-    };
-    for (const line of ready.split(/(?<=\n)/).filter(Boolean)) {
-      const inBody = pending.held.length > 0 || pending.overflow;
-      const minimum = inBody ? 1 : 16;
-      const bodyLine = new RegExp(`^[A-Za-z0-9+/=]{${minimum},1024}\\r?\\n$`).test(line) || inBody && /^\r?\n$/.test(line);
-      if (!pending.redaction.inPrivateKey && bodyLine) {
-        if (pending.overflow)
-          continue;
-        pending.held.push(line);
-        if (pending.held.length > MAX_HELD_RESPONSE_LINES) {
-          pending.held = [];
-          pending.overflow = true;
-          released += "[response lines suppressed before redaction]\n";
-        }
-        continue;
+      throw error62;
+    } finally {
+      if (stepTimer) {
+        clearTimeout(stepTimer);
+        if (task2.timer === stepTimer)
+          task2.timer = void 0;
+        stepTimer = void 0;
       }
-      pending.overflow = false;
-      const orphanEnd = !pending.redaction.inPrivateKey && /-----END [^-]*PRIVATE KEY-----/.test(line) && !/-----BEGIN [^-]*PRIVATE KEY-----/.test(line);
-      if (orphanEnd && pending.held.length)
-        released += "[private key redacted]\n";
-      else
-        released += pending.held.map(redactLine).join("");
-      pending.held = [];
-      released += redactLine(line);
+      if (task2.executionAbort === controller)
+        task2.executionAbort = void 0;
     }
-    if (done) {
-      released += pending.held.map(redactLine).join("");
-      pending.held = [];
+    if (spawnedPid === void 0) {
+      await this.restoreLineEndings(task2).catch(() => void 0);
     }
-    return released + marker;
+    const exitCode = result.exitCode;
+    if (exitCode !== void 0)
+      record2.exitCode = exitCode;
+    else if (!hookResultSeen && result.status === "completed" && record2.exitCode === void 0)
+      record2.exitCode = 0;
+    if (result.session && !record2.sessionId)
+      record2.sessionId = result.session.id;
+    if (result.usage !== void 0 && record2.usage === void 0) {
+      record2.usage = result.usage;
+      record2.lastObservedCliUsage = normalizeUsage(result.usage);
+    }
+    if (!hookResultSeen && record2.result === void 0) {
+      if (result.raw !== void 0) {
+        record2.result = sanitizePayload(result.raw).value;
+      } else if (result.status === "completed") {
+        record2.result = sanitizePayload({
+          status: "SUCCESS",
+          response: result.response,
+          ...result.structuredOutput !== void 0 ? { structured_output: result.structuredOutput } : {},
+          ...result.usage !== void 0 ? { usage: result.usage } : {}
+        }).value;
+      }
+      if (result.status === "completed") {
+        recordFinalText(result.response, result.structuredOutput);
+      }
+    }
+    return { result, styles, boms };
   }
-  // Dropped text may hold a key delimiter that redaction never saw, so the rest of that step stays suppressed.
-  dropResponseText(pending, text) {
-    if ((pending.dropped + text).includes("-----"))
-      pending.untilDone = true;
-    pending.dropped = (pending.dropped + text).slice(-4);
+  /**
+   * Bounds a pure E02 ExecutionAdapter against host cancellation and deadlines.
+   * Under the E02 contract ExecutionRequest has no AbortSignal, so host cancellation
+   * or timeout frees the TaskManager slot without being able to forcibly stop provider internals;
+   * late settlements are absorbed so they cannot trigger unhandled rejections or double-finish.
+   */
+  async executePureAdapterBounded(adapter, request, task2, signal) {
+    if (signal.aborted || task2.termination) {
+      const reason = task2.termination ?? "cancelled";
+      throw new BridgeError(reason === "timeout" ? "TASK_TIMEOUT" : "TASK_CANCELLED", `Task ${reason}`);
+    }
+    const execPromise = Promise.resolve().then(() => adapter.execute(request));
+    execPromise.catch(() => void 0);
+    return await new Promise((resolve2, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        signal.removeEventListener("abort", onAbort);
+      };
+      const onAbort = () => {
+        if (settled)
+          return;
+        settled = true;
+        cleanup();
+        const reason = task2.termination ?? "cancelled";
+        reject(new BridgeError(reason === "timeout" ? "TASK_TIMEOUT" : "TASK_CANCELLED", `Task ${reason}`));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      execPromise.then((result) => {
+        if (settled)
+          return;
+        settled = true;
+        cleanup();
+        resolve2(result);
+      }, (error62) => {
+        if (settled)
+          return;
+        settled = true;
+        cleanup();
+        reject(error62);
+      });
+    });
   }
-  flushResponse(task2, index) {
-    const text = this.releaseResponseDelta(task2, index, "", true);
-    if (!text)
+  async verifyAndRecordExecutionPolicy(task2, receiptOffset, unverifiedMessage) {
+    if (!task2.project?.executionPolicy)
       return;
-    this.events.append(task2.record.taskId, "response.chunk", { step_index: index, step_type: "agent_response", text_delta: text });
+    const record2 = task2.record;
+    await verifyManagedCopy(task2.project);
+    const receipt = await readExecutionPolicyReceipt(task2.project.executionPolicy, task2.project.executionStateDirectory ?? this.config.stateDirectory, receiptOffset, record2.sessionId);
+    if (!record2.sessionId) {
+      throw new BridgeError("AGENT_POLICY_UNVERIFIED", unverifiedMessage);
+    }
+    record2.agentPolicyReceipt = {
+      sha256: receipt.sha256,
+      decisionCount: receipt.decisionCount,
+      deniedCount: receipt.deniedCount
+    };
+    if (receipt.deniedCount > 0) {
+      throw new BridgeError("AGY_PROCESS_FAILED", `Execution policy pre-tool hook denied ${receipt.deniedCount} tool call${receipt.deniedCount === 1 ? "" : "s"}`);
+    }
+    if (!receipt.guardedFinish) {
+      throw new BridgeError("AGENT_POLICY_UNVERIFIED", unverifiedMessage);
+    }
+  }
+  finishFromError(task2, error62, fallbackCode) {
+    if (task2.termination) {
+      this.finish(task2, task2.termination);
+      return;
+    }
+    const rawCode = error62 instanceof BridgeError ? error62.code : fallbackCode;
+    const code = rawCode === "TASK_CANCELLED" || rawCode === "TASK_TIMEOUT" ? "AGY_PROCESS_FAILED" : rawCode;
+    const rawMessage = error62 instanceof Error ? redactDiagnostic(error62.message) : redactDiagnostic(String(error62));
+    const message = rawCode !== code ? `Provider reported ${rawCode} without host termination: ${rawMessage}` : rawMessage;
+    this.finish(task2, "failed", code, message);
+  }
+  terminalStateFromResult(task2, _result) {
+    return task2.termination ?? "failed";
+  }
+  resultFailure(task2, result) {
+    if (result.status === "failed" || result.status === "cancelled" || result.status === "timeout") {
+      if (!task2.termination && (result.status === "cancelled" || result.status === "timeout" || result.error.code === "TASK_CANCELLED" || result.error.code === "TASK_TIMEOUT")) {
+        return {
+          code: "AGY_PROCESS_FAILED",
+          message: `Provider reported ${result.status} (${result.error.code}) without host termination: ${redactDiagnostic(result.error.message)}`
+        };
+      }
+      return result.error;
+    }
+    if (result.status === "needs-host") {
+      return {
+        code: "AGY_PROCESS_FAILED",
+        message: `Execution requires host action (${result.message.kind}): ${redactDiagnostic(result.message.text)}`
+      };
+    }
+    return {
+      code: "AGY_PROCESS_FAILED",
+      message: `Execution ended with incomplete status: ${result.status}`
+    };
+  }
+  resolveEditMismatch(task2, toolName, state, rawErrorMsg, params) {
+    const project = task2.project;
+    const record2 = task2.record;
+    let matchedEdit;
+    if (toolName === "edit_file" && (state === "DONE" || state === "ERROR" && !/denied by pre-tool hook/i.test(rawErrorMsg ?? ""))) {
+      if (project?.executionPolicy && task2.editReceipts) {
+        try {
+          const { nextOffset, edits } = readReceiptEditsSync(project.executionPolicy, task2.editReceipts.offset, record2.sessionId);
+          task2.editReceipts.offset = nextOffset;
+          for (const edit of edits) {
+            if (task2.editReceipts.ambiguous.has(edit.pathSha256))
+              continue;
+            const list = task2.editReceipts.pending.get(edit.pathSha256);
+            if (list)
+              list.push(edit);
+            else
+              task2.editReceipts.pending.set(edit.pathSha256, [edit]);
+          }
+          const pathSha256 = createHash25("sha256").update(String(params?.Path), "utf8").digest("hex");
+          if (!task2.editReceipts.ambiguous.has(pathSha256)) {
+            const pending = task2.editReceipts.pending.get(pathSha256);
+            if (pending && pending.length > 1) {
+              task2.editReceipts.ambiguous.add(pathSha256);
+              task2.editReceipts.pending.delete(pathSha256);
+            } else
+              matchedEdit = pending?.shift();
+          }
+        } catch {
+          task2.editReceipts = void 0;
+        }
+      }
+    }
+    if (state !== "ERROR")
+      return void 0;
+    const redactedMsg = rawErrorMsg !== void 0 ? redactDiagnostic(rawErrorMsg).slice(0, 500) : "";
+    if (toolName !== "edit_file" || !/target (content|text) (was )?not found/i.test(redactedMsg))
+      return void 0;
+    return matchedEdit ? {
+      mismatch: matchedEdit.mismatch === "none" ? "unknown" : matchedEdit.mismatch,
+      target: { sha256: matchedEdit.targetSha256, bytes: matchedEdit.targetBytes, lines: matchedEdit.targetLines }
+    } : { mismatch: "unknown" };
   }
   acceptResponseText(task2, index, text) {
     const record2 = task2.record;
@@ -56490,9 +57149,6 @@ ${redacted}`;
   finish(task2, status2, code, message) {
     if (terminal3.has(task2.record.status))
       return;
-    for (const index of [...task2.pendingResponses?.keys() ?? []])
-      this.flushResponse(task2, index);
-    task2.pendingResponses = void 0;
     if (task2.record.result && typeof task2.record.result.error === "string") {
       task2.record.result.error = redactDiagnostic(task2.record.result.error);
     }
@@ -56518,14 +57174,6 @@ ${redacted}`;
     const source = !hasPeerEnvelope && status2 === "completed" && typeof reported === "string" && task2.record.usageProvenance !== "local-executor" ? "agy-reported" : "bridge";
     appendMessage(task2.record, status2 === "completed" ? "final" : "error", source, status2 === "completed" ? text : (task2.record.error?.code ?? status2) + ": " + (task2.record.error?.message ?? text), resultReference(task2.record));
     this.events.append(task2.record.taskId, `task.${status2}`, task2.record.error || { exitCode: task2.record.exitCode });
-  }
-  // kill() and taskkill do not prove the tree ended: a descendant may outlive its parent, so ownership is re-observed after close.
-  async reconcileProcesses(task2, child, spawnedAt) {
-    if (child.pid === void 0)
-      return;
-    const cleanup = await reconcileOwnedProcesses({ pid: child.pid, spawnedAt, processGroup: isOwnedProcessGroup(child) });
-    task2.record.processCleanup = { verified: cleanup.verified, spawnedAt: new Date(spawnedAt).toISOString(), checkedAt: (/* @__PURE__ */ new Date()).toISOString(), remaining: cleanup.remaining.length };
-    this.events.append(task2.record.taskId, "process.cleanup", { verified: cleanup.verified, method: cleanup.method, remaining: cleanup.remaining.length });
   }
   // A copy whose processes may still run cannot be reused; another observation may confirm they ended.
   async assertProcessesReconciled(record2) {
@@ -56558,7 +57206,7 @@ ${redacted}`;
   }
   // The CLI's edit tool matches text exactly and fails on CRLF, so pure CRLF files run as LF. The list is recorded with the
   // copy before the first rewrite; until the files regain their exact bytes, the copy refuses to be previewed, tested, forked or integrated.
-  async spawnWithLfCopy(task2, options, convert) {
+  async prepareLfCopy(task2, convert) {
     const project = task2.project;
     if (await readLineEndingConversions(project))
       throw new BridgeError("LINE_ENDINGS_UNRESTORED", "A previous run left files converted to LF; confirm its processes ended before starting another");
@@ -56575,7 +57223,7 @@ ${redacted}`;
       }
       if (task2.termination)
         throw new BridgeError("TASK_TERMINATED", "The task was stopped before the CLI started");
-      return { child: this.adapter.spawnTask(options, task2.record.model, project.copyDirectory), styles, boms };
+      return { styles, boms };
     } catch (error62) {
       await this.restoreLineEndings(task2).catch(() => void 0);
       throw error62;
@@ -56819,7 +57467,8 @@ if (command[0] === "wait") {
   }, { report: (line) => process.stderr.write(line + "\n") });
   const adapter = new CliAdapter(config2);
   await adapter.discover();
-  const tasks = new TaskManager(adapter, config2);
+  const executionAdapter = new AgyExecutionAdapter(adapter, config2);
+  const tasks = new TaskManager(adapter, config2, executionAdapter);
   const warning = configurationWarning(tasks.configurationIssues);
   if (warning)
     process.stderr.write(warning + "\n");

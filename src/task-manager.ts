@@ -15,17 +15,18 @@ import { agentPolicySelectionSchema, resolveAgentPolicy, type ResolvedAgentPolic
 import { integrationPreauthorized, type IntegrationApproval } from './integration-policy.js';
 import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { appendMessage, deliveryModeSchema, extractAgentMessages, readMessages, resultReference, type DeliveryMode } from './messages.js';
-import { CliAdapter, taskPrompt, type CliProcess } from './cli-adapter.js';
-import { terminateSubprocess, redactDiagnostic, redactionContextDigest, containsCredential, isOwnedProcessGroup, type RedactionState } from './subprocess.js';
+import { CliAdapter, taskPrompt } from './cli-adapter.js';
+import { AgyExecutionAdapter, type AgyExecutionHooks, type AgyExecutionResult } from './agy-execution-adapter.js';
+import type { ExecutionAdapter, ExecutionRequest, ExecutionResult } from './execution-contract.js';
+import { terminateSubprocess, redactDiagnostic, redactionContextDigest, containsCredential } from './subprocess.js';
 import { reconcileOwnedProcesses } from './process-tree.js';
-import { sanitizePayload, DEFAULT_MAX_PAYLOAD_DEPTH, DEFAULT_MAX_PAYLOAD_NODES } from './payload-safety.js';
+import { sanitizePayload } from './payload-safety.js';
 import { providedSkillsSchema, MAX_TOTAL_BUNDLES_BYTES, verifyProvidedSkills } from './skills.js';
 import { prepareCraft, mergePermanentSkills, verifyCraftSelection } from './craft.js';
 import { convertCrlfToLf, listCopyFiles, normalizeEditedLineEndings, planLineEndings, restoreByteOrderMarks, restoreCrlfLineEndings, type LineEndingStyle } from './line-endings.js';
 import { assertForbiddenDirectoriesUsable, assertSecretExclusionsUsable, assertAgyPathUsable, assertWindowsNodeCacheDirectoryUsable, assertAntiAiCraftDirectoryUsable, type Config, type ApprovalMode, type ConfigurationIssue, type ConfigurationIssueReason } from './config.js';
-import { EventStore, MAX_EVENT_PAYLOAD_CHARS } from './event-store.js';
+import { EventStore } from './event-store.js';
 import { assertTextIsUtf8, createProjectCopy, stageProjectExecutionPolicy, verifyManagedCopy, discardProjectCopy, fingerprintProjectCopy, forkProjectCopy, snapshotCopyFiles, integrateProjectCopy, previewProjectCopy, readProjectPatch, verifyReadOnlyCopy, editableCopyFiles, writeLineEndingConversions, readLineEndingConversions, clearLineEndingConversions, type ChangePreview, type ProjectCopy } from './isolation.js';
-import { LineParser } from './stream-parser.js';
 import { BridgeError, type RunOptions, type TaskRecord, type CallerInboxItem, type CallerMessageReceipt } from './types.js';
 import { validatePrompt, validateRuntimeCacheSeparation, validateWorkingDirectory, validateStateSeparation } from './validation.js';
 import { processAlive, StateStore, StateStoreLinkError, stateDirectoryProblem } from './state-store.js';
@@ -45,10 +46,6 @@ import { normalizeSandboxPolicy, resolveSandboxSelection, sandboxPolicyDigest, t
 import { executeWindowsTest, recoverWindowsExecutions } from './windows-executor.js';
 import { portableNodeStatus, type PortableNodeStatus } from './portable-node.js';
 
-const RESPONSE_HOLD_BACK_CHARS = 8192;
-const MAX_BUFFERED_RESPONSE_STEPS = 16;
-const MAX_RESPONSE_STEPS = 1000;
-const MAX_HELD_RESPONSE_LINES = 100;
 const RESTORE_LIMITS = { maxDepth: 256, maxNodes: 5_000_000 };
 const RESUME_GUIDANCE = 'Pass the taskId of the task to continue, or a sessionId obtained from black_gravity_status';
 const RESUME_REFUSED = `Resume requires a completed, non-integrated task in this project. ${RESUME_GUIDANCE}`;
@@ -62,9 +59,7 @@ function maintenanceErrorCode(error: unknown): string {
   return typeof candidate === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(candidate) ? candidate : 'UNEXPECTED_ERROR';
 }
 
-interface PendingResponse { text: string; redaction: RedactionState; suppressing: boolean; dropped: string; untilDone: boolean; held: string[]; overflow: boolean }
-
-interface InternalTask { publicResponses?: Map<number, string>; pendingResponses?: Map<number, PendingResponse>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; parseErrors?: number; editReceipts?: { offset: number; pending: Map<string, ReceiptEdit[]>; ambiguous: Set<string> }; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
+interface InternalTask { publicResponses?: Map<number, string>; messageKeys?: Set<string>; responseChars?: number; messageBufferLimited?: boolean; messageLimitReported?: boolean; record: TaskRecord; options: RunOptions; ownerPid: number; owned?: boolean; project?: ProjectCopy; releaseProject?: () => void; completion?: Promise<void>; child?: ChildProcessWithoutNullStreams; nativeAbort?: AbortController; executionAbort?: AbortController; timer?: NodeJS.Timeout; termination?: 'cancelled' | 'timeout'; editReceipts?: { offset: number; pending: Map<string, ReceiptEdit[]>; ambiguous: Set<string> }; nativeTest?: { nonce: string; commandLine: string; attempts: Array<{ receipt: NativeTestReceipt; output: string }>; steps: Set<number>; failure?: BridgeError } }
 const terminal = new Set(['completed', 'failed', 'cancelled', 'timeout']);
 
 function restoredEvents(stored: readonly BridgeEvent[]): BridgeEvent[] {
@@ -148,7 +143,10 @@ export class TaskManager {
     this.nativeRecoveryError = undefined;
   }
 
-  constructor(private readonly adapter: CliAdapter, private readonly config: Config) {
+  private readonly executor: ExecutionAdapter;
+
+  constructor(private readonly adapter: CliAdapter, private readonly config: Config, executor?: ExecutionAdapter) {
+    this.executor = executor ?? new AgyExecutionAdapter(adapter, config);
     this.events = new EventStore(config.eventBufferSize, taskId => this.persist(taskId));
 
     if (config.stateDirectoryInvalid) {
@@ -1506,7 +1504,8 @@ export class TaskManager {
         task.termination = 'cancelled';
       }
       if (task.nativeAbort) task.nativeAbort.abort();
-      else if (task.child) this.terminate(task.child);
+      if (task.executionAbort) task.executionAbort.abort('cancelled');
+      if (task.child) this.terminate(task.child);
     }
     return this.status(taskId);
   }
@@ -1535,8 +1534,7 @@ export class TaskManager {
       record.usageProvenance = 'local-executor';
       try { await this.executeWindowsNativeTest(task); }
       catch (error) {
-        if (task.termination) this.finish(task, task.termination);
-        else this.finish(task, 'failed', error instanceof BridgeError ? error.code : 'WINDOWS_EXECUTION_UNVERIFIED', error instanceof Error ? error.message : String(error));
+        this.finishFromError(task, error, 'WINDOWS_EXECUTION_UNVERIFIED');
       }
       return;
     }
@@ -1546,8 +1544,6 @@ export class TaskManager {
     let native: Awaited<ReturnType<typeof prepareNativeTest>> | undefined;
     let readOnlyBaseline: Map<string, string> | undefined;
     let policyReceiptOffset = 0;
-    let lineEndingStyles: Map<string, LineEndingStyle> | undefined;
-    let byteOrderMarks: Set<string> | undefined;
     try {
       task.project ??= await createProjectCopy(record.workingDirectory, task.options.includePaths, project => {
         task.project = project;
@@ -1583,90 +1579,16 @@ export class TaskManager {
         task.editReceipts = { offset: policyReceiptOffset, pending: new Map(), ambiguous: new Set() };
       } else task.editReceipts = undefined;
       if (task.options.craft) await verifyCraftSelection(task.options.craft);
-      const spawnedAt = Date.now();
-      let child: CliProcess;
-      if (record.mode === 'read-only') child = this.adapter.spawnTask(task.options, record.model, task.project.copyDirectory);
-      // Native test runs keep the original bytes: the tests must see them, and their repairs happen inside the same CLI session.
-      else ({ child, styles: lineEndingStyles, boms: byteOrderMarks } = await this.spawnWithLfCopy(task, native ? { ...task.options, prompt: native.prompt } : task.options, !native));
-      task.child = child;
-      record.pid = child.pid;
-      record.status = 'running';
-      this.events.append(record.taskId, 'process.started', { pid: child.pid });
-      const timeoutMs = task.options.timeoutSeconds! * 1000;
-      task.timer = setTimeout(() => {
-        task.termination ??= 'timeout';
-        this.terminate(child);
-      }, timeoutMs);
-      task.timer.unref();
-      let stderr = '';
-      let stderrSuppressed = false;
-      const stderrRedactor = {};
-      let lastWasRedactedKey = false;
-      const stdoutParser = new LineParser(line => this.handleStdout(task, line), undefined, () => {
-        this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stdout', reason: 'line_limit' });
-      });
-      const stderrParser = new LineParser(line => {
-        if (stderrSuppressed) return;
-        const redacted = redactDiagnostic(line, stderrRedactor);
-        if (redacted === '[private key redacted]') {
-          if (!lastWasRedactedKey) {
-            lastWasRedactedKey = true;
-            stderr = (stderr + '\n' + redacted).slice(-10000);
-            this.events.append(record.taskId, 'process.stderr', { text: redacted });
-          }
-          return;
-        }
-        lastWasRedactedKey = false;
-        stderr = (stderr + '\n' + redacted).slice(-10000);
-        this.events.append(record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
-      }, undefined, () => {
-        if (stderrSuppressed) return;
-        stderrSuppressed = true;
-        stderr = (stderr + '\n[stderr suppressed after line limit]').slice(-10000);
-        this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stderr', reason: 'line_limit', remainingStreamSuppressed: true });
-      });
-      child.stdout.on('data', chunk => stdoutParser.write(chunk));
-      child.stderr.on('data', chunk => { if (!stderrSuppressed) stderrParser.write(chunk); });
-      child.stdout.on('error', error => {
-        const redacted = redactDiagnostic(error.message);
-        stderr += '\n' + redacted;
-        this.events.append(record.taskId, 'process.error', { message: redacted });
-        if (!task.termination) this.terminate(child);
-      });
-      child.stderr.on('error', error => {
-        const redacted = redactDiagnostic(error.message);
-        stderr += '\n' + redacted;
-        this.events.append(record.taskId, 'process.error', { message: redacted });
-        if (!task.termination) this.terminate(child);
-      });
-      child.stdin.on('error', error => {
-        const redacted = redactDiagnostic(error.message);
-        stderr += '\n' + redacted;
-        this.events.append(record.taskId, 'process.error', { message: redacted });
-        if (!task.termination) this.terminate(child);
-      });
-      child.on('error', error => {
-        const redacted = redactDiagnostic(error.message);
-        stderr += `\n${redacted}`;
-        this.events.append(record.taskId, 'process.error', { message: redacted });
-        if (!task.termination) this.terminate(child);
-      });
-      const exitCode = await new Promise<number | null>(resolve => {
-        child.once('close', resolve);
-      });
-      await this.reconcileProcesses(task, child, spawnedAt);
-      if (child.pid === undefined || record.processCleanup?.verified) await this.restoreLineEndings(task);
-      stdoutParser.end(); stderrParser.end();
-      if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
-      task.child = undefined;
+      const isReadOnly = record.mode === 'read-only';
+      const { result: execResult, styles, boms } = await this.runAgyStep(
+        task,
+        native ? { ...task.options, prompt: native.prompt } : task.options,
+        { prepareLf: !isReadOnly, convertLf: !isReadOnly && !native },
+      );
       if (task.termination) {
         this.finish(task, task.termination);
         return;
       }
-      if ((child as CliProcess).schemaCleanupError) throw (child as CliProcess).schemaCleanupError;
-      if ((child as CliProcess).startupError) throw (child as CliProcess).startupError;
-      if ((child as CliProcess).communicationError) throw (child as CliProcess).communicationError;
-      record.exitCode = exitCode;
       if (native) {
         await native.cleanup(); native = undefined;
         const preview = await previewProjectCopy(task.project, this.config);
@@ -1686,9 +1608,13 @@ export class TaskManager {
           if (task.nativeTest!.failure) throw task.nativeTest!.failure;
           const last = attempts.at(-1)?.receipt;
           if (!last || last.exitCode === null || last.error) {
-            const denied = (record.result as { denied_actions?: unknown } | undefined)?.denied_actions;
-            if (Array.isArray(denied) && denied.some(action => action && typeof action === 'object' && action.action === 'escalate_admin')) {
-              throw new BridgeError('AGY_SANDBOX_SETUP_REQUIRED', 'The CLI denied administrative sandbox setup for this process. A setup performed in an exited CLI session does not prove that its administrative broker is still available.');
+            if (last && (last.exitCode === null || last.error)) {
+              throw new BridgeError('TEST_EXECUTION_UNVERIFIED', 'No valid execution receipt from the exact run_command call; check native sandbox permissions');
+            }
+            if (execResult.status !== 'completed') {
+              const nonCompleteError = this.resultFailure(task, execResult);
+              this.finish(task, this.terminalStateFromResult(task, execResult), nonCompleteError.code, nonCompleteError.message);
+              return;
             }
             throw new BridgeError('TEST_EXECUTION_UNVERIFIED', 'No valid execution receipt from the exact run_command call; check native sandbox permissions');
           }
@@ -1701,43 +1627,31 @@ export class TaskManager {
         return;
       }
       if (record.mode === 'read-only') await verifyReadOnlyCopy(task.project, readOnlyBaseline);
-      if (CliAdapter.authError(stderr + JSON.stringify(record.result || ''))) this.finish(task, 'failed', 'AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
-      else if (/no output produced[^\r\n]*["']mcp["'][^\r\n]*permission[^\r\n]*headless/iu.test(stderr)) {
-        this.finish(task, 'failed', 'AGY_MCP_PERMISSION_REQUIRED', 'Native agy permission is required for the selected MCP tool. Authorize the exact server/tool in agy settings before retrying; headless cannot request approval.');
+      if (execResult.status !== 'completed') {
+        const nonCompleteError = this.resultFailure(task, execResult);
+        this.finish(task, this.terminalStateFromResult(task, execResult), nonCompleteError.code, nonCompleteError.message);
+        return;
       }
-      else if (exitCode !== 0 || !record.result || (record.result as { status?: string }).status !== 'SUCCESS') {
-        const rawMessage = (record.result as { error?: string } | undefined)?.error || (stderr.trim() ? stderr.trim() : `agy exited with code ${exitCode}`);
-        const message = redactDiagnostic(rawMessage);
-        this.finish(task, 'failed', !record.result && task.parseErrors ? 'STREAM_PARSE_ERROR' : 'AGY_PROCESS_FAILED', message);
-      } else {
-        if (task.project.executionPolicy) {
-          await verifyManagedCopy(task.project);
-          const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, task.project.executionStateDirectory ?? this.config.stateDirectory, policyReceiptOffset, record.sessionId);
-          if (!record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'No new guarded finish was observed for this conversation');
-          record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
-        }
-        if (record.mode !== 'read-only') await this.normalizeEditedFiles(task, lineEndingStyles!, byteOrderMarks!);
-        record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
-          (record.result as { structured_output?: unknown }).structured_output, task.project.copyDirectory);
-        if (!task.options.nativeTest && record.outputSchema !== undefined) {
-          const rawStructured = (record.result as { structured_output?: unknown } | undefined)?.structured_output;
-          record.structuredResult = validateStructuredResult(record.outputSchema, rawStructured);
-        }
-        if (!task.options.nativeTest && record.artifactPaths !== undefined) {
-          record.artifacts = await collectArtifacts(task.project, record.artifactPaths, this.config);
-        }
-        this.finish(task, 'completed');
+      await this.verifyAndRecordExecutionPolicy(task, policyReceiptOffset, 'No new guarded finish was observed for this conversation');
+      if (record.mode !== 'read-only') await this.normalizeEditedFiles(task, styles!, boms!);
+      const structuredOutput = (record.result as { structured_output?: unknown } | undefined)?.structured_output ?? execResult.structuredOutput;
+      record.report = await validateRoleReport((record.roleDefinition ?? resolveRole(record.role ?? 'implementer')).baseRole,
+        structuredOutput, task.project.copyDirectory);
+      if (!task.options.nativeTest && record.outputSchema !== undefined) {
+        record.structuredResult = validateStructuredResult(record.outputSchema, structuredOutput);
       }
+      if (!task.options.nativeTest && record.artifactPaths !== undefined) {
+        record.artifacts = await collectArtifacts(task.project, record.artifactPaths, this.config);
+      }
+      this.finish(task, 'completed');
     } catch (error) {
       if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
+      if (task.executionAbort) { task.executionAbort.abort(task.termination ?? 'cancelled'); task.executionAbort = undefined; }
       if (task.child) { this.terminate(task.child); task.child = undefined; }
-      if (task.termination) this.finish(task, task.termination);
-      else {
-        const code = error instanceof BridgeError ? error.code : 'AGY_PROCESS_FAILED';
-        this.finish(task, 'failed', code, error instanceof Error ? redactDiagnostic(error.message) : redactDiagnostic(String(error)));
-      }
+      this.finishFromError(task, error, 'AGY_PROCESS_FAILED');
     } finally {
       if (task.timer) { clearTimeout(task.timer); task.timer = undefined; }
+      if (task.executionAbort) { task.executionAbort.abort(task.termination ?? 'cancelled'); task.executionAbort = undefined; }
       if (task.child) { this.terminate(task.child); task.child = undefined; }
       await native?.cleanup();
     }
@@ -1820,99 +1734,18 @@ export class TaskManager {
     task.record.result = undefined;
     task.record.usage = undefined;
     if (options.craft) await verifyCraftSelection(options.craft);
-    const spawnedAt = Date.now();
-    const { child, styles, boms } = await this.spawnWithLfCopy(task, options, true);
-    task.child = child;
-    task.record.pid = child.pid;
-    task.record.status = 'running';
-    this.events.append(task.record.taskId, 'process.started', { pid: child.pid, repair: true });
-    let stderr = '';
-    let stderrSuppressed = false;
-    const repairStderrRedactor = {};
-    let lastRepairWasRedactedKey = false;
-    const stdoutParser = new LineParser(line => this.handleStdout(task, line), undefined, () => {
-      this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stdout', reason: 'line_limit' });
+    const { result: execResult, styles, boms } = await this.runAgyStep(task, options, {
+      prepareLf: true,
+      convertLf: true,
+      repair: true,
     });
-    const stderrParser = new LineParser(line => {
-      if (stderrSuppressed) return;
-      const redacted = redactDiagnostic(line, repairStderrRedactor);
-      if (redacted === '[private key redacted]') {
-        if (!lastRepairWasRedactedKey) {
-          lastRepairWasRedactedKey = true;
-          stderr = (stderr + '\n' + redacted).slice(-10000);
-          this.events.append(task.record.taskId, 'process.stderr', { text: redacted });
-        }
-        return;
-      }
-      lastRepairWasRedactedKey = false;
-      stderr = (stderr + '\n' + redacted).slice(-10000);
-      this.events.append(task.record.taskId, 'process.stderr', { text: redacted.slice(0, 4000) });
-    }, undefined, () => {
-      if (stderrSuppressed) return;
-      stderrSuppressed = true;
-      stderr = (stderr + '\n[stderr suppressed after line limit]').slice(-10000);
-      this.events.append(task.record.taskId, 'process.output_rejected', { stream: 'stderr', reason: 'line_limit', remainingStreamSuppressed: true });
-    });
-    child.stdout.on('data', chunk => stdoutParser.write(chunk));
-    child.stderr.on('data', chunk => { if (!stderrSuppressed) stderrParser.write(chunk); });
-    child.stdout.on('error', error => {
-      const redacted = redactDiagnostic(error.message);
-      stderr += '\n' + redacted;
-      this.events.append(task.record.taskId, 'process.error', { message: redacted });
-      if (!task.termination) this.terminate(child);
-    });
-    child.stderr.on('error', error => {
-      const redacted = redactDiagnostic(error.message);
-      stderr += '\n' + redacted;
-      this.events.append(task.record.taskId, 'process.error', { message: redacted });
-      if (!task.termination) this.terminate(child);
-    });
-    child.stdin.on('error', error => {
-      const redacted = redactDiagnostic(error.message);
-      stderr += '\n' + redacted;
-      this.events.append(task.record.taskId, 'process.error', { message: redacted });
-      if (!task.termination) this.terminate(child);
-    });
-    child.on('error', error => {
-      const redacted = redactDiagnostic(error.message);
-      stderr += `\n${redacted}`;
-      this.events.append(task.record.taskId, 'process.error', { message: redacted });
-      if (!task.termination) this.terminate(child);
-    });
-    try {
-      const exitCode = await new Promise<number | null>(resolve => {
-        child.once('close', resolve);
-      });
-      await this.reconcileProcesses(task, child, spawnedAt);
-      if (child.pid === undefined || task.record.processCleanup?.verified) await this.restoreLineEndings(task);
-      stdoutParser.end(); stderrParser.end();
-      task.child = undefined;
-      task.record.exitCode = exitCode;
-      if (task.termination) return;
-      if ((child as CliProcess).schemaCleanupError) throw (child as CliProcess).schemaCleanupError;
-      if ((child as CliProcess).startupError) throw (child as CliProcess).startupError;
-      if ((child as CliProcess).communicationError) throw (child as CliProcess).communicationError;
-      if (CliAdapter.authError(stderr + JSON.stringify(task.record.result || ''))) {
-        throw new BridgeError('AGY_AUTH_REQUIRED', 'Authenticate with the official interactive `agy` command');
-      }
-      if (exitCode !== 0 || !task.record.result || (task.record.result as { status?: string }).status !== 'SUCCESS') {
-        const rawMessage = (task.record.result as { error?: string } | undefined)?.error || (stderr.trim() ? stderr.trim() : `agy repair exited with code ${exitCode}`);
-        const message = redactDiagnostic(rawMessage);
-        throw new BridgeError('AGY_PROCESS_FAILED', message);
-      }
-    } finally {
-      if (task.child) {
-        this.terminate(task.child);
-        task.child = undefined;
-      }
+    if (task.termination) return;
+    if (execResult.status !== 'completed') {
+      const failure = this.resultFailure(task, execResult);
+      throw new BridgeError(failure.code, failure.message);
     }
-    if (task.project.executionPolicy) {
-      await verifyManagedCopy(task.project);
-      const receipt = await readExecutionPolicyReceipt(task.project.executionPolicy, task.project.executionStateDirectory ?? this.config.stateDirectory, receiptOffset, task.record.sessionId);
-      if (!task.record.sessionId || !receipt.guardedFinish) throw new BridgeError('AGENT_POLICY_UNVERIFIED', 'Repair did not produce a new guarded finish');
-      task.record.agentPolicyReceipt = { sha256: receipt.sha256, decisionCount: receipt.decisionCount, deniedCount: receipt.deniedCount };
-    }
-    await this.normalizeEditedFiles(task, styles, boms);
+    await this.verifyAndRecordExecutionPolicy(task, receiptOffset, 'Repair did not produce a new guarded finish');
+    await this.normalizeEditedFiles(task, styles!, boms!);
   }
 
   private async executeWindowsNativeTest(task: InternalTask): Promise<void> {
@@ -1927,7 +1760,8 @@ export class TaskManager {
     task.timer = setTimeout(() => {
       task.termination ??= 'timeout';
       if (task.nativeAbort) task.nativeAbort.abort();
-      else if (task.child) this.terminate(task.child);
+      if (task.executionAbort) task.executionAbort.abort('timeout');
+      if (task.child) this.terminate(task.child);
     }, task.options.timeoutSeconds! * 1000);
     task.timer.unref();
     try {
@@ -1986,6 +1820,10 @@ export class TaskManager {
       if (task.timer) clearTimeout(task.timer);
       task.timer = undefined;
       task.nativeAbort = undefined;
+      if (task.executionAbort) {
+        task.executionAbort.abort(task.termination ?? 'cancelled');
+        task.executionAbort = undefined;
+      }
       if (task.child) {
         this.terminate(task.child);
         task.child = undefined;
@@ -1993,222 +1831,336 @@ export class TaskManager {
     }
   }
 
-  private handleStdout(task: InternalTask, line: string): void {
+  private async runAgyStep(
+    task: InternalTask,
+    options: RunOptions,
+    config: {
+      prepareLf: boolean;
+      convertLf: boolean;
+      repair?: boolean;
+    },
+  ): Promise<{ result: ExecutionResult; styles?: Map<string, LineEndingStyle>; boms?: Set<string> }> {
     const record = task.record;
-    let source: Record<string, unknown>;
+    const project = task.project!;
+    let styles: Map<string, LineEndingStyle> | undefined;
+    let boms: Set<string> | undefined;
+    if (config.prepareLf) {
+      ({ styles, boms } = await this.prepareLfCopy(task, config.convertLf));
+    }
+    const controller = new AbortController();
+    task.executionAbort = controller;
+    if (task.termination) controller.abort(task.termination);
+    let spawnedPid: number | undefined;
+    let stepTimer: NodeJS.Timeout | undefined;
+    let hookResultSeen = false;
+    const request: ExecutionRequest = {
+      taskId: record.taskId,
+      prompt: options.prompt,
+      workingDirectory: project.copyDirectory,
+      role: options.role ?? 'implementer',
+      model: record.model,
+      effort: options.effort,
+      session: options.sessionId ? { id: options.sessionId } : undefined,
+      mode: record.mode ?? 'write',
+      outputSchema: config.repair || options.nativeTest ? undefined : options.outputSchema,
+    };
+    const startStepTimer = () => {
+      if (!task.timer) {
+        stepTimer = setTimeout(() => {
+          task.termination ??= 'timeout';
+          controller.abort('timeout');
+        }, (options.timeoutSeconds ?? this.config.defaultTimeoutSeconds) * 1000);
+        stepTimer.unref();
+        task.timer = stepTimer;
+      }
+    };
+    const recordFinalText = (response: unknown, structuredOutput: unknown) => {
+      if (typeof response === 'string') this.captureMessages(task, response, 'final', true);
+      if (structuredOutput && typeof structuredOutput === 'object' && typeof (structuredOutput as { summary?: unknown }).summary === 'string') {
+        this.captureMessages(task, (structuredOutput as { summary: string }).summary, 'structured-final', true);
+      }
+    };
+    let result: ExecutionResult;
     try {
-      const parsed: unknown = JSON.parse(line);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Expected event object');
-      source = parsed as Record<string, unknown>;
-    } catch {
-      task.parseErrors = (task.parseErrors || 0) + 1;
-      this.events.append(record.taskId, 'stream.unparsed', { line: redactDiagnostic(line).slice(0, 4000) });
+      if (this.executor instanceof AgyExecutionAdapter) {
+        const hooks: AgyExecutionHooks = {
+          runOptions: options,
+          spawnWorkingDirectory: project.copyDirectory,
+          signal: controller.signal,
+          getTerminationReason: () => task.termination,
+          repair: config.repair,
+          onProcessStarted: (pid, isRepair) => {
+            spawnedPid = pid;
+            record.pid = pid;
+            record.status = 'running';
+            this.events.append(record.taskId, 'process.started', isRepair ? { pid, repair: true } : { pid });
+            startStepTimer();
+          },
+          onProcessCleanup: cleanup => {
+            record.processCleanup = cleanup;
+          },
+          onAfterProcessExit: async () => {
+            if (spawnedPid === undefined || record.processCleanup?.verified) {
+              await this.restoreLineEndings(task);
+            }
+          },
+          onEvent: (type, data, raw) => {
+            this.events.append(record.taskId, type, data, raw);
+          },
+          onSession: sessionId => {
+            record.sessionId = sessionId;
+          },
+          onStreaming: () => {
+            if (record.status === 'running') record.status = 'streaming';
+          },
+          onUsage: (usage, normalized) => {
+            record.usage = usage;
+            if (normalized) record.lastObservedCliUsage = normalized;
+          },
+          onRawResponseDelta: (stepIndex, textDelta) => {
+            this.acceptResponseText(task, stepIndex, textDelta);
+          },
+          onResultFrame: frame => {
+            hookResultSeen = true;
+            record.result = frame;
+          },
+          onFinalText: recordFinalText,
+          resolveEditMismatch: (toolName, state, rawErrorMsg, params) => this.resolveEditMismatch(task, toolName, state, rawErrorMsg, params),
+          onNativeStep: (sourceStep, stepIndex) => {
+            if (!task.nativeTest || task.nativeTest.steps.has(stepIndex)) return;
+            const blocked = readNativeSandboxError(sourceStep, task.nativeTest);
+            const failure = blocked && new BridgeError(blocked.code, redactDiagnostic(blocked.message));
+            if (failure) {
+              if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = failure;
+              this.events.append(record.taskId, 'test.blocked', { code: failure.code, message: failure.message });
+            }
+            const attempt = readNativeReceipt(sourceStep, task.nativeTest);
+            if (attempt) {
+              if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = undefined;
+              task.nativeTest.steps.add(stepIndex);
+              task.nativeTest.attempts.push({ ...attempt, output: redactDiagnostic(attempt.output) });
+              this.events.append(record.taskId, 'test.executed', { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
+              if (task.nativeTest.attempts.length > task.options.nativeTest!.maxAttempts) {
+                task.termination ??= 'cancelled';
+                controller.abort('cancelled');
+              }
+            }
+          },
+        };
+        result = await this.executor.execute(request, hooks);
+      } else {
+        // Pure E02 ExecutionAdapter: invoke only execute(request) and enforce host cancellation/timeout around it.
+        record.status = 'running';
+        startStepTimer();
+        result = await this.executePureAdapterBounded(this.executor, request, task, controller.signal);
+      }
+    } catch (error) {
+      if (spawnedPid === undefined) await this.restoreLineEndings(task).catch(() => undefined);
+      if (error instanceof TypeError && error.message.startsWith('Execution capability unavailable:')) {
+        throw new BridgeError('AGY_CAPABILITY_UNAVAILABLE', error.message);
+      }
+      throw error;
+    } finally {
+      if (stepTimer) {
+        clearTimeout(stepTimer);
+        if (task.timer === stepTimer) task.timer = undefined;
+        stepTimer = undefined;
+      }
+      if (task.executionAbort === controller) task.executionAbort = undefined;
+    }
+    if (spawnedPid === undefined) {
+      await this.restoreLineEndings(task).catch(() => undefined);
+    }
+    const exitCode = (result as Partial<AgyExecutionResult>).exitCode;
+    if (exitCode !== undefined) record.exitCode = exitCode;
+    else if (!hookResultSeen && result.status === 'completed' && record.exitCode === undefined) record.exitCode = 0;
+    if (result.session && !record.sessionId) record.sessionId = result.session.id;
+    if (result.usage !== undefined && record.usage === undefined) {
+      record.usage = result.usage;
+      record.lastObservedCliUsage = normalizeUsage(result.usage);
+    }
+    if (!hookResultSeen && record.result === undefined) {
+      if (result.raw !== undefined) {
+        record.result = sanitizePayload(result.raw).value;
+      } else if (result.status === 'completed') {
+        record.result = sanitizePayload({
+          status: 'SUCCESS',
+          response: result.response,
+          ...(result.structuredOutput !== undefined ? { structured_output: result.structuredOutput } : {}),
+          ...(result.usage !== undefined ? { usage: result.usage } : {}),
+        }).value;
+      }
+      if (result.status === 'completed') {
+        recordFinalText(result.response, result.structuredOutput);
+      }
+    }
+    return { result, styles, boms };
+  }
+
+  /**
+   * Bounds a pure E02 ExecutionAdapter against host cancellation and deadlines.
+   * Under the E02 contract ExecutionRequest has no AbortSignal, so host cancellation
+   * or timeout frees the TaskManager slot without being able to forcibly stop provider internals;
+   * late settlements are absorbed so they cannot trigger unhandled rejections or double-finish.
+   */
+  private async executePureAdapterBounded(
+    adapter: ExecutionAdapter,
+    request: ExecutionRequest,
+    task: InternalTask,
+    signal: AbortSignal,
+  ): Promise<ExecutionResult> {
+    if (signal.aborted || task.termination) {
+      const reason = task.termination ?? 'cancelled';
+      throw new BridgeError(reason === 'timeout' ? 'TASK_TIMEOUT' : 'TASK_CANCELLED', `Task ${reason}`);
+    }
+    const execPromise = Promise.resolve().then(() => adapter.execute(request));
+    execPromise.catch(() => undefined);
+    return await new Promise<ExecutionResult>((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        signal.removeEventListener('abort', onAbort);
+      };
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        const reason = task.termination ?? 'cancelled';
+        reject(new BridgeError(reason === 'timeout' ? 'TASK_TIMEOUT' : 'TASK_CANCELLED', `Task ${reason}`));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      execPromise.then(
+        result => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(result);
+        },
+        error => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error);
+        },
+      );
+    });
+  }
+
+  private async verifyAndRecordExecutionPolicy(task: InternalTask, receiptOffset: number, unverifiedMessage: string): Promise<void> {
+    if (!task.project?.executionPolicy) return;
+    const record = task.record;
+    await verifyManagedCopy(task.project);
+    const receipt = await readExecutionPolicyReceipt(
+      task.project.executionPolicy,
+      task.project.executionStateDirectory ?? this.config.stateDirectory,
+      receiptOffset,
+      record.sessionId,
+    );
+    if (!record.sessionId) {
+      throw new BridgeError('AGENT_POLICY_UNVERIFIED', unverifiedMessage);
+    }
+    record.agentPolicyReceipt = {
+      sha256: receipt.sha256,
+      decisionCount: receipt.decisionCount,
+      deniedCount: receipt.deniedCount,
+    };
+    if (receipt.deniedCount > 0) {
+      throw new BridgeError(
+        'AGY_PROCESS_FAILED',
+        `Execution policy pre-tool hook denied ${receipt.deniedCount} tool call${receipt.deniedCount === 1 ? '' : 's'}`,
+      );
+    }
+    if (!receipt.guardedFinish) {
+      throw new BridgeError('AGENT_POLICY_UNVERIFIED', unverifiedMessage);
+    }
+  }
+
+  private finishFromError(task: InternalTask, error: unknown, fallbackCode: string): void {
+    if (task.termination) {
+      this.finish(task, task.termination);
       return;
     }
-    // Everything retained or returned derives from this bounded, redacted copy; the source frame is read only for native receipts and response deltas.
-    const sanitized = sanitizePayload(source);
-    const raw = sanitized.value as Record<string, unknown>;
-    if (sanitized.truncated) this.events.append(record.taskId, 'stream.truncated', { maxDepth: DEFAULT_MAX_PAYLOAD_DEPTH, maxNodes: DEFAULT_MAX_PAYLOAD_NODES });
-    const sourceType = raw.event;
-    if (sourceType === 'init') {
-      if (typeof raw.conversation_id === 'string') record.sessionId = raw.conversation_id;
-      this.events.append(record.taskId, 'agent.started', raw.init || {}, raw);
-    } else if (sourceType === 'step_update' && raw.step_update && typeof raw.step_update === 'object') {
-      const step = raw.step_update as Record<string, unknown>;
-      const sourceStep = source.step_update as Record<string, unknown>;
-      if (task.nativeTest && typeof step.step_index === 'number' && !task.nativeTest.steps.has(step.step_index)) {
-        const blocked = readNativeSandboxError(sourceStep, task.nativeTest);
-        const failure = blocked && new BridgeError(blocked.code, redactDiagnostic(blocked.message));
-        if (failure) {
-          if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = failure;
-          this.events.append(record.taskId, 'test.blocked', { code: failure.code, message: failure.message });
-        }
-        const attempt = readNativeReceipt(sourceStep, task.nativeTest);
-        if (attempt) {
-          if (task.nativeTest.failure?.code !== 'AGY_SANDBOX_BYPASS_REQUESTED') task.nativeTest.failure = undefined;
-          task.nativeTest.steps.add(step.step_index);
-          task.nativeTest.attempts.push({ ...attempt, output: redactDiagnostic(attempt.output) });
-          this.events.append(record.taskId, 'test.executed', { attempt: task.nativeTest.attempts.length, exitCode: attempt.receipt.exitCode });
-          if (task.nativeTest.attempts.length > task.options.nativeTest!.maxAttempts) {
-            task.termination ??= 'cancelled';
-            if (task.child) this.terminate(task.child);
-          }
-        }
-      }
-      if (step.step_type === 'agent_response' && Number.isSafeInteger(step.step_index)) {
-        const index = step.step_index as number;
-        if (typeof sourceStep.text_delta === 'string') {
-          this.acceptResponseText(task, index, sourceStep.text_delta);
-          step.text_delta = this.releaseResponseDelta(task, index, sourceStep.text_delta, step.state === 'DONE');
-        }
-        else if (step.state === 'DONE' && task.pendingResponses?.has(index)) this.flushResponse(task, index);
-      } else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') {
-        // Without a usable step index, deltas cannot be joined for redaction, so their text is not retained.
-        step.text_delta = '';
-      }
-      let type = 'step.update';
-      let eventData: Record<string, unknown> = step;
-      if (step.step_type === 'tool') {
-        type = step.state === 'DONE' ? 'tool.completed' : step.state === 'ERROR' ? 'tool.failed' : 'tool.started';
-        const toolInfo = step.tool_info && typeof step.tool_info === 'object' ? step.tool_info as Record<string, unknown> : undefined;
-        const toolError = toolInfo?.error && typeof toolInfo.error === 'object' ? toolInfo.error as Record<string, unknown> : undefined;
-        const rawErrorMsg = typeof toolError?.message === 'string' ? toolError.message : undefined;
-        let matchedEdit: ReceiptEdit | undefined;
-        if (step.tool_name === 'edit_file' && (step.state === 'DONE' || (step.state === 'ERROR' && !/denied by pre-tool hook/i.test(rawErrorMsg ?? '')))) {
-          if (task.project?.executionPolicy && task.editReceipts) {
-            try {
-              const { nextOffset, edits } = readReceiptEditsSync(task.project.executionPolicy, task.editReceipts.offset, record.sessionId);
-              task.editReceipts.offset = nextOffset;
-              for (const edit of edits) {
-                if (task.editReceipts.ambiguous.has(edit.pathSha256)) continue;
-                const list = task.editReceipts.pending.get(edit.pathSha256);
-                if (list) list.push(edit);
-                else task.editReceipts.pending.set(edit.pathSha256, [edit]);
-              }
-              const params = toolInfo?.parameters && typeof toolInfo.parameters === 'object' ? toolInfo.parameters as Record<string, unknown> : undefined;
-              const pathSha256 = createHash('sha256').update(String(params?.Path), 'utf8').digest('hex');
-              if (!task.editReceipts.ambiguous.has(pathSha256)) {
-                const pending = task.editReceipts.pending.get(pathSha256);
-                if (pending && pending.length > 1) {
-                  task.editReceipts.ambiguous.add(pathSha256);
-                  task.editReceipts.pending.delete(pathSha256);
-                } else matchedEdit = pending?.shift();
-              }
-            } catch {
-              task.editReceipts = undefined;
-            }
-          }
-        }
-        if (step.state === 'ERROR') {
-          const failure = {
-            ...(typeof toolError?.type === 'string' && toolError.type.length <= 64 ? { type: toolError.type } : {}),
-            message: rawErrorMsg !== undefined ? redactDiagnostic(rawErrorMsg).slice(0, 500) : 'Tool reported an error without details',
-          };
-          const editSearch = step.tool_name === 'edit_file' && /target (content|text) (was )?not found/i.test(failure.message)
-            ? matchedEdit
-              ? {
-                  mismatch: matchedEdit.mismatch === 'none' ? 'unknown' : matchedEdit.mismatch,
-                  target: { sha256: matchedEdit.targetSha256, bytes: matchedEdit.targetBytes, lines: matchedEdit.targetLines },
-                }
-              : { mismatch: 'unknown' }
-            : undefined;
-          eventData = { ...step, failure, ...(editSearch ? { editSearch } : {}) };
-          if (JSON.stringify(eventData).length > MAX_EVENT_PAYLOAD_CHARS) {
-            const { conversation_id, step_index, state, step_type, tool_name, duration_seconds } = step;
-            eventData = {
-              ...(conversation_id !== undefined ? { conversation_id } : {}),
-              ...(step_index !== undefined ? { step_index } : {}),
-              ...(state !== undefined ? { state } : {}),
-              ...(step_type !== undefined ? { step_type } : {}),
-              ...(tool_name !== undefined ? { tool_name } : {}),
-              ...(duration_seconds !== undefined ? { duration_seconds } : {}),
-              failure,
-              ...(editSearch ? { editSearch } : {}),
-              truncated: true,
-            };
-          }
-        }
-      } else if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') type = 'response.chunk';
-      this.events.append(record.taskId, type, eventData, raw);
-      if (step.usage !== undefined) record.usage = step.usage;
-      if (record.status === 'running') record.status = 'streaming';
-    } else if (sourceType === 'result' && raw.result && typeof raw.result === 'object') {
-      for (const index of [...task.pendingResponses?.keys() ?? []]) this.flushResponse(task, index);
-      const result = raw.result as Record<string, unknown>;
-      if (typeof result.error === 'string') {
-        result.error = redactDiagnostic(result.error);
-      }
-      record.result = raw.result;
-      if (typeof result.conversation_id === 'string') record.sessionId = result.conversation_id;
-      if (result.usage !== undefined) {
-        record.usage = result.usage;
-        record.lastObservedCliUsage = normalizeUsage(result.usage);
-      }
-      if (typeof result.response === 'string') this.captureMessages(task, result.response, 'final', true);
-      const structured = result.structured_output;
-      if (structured && typeof structured === 'object' && typeof (structured as { summary?: unknown }).summary === 'string') this.captureMessages(task, (structured as { summary: string }).summary, 'structured-final', true);
-      this.events.append(record.taskId, 'agy.result', result, raw);
-    } else this.events.append(record.taskId, 'agy.event', raw, raw);
+    const rawCode = error instanceof BridgeError ? error.code : fallbackCode;
+    // Provider-supplied TASK_CANCELLED / TASK_TIMEOUT codes must not impersonate host cancellation or timeout.
+    const code = (rawCode === 'TASK_CANCELLED' || rawCode === 'TASK_TIMEOUT') ? 'AGY_PROCESS_FAILED' : rawCode;
+    const rawMessage = error instanceof Error ? redactDiagnostic(error.message) : redactDiagnostic(String(error));
+    const message = rawCode !== code
+      ? `Provider reported ${rawCode} without host termination: ${rawMessage}`
+      : rawMessage;
+    this.finish(task, 'failed', code, message);
   }
 
-  // Deltas may split a credential, so only complete lines are released, redacted with per-step state.
-  private releaseResponseDelta(task: InternalTask, index: number, delta: string, done: boolean): string {
-    task.pendingResponses ??= new Map();
-    let pending = task.pendingResponses.get(index);
-    if (!pending) {
-      if (task.pendingResponses.size >= MAX_RESPONSE_STEPS) return '';
-      // Redaction state outlives any buffered text, so a step that resumes mid-key is still treated as inside the key.
-      pending = { text: '', redaction: {}, suppressing: false, dropped: '', untilDone: false, held: [], overflow: false };
-      task.pendingResponses.set(index, pending);
+  private terminalStateFromResult(task: InternalTask, _result: ExecutionResult): 'failed' | 'cancelled' | 'timeout' {
+    return task.termination ?? 'failed';
+  }
+
+  private resultFailure(task: InternalTask, result: ExecutionResult): { code: string; message: string } {
+    if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'timeout') {
+      if (
+        !task.termination &&
+        (result.status === 'cancelled' || result.status === 'timeout' || result.error.code === 'TASK_CANCELLED' || result.error.code === 'TASK_TIMEOUT')
+      ) {
+        return {
+          code: 'AGY_PROCESS_FAILED',
+          message: `Provider reported ${result.status} (${result.error.code}) without host termination: ${redactDiagnostic(result.error.message)}`,
+        };
+      }
+      return result.error;
     }
-    let input = delta;
-    if (pending.suppressing) {
-      const newline = pending.untilDone ? -1 : input.indexOf('\n');
-      this.dropResponseText(pending, newline < 0 ? input : input.slice(0, newline));
-      input = newline < 0 || pending.untilDone ? '' : input.slice(newline + 1);
-      if (newline >= 0 && !pending.untilDone) pending.suppressing = false;
+    if (result.status === 'needs-host') {
+      return {
+        code: 'AGY_PROCESS_FAILED',
+        message: `Execution requires host action (${result.message.kind}): ${redactDiagnostic(result.message.text)}`,
+      };
     }
-    pending.text += input;
-    const cut = done ? pending.text.length : pending.text.lastIndexOf('\n') + 1;
-    const ready = pending.text.slice(0, cut);
-    pending.text = pending.text.slice(cut);
-    let marker = '';
-    const buffered = [...task.pendingResponses.values()].filter(item => item.text).length;
-    if (pending.text.length > RESPONSE_HOLD_BACK_CHARS || (pending.text && buffered > MAX_BUFFERED_RESPONSE_STEPS)) {
-      // An unfinished line too long (or too many unfinished lines) cannot be redacted safely; drop it until its newline.
-      this.dropResponseText(pending, pending.text);
-      pending.text = '';
-      pending.suppressing = true;
-      marker = '[response line suppressed before redaction]\n';
-      this.events.append(task.record.taskId, 'response.truncated', { step_index: index, maxPendingChars: RESPONSE_HOLD_BACK_CHARS });
-    }
-    // Finished steps keep their entry so the step limit never frees a slot for an index whose context was lost.
-    let released = '';
-    const redactLine = (line: string) => {
-      const redacted = redactDiagnostic(line, pending.redaction);
-      return line.endsWith('\n') && !redacted.endsWith('\n') ? redacted + '\n' : redacted;
+    return {
+      code: 'AGY_PROCESS_FAILED',
+      message: `Execution ended with incomplete status: ${result.status}`,
     };
-    // A key body may arrive before a terminator whose opening was never streamed, so base64-like lines wait for the next line.
-    for (const line of ready.split(/(?<=\n)/).filter(Boolean)) {
-      // Once a body may have started, its short final line and blank lines inside it are held too.
-      const inBody = pending.held.length > 0 || pending.overflow;
-      const minimum = inBody ? 1 : 16;
-      const bodyLine = new RegExp(`^[A-Za-z0-9+/=]{${minimum},1024}\\r?\\n$`).test(line) || (inBody && /^\r?\n$/.test(line));
-      if (!pending.redaction.inPrivateKey && bodyLine) {
-        // After an overflow the rest of the same body is dropped, not released line by line.
-        if (pending.overflow) continue;
-        pending.held.push(line);
-        if (pending.held.length > MAX_HELD_RESPONSE_LINES) {
-          pending.held = [];
-          pending.overflow = true;
-          released += '[response lines suppressed before redaction]\n';
+  }
+
+  private resolveEditMismatch(
+    task: InternalTask,
+    toolName: unknown,
+    state: unknown,
+    rawErrorMsg: string | undefined,
+    params: Record<string, unknown> | undefined,
+  ): { mismatch: string; target?: { sha256: string; bytes: number; lines: number } } | undefined {
+    const project = task.project;
+    const record = task.record;
+    let matchedEdit: ReceiptEdit | undefined;
+    if (toolName === 'edit_file' && (state === 'DONE' || (state === 'ERROR' && !/denied by pre-tool hook/i.test(rawErrorMsg ?? '')))) {
+      if (project?.executionPolicy && task.editReceipts) {
+        try {
+          const { nextOffset, edits } = readReceiptEditsSync(project.executionPolicy, task.editReceipts.offset, record.sessionId);
+          task.editReceipts.offset = nextOffset;
+          for (const edit of edits) {
+            if (task.editReceipts.ambiguous.has(edit.pathSha256)) continue;
+            const list = task.editReceipts.pending.get(edit.pathSha256);
+            if (list) list.push(edit);
+            else task.editReceipts.pending.set(edit.pathSha256, [edit]);
+          }
+          const pathSha256 = createHash('sha256').update(String(params?.Path), 'utf8').digest('hex');
+          if (!task.editReceipts.ambiguous.has(pathSha256)) {
+            const pending = task.editReceipts.pending.get(pathSha256);
+            if (pending && pending.length > 1) {
+              task.editReceipts.ambiguous.add(pathSha256);
+              task.editReceipts.pending.delete(pathSha256);
+            } else matchedEdit = pending?.shift();
+          }
+        } catch {
+          task.editReceipts = undefined;
         }
-        continue;
       }
-      pending.overflow = false;
-      const orphanEnd = !pending.redaction.inPrivateKey && /-----END [^-]*PRIVATE KEY-----/.test(line) && !/-----BEGIN [^-]*PRIVATE KEY-----/.test(line);
-      if (orphanEnd && pending.held.length) released += '[private key redacted]\n';
-      else released += pending.held.map(redactLine).join('');
-      pending.held = [];
-      released += redactLine(line);
     }
-    if (done) {
-      released += pending.held.map(redactLine).join('');
-      pending.held = [];
-    }
-    return released + marker;
-  }
-
-  // Dropped text may hold a key delimiter that redaction never saw, so the rest of that step stays suppressed.
-  private dropResponseText(pending: PendingResponse, text: string): void {
-    if ((pending.dropped + text).includes('-----')) pending.untilDone = true;
-    pending.dropped = (pending.dropped + text).slice(-4);
-  }
-
-  private flushResponse(task: InternalTask, index: number): void {
-    const text = this.releaseResponseDelta(task, index, '', true);
-    if (!text) return;
-    this.events.append(task.record.taskId, 'response.chunk', { step_index: index, step_type: 'agent_response', text_delta: text });
+    if (state !== 'ERROR') return undefined;
+    const redactedMsg = rawErrorMsg !== undefined ? redactDiagnostic(rawErrorMsg).slice(0, 500) : '';
+    if (toolName !== 'edit_file' || !/target (content|text) (was )?not found/i.test(redactedMsg)) return undefined;
+    return matchedEdit
+      ? {
+          mismatch: matchedEdit.mismatch === 'none' ? 'unknown' : matchedEdit.mismatch,
+          target: { sha256: matchedEdit.targetSha256, bytes: matchedEdit.targetBytes, lines: matchedEdit.targetLines },
+        }
+      : { mismatch: 'unknown' };
   }
 
   private acceptResponseText(task: InternalTask, index: number, text: string): void {
@@ -2269,9 +2221,6 @@ export class TaskManager {
 
   private finish(task: InternalTask, status: 'completed' | 'failed' | 'cancelled' | 'timeout', code?: string, message?: string): void {
     if (terminal.has(task.record.status)) return;
-    // A CLI that stops before DONE or result still leaves its last unfinished line in the history, redacted.
-    for (const index of [...task.pendingResponses?.keys() ?? []]) this.flushResponse(task, index);
-    task.pendingResponses = undefined;
     if (task.record.result && typeof (task.record.result as Record<string, unknown>).error === 'string') {
       (task.record.result as Record<string, unknown>).error = redactDiagnostic((task.record.result as { error: string }).error);
     }
@@ -2294,15 +2243,6 @@ export class TaskManager {
     appendMessage(task.record, status === 'completed' ? 'final' : 'error', source,
       status === 'completed' ? text : (task.record.error?.code ?? status) + ': ' + (task.record.error?.message ?? text), resultReference(task.record));
     this.events.append(task.record.taskId, `task.${status}`, task.record.error || { exitCode: task.record.exitCode });
-  }
-
-  // kill() and taskkill do not prove the tree ended: a descendant may outlive its parent, so ownership is re-observed after close.
-  private async reconcileProcesses(task: InternalTask, child: ChildProcessWithoutNullStreams, spawnedAt: number): Promise<void> {
-    // Without a PID the CLI never started, so there is no process tree to observe.
-    if (child.pid === undefined) return;
-    const cleanup = await reconcileOwnedProcesses({ pid: child.pid, spawnedAt, processGroup: isOwnedProcessGroup(child) });
-    task.record.processCleanup = { verified: cleanup.verified, spawnedAt: new Date(spawnedAt).toISOString(), checkedAt: new Date().toISOString(), remaining: cleanup.remaining.length };
-    this.events.append(task.record.taskId, 'process.cleanup', { verified: cleanup.verified, method: cleanup.method, remaining: cleanup.remaining.length });
   }
 
   // A copy whose processes may still run cannot be reused; another observation may confirm they ended.
@@ -2332,7 +2272,7 @@ export class TaskManager {
 
   // The CLI's edit tool matches text exactly and fails on CRLF, so pure CRLF files run as LF. The list is recorded with the
   // copy before the first rewrite; until the files regain their exact bytes, the copy refuses to be previewed, tested, forked or integrated.
-  private async spawnWithLfCopy(task: InternalTask, options: RunOptions, convert: boolean): Promise<{ child: CliProcess; styles: Map<string, LineEndingStyle>; boms: Set<string> }> {
+  private async prepareLfCopy(task: InternalTask, convert: boolean): Promise<{ styles: Map<string, LineEndingStyle>; boms: Set<string> }> {
     const project = task.project!;
     if (await readLineEndingConversions(project)) throw new BridgeError('LINE_ENDINGS_UNRESTORED', 'A previous run left files converted to LF; confirm its processes ended before starting another');
     const editable = await editableCopyFiles(project, this.config);
@@ -2348,7 +2288,7 @@ export class TaskManager {
         this.events.append(task.record.taskId, 'copy.line-endings-converted', { files: converted.length });
       }
       if (task.termination) throw new BridgeError('TASK_TERMINATED', 'The task was stopped before the CLI started');
-      return { child: this.adapter.spawnTask(options, task.record.model, project.copyDirectory), styles, boms };
+      return { styles, boms };
     } catch (error) {
       // No process was started, so restoring is safe; if it fails, the record stays and keeps blocking every read of the copy.
       await this.restoreLineEndings(task).catch(() => undefined);

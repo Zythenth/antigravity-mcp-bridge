@@ -10,7 +10,8 @@ import { PassThrough } from 'node:stream';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { loadConfig, type Config } from '../src/config.js';
-import { CliAdapter, taskPrompt } from '../src/cli-adapter.js';
+import { taskPrompt } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { createMcpServer } from '../src/mcp-server.js';
@@ -22,7 +23,7 @@ import { successOutputSchemas } from '../src/output-schemas.js';
 import type { RunOptions, TaskRecord } from '../src/types.js';
 import { waitForTask } from './wait-for-task.js';
 
-class MemoryAdapter extends CliAdapter {
+class MemoryAdapter extends ControlledCliAdapter {
   calls: Array<{ options: RunOptions; content: string }> = [];
   override spawnTask(options: RunOptions): ChildProcessWithoutNullStreams {
     this.calls.push({ options: structuredClone(options), content: taskPrompt(options, 50000) });

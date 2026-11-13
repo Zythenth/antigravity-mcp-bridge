@@ -52,7 +52,7 @@ async function stateText(directory: string): Promise<string> {
   return text;
 }
 
-test('results, deltas, tool output, messages and deep frames are redacted before persistence', async () => {
+test('results, deltas, tool output and messages stay redacted when deep frame loss fails execution', async () => {
   const { source, state, tasks } = await setup();
   try {
     const started = await tasks.run({ prompt: 'synthetic redaction run', workingDirectory: source, deliveryMode: 'messages' });
@@ -62,7 +62,9 @@ test('results, deltas, tool output, messages and deep frames are redacted before
       await new Promise(resolve => setTimeout(resolve, 50));
       record = tasks.status(started.taskId);
     }
-    assert.equal(record.status, 'completed', JSON.stringify(record.error));
+    assert.equal(record.status, 'failed', JSON.stringify(record.error));
+    assert.equal(record.error?.code, 'AGY_PROCESS_FAILED');
+    assert.match(record.error?.message ?? '', /output truncated without denial inspection \(stdout\)/);
     assert.equal(record.sessionId, 'redaction-conv');
     const events = tasks.readEvents(started.taskId, 0, 1000).events;
     const visible = JSON.stringify({ record, events, result: tasks.result(started.taskId) });

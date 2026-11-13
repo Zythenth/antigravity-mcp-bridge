@@ -13,7 +13,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { discardProjectCopy } from '../src/isolation.js';
 import { createMcpServer } from '../src/mcp-server.js';
@@ -145,7 +145,7 @@ function stateFixture() {
   };
 }
 
-class HoldAdapter extends CliAdapter {
+class HoldAdapter extends ControlledCliAdapter {
   private released = false;
   private releaseCurrent?: () => void;
   constructor(config: Config) { super(config); }

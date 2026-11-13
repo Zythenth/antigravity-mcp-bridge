@@ -12,7 +12,7 @@ import { PassThrough } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
@@ -24,7 +24,7 @@ import type { GroupDefinition } from '../src/group-contract.js';
 import type { RunOptions } from '../src/types.js';
 import { waitForTask } from './wait-for-task.js';
 
-class HeldAdapter extends CliAdapter {
+class HeldAdapter extends ControlledCliAdapter {
   calls: Array<{ key: string; options: RunOptions; finish: (success?: boolean) => void }> = [];
   override spawnTask(options: RunOptions, _model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {
     const child = new EventEmitter() as ChildProcessWithoutNullStreams, stdout = new PassThrough(), sessionId = options.sessionId ?? randomUUID();

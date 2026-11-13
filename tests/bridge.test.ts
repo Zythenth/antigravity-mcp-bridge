@@ -995,14 +995,16 @@ test('review digest gates integration and source edits block stale patches', asy
 });
 
 for (const scenario of ['oversized-stream', 'oversized-stream-late-key', 'oversized-stream-plain']) {
-  test(`oversized subprocess streams suppress stderr and preserve the next result (${scenario})`, async () => {
+  test(`oversized subprocess streams fail uninspected loss and preserve the next result (${scenario})`, async () => {
     const dir = await repository();
     const { adapter, tasks, config } = setup();
     try {
       await adapter.discover();
       const task = await tasks.run({ prompt: scenario + ':test', workingDirectory: dir, timeoutSeconds: 20 });
       const final = await until(tasks, task.taskId, done);
-      assert.equal(final.status, 'completed');
+      assert.equal(final.status, 'failed');
+      assert.equal(final.error?.code, 'AGY_PROCESS_FAILED');
+      assert.match(final.error?.message ?? '', /output truncated without denial inspection \(stdout, stderr\)/);
       assert.equal((final.result as { response: string }).response, 'valid result');
       const events = tasks.readEvents(task.taskId).events;
       assert.deepEqual(events.filter(event => event.type === 'process.output_rejected').map(event => event.data)

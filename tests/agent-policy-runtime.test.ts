@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
@@ -19,9 +19,9 @@ function hook(cwd: string, conversationId: string, name: string, args: unknown) 
   const child = spawnSync(process.execPath, ['bridge-execution-hook.mjs'], { cwd: path.join(cwd, '.agents'), input: JSON.stringify({ workspacePaths: [cwd], conversationId, toolCall: { name, args } }), encoding: 'utf8', windowsHide: true, timeout: 60000 });
   assert.equal(child.status, 0, child.stderr); return JSON.parse(child.stdout).decision as string;
 }
-class GuardedAdapter extends CliAdapter {
+class GuardedAdapter extends ControlledCliAdapter {
   calls: Array<{ options: RunOptions; cwd: string }> = [];
-  behavior: 'guarded' | 'bypass' | 'tamper' = 'guarded';
+  behavior: 'guarded' | 'guarded-with-silent-denials' | 'bypass' | 'tamper' = 'guarded';
   override spawnTask(options: RunOptions, _model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {
     this.calls.push({ options, cwd });
     const child = new EventEmitter() as ChildProcessWithoutNullStreams, stdout = new PassThrough(), stderr = new PassThrough();
@@ -31,8 +31,10 @@ class GuardedAdapter extends CliAdapter {
       stdout.write(JSON.stringify({ event: 'init', conversation_id: session }) + '\n');
       if (this.behavior !== 'bypass') {
         assert.equal(hook(cwd, session, 'view_file', { AbsolutePath: path.join(cwd, 'source.txt') }), 'allow');
-        assert.equal(hook(cwd, session, 'run_command', { CommandLine: 'inert fixture' }), 'deny');
-        assert.equal(hook(cwd, session, 'call_mcp_tool', { ServerName: 'unselected', ToolName: 'echo', Arguments: {} }), 'deny');
+        if (this.behavior === 'guarded-with-silent-denials') {
+          assert.equal(hook(cwd, session, 'run_command', { CommandLine: 'inert fixture' }), 'deny');
+          assert.equal(hook(cwd, session, 'call_mcp_tool', { ServerName: 'unselected', ToolName: 'echo', Arguments: {} }), 'deny');
+        }
         if (options.mode === 'write') {
           assert.equal(hook(cwd, session, 'write_to_file', { TargetFile: path.join(cwd, 'created.txt') }), 'allow');
           await writeFile(path.join(cwd, 'created.txt'), 'created by controlled adapter\n');
@@ -63,7 +65,7 @@ async function end(tasks: TaskManager, task: TaskRecord) { return waitForTask(ta
 test('enforced task executes real hooks, excludes managed files from preview and persists policy identity', async () => {
   await fixture(async ({ source, tasks, config }) => {
     const task = await end(tasks, await tasks.run({ prompt: 'Public fixture.', workingDirectory: source, allowedTools: ['view_file', 'write_to_file'], mcpServers: [] }));
-    assert.equal(task.status, 'completed', JSON.stringify(task.error)); assert.ok(task.agentPolicyReceipt!.decisionCount >= 5); assert.equal(task.agentPolicyReceipt!.deniedCount, 2);
+    assert.equal(task.status, 'completed', JSON.stringify(task.error)); assert.ok(task.agentPolicyReceipt!.decisionCount >= 3); assert.equal(task.agentPolicyReceipt!.deniedCount, 0);
     assert.deepEqual((await tasks.preview(task.taskId)).files, [{ status: 'A', path: 'created.txt' }]);
     assert.deepEqual(new StateStore(config.stateDirectory).load().find(t => t.record.taskId === task.taskId)!.record.agentPolicy, task.agentPolicy);
     await assert.rejects(readFile(path.join(source, '.agents/hooks.json')), { code: 'ENOENT' });
@@ -149,5 +151,18 @@ test('Windows restart accepts canonical aliases of the same private state direct
     const first = await end(tasks, await tasks.run({ prompt: 'Alias fixture.', workingDirectory: source, mode: 'read-only', allowedTools: ['view_file'] })); assert.equal(first.status, 'completed'); await tasks.shutdown();
     const aliased = { ...config, stateDirectory: config.stateDirectory.toLowerCase() }, adapter = new GuardedAdapter(aliased), next = new TaskManager(adapter, aliased); managers.push(next);
     const resumed = await end(next, await next.run({ prompt: 'Continue through alias.', workingDirectory: source, sessionId: first.sessionId })); assert.equal(resumed.status, 'completed', JSON.stringify(resumed.error)); assert.deepEqual(resumed.agentPolicy, first.agentPolicy);
+  });
+});
+
+test('silent pre-tool hook denial receipt fails completed CLI run and preserves denial receipt', async () => {
+  await fixture(async ({ source, tasks, adapter }) => {
+    adapter.behavior = 'guarded-with-silent-denials';
+    const task = await end(tasks, await tasks.run({ prompt: 'Silent denial fixture.', workingDirectory: source, allowedTools: ['view_file', 'write_to_file'], mcpServers: [] }));
+    assert.equal(task.status, 'failed');
+    assert.equal(task.error?.code, 'AGY_PROCESS_FAILED');
+    assert.match(task.error?.message ?? '', /denied 2 tool calls/i);
+    assert.ok(task.agentPolicyReceipt);
+    assert.ok(task.agentPolicyReceipt.decisionCount >= 5);
+    assert.equal(task.agentPolicyReceipt.deniedCount, 2);
   });
 });

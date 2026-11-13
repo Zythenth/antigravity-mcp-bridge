@@ -9,13 +9,14 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { CliAdapter } from '../src/cli-adapter.js';
+import { ControlledCliAdapter } from './controlled-cli-adapter.js';
 import { loadConfig, type Config } from '../src/config.js';
 import { TaskManager } from '../src/task-manager.js';
 import { StateStore } from '../src/state-store.js';
 import { discardProjectCopy } from '../src/isolation.js';
 import type { RunOptions } from '../src/types.js';
 
-class HeldAdapter extends CliAdapter {
+class HeldAdapter extends ControlledCliAdapter {
   calls: Array<{ key: string; options: RunOptions; finish: (response?: string, structured?: unknown, usage?: unknown) => void; emit: (value: unknown) => void }> = [];
   override spawnTask(options: RunOptions, _model: string | undefined, cwd: string): ChildProcessWithoutNullStreams {
     const child = new EventEmitter() as ChildProcessWithoutNullStreams, stdout = new PassThrough(), sessionId = options.sessionId ?? randomUUID();
